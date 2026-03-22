@@ -14,6 +14,69 @@ export const computeHeadX = (t: number) => Math.sin(t * 0.3) * 0.04;
 export const computeLeftUpperArmZ = (t: number) => 0.6 + Math.sin(t * 0.6) * 0.03;
 export const computeRightUpperArmZ = (t: number) => -(0.6 + Math.sin(t * 0.6 + 1) * 0.03);
 
+// ─── Blink Interpolation Formula Functions (exported for testability) ─────────
+
+export function computeBlinkClosing(timer: number): number {
+  return Math.min(timer / 0.07, 1);
+}
+
+export function computeBlinkOpening(timer: number): number {
+  return 1 - Math.min(timer / 0.07, 1);
+}
+
+// ─── Lip Sync Formula Function (exported for testability) ────────────────────
+
+/** Returns the Aa expression value for lip sync.
+ *  lipOpen=true: maps rand [0,1] → [0.4, 0.8]
+ *  lipOpen=false: returns 0 (mouth closed)
+ */
+export function computeLipSyncAa(lipOpen: boolean, rand: number): number {
+  return lipOpen ? 0.4 + rand * 0.4 : 0;
+}
+
+// ─── TTS Fallback Duration (exported for testability) ────────────────────────
+
+/** Clamps TTS fallback duration: text.length * 40ms, min 1500ms, max 6000ms */
+export function computeTTSFallbackDuration(text: string): number {
+  return Math.min(Math.max(text.length * 40, 1500), 6000);
+}
+
+// ─── Blink State Transition Functions (exported for testability) ──────────────
+
+export type BlinkState = 'open' | 'closing' | 'opening';
+
+/** Returns the next blink state given current state and accumulated timer (seconds). */
+export function nextBlinkState(state: BlinkState, timer: number, nextBlinkThreshold: number): BlinkState {
+  if (state === 'open') {
+    return timer >= nextBlinkThreshold ? 'closing' : 'open';
+  } else if (state === 'closing') {
+    return computeBlinkClosing(timer) >= 1 ? 'opening' : 'closing';
+  } else {
+    return computeBlinkOpening(timer) <= 0 ? 'open' : 'opening';
+  }
+}
+
+// ─── Emotion Expression Formula Function (exported for testability) ──────────
+
+export type EmotionState = 'neutral' | 'thinking' | 'happy' | 'celebrate'
+
+export function computeEmotionExpressions(emotion: EmotionState): {
+  happy: number
+  relaxed: number
+  surprised: number
+} {
+  switch (emotion) {
+    case 'happy':
+    case 'celebrate':
+      return { happy: 1, relaxed: 0, surprised: 0 }
+    case 'thinking':
+      return { happy: 0, relaxed: 0.5, surprised: 0 }
+    case 'neutral':
+    default:
+      return { happy: 0, relaxed: 0, surprised: 0 }
+  }
+}
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Message {
@@ -22,8 +85,6 @@ interface Message {
   text: string
   timestamp: Date
 }
-
-type EmotionState = 'neutral' | 'thinking' | 'happy' | 'celebrate'
 
 // ─── VRM Canvas ───────────────────────────────────────────────────────────────
 
@@ -43,6 +104,7 @@ function VRMViewer({ emotion, isTalking, onLoaded }: VRMViewerProps) {
   const frameRef = useRef<number>(0)
   const blinkTimerRef = useRef(0)
   const blinkStateRef = useRef<'open' | 'closing' | 'opening'>('open')
+  const nextBlinkRef = useRef(3 + Math.random() * 2)
   const lipTimerRef = useRef(0)
   const lipOpenRef = useRef(false)
   // Ref mirrors so the rAF loop always reads current prop values (no stale closures)
@@ -57,14 +119,10 @@ function VRMViewer({ emotion, isTalking, onLoaded }: VRMViewerProps) {
     const vrm = vrmRef.current
     if (!vrm?.expressionManager) return
     const em = vrm.expressionManager
-    em.setValue(VRMExpressionPresetName.Happy, 0)
-    em.setValue(VRMExpressionPresetName.Surprised, 0)
-    em.setValue(VRMExpressionPresetName.Relaxed, 0)
-    if (emotion === 'happy' || emotion === 'celebrate') {
-      em.setValue(VRMExpressionPresetName.Happy, 1)
-    } else if (emotion === 'thinking') {
-      em.setValue(VRMExpressionPresetName.Relaxed, 0.5)
-    }
+    const { happy, relaxed, surprised } = computeEmotionExpressions(emotion)
+    em.setValue(VRMExpressionPresetName.Happy, happy)
+    em.setValue(VRMExpressionPresetName.Relaxed, relaxed)
+    em.setValue(VRMExpressionPresetName.Surprised, surprised)
   }, [emotion])
 
   useEffect(() => {
@@ -168,31 +226,37 @@ function VRMViewer({ emotion, isTalking, onLoaded }: VRMViewerProps) {
         blinkTimerRef.current += delta
         const em = vrm.expressionManager
         if (em) {
-          if (blinkStateRef.current === 'open' && blinkTimerRef.current > 3 + Math.random() * 2) {
-            blinkStateRef.current = 'closing'
-            blinkTimerRef.current = 0
+          if (blinkStateRef.current === 'open') {
+            if (blinkTimerRef.current >= nextBlinkRef.current) {
+              blinkStateRef.current = 'closing'
+              blinkTimerRef.current = 0
+            }
           } else if (blinkStateRef.current === 'closing') {
-            const v = Math.min(blinkTimerRef.current / 0.07, 1)
+            const v = computeBlinkClosing(blinkTimerRef.current)
             em.setValue(VRMExpressionPresetName.BlinkLeft, v)
             em.setValue(VRMExpressionPresetName.BlinkRight, v)
             if (v >= 1) { blinkStateRef.current = 'opening'; blinkTimerRef.current = 0 }
           } else if (blinkStateRef.current === 'opening') {
-            const v = 1 - Math.min(blinkTimerRef.current / 0.07, 1)
+            const v = computeBlinkOpening(blinkTimerRef.current)
             em.setValue(VRMExpressionPresetName.BlinkLeft, v)
             em.setValue(VRMExpressionPresetName.BlinkRight, v)
-            if (v <= 0) { blinkStateRef.current = 'open'; blinkTimerRef.current = 0 }
+            if (v <= 0) {
+              blinkStateRef.current = 'open'
+              blinkTimerRef.current = 0
+              nextBlinkRef.current = 3 + Math.random() * 2
+            }
           }
 
           // Lip sync while talking
           if (isTalkingRef.current) {
-            lipTimerRef.current += delta
-            if (lipTimerRef.current > 0.1) {
+            lipTimerRef.current += delta * 1000
+            if (lipTimerRef.current > 100) {
               lipOpenRef.current = !lipOpenRef.current
-              em.setValue(VRMExpressionPresetName.Aa, lipOpenRef.current ? 0.4 + Math.random() * 0.4 : 0)
+              em.setValue('aa', computeLipSyncAa(lipOpenRef.current, Math.random()))
               lipTimerRef.current = 0
             }
           } else {
-            em.setValue(VRMExpressionPresetName.Aa, 0)
+            em.setValue('aa', 0)
           }
 
           em.update()
@@ -261,25 +325,52 @@ export default function BellaOverlay() {
   const [thinking, setThinking] = useState(false)
   const [isTalking, setIsTalking] = useState(false)
   const [vrmLoaded, setVrmLoaded] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [micError, setMicError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const sessionIdRef = useRef<string>(crypto.randomUUID())
+  const recorderRef = useRef<MediaRecorder | null>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  const playTTS = useCallback(async (text: string) => {
+    try {
+      const { api } = await import('@/lib/api')
+      const arrayBuffer = await api.bellaTTS(text)
+      const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' })
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audio.onplay = () => setIsTalking(true)
+      audio.onended = () => {
+        setIsTalking(false)
+        setEmotion('neutral')
+        URL.revokeObjectURL(url)
+      }
+      audio.onerror = () => {
+        URL.revokeObjectURL(url)
+        // Fallback to timer if audio fails to play
+        const duration = computeTTSFallbackDuration(text)
+        setIsTalking(true)
+        setTimeout(() => { setIsTalking(false); setEmotion('neutral') }, duration)
+      }
+      await audio.play()
+    } catch {
+      // TTS request failed — use timer-based fallback
+      const duration = computeTTSFallbackDuration(text)
+      setIsTalking(true)
+      setTimeout(() => { setIsTalking(false); setEmotion('neutral') }, duration)
+    }
+  }, [])
+
   const addBellaMessage = useCallback((text: string, em: EmotionState = 'neutral') => {
     setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'bella', text, timestamp: new Date() }])
     setEmotion(em)
-    setIsTalking(true)
-    // Simulate talking duration based on text length
-    const duration = Math.min(Math.max(text.length * 40, 1500), 6000)
-    setTimeout(() => {
-      setIsTalking(false)
-      setEmotion('neutral')
-    }, duration)
-  }, [])
+    playTTS(text)
+  }, [playTTS])
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     if (!input.trim() || thinking) return
     const userText = input.trim()
     setInput('')
@@ -287,16 +378,66 @@ export default function BellaOverlay() {
     setThinking(true)
     setEmotion('thinking')
 
-    await new Promise((r) => setTimeout(r, 1200 + Math.random() * 800))
+    try {
+      const { api } = await import('@/lib/api')
+      const { reply } = await api.bellaChat(userText, sessionIdRef.current)
+      setThinking(false)
+      addBellaMessage(reply, 'happy')
+    } catch {
+      setThinking(false)
+      setEmotion('neutral')
+      addBellaMessage("Sorry, I had trouble connecting. Please try again.", 'neutral')
+    }
+  }, [input, thinking, addBellaMessage])
 
-    const responses = [
-      `Great question about "${userText}"! The key concept here is that everything connects through fundamental principles that build on each other.`,
-      `"${userText}" is something I love explaining! Think of it like building blocks — each piece supports the next. Want me to generate an anime scene to visualize it?`,
-      `Excellent! "${userText}" involves some really interesting ideas. Shall I create a story series about it?`,
-    ]
-    setThinking(false)
-    addBellaMessage(responses[Math.floor(Math.random() * responses.length)], 'happy')
-  }
+  const handleMicToggle = useCallback(async () => {
+    setMicError(null)
+    if (!isRecording) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const recorder = new MediaRecorder(stream)
+        const chunks: BlobPart[] = []
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
+        recorder.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop())
+          const blob = new Blob(chunks, { type: 'audio/webm' })
+          try {
+            const { api } = await import('@/lib/api')
+            const { transcript } = await api.bellaTranscribe(blob)
+            setInput(transcript)
+            // Auto-send after transcription
+            setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'user', text: transcript, timestamp: new Date() }])
+            setThinking(true)
+            setEmotion('thinking')
+            try {
+              const { api: api2 } = await import('@/lib/api')
+              const { reply } = await api2.bellaChat(transcript, sessionIdRef.current)
+              setThinking(false)
+              setInput('')
+              addBellaMessage(reply, 'happy')
+            } catch {
+              setThinking(false)
+              setEmotion('neutral')
+              setInput('')
+              addBellaMessage("Sorry, I had trouble connecting. Please try again.", 'neutral')
+            }
+          } catch {
+            setMicError('Transcription failed. Please try again.')
+            setIsRecording(false)
+          }
+        }
+        recorder.start()
+        recorderRef.current = recorder
+        setIsRecording(true)
+      } catch {
+        setMicError('Microphone access denied.')
+      }
+    } else {
+      recorderRef.current?.stop()
+      recorderRef.current = null
+      setIsRecording(false)
+    }
+  }, [isRecording, addBellaMessage])
 
   // Floating button when closed
   if (!open) {
@@ -363,7 +504,26 @@ export default function BellaOverlay() {
 
           {/* Input */}
           <div className="p-3 border-t border-border shrink-0">
+            {micError && (
+              <p className="text-xs text-red-400 mb-2 px-1">{micError}</p>
+            )}
             <div className="flex gap-2">
+              {/* Mic button */}
+              <button
+                onClick={handleMicToggle}
+                disabled={thinking}
+                className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm transition-colors shrink-0 relative ${
+                  isRecording
+                    ? 'bg-red-500 hover:bg-red-600 text-white'
+                    : 'bg-bg-elevated border border-border text-slate-400 hover:text-white hover:border-accent-purple disabled:opacity-40'
+                }`}
+                title={isRecording ? 'Stop recording' : 'Start recording'}
+              >
+                🎤
+                {isRecording && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-400 animate-pulse" />
+                )}
+              </button>
               <input
                 type="text"
                 value={input}
