@@ -6,44 +6,44 @@ Implement the full Bella VRM avatar feature: backend router + service, frontend 
 
 ## Tasks
 
-- [ ] 1. Backend Pydantic models and router skeleton
-  - [ ] 1.1 Define Pydantic v2 models in `backend/app/routers/bella.py`
+- [x] 1. Backend Pydantic models and router skeleton
+  - [x] 1.1 Define Pydantic v2 models in `backend/app/routers/bella.py`
     - `ChatRequest(message: str, session_id: str = "")`, `ChatResponse(reply: str)`
     - `TTSRequest(text: str)`, `TranscribeResponse(transcript: str)`
     - `HistoryMessage(role: str, text: str, timestamp: str)`, `HistoryResponse(messages: list[HistoryMessage])`
     - _Requirements: 7.2, 8.2, 9.3, 7.4_
-  - [ ] 1.2 Scaffold FastAPI router with all four endpoints returning stub responses
+  - [x] 1.2 Scaffold FastAPI router with all four endpoints returning stub responses
     - `POST /bella/chat`, `POST /bella/tts`, `POST /bella/transcribe`, `GET /bella/history`
     - Include `request_id` in all error responses per project conventions
     - Register router in `backend/app/main.py` under prefix `/bella`
     - _Requirements: 7.2, 8.2, 9.3, 7.4_
 
-- [ ] 2. Backend BellaService implementation
-  - [ ] 2.1 Implement `BellaService.chat()` in `backend/app/services/bella_service.py`
+- [x] 2. Backend BellaService implementation
+  - [x] 2.1 Implement `BellaService.chat()` in `backend/app/services/bella_service.py`
     - Groq LLaMA 3.3 70B with educational assistant system prompt
     - Append user message and Bella reply to `_history[session_id]` with ISO timestamp
     - _Requirements: 7.3, 7.2_
-  - [ ] 2.2 Implement `BellaService.synthesize_speech()` 
+  - [x] 2.2 Implement `BellaService.synthesize_speech()` 
     - POST to Fal.ai Kokoro TTS v1.0; return raw audio bytes
     - _Requirements: 8.2_
-  - [ ] 2.3 Implement `BellaService.transcribe_audio()`
+  - [x] 2.3 Implement `BellaService.transcribe_audio()`
     - POST audio bytes to Groq Whisper Large v3; return transcript string
     - _Requirements: 9.3_
-  - [ ] 2.4 Implement `BellaService.get_history()`
+  - [x] 2.4 Implement `BellaService.get_history()`
     - Return `_history[session_id]` as list of dicts; return `[]` for unknown sessions
     - _Requirements: 7.4_
-  - [ ] 2.5 Wire router endpoints to BellaService
+  - [x] 2.5 Wire router endpoints to BellaService
     - `/bella/chat` → `service.chat()` → `ChatResponse`
     - `/bella/tts` → `service.synthesize_speech()` → `Response(content=bytes, media_type="audio/mpeg")`
     - `/bella/transcribe` → `service.transcribe_audio()` → `TranscribeResponse`
     - `/bella/history` → `service.get_history()` → `HistoryResponse`
     - _Requirements: 7.2, 8.2, 9.3, 7.4_
 
-- [ ] 3. Checkpoint — Backend
+- [x] 3. Checkpoint — Backend
   - Ensure all backend tests pass, ask the user if questions arise.
 
-- [ ] 4. Frontend lib/api.ts — Bella typed wrappers
-  - [ ] 4.1 Add/update Bella API wrappers in `frontend/lib/api.ts`
+- [x] 4. Frontend lib/api.ts — Bella typed wrappers
+  - [x] 4.1 Add/update Bella API wrappers in `frontend/lib/api.ts`
     - `bellaChat(message, session_id)` → `POST /bella/chat` → `{ reply: string }`
     - `bellaTTS(text)` → `POST /bella/tts` → `ArrayBuffer` (audio bytes)
     - `bellaTranscribe(blob)` → `POST /bella/transcribe` multipart → `{ transcript: string }`
@@ -51,30 +51,30 @@ Implement the full Bella VRM avatar feature: backend router + service, frontend 
     - Export `HistoryMessage` type
     - _Requirements: 7.1, 8.1, 9.2, 7.4_
 
-- [ ] 5. VRMViewer component — scene setup and model loading
-  - [ ] 5.1 Refine `VRMViewer` in `BellaOverlay.tsx` — scene, camera, lighting, controls
+- [x] 5. VRMViewer component — scene setup and model loading
+  - [x] 5.1 Refine `VRMViewer` in `BellaOverlay.tsx` — scene, camera, lighting, controls
     - `PerspectiveCamera` FOV 30°, position `(0, 1.4, 2.2)`, lookAt `(0, 1.2, 0)`
     - Ambient `0xffffff 0.8`, directional `0xffffff 1.2` at `(1,2,2)`, rim `0x9d5cf6 0.6` at `(-2,1,-1)`
     - `OrbitControls`: pan/zoom disabled, azimuth ±30°, polar 60–90°
     - Pixel ratio capped at 2; resize handler updates renderer size + camera aspect
     - _Requirements: 1.3, 1.4, 1.5, 1.8_
-  - [ ] 5.2 Implement VRM load via `GLTFLoader` + `VRMLoaderPlugin`
+  - [x] 5.2 Implement VRM load via `GLTFLoader` + `VRMLoaderPlugin`
     - On success: add `vrm.scene` to scene, rotate `Math.PI`, call `onLoaded()`
     - On error: call `onLoaded()` so shimmer clears; log error
     - On unmount: `cancelAnimationFrame`, `renderer.dispose()`, remove VRM from scene
     - _Requirements: 1.1, 1.2, 1.6, 1.7_
-  - [ ] 5.3 Add `emotionRef` and `isTalkingRef` mirrors inside `VRMViewer`
+  - [x] 5.3 Add `emotionRef` and `isTalkingRef` mirrors inside `VRMViewer`
     - Sync refs from props via `useEffect` so rAF loop reads current values without stale closures
     - _Requirements: 4.1, 5.1_
 
-- [ ] 6. Idle animation
+- [-] 6. Idle animation
   - [ ] 6.1 Implement sinusoidal bone rotations in the rAF loop
     - Spine Z: `sin(t*0.8)*0.02`, Spine X: `sin(t*0.5)*0.01`
     - Head Y: `sin(t*0.4)*0.08`, Head X: `sin(t*0.3)*0.04`
     - LeftUpperArm Z: `0.6 + sin(t*0.6)*0.03`, RightUpperArm Z: `-(0.6 + sin(t*0.6+1)*0.03)`
     - Call `vrm.update(delta)` every frame
     - _Requirements: 2.1, 2.2, 2.3, 2.4_
-  - [ ]* 6.2 Write property test for idle bone rotation formula (Property 1)
+  - [-] 6.2 Write property test for idle bone rotation formula (Property 1)
     - **Property 1: Idle bone rotation follows sinusoidal formula**
     - **Validates: Requirements 2.1, 2.2, 2.3**
     - Extract pure formula functions (`computeSpineZ`, `computeHeadY`, etc.) from component for testability
@@ -87,7 +87,7 @@ Implement the full Bella VRM avatar feature: backend router + service, frontend 
     - `opening`: `v = 1 - clamp(blinkTimer/0.07, 0, 1)` → set BlinkLeft + BlinkRight
     - Call `em.update()` every frame after all expression writes
     - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
-  - [ ]* 7.2 Write property test for blink interpolation (Property 2)
+  - [ ] 7.2 Write property test for blink interpolation (Property 2)
     - **Property 2: Blink expression interpolation is correct**
     - **Validates: Requirements 3.3, 3.4**
     - `fc.float({ min: 0, max: 1 })` for timer, test both closing and opening directions, 100 runs

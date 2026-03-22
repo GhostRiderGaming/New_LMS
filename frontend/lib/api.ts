@@ -12,9 +12,21 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
+async function requestRaw(path: string, options?: RequestInit): Promise<Response> {
+  const res = await fetch(`${BASE}${path}`, options)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'unknown' }))
+    throw new Error(err.error ?? `HTTP ${res.status}`)
+  }
+  return res
+}
+
 // --- Job types ---
 export type JobStatus = 'queued' | 'processing' | 'complete' | 'failed'
 export interface Job { job_id: string; status: JobStatus; asset_id?: string; asset_url?: string; error_message?: string }
+
+// --- Bella types ---
+export interface HistoryMessage { role: string; text: string; timestamp: string }
 
 // --- Generation ---
 export const api = {
@@ -41,13 +53,17 @@ export const api = {
 
   // --- Bella ---
   bellaChat: (message: string, session_id: string) =>
-    request<{ text: string; audio_b64?: string; phonemes?: unknown[] }>('/api/v1/bella/chat', { method: 'POST', body: JSON.stringify({ message, session_id }) }),
+    request<{ reply: string }>('/bella/chat', { method: 'POST', body: JSON.stringify({ message, session_id }) }),
+  bellaTTS: async (text: string): Promise<ArrayBuffer> => {
+    const res = await requestRaw('/bella/tts', { method: 'POST', body: JSON.stringify({ text }), headers: { 'Content-Type': 'application/json' } })
+    return res.arrayBuffer()
+  },
   bellaTranscribe: (audioBlob: Blob) => {
     const form = new FormData(); form.append('audio', audioBlob)
-    return request<{ transcript: string }>('/api/v1/bella/transcribe', { method: 'POST', body: form, headers: {} })
+    return request<{ transcript: string }>('/bella/transcribe', { method: 'POST', body: form, headers: {} })
   },
   bellaHistory: (session_id: string) =>
-    request<{ messages: { role: string; text: string }[] }>(`/api/v1/bella/history?session_id=${session_id}`),
+    request<{ messages: HistoryMessage[] }>(`/bella/history?session_id=${session_id}`),
 
   // --- Story ---
   getStory: (story_id: string) => request<{ story_id: string; status: string; episodes: unknown[] }>(`/api/v1/story/${story_id}`),

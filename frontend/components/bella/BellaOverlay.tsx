@@ -5,6 +5,15 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { VRMLoaderPlugin, VRM, VRMHumanBoneName, VRMExpressionPresetName } from '@pixiv/three-vrm'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 
+// ─── Idle Animation Formula Functions (exported for testability) ──────────────
+
+export const computeSpineZ = (t: number) => Math.sin(t * 0.8) * 0.02;
+export const computeSpineX = (t: number) => Math.sin(t * 0.5) * 0.01;
+export const computeHeadY = (t: number) => Math.sin(t * 0.4) * 0.08;
+export const computeHeadX = (t: number) => Math.sin(t * 0.3) * 0.04;
+export const computeLeftUpperArmZ = (t: number) => 0.6 + Math.sin(t * 0.6) * 0.03;
+export const computeRightUpperArmZ = (t: number) => -(0.6 + Math.sin(t * 0.6 + 1) * 0.03);
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Message {
@@ -36,13 +45,18 @@ function VRMViewer({ emotion, isTalking, onLoaded }: VRMViewerProps) {
   const blinkStateRef = useRef<'open' | 'closing' | 'opening'>('open')
   const lipTimerRef = useRef(0)
   const lipOpenRef = useRef(false)
+  // Ref mirrors so the rAF loop always reads current prop values (no stale closures)
+  const emotionRef = useRef<EmotionState>(emotion)
+  const isTalkingRef = useRef(isTalking)
+
+  useEffect(() => { emotionRef.current = emotion }, [emotion])
+  useEffect(() => { isTalkingRef.current = isTalking }, [isTalking])
 
   // Update emotion on VRM expressions
   useEffect(() => {
     const vrm = vrmRef.current
     if (!vrm?.expressionManager) return
     const em = vrm.expressionManager
-    // Reset all
     em.setValue(VRMExpressionPresetName.Happy, 0)
     em.setValue(VRMExpressionPresetName.Surprised, 0)
     em.setValue(VRMExpressionPresetName.Relaxed, 0)
@@ -128,25 +142,27 @@ function VRMViewer({ emotion, isTalking, onLoaded }: VRMViewerProps) {
 
       const vrm = vrmRef.current
       if (vrm) {
+        const humanoid = vrm.humanoid
+
         // Idle body sway
-        const spine = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Spine)
+        const spine = humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Spine)
         if (spine) {
-          spine.rotation.z = Math.sin(elapsed * 0.8) * 0.02
-          spine.rotation.x = Math.sin(elapsed * 0.5) * 0.01
+          spine.rotation.z = computeSpineZ(elapsed)
+          spine.rotation.x = computeSpineX(elapsed)
         }
 
         // Head look-around idle
-        const head = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Head)
+        const head = humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Head)
         if (head) {
-          head.rotation.y = Math.sin(elapsed * 0.4) * 0.08
-          head.rotation.x = Math.sin(elapsed * 0.3) * 0.04
+          head.rotation.y = computeHeadY(elapsed)
+          head.rotation.x = computeHeadX(elapsed)
         }
 
         // Arm idle float
-        const leftArm = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm)
-        const rightArm = vrm.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm)
-        if (leftArm) leftArm.rotation.z = 0.6 + Math.sin(elapsed * 0.6) * 0.03
-        if (rightArm) rightArm.rotation.z = -(0.6 + Math.sin(elapsed * 0.6 + 1) * 0.03)
+        const leftArm = humanoid?.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm)
+        const rightArm = humanoid?.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm)
+        if (leftArm) leftArm.rotation.z = computeLeftUpperArmZ(elapsed)
+        if (rightArm) rightArm.rotation.z = computeRightUpperArmZ(elapsed)
 
         // Auto blink
         blinkTimerRef.current += delta
@@ -168,7 +184,7 @@ function VRMViewer({ emotion, isTalking, onLoaded }: VRMViewerProps) {
           }
 
           // Lip sync while talking
-          if (isTalking) {
+          if (isTalkingRef.current) {
             lipTimerRef.current += delta
             if (lipTimerRef.current > 0.1) {
               lipOpenRef.current = !lipOpenRef.current
