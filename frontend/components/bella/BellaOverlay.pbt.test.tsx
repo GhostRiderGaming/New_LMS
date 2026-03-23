@@ -14,6 +14,9 @@ import {
   computeLipSyncAa,
   computeEmotionExpressions,
   computeTTSFallbackDuration,
+  isSendDisabled,
+  messageAlignClass,
+  messageBubbleClass,
   type EmotionState,
 } from './BellaOverlay';
 
@@ -339,6 +342,122 @@ describe('Property 8: Message history is append-only and preserved', () => {
           // New message is at the end
           expect(after[after.length - 1].role).toBe(newMsg.role)
           expect(after[after.length - 1].text).toBe(newMsg.text)
+        }
+      ),
+      { numRuns: 100 }
+    )
+  })
+})
+
+// Feature: bella-vrm-avatar, Property 6: Send button disabled when input empty or thinking
+describe('Property 6: Send button disabled when input empty or thinking', () => {
+  // Validates: Requirements 6.6
+  it('disabled iff thinking === true OR input.trim() === ""', () => {
+    fc.assert(
+      fc.property(
+        fc.record({ thinking: fc.boolean(), input: fc.string() }),
+        ({ thinking, input }) => {
+          const disabled = isSendDisabled(thinking, input)
+          const expected = thinking || !input.trim()
+          expect(disabled).toBe(expected)
+        }
+      ),
+      { numRuns: 100 }
+    )
+  })
+
+  it('always disabled when thinking is true regardless of input', () => {
+    fc.assert(
+      fc.property(fc.string(), (input) => {
+        expect(isSendDisabled(true, input)).toBe(true)
+      }),
+      { numRuns: 100 }
+    )
+  })
+
+  it('always disabled when input is blank regardless of thinking', () => {
+    fc.assert(
+      fc.property(
+        fc.boolean(),
+        fc.stringMatching(/^\s*$/),
+        (thinking, input) => {
+          expect(isSendDisabled(thinking, input)).toBe(true)
+        }
+      ),
+      { numRuns: 100 }
+    )
+  })
+
+  it('enabled only when not thinking and input has non-whitespace content', () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1 }).filter((s) => s.trim().length > 0),
+        (input) => {
+          expect(isSendDisabled(false, input)).toBe(false)
+        }
+      ),
+      { numRuns: 100 }
+    )
+  })
+})
+
+// Feature: bella-vrm-avatar, Property 7: Message alignment matches role
+describe('Property 7: Message alignment matches role', () => {
+  // Validates: Requirements 6.2
+  it('user messages are always right-aligned (justify-end)', () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({ role: fc.constantFrom('user' as const, 'bella' as const), text: fc.string() }),
+          { minLength: 1, maxLength: 20 }
+        ),
+        (messages) => {
+          for (const msg of messages) {
+            if (msg.role === 'user') {
+              expect(messageAlignClass(msg.role)).toBe('justify-end')
+            }
+          }
+        }
+      ),
+      { numRuns: 100 }
+    )
+  })
+
+  it('bella messages are always left-aligned (justify-start)', () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({ role: fc.constantFrom('user' as const, 'bella' as const), text: fc.string() }),
+          { minLength: 1, maxLength: 20 }
+        ),
+        (messages) => {
+          for (const msg of messages) {
+            if (msg.role === 'bella') {
+              expect(messageAlignClass(msg.role)).toBe('justify-start')
+            }
+          }
+        }
+      ),
+      { numRuns: 100 }
+    )
+  })
+
+  it('user bubble uses accent-purple class, bella bubble uses bg-elevated class', () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.record({ role: fc.constantFrom('user' as const, 'bella' as const), text: fc.string() }),
+          { minLength: 1, maxLength: 20 }
+        ),
+        (messages) => {
+          for (const msg of messages) {
+            const cls = messageBubbleClass(msg.role)
+            if (msg.role === 'user') {
+              expect(cls).toContain('bg-accent-purple')
+            } else {
+              expect(cls).toContain('bg-bg-elevated')
+            }
+          }
         }
       ),
       { numRuns: 100 }

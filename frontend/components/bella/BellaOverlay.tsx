@@ -41,6 +41,27 @@ export function computeTTSFallbackDuration(text: string): number {
   return Math.min(Math.max(text.length * 40, 1500), 6000);
 }
 
+// ─── Send Button Disabled Logic (exported for testability) ───────────────────
+
+/** Returns true when the send button should be disabled. */
+export function isSendDisabled(thinking: boolean, input: string): boolean {
+  return thinking || !input.trim();
+}
+
+// ─── Message Alignment Logic (exported for testability) ──────────────────────
+
+/** Returns the CSS alignment class for a message based on its role. */
+export function messageAlignClass(role: 'user' | 'bella'): 'justify-end' | 'justify-start' {
+  return role === 'user' ? 'justify-end' : 'justify-start';
+}
+
+/** Returns the CSS bubble class for a message based on its role. */
+export function messageBubbleClass(role: 'user' | 'bella'): string {
+  return role === 'user'
+    ? 'bg-accent-purple text-white rounded-br-sm'
+    : 'bg-bg-elevated text-slate-300 rounded-bl-sm border border-border';
+}
+
 // ─── Blink State Transition Functions (exported for testability) ──────────────
 
 export type BlinkState = 'open' | 'closing' | 'opening';
@@ -476,13 +497,9 @@ export default function BellaOverlay() {
           {/* Messages */}
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {messages.map((msg) => (
-              <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div key={msg.id} className={`flex ${messageAlignClass(msg.role)}`}>
                 <div
-                  className={`max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
-                    msg.role === 'user'
-                      ? 'bg-accent-purple text-white rounded-br-sm'
-                      : 'bg-bg-elevated text-slate-300 rounded-bl-sm border border-border'
-                  }`}
+                  className={`max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed ${messageBubbleClass(msg.role)}`}
                 >
                   {msg.text}
                 </div>
@@ -534,7 +551,7 @@ export default function BellaOverlay() {
               />
               <button
                 onClick={handleSend}
-                disabled={!input.trim() || thinking}
+              disabled={isSendDisabled(thinking, input)}
                 className="w-9 h-9 rounded-xl bg-accent-purple hover:bg-accent-purple-light disabled:opacity-40 flex items-center justify-center text-white text-sm transition-colors shrink-0"
               >
                 ↑
@@ -573,8 +590,8 @@ export default function BellaOverlay() {
             </div>
           )}
 
-          {/* Talking indicator */}
-          {isTalking && (
+          {/* Talking indicator — only shown after VRM loaded (Req 11.3) */}
+          {vrmLoaded && isTalking && (
             <div className="absolute bottom-2 left-0 right-0 flex justify-center z-10">
               <div className="flex gap-0.5 items-end px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm">
                 {[3, 6, 4, 7, 3, 5].map((h, i) => (
