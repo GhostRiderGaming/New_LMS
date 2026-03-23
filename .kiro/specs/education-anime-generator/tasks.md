@@ -8,7 +8,7 @@ Build the Education Anime Generator as a standalone full-stack application (Fast
 
 ## Tasks
 
-- [ ] 1. Project scaffolding and configuration
+- [x] 1. Project scaffolding and configuration
   - Create monorepo structure: `backend/` (FastAPI) and `frontend/` (Next.js 14)
   - Set up `backend/` with FastAPI, SQLAlchemy, Pydantic, Celery, Redis, fal-client, boto3
   - Set up `frontend/` with Next.js 14, TypeScript, TailwindCSS, @react-three/fiber, @pixiv/three-vrm, d3, matter-js, zustand
