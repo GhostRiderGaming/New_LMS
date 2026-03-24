@@ -16,36 +16,36 @@ Build the Education Anime Generator as a standalone full-stack application (Fast
   - Set up Docker Compose for local development (backend + Redis)
   - _Requirements: 4.1, 4.6_
 
-- [ ] 2. Backend: Core infrastructure
-  - [ ] 2.1 Set up FastAPI app with CORS, rate limiting, and health endpoint
+- [x] 2. Backend: Core infrastructure
+  - [x] 2.1 Set up FastAPI app with CORS, rate limiting, and health endpoint
     - Mirror CatchupXV1's `main.py` pattern with SlowAPI rate limiter
     - Configure CORS for localhost:3000 and production domain
     - _Requirements: 4.1_
 
-  - [ ] 2.2 Set up SQLAlchemy database with Job and Asset models
+  - [x] 2.2 Set up SQLAlchemy database with Job and Asset models
     - Create `app/models/anime_assets.py` with Job and Asset SQLAlchemy models
     - Job fields: job_id (UUID), type, status, topic, parameters (JSON), asset_id, error_message, retry_count, created_at, updated_at, session_id
     - Asset fields: asset_id (UUID), job_id, type, topic, file_path, file_size_bytes, mime_type, metadata (JSON), created_at, expires_at, session_id
     - Auto-create tables on startup
     - _Requirements: 7.2, 6.2_
 
-  - [ ] 2.3 Set up Cloudflare R2 asset storage service
+  - [x] 2.3 Set up Cloudflare R2 asset storage service
     - Create `app/services/asset_manager.py` using boto3 S3-compatible client
     - Implement: upload_file(data, key, content_type), get_presigned_url(key, expires=86400), delete_file(key)
     - _Requirements: 6.1, 6.3, 6.4_
 
-  - [ ] 2.4 Write property test for asset round trip (Property 3)
+  - [x] 2.4 Write property test for asset round trip (Property 3)
 
     - **Property 3: Asset retrieval round trip**
     - **Validates: Requirements 6.1, 6.3**
     - Use Hypothesis to generate random binary blobs, upload, retrieve, verify byte equality
 
-  - [ ] 2.5 Set up Celery with Upstash Redis broker
+  - [x] 2.5 Set up Celery with Upstash Redis broker
     - Create `app/worker.py` with Celery app configured for Upstash Redis
     - Configure task retry policy: max_retries=3, exponential backoff
     - _Requirements: 7.1, 7.3_
 
-  - [ ] 2.6 Write property test for retry count bounded (Property 9)
+  - [x] 2.6 Write property test for retry count bounded (Property 9)
 
     - **Property 9: Retry count bounded**
     - **Validates: Requirements 7.3**

@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -6,9 +8,18 @@ from slowapi.errors import RateLimitExceeded
 
 from app.routers import bella, jobs, assets, anime, simulation, model3d, story
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Auto-create all SQLAlchemy tables on startup."""
+    from app.models.anime_assets import Base, engine
+    Base.metadata.create_all(bind=engine)
+    yield
+
+
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="Education Anime Generator API", version="1.0.0")
+app = FastAPI(title="Education Anime Generator API", version="1.0.0", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
