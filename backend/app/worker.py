@@ -51,3 +51,29 @@ def _retry_countdown(retries: int) -> int:
 def noop_task(self):
     """No-op task used for worker health checks."""
     return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Webhook delivery task (Property 13 / Requirement 4.8)
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    name="education_anime.deliver_webhook",
+)
+def deliver_webhook(self, webhook_url: str, job_id: str, status: str):
+    """
+    POST a job completion notification to the registered webhook URL.
+    Retries up to 3 times with exponential backoff on network errors.
+    """
+    import httpx
+
+    payload = {"job_id": job_id, "status": status}
+    try:
+        with httpx.Client(timeout=10) as client:
+            resp = client.post(webhook_url, json=payload)
+            resp.raise_for_status()
+    except Exception as exc:
+        countdown = _retry_countdown(self.request.retries)
+        raise self.retry(exc=exc, countdown=countdown)

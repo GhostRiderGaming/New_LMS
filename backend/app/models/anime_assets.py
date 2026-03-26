@@ -63,10 +63,19 @@ class Asset(Base):
     file_path = Column(String, nullable=False)     # R2 object key
     file_size_bytes = Column(Integer, default=0)
     mime_type = Column(String, nullable=False)
-    metadata = Column(JSON, default=dict)
+    asset_metadata = Column("metadata", JSON, default=dict)
     created_at = Column(DateTime(timezone=True), default=_now)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     session_id = Column(String, nullable=False, default="")
+
+
+class Webhook(Base):
+    __tablename__ = "webhooks"
+
+    webhook_id = Column(String, primary_key=True, default=_uuid)
+    url = Column(String, nullable=False)
+    session_id = Column(String, nullable=False, default="")
+    created_at = Column(DateTime(timezone=True), default=_now)
 
 
 def get_db():

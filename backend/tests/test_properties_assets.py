@@ -1,4 +1,4 @@
-"""
+﻿"""
 Property-based tests for asset storage.
 
 Feature: education-anime-generator
@@ -19,7 +19,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 # ---------------------------------------------------------------------------
-# Helpers — in-memory fake R2 store for pure property testing
+# Helpers â€” in-memory fake R2 store for pure property testing
 # ---------------------------------------------------------------------------
 
 class FakeR2:
@@ -154,3 +154,67 @@ def test_delete_nonexistent_key_is_idempotent(key: str) -> None:
     # Should not raise
     mgr.delete_file(key)
     mgr.delete_file(key)  # second call also safe
+
+
+# ---------------------------------------------------------------------------
+# Property 4 (HTTP layer): DELETE endpoint makes asset unretrievable via API
+# Feature: education-anime-generator, Property 4: Asset deletion is permanent
+# Validates: Requirements 6.4, 6.5
+# ---------------------------------------------------------------------------
+
+@given(data=st.binary(min_size=1, max_size=512))
+@settings(max_examples=100, deadline=None)
+def test_delete_endpoint_makes_asset_unretrievable(data: bytes) -> None:
+    """
+    Feature: education-anime-generator, Property 4: Asset deletion is permanent
+
+    After the DELETE /assets/{id} endpoint removes an asset, any subsequent
+    GET /assets/{id} must return HTTP 404 and the asset must not appear in
+    any listing.
+    """
+    import datetime
+    from fastapi.testclient import TestClient
+    from unittest.mock import patch, MagicMock
+    from app.main import app
+    from app.models.anime_assets import Base, engine, SessionLocal, Asset as AssetModel
+
+    Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+
+    asset_id = str(uuid.uuid4())
+    now = datetime.datetime.now(datetime.timezone.utc)
+    asset = AssetModel(
+        asset_id=asset_id,
+        job_id=str(uuid.uuid4()),
+        type="image",
+        topic="test",
+        file_path=f"assets/{asset_id}.png",
+        file_size_bytes=len(data),
+        mime_type="image/png",
+        asset_metadata={"caption": "test"},
+        created_at=now,
+        expires_at=now + datetime.timedelta(hours=25),
+        session_id="test-session",
+    )
+    db.add(asset)
+    db.commit()
+    file_path = f"assets/{asset_id}.png"  # capture before session closes
+    db.close()
+
+    fake_r2 = FakeR2()
+    fake_r2.put_object(Bucket="b", Key=file_path, Body=data, ContentType="image/png")
+
+    with patch("app.routers.assets.asset_manager") as mock_mgr:
+        mock_mgr.delete_file = MagicMock(side_effect=lambda key: fake_r2.delete_object(Bucket="b", Key=key))
+        mock_mgr.get_presigned_url = MagicMock(return_value="https://fake/url")
+
+        client = TestClient(app)
+        headers = {"X-API-Key": "dev-api-key"}
+
+        # DELETE should succeed with 204
+        del_resp = client.delete(f"/api/v1/assets/{asset_id}", headers=headers)
+        assert del_resp.status_code == 204, f"Expected 204, got {del_resp.status_code}"
+
+        # Subsequent GET must return 404
+        get_resp = client.get(f"/api/v1/assets/{asset_id}", headers=headers)
+        assert get_resp.status_code == 404, f"Expected 404 after deletion, got {get_resp.status_code}"

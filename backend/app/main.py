@@ -6,7 +6,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from app.routers import bella, jobs, assets, anime, simulation, model3d, story
+from app.routers import bella, jobs, assets, anime, simulation, model3d, story, webhooks
 
 
 @asynccontextmanager
@@ -39,6 +39,7 @@ app.include_router(anime.router, prefix="/api/v1/anime", tags=["anime"])
 app.include_router(simulation.router, prefix="/api/v1/simulation", tags=["simulation"])
 app.include_router(model3d.router, prefix="/api/v1/model3d", tags=["model3d"])
 app.include_router(story.router, prefix="/api/v1/story", tags=["story"])
+app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["webhooks"])
 
 
 @app.get("/health")
