@@ -37,6 +37,12 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
+def _default_expires_at() -> datetime:
+    """Default expires_at = now + 24 hours (Requirement 4.3)."""
+    from datetime import timedelta
+    return datetime.now(timezone.utc) + timedelta(hours=24)
+
+
 class Job(Base):
     __tablename__ = "jobs"
 
@@ -65,7 +71,7 @@ class Asset(Base):
     mime_type = Column(String, nullable=False)
     asset_metadata = Column("metadata", JSON, default=dict)
     created_at = Column(DateTime(timezone=True), default=_now)
-    expires_at = Column(DateTime(timezone=True), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, default=_default_expires_at)
     session_id = Column(String, nullable=False, default="")
 
 

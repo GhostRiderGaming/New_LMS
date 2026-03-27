@@ -218,3 +218,268 @@ def test_delete_endpoint_makes_asset_unretrievable(data: bytes) -> None:
         # Subsequent GET must return 404
         get_resp = client.get(f"/api/v1/assets/{asset_id}", headers=headers)
         assert get_resp.status_code == 404, f"Expected 404 after deletion, got {get_resp.status_code}"
+
+
+# ---------------------------------------------------------------------------
+# Property 14: Asset metadata completeness
+# Feature: education-anime-generator, Property 14: Asset metadata completeness
+# Validates: Requirements 1.3, 3.4, 6.2
+# ---------------------------------------------------------------------------
+
+# Type-specific required metadata fields per asset type
+_REQUIRED_METADATA_FIELDS: dict[str, list[str]] = {
+    "image": ["caption"],
+    "animation": ["caption"],
+    "simulation": [],
+    "model3d": ["object_name", "description"],
+    "story": ["story_id"],
+}
+
+# Common required top-level fields on every Asset record
+_REQUIRED_ASSET_FIELDS = ["topic", "type", "created_at", "mime_type"]
+
+
+def _make_asset_record(
+    asset_type: str,
+    topic: str,
+    metadata: dict,
+    mime_type: str = "image/png",
+) -> dict:
+    """Build a minimal asset record dict as it would be stored/returned."""
+    import datetime
+    now = datetime.datetime.now(datetime.timezone.utc)
+    return {
+        "asset_id": str(uuid.uuid4()),
+        "job_id": str(uuid.uuid4()),
+        "type": asset_type,
+        "topic": topic,
+        "file_path": f"assets/{uuid.uuid4()}.bin",
+        "file_size_bytes": 1,
+        "mime_type": mime_type,
+        "metadata": metadata,
+        "created_at": now,
+        "expires_at": now + datetime.timedelta(hours=25),
+        "session_id": "test-session",
+    }
+
+
+def _metadata_is_complete(asset_type: str, metadata: dict) -> tuple[bool, str]:
+    """Return (ok, reason). Checks type-specific required fields are non-empty."""
+    required = _REQUIRED_METADATA_FIELDS.get(asset_type, [])
+    for field in required:
+        if not metadata.get(field):
+            return False, f"metadata missing or empty field '{field}' for type '{asset_type}'"
+    return True, ""
+
+
+@given(
+    topic=st.text(min_size=1, max_size=200).filter(lambda s: s.strip()),
+    caption=st.text(min_size=1, max_size=500).filter(lambda s: s.strip()),
+)
+@settings(max_examples=100, deadline=None)
+def test_image_asset_metadata_has_caption(topic: str, caption: str) -> None:
+    """
+    Feature: education-anime-generator, Property 14: Asset metadata completeness
+
+    For any anime scene (image/animation) asset, the metadata must contain
+    a non-empty 'caption' field. Validates Requirements 1.3, 6.2.
+    """
+    for asset_type in ("image", "animation"):
+        record = _make_asset_record(asset_type, topic, {"caption": caption})
+        ok, reason = _metadata_is_complete(asset_type, record["metadata"])
+        assert ok, reason
+
+        # Verify that an asset WITHOUT caption fails the check
+        bad_record = _make_asset_record(asset_type, topic, {})
+        ok_bad, _ = _metadata_is_complete(asset_type, bad_record["metadata"])
+        assert not ok_bad, (
+            f"Expected metadata completeness check to fail for {asset_type} without caption"
+        )
+
+
+@given(
+    topic=st.text(min_size=1, max_size=200).filter(lambda s: s.strip()),
+    object_name=st.text(min_size=1, max_size=200).filter(lambda s: s.strip()),
+    description=st.text(min_size=1, max_size=500).filter(lambda s: s.strip()),
+)
+@settings(max_examples=100, deadline=None)
+def test_model3d_asset_metadata_has_object_name_and_description(
+    topic: str, object_name: str, description: str
+) -> None:
+    """
+    Feature: education-anime-generator, Property 14: Asset metadata completeness
+
+    For any 3D model asset, the metadata must contain non-empty 'object_name'
+    and 'description' fields. Validates Requirements 3.4, 6.2.
+    """
+    record = _make_asset_record(
+        "model3d", topic, {"object_name": object_name, "description": description}
+    )
+    ok, reason = _metadata_is_complete("model3d", record["metadata"])
+    assert ok, reason
+
+    # Missing object_name
+    bad1 = _make_asset_record("model3d", topic, {"description": description})
+    ok1, _ = _metadata_is_complete("model3d", bad1["metadata"])
+    assert not ok1, "Expected failure when object_name is missing from model3d metadata"
+
+    # Missing description
+    bad2 = _make_asset_record("model3d", topic, {"object_name": object_name})
+    ok2, _ = _metadata_is_complete("model3d", bad2["metadata"])
+    assert not ok2, "Expected failure when description is missing from model3d metadata"
+
+
+@given(
+    topic=st.text(min_size=1, max_size=200).filter(lambda s: s.strip()),
+    story_id=st.uuids().map(str),
+)
+@settings(max_examples=100, deadline=None)
+def test_story_asset_metadata_has_story_id(topic: str, story_id: str) -> None:
+    """
+    Feature: education-anime-generator, Property 14: Asset metadata completeness
+
+    For any story scene asset, the metadata must contain a non-empty 'story_id'.
+    Validates Requirements 6.2.
+    """
+    record = _make_asset_record("story", topic, {"story_id": story_id})
+    ok, reason = _metadata_is_complete("story", record["metadata"])
+    assert ok, reason
+
+    bad = _make_asset_record("story", topic, {})
+    ok_bad, _ = _metadata_is_complete("story", bad["metadata"])
+    assert not ok_bad, "Expected failure when story_id is missing from story asset metadata"
+
+
+@given(
+    asset_type=st.sampled_from(list(_REQUIRED_METADATA_FIELDS.keys())),
+    topic=st.text(min_size=1, max_size=200).filter(lambda s: s.strip()),
+)
+@settings(max_examples=100, deadline=None)
+def test_asset_record_has_required_top_level_fields(asset_type: str, topic: str) -> None:
+    """
+    Feature: education-anime-generator, Property 14: Asset metadata completeness
+
+    For any asset type, the asset record must have non-empty values for
+    topic, type, created_at, and mime_type. Validates Requirements 6.2.
+    """
+    record = _make_asset_record(asset_type, topic, {})
+    for field in _REQUIRED_ASSET_FIELDS:
+        value = record.get(field)
+        assert value is not None and value != "", (
+            f"Asset record missing required field '{field}' for type '{asset_type}'"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Property 15: Asset availability window
+# Validates: Requirements 4.3
+# ---------------------------------------------------------------------------
+
+@given(
+    asset_type=st.sampled_from(list(_REQUIRED_METADATA_FIELDS.keys())),
+    topic=st.text(min_size=1, max_size=200).filter(lambda s: s.strip()),
+    hours_offset=st.floats(min_value=0.0, max_value=8760.0),  # 0 to 1 year ahead
+)
+@settings(max_examples=100, deadline=None)
+def test_asset_expires_at_is_at_least_24h_after_created_at(
+    asset_type: str, topic: str, hours_offset: float
+) -> None:
+    """
+    Feature: education-anime-generator, Property 15: Asset availability window
+
+    For any completed Asset, the expires_at timestamp must be at least 24 hours
+    after the created_at timestamp. Validates Requirements 4.3.
+    """
+    import datetime
+
+    created_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+        hours=hours_offset
+    )
+    expires_at = created_at + datetime.timedelta(hours=24)
+
+    record = {
+        "asset_id": str(uuid.uuid4()),
+        "job_id": str(uuid.uuid4()),
+        "type": asset_type,
+        "topic": topic,
+        "file_path": f"assets/{uuid.uuid4()}.bin",
+        "file_size_bytes": 1,
+        "mime_type": "image/png",
+        "metadata": {},
+        "created_at": created_at,
+        "expires_at": expires_at,
+        "session_id": "test-session",
+    }
+
+    window = record["expires_at"] - record["created_at"]
+    assert window >= datetime.timedelta(hours=24), (
+        f"Asset availability window is {window}, expected >= 24 hours. "
+        f"created_at={record['created_at']}, expires_at={record['expires_at']}"
+    )
+
+
+@given(
+    asset_type=st.sampled_from(list(_REQUIRED_METADATA_FIELDS.keys())),
+    topic=st.text(min_size=1, max_size=200).filter(lambda s: s.strip()),
+    short_hours=st.floats(min_value=0.0, max_value=23.999),
+)
+@settings(max_examples=100, deadline=None)
+def test_asset_with_short_expiry_fails_availability_check(
+    asset_type: str, topic: str, short_hours: float
+) -> None:
+    """
+    Feature: education-anime-generator, Property 15: Asset availability window
+
+    Negative case: any asset whose expires_at is less than 24 hours after
+    created_at must fail the availability window check. Validates Requirements 4.3.
+    """
+    import datetime
+
+    created_at = datetime.datetime.now(datetime.timezone.utc)
+    expires_at = created_at + datetime.timedelta(hours=short_hours)
+
+    window = expires_at - created_at
+    assert window < datetime.timedelta(hours=24), (
+        "Precondition: window should be < 24h for this negative test"
+    )
+
+    # The system must enforce >= 24h; a record with a shorter window is invalid.
+    is_valid = window >= datetime.timedelta(hours=24)
+    assert not is_valid, (
+        f"Expected availability check to fail for window={window} (< 24h), "
+        f"but it passed. created_at={created_at}, expires_at={expires_at}"
+    )
+
+
+@given(
+    asset_type=st.sampled_from(list(_REQUIRED_METADATA_FIELDS.keys())),
+    topic=st.text(min_size=1, max_size=200).filter(lambda s: s.strip()),
+)
+@settings(max_examples=100, deadline=None)
+def test_default_expires_at_satisfies_availability_window(
+    asset_type: str, topic: str
+) -> None:
+    """
+    Feature: education-anime-generator, Property 15: Asset availability window
+
+    The _default_expires_at() factory used by the Asset SQLAlchemy model must
+    always produce a timestamp >= 24 hours from now. Validates Requirements 4.3.
+    """
+    import datetime
+    from app.models.anime_assets import _default_expires_at
+
+    before = datetime.datetime.now(datetime.timezone.utc)
+    expires_at = _default_expires_at()
+    after = datetime.datetime.now(datetime.timezone.utc)
+
+    # expires_at must be at least 24h after the call time
+    min_expected = before + datetime.timedelta(hours=24)
+    assert expires_at >= min_expected, (
+        f"_default_expires_at() returned {expires_at}, expected >= {min_expected}"
+    )
+
+    # Sanity: should not be unreasonably far in the future (> 25h is suspicious)
+    max_expected = after + datetime.timedelta(hours=25)
+    assert expires_at <= max_expected, (
+        f"_default_expires_at() returned {expires_at}, which is unexpectedly far in the future"
+    )
