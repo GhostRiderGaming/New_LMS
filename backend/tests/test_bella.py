@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.bella_service import ChatResult
 
 client = TestClient(app)
 
@@ -19,6 +20,10 @@ client = TestClient(app)
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _make_chat_result(reply: str = "Hello!", tts_available: bool = False) -> ChatResult:
+    return ChatResult(reply=reply, audio_b64=None, phonemes=[], tts_available=tts_available)
+
+
 def _make_service_mock(
     chat_reply: str = "Hello!",
     transcript: str = "test transcript",
@@ -26,7 +31,7 @@ def _make_service_mock(
 ) -> MagicMock:
     """Return a mock BellaService with sensible defaults."""
     mock = MagicMock()
-    mock.chat = AsyncMock(return_value=chat_reply)
+    mock.chat = AsyncMock(return_value=_make_chat_result(chat_reply))
     mock.transcribe_audio = AsyncMock(return_value=transcript)
     mock.get_history = MagicMock(return_value=history or [])
     return mock

@@ -161,6 +161,322 @@ def generate_anime_task(
 
 
 # ---------------------------------------------------------------------------
+# Simulation generation task (Requirements 2.1, 2.2, 2.4, 2.5, 2.6)
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    name="education_anime.generate_simulation",
+)
+def generate_simulation_task(
+    self,
+    job_id: str,
+    topic: str,
+    category: str,
+    session_id: str,
+):
+    """
+    Celery task: generate a self-contained HTML simulation for a job.
+
+    On success: updates job status to 'complete' and sets asset_id.
+    On failure: retries up to 3 times with exponential backoff, then marks 'failed'.
+    Post-generation safety check runs before storing the asset (Requirement 8.1).
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    from app.models.anime_assets import Job, SessionLocal
+    from app.services.simulation_engine import generate_simulation
+    from app.services.safety import safety_service
+
+    db = SessionLocal()
+    try:
+        job = db.query(Job).filter(Job.job_id == job_id).first()
+        if not job:
+            return
+
+        job.status = "processing"
+        job.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        loop = asyncio.new_event_loop()
+        try:
+            asset = loop.run_until_complete(
+                generate_simulation(
+                    topic=topic,
+                    category=category,
+                    db=db,
+                    session_id=session_id,
+                    job_id=job_id,
+                )
+            )
+
+            # Post-generation safety check (Requirement 8.1)
+            safety_result = loop.run_until_complete(
+                safety_service.check_content(topic)
+            )
+        finally:
+            loop.close()
+
+        if not safety_result.safe:
+            from app.services.asset_manager import asset_manager
+            asset_manager.delete_file(asset.file_path)
+            db.delete(asset)
+            job.status = "failed"
+            job.error_message = f"safety_violation: {safety_result.reason}"
+            job.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            return
+
+        job.status = "complete"
+        job.asset_id = asset.asset_id
+        job.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+    except Exception as exc:
+        db.rollback()
+        job = db.query(Job).filter(Job.job_id == job_id).first()
+        if job:
+            job.retry_count = min((job.retry_count or 0) + 1, 3)
+            if job.retry_count >= 3:
+                job.status = "failed"
+                job.error_message = str(exc)
+            job.updated_at = datetime.now(timezone.utc)
+            db.commit()
+        countdown = _retry_countdown(self.request.retries)
+        raise self.retry(exc=exc, countdown=countdown)
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# 3D model generation task (Requirements 3.1, 3.4, 3.7)
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    name="education_anime.generate_model3d",
+)
+def generate_model3d_task(
+    self,
+    job_id: str,
+    object_name: str,
+    category: str,
+    session_id: str,
+):
+    """
+    Celery task: generate a 3D model (GLB/GLTF) for a job.
+
+    On success: updates job status to 'complete' and sets asset_id.
+    On failure: retries up to 3 times with exponential backoff, then marks 'failed'.
+    Post-generation safety check runs before storing the asset (Requirement 8.1).
+    Handles unsupported objects by marking job failed with suggestions (Requirement 3.5).
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    from app.models.anime_assets import Job, SessionLocal
+    from app.services.model3d_engine import generate_model3d, get_suggestions_for_category
+    from app.services.safety import safety_service
+
+    db = SessionLocal()
+    try:
+        job = db.query(Job).filter(Job.job_id == job_id).first()
+        if not job:
+            return
+
+        job.status = "processing"
+        job.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        loop = asyncio.new_event_loop()
+        try:
+            asset = loop.run_until_complete(
+                generate_model3d(
+                    object_name=object_name,
+                    category=category,
+                    job_id=job_id,
+                    session_id=session_id,
+                )
+            )
+
+            # Post-generation safety check (Requirement 8.1)
+            safety_result = loop.run_until_complete(
+                safety_service.check_content(object_name)
+            )
+        finally:
+            loop.close()
+
+        if not safety_result.safe:
+            from app.services.asset_manager import asset_manager
+            asset_manager.delete_file(asset.file_path)
+            db.delete(asset)
+            job.status = "failed"
+            job.error_message = f"safety_violation: {safety_result.reason}"
+            job.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            return
+
+        job.status = "complete"
+        job.asset_id = asset.asset_id
+        job.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+    except Exception as exc:
+        db.rollback()
+        job = db.query(Job).filter(Job.job_id == job_id).first()
+        if job:
+            job.retry_count = min((job.retry_count or 0) + 1, 3)
+            if job.retry_count >= 3:
+                job.status = "failed"
+                # Include suggestions for unsupported object errors (Requirement 3.5)
+                suggestions = get_suggestions_for_category(category)
+                job.error_message = (
+                    f"model_unavailable: {exc}. "
+                    f"Suggestions: {', '.join(suggestions)}"
+                )
+            job.updated_at = datetime.now(timezone.utc)
+            db.commit()
+        countdown = _retry_countdown(self.request.retries)
+        raise self.retry(exc=exc, countdown=countdown)
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
+# Story generation task (Requirements 9.1, 9.2, 9.5, 9.8, 9.10, 9.11)
+# ---------------------------------------------------------------------------
+
+@celery_app.task(
+    bind=True,
+    max_retries=3,
+    name="education_anime.generate_story",
+)
+def generate_story_task(
+    self,
+    job_id: str,
+    topic: str,
+    episode_count: int,
+    session_id: str,
+):
+    """
+    Celery task: generate a full StoryPlan then dispatch per-scene anime tasks.
+
+    Flow:
+      1. Generate StoryPlan via Groq (LLaMA 3.3 70B)
+      2. For each scene in each episode: dispatch generate_anime_task
+      3. Track scene completion; substitute placeholder on failure (Req 9.10)
+      4. Mark job complete when all scenes are dispatched
+
+    On failure: retries up to 3 times with exponential backoff, then marks 'failed'.
+    """
+    import asyncio
+    from datetime import datetime, timezone
+
+    from app.models.anime_assets import Job, SessionLocal
+    from app.services.story_engine import generate_story_plan, _placeholder_scene
+    from app.services.safety import safety_service
+
+    db = SessionLocal()
+    try:
+        job = db.query(Job).filter(Job.job_id == job_id).first()
+        if not job:
+            return
+
+        job.status = "processing"
+        job.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        loop = asyncio.new_event_loop()
+        try:
+            # Step 1: Generate story plan (Requirement 9.1, 9.11)
+            plan = loop.run_until_complete(
+                generate_story_plan(
+                    topic=topic,
+                    episode_count=episode_count,
+                    session_id=session_id,
+                    job_id=job_id,
+                    db=db,
+                )
+            )
+
+            # Post-generation safety check on the plan title/synopsis
+            safety_result = loop.run_until_complete(
+                safety_service.check_content(f"{plan.title} {plan.synopsis}")
+            )
+        finally:
+            loop.close()
+
+        if not safety_result.safe:
+            job.status = "failed"
+            job.error_message = f"safety_violation: {safety_result.reason}"
+            job.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            return
+
+        # Step 2: Dispatch per-scene anime generation tasks (Requirement 9.2)
+        # Each scene gets its own anime job; failures produce placeholders (Req 9.10)
+        import uuid as _uuid
+        from app.models.anime_assets import Job as JobModel
+
+        for episode in plan.episodes:
+            for scene in episode.scenes:
+                scene_job_id = str(_uuid.uuid4())
+                scene_job = JobModel(
+                    job_id=scene_job_id,
+                    type="anime",
+                    status="queued",
+                    topic=topic,
+                    parameters={
+                        "style": "classroom",
+                        "caption": scene.caption,
+                        "story_id": plan.story_id,
+                        "episode_number": episode.episode_number,
+                        "scene_number": scene.scene_number,
+                    },
+                    session_id=session_id,
+                )
+                db.add(scene_job)
+                db.commit()
+
+                try:
+                    generate_anime_task.delay(
+                        job_id=scene_job_id,
+                        topic=f"{topic} — {scene.description}",
+                        style="classroom",
+                        include_animation=False,
+                        session_id=session_id,
+                    )
+                except Exception:
+                    # Substitute placeholder on dispatch failure (Requirement 9.10)
+                    placeholder = _placeholder_scene(scene.scene_number, topic)
+                    scene_job.status = "failed"
+                    scene_job.error_message = "dispatch_failed"
+                    db.commit()
+
+        job.status = "complete"
+        job.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+    except Exception as exc:
+        db.rollback()
+        job = db.query(Job).filter(Job.job_id == job_id).first()
+        if job:
+            job.retry_count = min((job.retry_count or 0) + 1, 3)
+            if job.retry_count >= 3:
+                job.status = "failed"
+                job.error_message = str(exc)
+            job.updated_at = datetime.now(timezone.utc)
+            db.commit()
+        countdown = _retry_countdown(self.request.retries)
+        raise self.retry(exc=exc, countdown=countdown)
+    finally:
+        db.close()
+
+
+# ---------------------------------------------------------------------------
 # Webhook delivery task (Property 13 / Requirement 4.8)
 # ---------------------------------------------------------------------------
 

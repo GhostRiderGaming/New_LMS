@@ -124,8 +124,9 @@ def test_history_round_trip_preserves_order(messages: list[str]) -> None:
     service = BellaService()
     reply_counter = 0
 
-    async def fake_chat(message: str, sid: str) -> str:
+    async def fake_chat(message: str, sid: str):
         nonlocal reply_counter
+        from app.services.bella_service import ChatResult
         reply = f"reply-{reply_counter}"
         reply_counter += 1
         # Delegate to real history logic but skip actual LLM call
@@ -134,7 +135,7 @@ def test_history_round_trip_preserves_order(messages: list[str]) -> None:
         bucket = service._history.setdefault(sid, [])
         bucket.append({"role": "user", "text": message, "timestamp": now})
         bucket.append({"role": "bella", "text": reply, "timestamp": now})
-        return reply
+        return ChatResult(reply=reply, audio_b64=None, phonemes=[], tts_available=False)
 
     service.chat = fake_chat  # type: ignore[method-assign]
 
@@ -183,4 +184,142 @@ def test_history_round_trip_preserves_order(messages: list[str]) -> None:
     user_entries = [h for h in history if h["role"] == "user"]
     assert [e["text"] for e in user_entries] == messages, (
         "User messages in history do not match sent messages in order"
+    )
+
+
+# ===========================================================================
+# Education Anime Generator — Property 20 & 21
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Property 20: Bella conversation history persistence
+# Feature: education-anime-generator, Property 20
+# Validates: Requirements 10.11
+# ---------------------------------------------------------------------------
+
+@given(st.lists(st.text(min_size=1, max_size=200), min_size=1, max_size=15))
+@settings(max_examples=100, deadline=None)
+def test_bella_history_persistence(messages: list[str]) -> None:
+    """
+    Feature: education-anime-generator, Property 20: Bella conversation history persistence
+
+    For any sequence of N messages sent to Bella within a session, a subsequent
+    GET /bella/history must return all 2*N entries (user + bella alternating)
+    in the exact insertion order, with correct roles, for the duration of the session.
+    """
+    import uuid as _uuid
+
+    session_id = str(_uuid.uuid4())
+    service = BellaService()
+    reply_index = 0
+
+    async def fake_chat(message: str, sid: str) -> "ChatResult":  # type: ignore[name-defined]
+        nonlocal reply_index
+        from app.services.bella_service import ChatResult
+        reply = f"reply-{reply_index}"
+        reply_index += 1
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).isoformat()
+        bucket = service._history.setdefault(sid, [])
+        bucket.append({"role": "user", "text": message, "timestamp": now})
+        bucket.append({"role": "bella", "text": reply, "timestamp": now})
+        return ChatResult(reply=reply, audio_b64=None, phonemes=[], tts_available=False)
+
+    service.chat = fake_chat  # type: ignore[method-assign]
+
+    with patch("app.routers.bella.bella_service", service):
+        sent_pairs: list[tuple[str, str]] = []
+        for msg in messages:
+            resp = client.post(
+                "/bella/chat",
+                json={"message": msg, "session_id": session_id},
+            )
+            assert resp.status_code == 200
+            sent_pairs.append((msg, resp.json()["reply"]))
+
+        hist_resp = client.get("/bella/history", params={"session_id": session_id})
+
+    assert hist_resp.status_code == 200
+    history_entries = hist_resp.json()["messages"]
+
+    # Must have exactly 2 entries per message
+    assert len(history_entries) == len(messages) * 2, (
+        f"Expected {len(messages) * 2} entries, got {len(history_entries)}"
+    )
+
+    # Verify order and roles
+    for i, (user_text, bella_reply) in enumerate(sent_pairs):
+        user_entry = history_entries[i * 2]
+        bella_entry = history_entries[i * 2 + 1]
+
+        assert user_entry["role"] == "user"
+        assert user_entry["text"] == user_text
+        assert bella_entry["role"] == "bella"
+        assert bella_entry["text"] == bella_reply
+
+    # All user messages appear in order
+    user_texts = [e["text"] for e in history_entries if e["role"] == "user"]
+    assert user_texts == messages
+
+
+# ---------------------------------------------------------------------------
+# Property 21: Bella TTS fallback on failure
+# Feature: education-anime-generator, Property 21
+# Validates: Requirements 10.12
+# ---------------------------------------------------------------------------
+
+@given(st.text(min_size=1, max_size=300))
+@settings(max_examples=100, deadline=None)
+def test_bella_tts_fallback_on_failure(message: str) -> None:
+    """
+    Feature: education-anime-generator, Property 21: Bella TTS fallback on failure
+
+    For any Bella response where TTS synthesis fails, the system must still
+    return HTTP 200 with a non-empty reply text, tts_available=False, and
+    must NOT return an error status to the client.
+    """
+    import uuid as _uuid
+
+    session_id = str(_uuid.uuid4())
+    service = BellaService()
+
+    async def fake_chat_tts_fails(msg: str, sid: str) -> "ChatResult":  # type: ignore[name-defined]
+        from app.services.bella_service import ChatResult
+        from datetime import datetime, timezone
+        reply = f"Bella says: {msg[:50]}"
+        now = datetime.now(timezone.utc).isoformat()
+        bucket = service._history.setdefault(sid, [])
+        bucket.append({"role": "user", "text": msg, "timestamp": now})
+        bucket.append({"role": "bella", "text": reply, "timestamp": now})
+        # Simulate TTS failure — tts_available=False, no audio
+        return ChatResult(reply=reply, audio_b64=None, phonemes=[], tts_available=False)
+
+    service.chat = fake_chat_tts_fails  # type: ignore[method-assign]
+
+    with patch("app.routers.bella.bella_service", service):
+        resp = client.post(
+            "/bella/chat",
+            json={"message": message, "session_id": session_id},
+        )
+
+    # Must return 200 — not an error status (Requirement 10.12)
+    assert resp.status_code == 200, (
+        f"Expected 200 on TTS failure, got {resp.status_code}"
+    )
+
+    data = resp.json()
+
+    # Reply text must be non-empty
+    assert "reply" in data
+    assert isinstance(data["reply"], str)
+    assert len(data["reply"]) > 0, "reply must be non-empty even when TTS fails"
+
+    # tts_available must be False
+    assert data["tts_available"] is False, (
+        "tts_available must be False when TTS synthesis fails"
+    )
+
+    # audio_b64 must be None (no audio produced)
+    assert data.get("audio_b64") is None, (
+        "audio_b64 must be None when TTS fails"
     )

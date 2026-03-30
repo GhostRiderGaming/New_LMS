@@ -1,9 +1,12 @@
 """
 BellaService — LLM chat (Groq LLaMA 3.3 70B), TTS (Fal.ai Kokoro v1.0),
 STT (Groq Whisper Large v3), and in-memory session history.
+
+Requirements: 10.3, 10.4, 10.5, 10.11, 10.12
 """
 from __future__ import annotations
 
+import base64
 import os
 from datetime import datetime, timezone
 from typing import Any
@@ -27,6 +30,22 @@ _SYSTEM_PROMPT = (
 )
 
 
+class ChatResult:
+    """Result of a Bella chat call, including optional TTS audio."""
+
+    def __init__(
+        self,
+        reply: str,
+        audio_b64: str | None,
+        phonemes: list[dict[str, Any]],
+        tts_available: bool,
+    ) -> None:
+        self.reply = reply
+        self.audio_b64 = audio_b64          # base64-encoded WAV/MP3, or None
+        self.phonemes = phonemes             # phoneme timestamp list for lip sync
+        self.tts_available = tts_available
+
+
 class BellaService:
     """Stateful service for Bella's chat, TTS, STT, and history."""
 
@@ -35,14 +54,15 @@ class BellaService:
         self._groq = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY", ""))
 
     # ------------------------------------------------------------------
-    # 2.1  Chat
+    # Chat — calls LLM then attempts TTS; falls back gracefully on TTS failure
+    # Requirements: 10.3, 10.4, 10.5, 10.11, 10.12
     # ------------------------------------------------------------------
 
-    async def chat(self, message: str, session_id: str) -> str:
-        """Send *message* to Groq LLaMA 3.3 70B and return Bella's reply.
+    async def chat(self, message: str, session_id: str) -> ChatResult:
+        """Send *message* to Groq LLaMA 3.3 70B, attempt TTS, return ChatResult.
 
-        Appends both the user message and Bella's reply to the session
-        history with ISO-8601 timestamps.
+        TTS failure is non-fatal: returns tts_available=False with text reply intact.
+        Appends both the user message and Bella's reply to session history.
         """
         # Build conversation context from history
         prior = self._history.get(session_id, [])
@@ -61,21 +81,47 @@ class BellaService:
         )
         reply: str = completion.choices[0].message.content or ""
 
-        # Persist to history
+        # Persist to history (Requirement 10.11)
         now = datetime.now(timezone.utc).isoformat()
         bucket = self._history.setdefault(session_id, [])
         bucket.append({"role": "user", "text": message, "timestamp": now})
         bucket.append({"role": "bella", "text": reply, "timestamp": now})
 
-        return reply
+        # Attempt TTS — graceful fallback on failure (Requirement 10.12)
+        try:
+            audio_bytes, phonemes = await self._synthesize_speech_with_phonemes(reply)
+            audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+            tts_available = True
+        except Exception:
+            audio_b64 = None
+            phonemes = []
+            tts_available = False
 
+        return ChatResult(
+            reply=reply,
+            audio_b64=audio_b64,
+            phonemes=phonemes,
+            tts_available=tts_available,
+        )
 
     # ------------------------------------------------------------------
-    # 2.2  TTS — Fal.ai Kokoro v1.0
+    # TTS — Fal.ai Kokoro v1.0
+    # Requirements: 10.4, 10.5
     # ------------------------------------------------------------------
 
     async def synthesize_speech(self, text: str) -> bytes:
         """POST *text* to Fal.ai Kokoro TTS and return raw audio bytes."""
+        audio_bytes, _ = await self._synthesize_speech_with_phonemes(text)
+        return audio_bytes
+
+    async def _synthesize_speech_with_phonemes(
+        self, text: str
+    ) -> tuple[bytes, list[dict[str, Any]]]:
+        """Call Fal.ai Kokoro TTS and return (audio_bytes, phoneme_timestamps).
+
+        Kokoro returns { "audio": { "url": "..." }, "phonemes": [...] } (if available).
+        Phoneme timestamps are used for VRM lip sync (Requirement 10.4).
+        """
         fal_key = os.environ.get("FAL_API_KEY", "")
         headers = {
             "Authorization": f"Key {fal_key}",
@@ -92,21 +138,22 @@ class BellaService:
             response.raise_for_status()
             data = response.json()
 
-        # Kokoro returns { "audio": { "url": "...", ... } }
+        # Kokoro returns { "audio": { "url": "...", ... }, "phonemes": [...] }
         audio_url: str = data["audio"]["url"]
+        phonemes: list[dict[str, Any]] = data.get("phonemes", [])
+
         async with httpx.AsyncClient(timeout=30) as client:
             audio_response = await client.get(audio_url)
             audio_response.raise_for_status()
-            return audio_response.content
-
+            return audio_response.content, phonemes
 
     # ------------------------------------------------------------------
-    # 2.3  STT — Groq Whisper Large v3
+    # STT — Groq Whisper Large v3
+    # Requirement: 10.3
     # ------------------------------------------------------------------
 
     async def transcribe_audio(self, audio_bytes: bytes, filename: str) -> str:
         """Transcribe *audio_bytes* via Groq Whisper Large v3."""
-        # groq client expects a file-like tuple: (filename, bytes, content_type)
         transcription = await self._groq.audio.transcriptions.create(
             model=_GROQ_WHISPER_MODEL,
             file=(filename, audio_bytes, "audio/webm"),
@@ -114,7 +161,8 @@ class BellaService:
         return transcription.text
 
     # ------------------------------------------------------------------
-    # 2.4  History
+    # History
+    # Requirement: 10.11
     # ------------------------------------------------------------------
 
     def get_history(self, session_id: str) -> list[dict[str, str]]:
