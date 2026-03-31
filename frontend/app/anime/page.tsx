@@ -1,10 +1,11 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import TopicInput from '@/components/shared/TopicInput'
 import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import AnimeSceneCard from '@/components/anime/AnimeSceneCard'
+import { api } from '@/lib/api'
 
 const styles = ['classroom', 'laboratory', 'outdoor', 'fantasy'] as const
 type Style = typeof styles[number]
@@ -34,6 +35,60 @@ export default function AnimePage() {
   const [scenes, setScenes] = useState<Scene[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Poll job status until terminal state
+  const startPolling = (id: string, currentTopic: string, currentStyle: Style) => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = setInterval(async () => {
+      try {
+        const job = await api.getJob(id)
+        setJobStatus(job.status)
+        if (job.status === 'complete') {
+          clearInterval(pollRef.current!)
+          setLoading(false)
+          if (job.asset_id) {
+            try {
+              const asset = await api.getAsset(job.asset_id)
+              const meta = asset.metadata as Record<string, string>
+              setScenes((prev) => [
+                ...prev,
+                {
+                  asset_id: asset.asset_id,
+                  asset_url: asset.asset_url,
+                  topic: currentTopic,
+                  caption: meta?.caption ?? `This scene illustrates "${currentTopic}" in an anime ${currentStyle} setting.`,
+                  style: currentStyle,
+                },
+              ])
+            } catch {
+              // asset fetch failed — use job url if available
+              if (job.asset_url) {
+                setScenes((prev) => [
+                  ...prev,
+                  {
+                    asset_id: job.asset_id!,
+                    asset_url: job.asset_url!,
+                    topic: currentTopic,
+                    caption: `This scene illustrates "${currentTopic}" in an anime ${currentStyle} setting.`,
+                    style: currentStyle,
+                  },
+                ])
+              }
+            }
+          }
+        } else if (job.status === 'failed') {
+          clearInterval(pollRef.current!)
+          setLoading(false)
+          setError(job.error_message ?? 'Generation failed. Please try again.')
+        }
+      } catch {
+        clearInterval(pollRef.current!)
+        setLoading(false)
+        setError('Lost connection while polling job status.')
+      }
+    }, 2000)
+  }
 
   const handleGenerate = async (t: string) => {
     setTopic(t)
@@ -42,36 +97,26 @@ export default function AnimePage() {
     setJobStatus(null)
     setLoading(true)
     try {
-      // Simulate job submission — replace with real api.generateAnime(t, style)
-      await new Promise((r) => setTimeout(r, 500))
-      const fakeJobId = crypto.randomUUID()
-      setJobId(fakeJobId)
-      setJobStatus('queued')
-      setTimeout(() => setJobStatus('processing'), 1500)
-      setTimeout(() => {
-        setJobStatus('complete')
-        setScenes((prev) => [
-          ...prev,
-          {
-            asset_id: crypto.randomUUID(),
-            asset_url: `https://picsum.photos/seed/${Date.now()}/512/512`,
-            topic: t,
-            caption: `This scene illustrates the concept of "${t}" in an anime ${style} setting.`,
-            style,
-          },
-        ])
-        setLoading(false)
-      }, 5000)
-    } catch {
-      setError('Failed to submit generation job. Please try again.')
+      const job = await api.generateAnime(t, style, includeAnimation)
+      setJobId(job.job_id)
+      setJobStatus(job.status)
+      startPolling(job.job_id, t, style)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit generation job. Please try again.')
       setLoading(false)
     }
   }
 
+  // Auto-generate if topic is in query params
   useEffect(() => {
     const t = searchParams.get('topic')
-    if (t && !topic) handleGenerate(t)
+    if (t) handleGenerate(t)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [])
+
+  const handleAddToStory = (scene: Scene) => {
+    window.location.href = `/story?topic=${encodeURIComponent(scene.topic)}`
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -146,7 +191,7 @@ export default function AnimePage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {scenes.map((scene) => (
-              <AnimeSceneCard key={scene.asset_id} scene={scene} />
+              <AnimeSceneCard key={scene.asset_id} scene={scene} onAddToStory={handleAddToStory} />
             ))}
           </div>
         </div>

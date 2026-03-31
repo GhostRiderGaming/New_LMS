@@ -1,12 +1,17 @@
 """
-Assets router — GET /assets/{id}, DELETE /assets/{id}, GET /assets/{id}/download
+Assets router — GET /assets, GET /assets/{id}, DELETE /assets/{id},
+                GET /assets/{id}/download, GET /assets/export/zip
 
-Requirements: 6.3, 6.4, 6.5
+Requirements: 6.3, 6.4, 6.5, 5.4, 5.9
 """
+import io
+import json
 import uuid
+import zipfile
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -71,6 +76,65 @@ def _asset_to_response(asset: Asset) -> AssetResponse:
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@router.get("", response_model=List[AssetResponse])
+async def list_assets(
+    type: Optional[str] = Query(None, description="Filter by asset type: image, animation, simulation, model3d, story"),
+    db: Session = Depends(get_db),
+    session: dict = Depends(get_current_session),
+):
+    """List all assets for the current session, optionally filtered by type."""
+    q = db.query(Asset).filter(Asset.session_id == session["session_id"])
+    if type:
+        q = q.filter(Asset.type == type)
+    assets = q.order_by(Asset.created_at.desc()).limit(200).all()
+    return [_asset_to_response(a) for a in assets]
+
+
+@router.get("/export/zip")
+async def export_all_zip(
+    type: Optional[str] = Query(None, description="Filter by asset type"),
+    db: Session = Depends(get_db),
+    session: dict = Depends(get_current_session),
+):
+    """Download all session assets as a ZIP archive. Requirements: 5.9"""
+    q = db.query(Asset).filter(Asset.session_id == session["session_id"])
+    if type:
+        q = q.filter(Asset.type == type)
+    assets = q.order_by(Asset.created_at.desc()).all()
+
+    buf = io.BytesIO()
+    manifest = []
+
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for asset in assets:
+            data = asset_manager.download_file(asset.file_path)
+            if data is None:
+                continue
+            # Derive a safe filename from topic + asset_id
+            safe_topic = "".join(c if c.isalnum() or c in "-_ " else "_" for c in asset.topic)[:40]
+            ext = asset.mime_type.split("/")[-1] if "/" in asset.mime_type else "bin"
+            filename = f"{asset.type}/{safe_topic}_{asset.asset_id[:8]}.{ext}"
+            zf.writestr(filename, data)
+            manifest.append({
+                "asset_id": asset.asset_id,
+                "type": asset.type,
+                "topic": asset.topic,
+                "filename": filename,
+                "file_size_bytes": asset.file_size_bytes,
+                "created_at": asset.created_at.isoformat(),
+                "metadata": asset.asset_metadata or {},
+            })
+
+        zf.writestr("manifest.json", json.dumps({"assets": manifest, "total": len(manifest)}, indent=2))
+
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=anime-assets.zip"},
+    )
+
 
 @router.get("/{asset_id}", response_model=AssetResponse)
 async def get_asset(

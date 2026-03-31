@@ -1,167 +1,279 @@
 'use client'
-import { useState } from 'react'
-import Image from 'next/image'
+import { useState, useEffect, useCallback } from 'react'
+import { api, AssetRecord } from '@/lib/api'
+import ErrorCard from '@/components/shared/ErrorCard'
 
-type AssetType = 'all' | 'anime' | 'simulation' | 'model3d' | 'story'
+type FilterType = 'all' | 'image' | 'animation' | 'simulation' | 'model3d' | 'story'
 
-interface Asset {
-  asset_id: string
-  type: 'anime' | 'simulation' | 'model3d' | 'story'
-  topic: string
-  asset_url: string
-  created_at: string
-  file_size_bytes: number
-}
-
-const typeIcons: Record<string, string> = {
-  anime: '🎨',
-  simulation: '🔬',
-  model3d: '🧊',
-  story: '📖',
-}
-
-const typeColors: Record<string, string> = {
-  anime: 'text-accent-purple bg-accent-purple/10',
-  simulation: 'text-accent-cyan bg-accent-cyan/10',
-  model3d: 'text-accent-pink bg-accent-pink/10',
-  story: 'text-yellow-400 bg-yellow-400/10',
-}
-
-// Mock assets for UI preview
-const mockAssets: Asset[] = [
-  { asset_id: '1', type: 'anime', topic: 'Photosynthesis', asset_url: 'https://picsum.photos/seed/a1/400/400', created_at: new Date().toISOString(), file_size_bytes: 245000 },
-  { asset_id: '2', type: 'simulation', topic: 'Newton\'s Laws', asset_url: 'https://picsum.photos/seed/a2/400/400', created_at: new Date().toISOString(), file_size_bytes: 18000 },
-  { asset_id: '3', type: 'model3d', topic: 'Human Heart', asset_url: 'https://picsum.photos/seed/a3/400/400', created_at: new Date().toISOString(), file_size_bytes: 1200000 },
-  { asset_id: '4', type: 'story', topic: 'World War II', asset_url: 'https://picsum.photos/seed/a4/400/400', created_at: new Date().toISOString(), file_size_bytes: 3400000 },
-  { asset_id: '5', type: 'anime', topic: 'DNA Replication', asset_url: 'https://picsum.photos/seed/a5/400/400', created_at: new Date().toISOString(), file_size_bytes: 312000 },
-  { asset_id: '6', type: 'simulation', topic: 'Pendulum Motion', asset_url: 'https://picsum.photos/seed/a6/400/400', created_at: new Date().toISOString(), file_size_bytes: 22000 },
+const FILTERS: { value: FilterType; label: string; icon: string }[] = [
+  { value: 'all', label: 'All', icon: '🗂️' },
+  { value: 'image', label: 'Anime', icon: '🎨' },
+  { value: 'animation', label: 'Animation', icon: '🎬' },
+  { value: 'simulation', label: 'Simulation', icon: '⚗️' },
+  { value: 'model3d', label: '3D Model', icon: '🧊' },
+  { value: 'story', label: 'Story', icon: '📖' },
 ]
 
-function formatBytes(bytes: number) {
+const TYPE_COLORS: Record<string, string> = {
+  image: 'text-accent-purple bg-accent-purple/10 border-accent-purple/20',
+  animation: 'text-accent-cyan bg-accent-cyan/10 border-accent-cyan/20',
+  simulation: 'text-green-400 bg-green-400/10 border-green-400/20',
+  model3d: 'text-accent-pink bg-accent-pink/10 border-accent-pink/20',
+  story: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+}
+
+const TYPE_ICONS: Record<string, string> = {
+  image: '🎨', animation: '🎬', simulation: '⚗️', model3d: '🧊', story: '📖',
+}
+
+function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function AssetCard({ asset, onDelete }: { asset: AssetRecord; onDelete: (id: string) => void }) {
+  const [deleting, setDeleting] = useState(false)
+  const isImage = asset.mime_type.startsWith('image/')
+  const isVideo = asset.mime_type.startsWith('video/')
+  const meta = asset.metadata as Record<string, string>
+
+  const handleDelete = async () => {
+    if (!confirm('Delete this asset? This cannot be undone.')) return
+    setDeleting(true)
+    try {
+      await api.deleteAsset(asset.asset_id)
+      onDelete(asset.asset_id)
+    } catch {
+      setDeleting(false)
+    }
+  }
+
+  const handleDownload = () => {
+    const a = document.createElement('a')
+    a.href = api.downloadAsset(asset.asset_id)
+    a.download = `${asset.type}-${asset.asset_id.slice(0, 8)}`
+    a.click()
+  }
+
+  return (
+    <div className="bg-bg-card border border-border rounded-xl overflow-hidden group hover:border-accent-purple/40 transition-all">
+      {/* Preview */}
+      <div className="relative aspect-video bg-bg-elevated flex items-center justify-center overflow-hidden">
+        {isImage && (
+          <img
+            src={asset.presigned_url}
+            alt={asset.topic}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        )}
+        {isVideo && (
+          <video
+            src={asset.presigned_url}
+            className="w-full h-full object-cover"
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        )}
+        {!isImage && !isVideo && (
+          <div className="text-4xl opacity-40">{TYPE_ICONS[asset.type] ?? '📄'}</div>
+        )}
+        {/* Type badge */}
+        <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-md text-xs font-medium border ${TYPE_COLORS[asset.type] ?? 'text-slate-400 bg-slate-400/10 border-slate-400/20'}`}>
+          {TYPE_ICONS[asset.type]} {asset.type}
+        </div>
+      </div>
+
+      {/* Info */}
+      <div className="p-3">
+        <p className="text-white text-sm font-medium truncate mb-0.5">{asset.topic}</p>
+        {meta?.caption && (
+          <p className="text-slate-500 text-xs line-clamp-2 mb-2">{meta.caption}</p>
+        )}
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <span>{formatBytes(asset.file_size_bytes)}</span>
+          <span>{new Date(asset.created_at).toLocaleDateString()}</span>
+        </div>
+      </div>
+
+      {/* Actions — visible on hover */}
+      <div className="px-3 pb-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={handleDownload}
+          className="flex-1 py-1.5 rounded-lg bg-bg-elevated hover:bg-accent-purple/20 text-slate-400 hover:text-white text-xs font-medium transition-all border border-border"
+        >
+          ↓ Download
+        </button>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="px-3 py-1.5 rounded-lg bg-bg-elevated hover:bg-red-500/20 text-slate-500 hover:text-red-400 text-xs transition-all border border-border disabled:opacity-40"
+        >
+          {deleting ? '...' : '🗑'}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export default function GalleryPage() {
-  const [filter, setFilter] = useState<AssetType>('all')
-  const [assets] = useState<Asset[]>(mockAssets)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [assets, setAssets] = useState<AssetRecord[]>([])
+  const [filter, setFilter] = useState<FilterType>('all')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [downloading, setDownloading] = useState(false)
+
+  const fetchAssets = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await api.listAssets()
+      setAssets(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load assets.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchAssets() }, [fetchAssets])
+
+  const handleDelete = (id: string) => setAssets((prev) => prev.filter((a) => a.asset_id !== id))
+
+  const handleDownloadAll = async () => {
+    setDownloading(true)
+    try {
+      const typeParam = filter !== 'all' ? `?type=${filter}` : ''
+      const url = `${api.exportAllZip()}${typeParam}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = 'anime-assets.zip'
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Download failed.')
+    } finally {
+      setDownloading(false)
+    }
+  }
 
   const filtered = filter === 'all' ? assets : assets.filter((a) => a.type === filter)
 
-  const handleDelete = async (id: string) => {
-    setDeletingId(id)
-    // Real impl: await api.deleteAsset(id)
-    await new Promise((r) => setTimeout(r, 800))
-    setDeletingId(null)
-  }
-
-  const handleDownloadAll = () => {
-    // Real impl: call api.downloadAllZip()
-    alert('Download all as ZIP — connect to backend /api/v1/assets/export')
-  }
-
-  const totalSize = assets.reduce((s, a) => s + a.file_size_bytes, 0)
+  const counts = assets.reduce<Record<string, number>>((acc, a) => {
+    acc[a.type] = (acc[a.type] ?? 0) + 1
+    return acc
+  }, {})
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-xl bg-accent-cyan/20 flex items-center justify-center text-xl">🗂️</div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">Asset Gallery</h1>
-              <p className="text-slate-400 text-sm">All generated assets for this session</p>
-            </div>
-          </div>
-          <div className="flex gap-4 text-xs text-slate-500 mt-2">
-            <span>{assets.length} assets</span>
-            <span>{formatBytes(totalSize)} total</span>
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-accent-cyan/20 flex items-center justify-center text-xl">🗂️</div>
+          <div>
+            <h1 className="text-2xl font-bold text-white">Asset Gallery</h1>
+            <p className="text-slate-400 text-sm">{assets.length} asset{assets.length !== 1 ? 's' : ''} in your session</p>
           </div>
         </div>
-        <button
-          onClick={handleDownloadAll}
-          className="px-4 py-2 rounded-xl bg-accent-purple/20 hover:bg-accent-purple/30 text-accent-purple-light text-sm font-medium transition-colors border border-accent-purple/30"
-        >
-          ↓ Download All ZIP
-        </button>
+        {assets.length > 0 && (
+          <button
+            onClick={handleDownloadAll}
+            disabled={downloading}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-anime text-white text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-all shadow-glow-purple"
+          >
+            {downloading ? (
+              <>
+                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Zipping...
+              </>
+            ) : (
+              <>↓ Download All as ZIP</>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-2 mb-6 flex-wrap">
-        {(['all', 'anime', 'simulation', 'model3d', 'story'] as AssetType[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setFilter(t)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all capitalize ${
-              filter === t
-                ? 'bg-accent-purple text-white shadow-glow-purple'
-                : 'bg-bg-card text-slate-400 hover:text-white border border-border'
-            }`}
-          >
-            {t !== 'all' && typeIcons[t]} {t === 'model3d' ? '3D Model' : t}
-            <span className="ml-1 px-1.5 py-0.5 rounded bg-white/10 text-xs">
-              {t === 'all' ? assets.length : assets.filter((a) => a.type === t).length}
-            </span>
-          </button>
-        ))}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {FILTERS.map(({ value, label, icon }) => {
+          const count = value === 'all' ? assets.length : (counts[value] ?? 0)
+          return (
+            <button
+              key={value}
+              onClick={() => setFilter(value)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                filter === value
+                  ? 'bg-accent-purple text-white shadow-glow-purple'
+                  : 'bg-bg-elevated text-slate-400 hover:text-white border border-border'
+              }`}
+            >
+              {icon} {label}
+              {count > 0 && (
+                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs ${filter === value ? 'bg-white/20' : 'bg-bg-card'}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
-      {/* Masonry grid */}
-      {filtered.length > 0 ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {filtered.map((asset) => (
-            <div key={asset.asset_id} className="bg-bg-card border border-border rounded-2xl overflow-hidden card-hover group">
-              {/* Thumbnail */}
-              <div className="relative aspect-square bg-bg-elevated overflow-hidden">
-                <Image
-                  src={asset.asset_url}
-                  alt={asset.topic}
-                  fill
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
-                />
-                {/* Type badge */}
-                <div className="absolute top-2 left-2">
-                  <span className={`px-2 py-1 rounded-lg text-xs font-medium capitalize ${typeColors[asset.type]}`}>
-                    {typeIcons[asset.type]} {asset.type === 'model3d' ? '3D' : asset.type}
-                  </span>
-                </div>
-                {/* Hover overlay */}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                  <a
-                    href={asset.asset_url}
-                    download
-                    className="px-3 py-1.5 rounded-lg bg-accent-purple text-white text-xs font-medium"
-                  >
-                    ↓ Download
-                  </a>
-                  <button
-                    onClick={() => handleDelete(asset.asset_id)}
-                    disabled={deletingId === asset.asset_id}
-                    className="px-3 py-1.5 rounded-lg bg-red-500/80 text-white text-xs font-medium disabled:opacity-50"
-                  >
-                    {deletingId === asset.asset_id ? '...' : '🗑️'}
-                  </button>
-                </div>
-              </div>
-              {/* Info */}
-              <div className="p-3">
-                <p className="text-sm font-medium text-white truncate">{asset.topic}</p>
-                <div className="flex items-center justify-between mt-1">
-                  <span className="text-xs text-slate-500">{formatBytes(asset.file_size_bytes)}</span>
-                  <span className="text-xs text-slate-600">{new Date(asset.created_at).toLocaleDateString()}</span>
-                </div>
+      {/* Error */}
+      {error && (
+        <div className="mb-6">
+          <ErrorCard message={error} onRetry={fetchAssets} />
+        </div>
+      )}
+
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="bg-bg-card border border-border rounded-xl overflow-hidden animate-pulse">
+              <div className="aspect-video bg-bg-elevated" />
+              <div className="p-3 space-y-2">
+                <div className="h-3 bg-bg-elevated rounded w-3/4" />
+                <div className="h-2 bg-bg-elevated rounded w-1/2" />
               </div>
             </div>
           ))}
         </div>
-      ) : (
-        <div className="text-center py-20 text-slate-600">
+      )}
+
+      {/* Masonry grid */}
+      {!loading && filtered.length > 0 && (
+        <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+          {filtered.map((asset) => (
+            <div key={asset.asset_id} className="break-inside-avoid">
+              <AssetCard asset={asset} onDelete={handleDelete} />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && filtered.length === 0 && !error && (
+        <div className="text-center py-24 text-slate-600">
           <div className="text-5xl mb-4">🗂️</div>
-          <p className="text-sm">No {filter === 'all' ? '' : filter} assets yet</p>
-          <p className="text-xs mt-2 text-slate-700">Generate content from any page to see it here</p>
+          <p className="text-sm">
+            {filter === 'all'
+              ? 'No assets yet — generate some content to see it here'
+              : `No ${filter} assets yet`}
+          </p>
+          {filter !== 'all' && (
+            <button
+              onClick={() => setFilter('all')}
+              className="mt-3 text-xs text-accent-purple hover:underline"
+            >
+              Show all assets
+            </button>
+          )}
         </div>
       )}
     </div>

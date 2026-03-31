@@ -1,23 +1,25 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'next/navigation'
 import TopicInput from '@/components/shared/TopicInput'
 import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import StoryPlayer from '@/components/story/StoryPlayer'
+import { api } from '@/lib/api'
 
-export interface Scene {
+export interface ScenePlan {
   scene_number: number
   description: string
   caption: string
-  asset_url?: string
+  asset_id?: string
   status: 'pending' | 'complete' | 'failed'
 }
 
-export interface Episode {
+export interface EpisodePlan {
   episode_number: number
   title: string
   educational_concept: string
-  scenes: Scene[]
+  scenes: ScenePlan[]
 }
 
 export interface StoryPlan {
@@ -25,12 +27,15 @@ export interface StoryPlan {
   title: string
   synopsis: string
   topic: string
-  characters: { name: string; role: string }[]
-  episodes: Episode[]
+  characters: { name: string; role: string; description: string }[]
+  episodes: EpisodePlan[]
+  total_scenes: number
   status: 'planning' | 'generating' | 'complete' | 'failed'
 }
 
 export default function StoryPage() {
+  const searchParams = useSearchParams()
+  const [topic, setTopic] = useState(searchParams.get('topic') || '')
   const [episodeCount, setEpisodeCount] = useState(3)
   const [jobId, setJobId] = useState<string | null>(null)
   const [jobStatus, setJobStatus] = useState<'queued' | 'processing' | 'complete' | 'failed' | null>(null)
@@ -38,61 +43,89 @@ export default function StoryPage() {
   const [story, setStory] = useState<StoryPlan | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const handleGenerate = async (topic: string) => {
+  const startPolling = (id: string) => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = setInterval(async () => {
+      try {
+        const job = await api.getJob(id)
+        setJobStatus(job.status)
+
+        if (job.status === 'processing') {
+          setProgressLabel('Generating story scenes...')
+        } else if (job.status === 'queued') {
+          setProgressLabel('Planning story structure...')
+        }
+
+        if (job.status === 'complete') {
+          clearInterval(pollRef.current!)
+          setLoading(false)
+          setProgressLabel('Story complete!')
+
+          // Get story_id from the job's asset metadata
+          if (job.asset_id) {
+            try {
+              const planAsset = await api.getAsset(job.asset_id)
+              const meta = planAsset.metadata as Record<string, unknown>
+              const storyId = meta?.story_id as string | undefined
+
+              if (storyId) {
+                // Fetch full StoryPlan from asset metadata
+                const storyPlan = meta as unknown as StoryPlan
+                setStory({
+                  story_id: storyId,
+                  title: (meta.title as string) ?? 'Untitled Story',
+                  synopsis: (meta.synopsis as string) ?? '',
+                  topic: (meta.topic as string) ?? topic,
+                  characters: (meta.characters as StoryPlan['characters']) ?? [],
+                  episodes: (meta.episodes as EpisodePlan[]) ?? [],
+                  total_scenes: (meta.total_scenes as number) ?? 0,
+                  status: 'complete',
+                })
+              }
+            } catch {
+              setError('Story generated but failed to load plan. Please refresh.')
+            }
+          }
+        } else if (job.status === 'failed') {
+          clearInterval(pollRef.current!)
+          setLoading(false)
+          setError(job.error_message ?? 'Story generation failed. Please try again.')
+        }
+      } catch {
+        clearInterval(pollRef.current!)
+        setLoading(false)
+        setError('Lost connection while polling job status.')
+      }
+    }, 3000)
+  }
+
+  const handleGenerate = async (t: string) => {
+    setTopic(t)
     setError(null)
     setJobId(null)
     setJobStatus(null)
     setStory(null)
     setLoading(true)
+    setProgressLabel('Planning story structure...')
 
     try {
-      await new Promise((r) => setTimeout(r, 500))
-      const fakeJobId = crypto.randomUUID()
-      setJobId(fakeJobId)
-      setJobStatus('queued')
-      setProgressLabel('Planning story structure...')
-
-      setTimeout(() => { setJobStatus('processing'); setProgressLabel('Generating story plan with LLaMA 3.3 70B...') }, 1500)
-      setTimeout(() => setProgressLabel('Creating characters...'), 4000)
-      setTimeout(() => setProgressLabel(`Generating scenes for ${episodeCount} episodes...`), 7000)
-
-      setTimeout(() => {
-        setJobStatus('complete')
-        setLoading(false)
-        // Mock story plan
-        const episodes: Episode[] = Array.from({ length: episodeCount }, (_, i) => ({
-          episode_number: i + 1,
-          title: `Episode ${i + 1}: ${['The Discovery', 'The Challenge', 'The Breakthrough', 'The Revelation', 'The Mastery'][i % 5]}`,
-          educational_concept: `Core concept ${i + 1} of ${topic}`,
-          scenes: Array.from({ length: 3 }, (_, j) => ({
-            scene_number: j + 1,
-            description: `Scene ${j + 1} of episode ${i + 1}`,
-            caption: `This scene explains concept ${j + 1} of "${topic}" through the story.`,
-            asset_url: `https://picsum.photos/seed/${fakeJobId}-${i}-${j}/512/512`,
-            status: 'complete' as const,
-          })),
-        }))
-
-        setStory({
-          story_id: fakeJobId,
-          title: `The World of ${topic}`,
-          synopsis: `An educational anime series that takes students on a journey through the fascinating world of ${topic}, exploring its core concepts through compelling characters and dramatic storytelling.`,
-          topic,
-          characters: [
-            { name: 'Hana', role: 'Curious student protagonist' },
-            { name: 'Professor Kai', role: 'Wise mentor' },
-            { name: 'Ren', role: 'Rival turned ally' },
-          ],
-          episodes,
-          status: 'complete',
-        })
-      }, 10000)
-    } catch {
-      setError('Failed to generate story. Please try again.')
+      const job = await api.generateStory(t, episodeCount)
+      setJobId(job.job_id)
+      setJobStatus(job.status)
+      startPolling(job.job_id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit story job. Please try again.')
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const t = searchParams.get('topic')
+    if (t) handleGenerate(t)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [])
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -110,10 +143,10 @@ export default function StoryPage() {
         <TopicInput
           onSubmit={handleGenerate}
           loading={loading}
+          defaultValue={topic}
           placeholder="Enter a topic — e.g. Quantum Physics, The French Revolution..."
           buttonLabel="Generate Story"
         >
-          {/* Episode count */}
           <div className="flex items-center gap-4">
             <span className="text-xs text-slate-400">Episodes:</span>
             <div className="flex gap-1.5">
@@ -144,7 +177,7 @@ export default function StoryPage() {
 
       {error && (
         <div className="mb-6">
-          <ErrorCard message={error} />
+          <ErrorCard message={error} onRetry={() => topic && handleGenerate(topic)} />
         </div>
       )}
 

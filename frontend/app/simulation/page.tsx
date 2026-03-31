@@ -1,10 +1,11 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import TopicInput from '@/components/shared/TopicInput'
 import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import SimulationFrame from '@/components/simulation/SimulationFrame'
+import { api } from '@/lib/api'
 
 const categories = ['physics', 'chemistry', 'biology', 'mathematics', 'history'] as const
 type Category = typeof categories[number]
@@ -17,64 +18,107 @@ const categoryIcons: Record<Category, string> = {
   history: '🏛️',
 }
 
+interface SimulationResult {
+  asset_id: string
+  asset_url: string
+  topic: string
+  category: Category
+}
+
 export default function SimulationPage() {
   const searchParams = useSearchParams()
   const [topic, setTopic] = useState(searchParams.get('topic') || '')
   const [category, setCategory] = useState<Category>('physics')
   const [jobId, setJobId] = useState<string | null>(null)
   const [jobStatus, setJobStatus] = useState<'queued' | 'processing' | 'complete' | 'failed' | null>(null)
+  const [result, setResult] = useState<SimulationResult | null>(null)
   const [simulationHtml, setSimulationHtml] = useState<string | null>(null)
-  const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const startPolling = (id: string, currentTopic: string, currentCategory: Category) => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    pollRef.current = setInterval(async () => {
+      try {
+        const job = await api.getJob(id)
+        setJobStatus(job.status)
+        if (job.status === 'complete') {
+          clearInterval(pollRef.current!)
+          setLoading(false)
+          if (job.asset_id) {
+            try {
+              const asset = await api.getAsset(job.asset_id)
+              setResult({
+                asset_id: asset.asset_id,
+                asset_url: asset.asset_url,
+                topic: currentTopic,
+                category: currentCategory,
+              })
+              // Fetch the HTML bundle from the asset URL
+              const res = await fetch(asset.asset_url)
+              const html = await res.text()
+              setSimulationHtml(html)
+            } catch {
+              if (job.asset_url) {
+                setResult({
+                  asset_id: job.asset_id!,
+                  asset_url: job.asset_url!,
+                  topic: currentTopic,
+                  category: currentCategory,
+                })
+                const res = await fetch(job.asset_url)
+                const html = await res.text()
+                setSimulationHtml(html)
+              }
+            }
+          }
+        } else if (job.status === 'failed') {
+          clearInterval(pollRef.current!)
+          setLoading(false)
+          setError(job.error_message ?? 'Simulation generation failed. Please try again.')
+        }
+      } catch {
+        clearInterval(pollRef.current!)
+        setLoading(false)
+        setError('Lost connection while polling job status.')
+      }
+    }, 2000)
+  }
 
   const handleGenerate = async (t: string) => {
     setTopic(t)
     setError(null)
     setJobId(null)
     setJobStatus(null)
+    setResult(null)
     setSimulationHtml(null)
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 500))
-      const fakeJobId = crypto.randomUUID()
-      setJobId(fakeJobId)
-      setJobStatus('queued')
-      setTimeout(() => setJobStatus('processing'), 1500)
-      setTimeout(() => {
-        setJobStatus('complete')
-        // Placeholder simulation HTML
-        setSimulationHtml(`<!DOCTYPE html><html><head><style>
-          body{margin:0;background:#0a0a0f;color:#f1f5f9;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;gap:16px;}
-          h2{color:#7c3aed;margin:0;}canvas{border:1px solid #1e1e3a;border-radius:12px;}
-          .controls{display:flex;gap:12px;align-items:center;}
-          input[type=range]{accent-color:#7c3aed;}label{font-size:12px;color:#94a3b8;}
-        </style></head><body>
-          <h2>${t} — ${category} Simulation</h2>
-          <canvas id="c" width="480" height="300"></canvas>
-          <div class="controls"><label>Speed <input type="range" id="spd" min="1" max="10" value="5"></label></div>
-          <script>
-            const c=document.getElementById('c'),ctx=c.getContext('2d');
-            let t=0,spd=5;
-            document.getElementById('spd').oninput=e=>spd=+e.target.value;
-            function draw(){
-              ctx.fillStyle='#0a0a0f';ctx.fillRect(0,0,480,300);
-              ctx.strokeStyle='#7c3aed';ctx.lineWidth=2;ctx.beginPath();
-              for(let x=0;x<480;x++){const y=150+80*Math.sin((x+t)*0.02*spd);x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}
-              ctx.stroke();t+=1;requestAnimationFrame(draw);
-            }draw();
-          </script></body></html>`)
-        setShareUrl(`${window.location.origin}/simulation?id=${fakeJobId}`)
-        setLoading(false)
-      }, 6000)
-    } catch {
-      setError('Failed to generate simulation. Please try again.')
+      const job = await api.generateSimulation(t, category)
+      setJobId(job.job_id)
+      setJobStatus(job.status)
+      startPolling(job.job_id, t, category)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to submit simulation job. Please try again.')
       setLoading(false)
     }
   }
 
+  // Auto-generate if topic is in query params
+  useEffect(() => {
+    const t = searchParams.get('topic')
+    if (t) handleGenerate(t)
+    return () => { if (pollRef.current) clearInterval(pollRef.current) }
+  }, [])
+
+  const shareUrl = result
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/simulation?topic=${encodeURIComponent(result.topic)}`
+    : undefined
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
+      {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-xl bg-accent-cyan/20 flex items-center justify-center text-xl">🔬</div>
@@ -85,8 +129,14 @@ export default function SimulationPage() {
         </div>
       </div>
 
+      {/* Input */}
       <div className="mb-6">
-        <TopicInput onSubmit={handleGenerate} loading={loading} defaultValue={topic} buttonLabel="Generate Simulation">
+        <TopicInput
+          onSubmit={handleGenerate}
+          loading={loading}
+          defaultValue={topic}
+          buttonLabel="Generate Simulation"
+        >
           <div className="flex flex-wrap gap-2">
             {categories.map((c) => (
               <button
@@ -105,22 +155,30 @@ export default function SimulationPage() {
         </TopicInput>
       </div>
 
+      {/* Progress */}
       {jobId && jobStatus !== 'complete' && jobStatus !== 'failed' && (
         <div className="mb-6">
           <JobProgressBar jobId={jobId} status={jobStatus} label="Generating simulation code..." />
         </div>
       )}
 
+      {/* Error */}
       {error && (
         <div className="mb-6">
           <ErrorCard message={error} onRetry={() => topic && handleGenerate(topic)} />
         </div>
       )}
 
-      {simulationHtml && (
-        <SimulationFrame html={simulationHtml} topic={topic} shareUrl={shareUrl || undefined} />
+      {/* Result */}
+      {simulationHtml && result && (
+        <SimulationFrame
+          html={simulationHtml}
+          topic={result.topic}
+          shareUrl={shareUrl}
+        />
       )}
 
+      {/* Empty state */}
       {!simulationHtml && !loading && !jobId && (
         <div className="text-center py-20 text-slate-600">
           <div className="text-5xl mb-4">🔬</div>

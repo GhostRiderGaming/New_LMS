@@ -68,7 +68,7 @@ export default function SimulationFrame({ html, topic, shareUrl }: Props) {
       <iframe
         ref={iframeRef}
         srcDoc={html}
-        sandbox="allow-scripts"
+        sandbox="allow-scripts allow-same-origin"
         className={`w-full bg-bg-primary ${fullscreen ? 'h-[calc(100%-48px)]' : 'h-[480px]'}`}
         title={`${topic} simulation`}
       />
