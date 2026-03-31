@@ -177,9 +177,14 @@ def test_delete_endpoint_makes_asset_unretrievable(data: bytes) -> None:
     from unittest.mock import patch, MagicMock
     from app.main import app
     from app.models.anime_assets import Base, engine, SessionLocal, Asset as AssetModel
+    from app.core.auth import _DEV_API_KEY
 
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
+
+    # Derive the session_id that the auth middleware will produce for dev-api-key
+    import uuid as _uuid
+    derived_session_id = str(_uuid.uuid5(_uuid.NAMESPACE_DNS, _DEV_API_KEY))
 
     asset_id = str(uuid.uuid4())
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -194,7 +199,7 @@ def test_delete_endpoint_makes_asset_unretrievable(data: bytes) -> None:
         asset_metadata={"caption": "test"},
         created_at=now,
         expires_at=now + datetime.timedelta(hours=25),
-        session_id="test-session",
+        session_id=derived_session_id,
     )
     db.add(asset)
     db.commit()

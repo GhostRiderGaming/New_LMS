@@ -15,6 +15,8 @@ from app.services.bella_service import ChatResult
 
 client = TestClient(app)
 
+_BELLA_PREFIX = "/api/v1/bella"
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -47,7 +49,7 @@ class TestChat:
         mock_svc = _make_service_mock(chat_reply="Hi there!")
 
         with patch("app.routers.bella.bella_service", mock_svc):
-            resp = client.post("/bella/chat", json={"message": "Hello", "session_id": "s1"})
+            resp = client.post(f"{_BELLA_PREFIX}/chat", json={"message": "Hello", "session_id": "s1"})
 
         assert resp.status_code == 200
         data = resp.json()
@@ -60,7 +62,7 @@ class TestChat:
         mock_svc = _make_service_mock(chat_reply="Sure!")
 
         with patch("app.routers.bella.bella_service", mock_svc):
-            resp = client.post("/bella/chat", json={"message": "What is gravity?"})
+            resp = client.post(f"{_BELLA_PREFIX}/chat", json={"message": "What is gravity?"})
 
         assert resp.status_code == 200
         assert resp.json()["reply"] == "Sure!"
@@ -71,7 +73,7 @@ class TestChat:
         mock_svc.chat = AsyncMock(side_effect=RuntimeError("LLM unavailable"))
 
         with patch("app.routers.bella.bella_service", mock_svc):
-            resp = client.post("/bella/chat", json={"message": "Hi"})
+            resp = client.post(f"{_BELLA_PREFIX}/chat", json={"message": "Hi"})
 
         assert resp.status_code == 500
         detail = resp.json()["detail"]
@@ -97,7 +99,7 @@ class TestHistory:
         mock_svc = _make_service_mock(history=stored)
 
         with patch("app.routers.bella.bella_service", mock_svc):
-            resp = client.get("/bella/history", params={"session_id": "sess-abc"})
+            resp = client.get(f"{_BELLA_PREFIX}/history", params={"session_id": "sess-abc"})
 
         assert resp.status_code == 200
         messages = resp.json()["messages"]
@@ -112,7 +114,7 @@ class TestHistory:
         mock_svc = _make_service_mock(history=[])
 
         with patch("app.routers.bella.bella_service", mock_svc):
-            resp = client.get("/bella/history", params={"session_id": "unknown"})
+            resp = client.get(f"{_BELLA_PREFIX}/history", params={"session_id": "unknown"})
 
         assert resp.status_code == 200
         assert resp.json()["messages"] == []
@@ -122,7 +124,7 @@ class TestHistory:
         mock_svc = _make_service_mock(history=[])
 
         with patch("app.routers.bella.bella_service", mock_svc):
-            client.get("/bella/history", params={"session_id": "my-session"})
+            client.get(f"{_BELLA_PREFIX}/history", params={"session_id": "my-session"})
 
         mock_svc.get_history.assert_called_once_with("my-session")
 
@@ -138,7 +140,7 @@ class TestTranscribe:
 
         with patch("app.routers.bella.bella_service", mock_svc):
             resp = client.post(
-                "/bella/transcribe",
+                f"{_BELLA_PREFIX}/transcribe",
                 files={"audio": ("audio.webm", b"fake-audio-bytes", "audio/webm")},
             )
 
@@ -155,7 +157,7 @@ class TestTranscribe:
 
         with patch("app.routers.bella.bella_service", mock_svc):
             resp = client.post(
-                "/bella/transcribe",
+                f"{_BELLA_PREFIX}/transcribe",
                 files={"audio": ("audio.webm", b"fake-audio-bytes", "audio/webm")},
             )
 
@@ -178,7 +180,7 @@ class TestErrorResponseShape:
         mock_svc.chat = AsyncMock(side_effect=Exception("boom"))
 
         with patch("app.routers.bella.bella_service", mock_svc):
-            resp = client.post("/bella/chat", json={"message": "hi"})
+            resp = client.post(f"{_BELLA_PREFIX}/chat", json={"message": "hi"})
 
         assert "request_id" in resp.json()["detail"]
 
@@ -188,7 +190,7 @@ class TestErrorResponseShape:
 
         with patch("app.routers.bella.bella_service", mock_svc):
             resp = client.post(
-                "/bella/transcribe",
+                f"{_BELLA_PREFIX}/transcribe",
                 files={"audio": ("a.webm", b"x", "audio/webm")},
             )
 
@@ -199,6 +201,6 @@ class TestErrorResponseShape:
         mock_svc.get_history = MagicMock(side_effect=Exception("boom"))
 
         with patch("app.routers.bella.bella_service", mock_svc):
-            resp = client.get("/bella/history", params={"session_id": "x"})
+            resp = client.get(f"{_BELLA_PREFIX}/history", params={"session_id": "x"})
 
         assert "request_id" in resp.json()["detail"]

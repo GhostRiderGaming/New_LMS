@@ -22,6 +22,8 @@ from app.services.bella_service import BellaService
 
 client = TestClient(app)
 
+_BELLA_PREFIX = "/api/v1/bella"
+
 # ---------------------------------------------------------------------------
 # Emotion → expression mapping (pure function, no HTTP needed)
 # ---------------------------------------------------------------------------
@@ -143,7 +145,7 @@ def test_history_round_trip_preserves_order(messages: list[str]) -> None:
         # Send all messages sequentially
         for msg in messages:
             resp = client.post(
-                "/bella/chat",
+                f"{_BELLA_PREFIX}/chat",
                 json={"message": msg, "session_id": session_id},
             )
             assert resp.status_code == 200
@@ -151,7 +153,7 @@ def test_history_round_trip_preserves_order(messages: list[str]) -> None:
             expected_pairs.append((msg, reply_text))
 
         # Fetch history
-        hist_resp = client.get("/bella/history", params={"session_id": session_id})
+        hist_resp = client.get(f"{_BELLA_PREFIX}/history", params={"session_id": session_id})
 
     assert hist_resp.status_code == 200
     history = hist_resp.json()["messages"]
@@ -231,13 +233,13 @@ def test_bella_history_persistence(messages: list[str]) -> None:
         sent_pairs: list[tuple[str, str]] = []
         for msg in messages:
             resp = client.post(
-                "/bella/chat",
+                f"{_BELLA_PREFIX}/chat",
                 json={"message": msg, "session_id": session_id},
             )
             assert resp.status_code == 200
             sent_pairs.append((msg, resp.json()["reply"]))
 
-        hist_resp = client.get("/bella/history", params={"session_id": session_id})
+        hist_resp = client.get(f"{_BELLA_PREFIX}/history", params={"session_id": session_id})
 
     assert hist_resp.status_code == 200
     history_entries = hist_resp.json()["messages"]
@@ -298,7 +300,7 @@ def test_bella_tts_fallback_on_failure(message: str) -> None:
 
     with patch("app.routers.bella.bella_service", service):
         resp = client.post(
-            "/bella/chat",
+            f"{_BELLA_PREFIX}/chat",
             json={"message": message, "session_id": session_id},
         )
 

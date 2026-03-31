@@ -45,8 +45,11 @@ class AssetResponse(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _get_asset_or_404(asset_id: str, db: Session) -> Asset:
-    asset = db.query(Asset).filter(Asset.asset_id == asset_id).first()
+def _get_asset_or_404(asset_id: str, db: Session, session_id: str | None = None) -> Asset:
+    q = db.query(Asset).filter(Asset.asset_id == asset_id)
+    if session_id:
+        q = q.filter(Asset.session_id == session_id)
+    asset = q.first()
     if not asset:
         raise HTTPException(
             status_code=404,
@@ -143,7 +146,7 @@ async def get_asset(
     session: dict = Depends(get_current_session),
 ):
     """Return asset metadata + presigned download URL. 404 if not found."""
-    asset = _get_asset_or_404(asset_id, db)
+    asset = _get_asset_or_404(asset_id, db, session_id=session["session_id"])
     return _asset_to_response(asset)
 
 
@@ -154,7 +157,7 @@ async def delete_asset(
     session: dict = Depends(get_current_session),
 ):
     """Delete asset from R2 and DB. Returns 204. 404 if not found."""
-    asset = _get_asset_or_404(asset_id, db)
+    asset = _get_asset_or_404(asset_id, db, session_id=session["session_id"])
     # Remove from R2 first, then DB
     asset_manager.delete_file(asset.file_path)
     db.delete(asset)
@@ -169,7 +172,7 @@ async def download_asset(
     session: dict = Depends(get_current_session),
 ):
     """Stream raw asset bytes. 404 if not found in DB or R2."""
-    asset = _get_asset_or_404(asset_id, db)
+    asset = _get_asset_or_404(asset_id, db, session_id=session["session_id"])
     data = asset_manager.download_file(asset.file_path)
     if data is None:
         raise HTTPException(

@@ -19,7 +19,14 @@ async def lifespan(app: FastAPI):
 
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="Education Anime Generator API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(
+    title="Education Anime Generator API",
+    version="1.0.0",
+    lifespan=lifespan,
+    openapi_url="/api/v1/openapi.json",
+    docs_url="/api/v1/docs",
+    redoc_url="/api/v1/redoc",
+)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -32,7 +39,7 @@ app.add_middleware(
 )
 
 # Router registration
-app.include_router(bella.router, prefix="/bella", tags=["bella"])
+app.include_router(bella.router, prefix="/api/v1/bella", tags=["bella"])
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
 app.include_router(assets.router, prefix="/api/v1/assets", tags=["assets"])
 app.include_router(anime.router, prefix="/api/v1/anime", tags=["anime"])
