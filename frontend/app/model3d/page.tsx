@@ -54,7 +54,7 @@ export default function Model3DPage() {
               const meta = asset.metadata as Record<string, string>
               setResult({
                 asset_id: asset.asset_id,
-                asset_url: asset.asset_url,
+                asset_url: asset.presigned_url,
                 object_name: meta?.object_name ?? currentObjectName,
                 description: meta?.description ?? '',
               })

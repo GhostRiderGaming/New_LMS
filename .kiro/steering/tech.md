@@ -21,16 +21,16 @@
 
 | Service | Provider | Use |
 |---|---|---|
-| Animagine XL 4.0 | Fal.ai | Anime image generation |
-| Hunyuan3D-2.1 | Fal.ai | 3D model generation |
-| Kokoro TTS v1.0 | Fal.ai | Bella voice synthesis |
+| Animagine XL 4.0 | HF Inference API (free) | Anime image generation |
+| TripoSR | HF Inference API (free) | 3D model generation |
+| edge-tts | Microsoft Edge (free, no key) | Bella voice synthesis |
 | LLaMA 3.3 70B | Groq API (free tier) | LLM for prompts, story, simulation code, Bella chat |
 | Whisper Large v3 | Groq API (free tier) | Bella speech-to-text |
 | LlamaGuard 3 8B | Groq API (free tier) | Content safety classification |
 
 ## Storage
 
-- **Object store:** Cloudflare R2 (S3-compatible, boto3 client, free 10GB/month)
+- **Object store:** AWS S3 (boto3 client)
 - **Database:** Supabase PostgreSQL (free tier) / SQLite for local dev
 
 ## Testing
@@ -73,12 +73,12 @@ docker compose up
 
 Backend `.env`:
 ```
-FAL_API_KEY=
+HF_API_TOKEN=
 GROQ_API_KEY=
-CLOUDFLARE_R2_ACCOUNT_ID=
-CLOUDFLARE_R2_ACCESS_KEY=
-CLOUDFLARE_R2_SECRET_KEY=
-CLOUDFLARE_R2_BUCKET=catchupx-anime-assets
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_REGION=us-east-1
+AWS_S3_BUCKET=catchupx-anime-assets
 DATABASE_URL=sqlite:///./app.db
 UPSTASH_REDIS_URL=
 STORAGE_QUOTA_BYTES=524288000

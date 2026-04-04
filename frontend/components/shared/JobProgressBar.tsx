@@ -1,11 +1,12 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { api, getJobWsUrl, type Job, type JobStatus } from '@/lib/api'
 
 interface Props {
   jobId: string | null
-  status: 'queued' | 'processing' | 'complete' | 'failed' | null
+  status: JobStatus | null
   label?: string
-  onComplete?: () => void
+  onComplete?: (job: Job) => void
 }
 
 const statusMessages: Record<string, string[]> = {
@@ -18,27 +19,112 @@ const statusMessages: Record<string, string[]> = {
     'Uploading asset...',
     'Almost done...',
   ],
-  complete: ['Done!'],
+  complete: ['Complete!'],
   failed: ['Generation failed'],
 }
 
-export default function JobProgressBar({ jobId, status, label, onComplete }: Props) {
+export default function JobProgressBar({ jobId, status: initialStatus, label, onComplete }: Props) {
+  const [status, setStatus] = useState<JobStatus | null>(initialStatus)
   const [progress, setProgress] = useState(0)
   const [msgIndex, setMsgIndex] = useState(0)
+  const wsRef = useRef<WebSocket | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const completedJobRef = useRef<Job | null>(null)
 
+  // Keep status in sync if parent passes a new initialStatus (e.g. before WS connects)
   useEffect(() => {
-    if (!status) return
-    if (status === 'complete') { setProgress(100); onComplete?.(); return }
+    if (initialStatus && !status) setStatus(initialStatus)
+  }, [initialStatus])
+
+  // Animate progress bar while processing
+  useEffect(() => {
+    if (progressRef.current) clearInterval(progressRef.current)
+
+    if (status === 'complete') { setProgress(100); return }
     if (status === 'failed') { setProgress(100); return }
-    if (status === 'queued') setProgress(10)
+    if (status === 'queued') { setProgress(10); return }
     if (status === 'processing') {
-      const interval = setInterval(() => {
+      progressRef.current = setInterval(() => {
         setProgress((p) => Math.min(p + Math.random() * 8, 88))
         setMsgIndex((i) => (i + 1) % statusMessages.processing.length)
       }, 1200)
-      return () => clearInterval(interval)
+      return () => { if (progressRef.current) clearInterval(progressRef.current) }
     }
   }, [status])
+
+  // Fire onComplete callback once when status becomes 'complete'
+  useEffect(() => {
+    if (status === 'complete') {
+      onComplete?.(completedJobRef.current ?? { job_id: jobId ?? '', status: 'complete' })
+    }
+  }, [status])
+
+  // WebSocket connection with polling fallback
+  useEffect(() => {
+    if (!jobId) return
+    if (status === 'complete' || status === 'failed') return
+
+    let cancelled = false
+
+    function startPolling() {
+      if (pollRef.current) return
+      pollRef.current = setInterval(async () => {
+        try {
+          const job = await api.getJob(jobId!)
+          if (cancelled) return
+          completedJobRef.current = job
+          setStatus(job.status)
+          if (job.status === 'complete' || job.status === 'failed') {
+            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+          }
+        } catch {
+          // ignore transient errors
+        }
+      }, 2000)
+    }
+
+    function connectWs() {
+      const url = getJobWsUrl(jobId!)
+      let ws: WebSocket
+      try {
+        ws = new WebSocket(url)
+      } catch {
+        startPolling()
+        return
+      }
+      wsRef.current = ws
+
+      ws.onmessage = (event) => {
+        if (cancelled) return
+        try {
+          const data: Job = JSON.parse(event.data)
+          completedJobRef.current = data
+          setStatus(data.status)
+        } catch {
+          // ignore malformed frames
+        }
+      }
+
+      ws.onerror = () => {
+        // WebSocket failed — fall back to polling
+        ws.close()
+        if (!cancelled) startPolling()
+      }
+
+      ws.onclose = () => {
+        wsRef.current = null
+      }
+    }
+
+    connectWs()
+
+    return () => {
+      cancelled = true
+      if (wsRef.current) { wsRef.current.close(); wsRef.current = null }
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+    }
+  }, [jobId])
 
   if (!status || !jobId) return null
 

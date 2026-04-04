@@ -1,5 +1,5 @@
 """
-Cloudflare R2 asset storage service (S3-compatible via boto3).
+AWS S3 asset storage service (boto3).
 
 Provides: upload_file, get_presigned_url, delete_file, download_file, store_asset.
 """
@@ -127,15 +127,13 @@ def enforce_expires_at(created_at: datetime, expires_at: Optional[datetime] = No
 
 class AssetManager:
     def __init__(self):
-        account_id = os.getenv("CLOUDFLARE_R2_ACCOUNT_ID", "")
-        self._bucket = os.getenv("CLOUDFLARE_R2_BUCKET", "catchupx-anime-assets")
+        self._bucket = os.getenv("AWS_S3_BUCKET", "catchupx-anime-assets")
         self._client = boto3.client(
             "s3",
-            endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com" if account_id else None,
-            aws_access_key_id=os.getenv("CLOUDFLARE_R2_ACCESS_KEY", ""),
-            aws_secret_access_key=os.getenv("CLOUDFLARE_R2_SECRET_KEY", ""),
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", ""),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+            region_name=os.getenv("AWS_REGION", "us-east-1"),
             config=Config(signature_version="s3v4"),
-            region_name="auto",
         )
 
     def store_asset(

@@ -1,17 +1,20 @@
 """
-BellaService — LLM chat (Groq LLaMA 3.3 70B), TTS (Fal.ai Kokoro v1.0),
+BellaService — LLM chat (Groq LLaMA 3.3 70B), TTS (edge-tts, free),
 STT (Groq Whisper Large v3), and in-memory session history.
 
 Requirements: 10.3, 10.4, 10.5, 10.11, 10.12
 """
 from __future__ import annotations
 
+import asyncio
 import base64
+import io
 import os
+import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
-import httpx
+import edge_tts
 from groq import AsyncGroq
 
 # ---------------------------------------------------------------------------
@@ -20,7 +23,7 @@ from groq import AsyncGroq
 
 _GROQ_CHAT_MODEL = "llama-3.3-70b-versatile"
 _GROQ_WHISPER_MODEL = "whisper-large-v3"
-_FAL_TTS_URL = "https://fal.run/fal-ai/kokoro/v1.0/american-english"
+_EDGE_TTS_VOICE = "en-US-AriaNeural"  # friendly female voice, free via edge-tts
 
 _SYSTEM_PROMPT = (
     "You are Bella, a friendly and knowledgeable educational assistant. "
@@ -105,47 +108,32 @@ class BellaService:
         )
 
     # ------------------------------------------------------------------
-    # TTS — Fal.ai Kokoro v1.0
+    # TTS — edge-tts (free, no API key required)
     # Requirements: 10.4, 10.5
     # ------------------------------------------------------------------
 
     async def synthesize_speech(self, text: str) -> bytes:
-        """POST *text* to Fal.ai Kokoro TTS and return raw audio bytes."""
+        """Synthesize speech via edge-tts and return raw MP3 bytes."""
         audio_bytes, _ = await self._synthesize_speech_with_phonemes(text)
         return audio_bytes
 
     async def _synthesize_speech_with_phonemes(
         self, text: str
     ) -> tuple[bytes, list[dict[str, Any]]]:
-        """Call Fal.ai Kokoro TTS and return (audio_bytes, phoneme_timestamps).
-
-        Kokoro returns { "audio": { "url": "..." }, "phonemes": [...] } (if available).
-        Phoneme timestamps are used for VRM lip sync (Requirement 10.4).
         """
-        fal_key = os.environ.get("FAL_API_KEY", "")
-        headers = {
-            "Authorization": f"Key {fal_key}",
-            "Content-Type": "application/json",
-        }
-        payload: dict[str, Any] = {"input": text}
-
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                _FAL_TTS_URL,
-                json=payload,
-                headers=headers,
-            )
-            response.raise_for_status()
-            data = response.json()
-
-        # Kokoro returns { "audio": { "url": "...", ... }, "phonemes": [...] }
-        audio_url: str = data["audio"]["url"]
-        phonemes: list[dict[str, Any]] = data.get("phonemes", [])
-
-        async with httpx.AsyncClient(timeout=30) as client:
-            audio_response = await client.get(audio_url)
-            audio_response.raise_for_status()
-            return audio_response.content, phonemes
+        Use edge-tts to synthesize speech. Returns (mp3_bytes, phonemes).
+        edge-tts doesn't provide phoneme timestamps, so phonemes is always [].
+        Lip sync will fall back to amplitude-based animation on the frontend.
+        """
+        communicate = edge_tts.Communicate(text, _EDGE_TTS_VOICE)
+        buf = io.BytesIO()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                buf.write(chunk["data"])
+        audio_bytes = buf.getvalue()
+        if not audio_bytes:
+            raise RuntimeError("edge-tts returned empty audio")
+        return audio_bytes, []
 
     # ------------------------------------------------------------------
     # STT — Groq Whisper Large v3

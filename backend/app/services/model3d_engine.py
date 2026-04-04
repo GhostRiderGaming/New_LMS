@@ -1,8 +1,8 @@
 """
 3D model generation service.
 
-Uses Fal.ai Hunyuan3D-2.1 for text-to-3D generation, downloads the GLTF result,
-uploads to Cloudflare R2, and attaches required metadata.
+Uses Hugging Face Inference API (free) with stabilityai/TripoSR for text-to-3D generation,
+uploads to AWS S3, and attaches required metadata.
 
 Public API:
   generate_model3d(object_name, category, job_id, session_id) -> Asset
@@ -11,11 +11,11 @@ Requirements: 3.1, 3.4, 3.7
 """
 from __future__ import annotations
 
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Literal
 
-import fal_client
 import httpx
 
 from app.models.anime_assets import Asset, SessionLocal
@@ -26,7 +26,9 @@ from app.services.prompt_builder import prompt_builder
 # Constants
 # ---------------------------------------------------------------------------
 
-_FAL_MODEL = "fal-ai/hunyuan3d-v2"
+# TripoSR via HF Inference API — free, no key required (rate-limited)
+_HF_MODEL = "stabilityai/TripoSR"
+_HF_API_URL = f"https://api-inference.huggingface.co/models/{_HF_MODEL}"
 
 Model3DCategory = Literal["anatomy", "chemistry", "astronomy", "historical", "mechanical"]
 
@@ -49,27 +51,20 @@ _FALLBACK_SUGGESTIONS: dict[str, list[str]] = {
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-async def _call_fal_model3d(prompt: str) -> bytes:
+async def _call_hf_model3d(prompt: str) -> bytes:
     """
-    Call Fal.ai Hunyuan3D-2.1 with the given prompt.
-    Returns raw GLTF bytes.
+    Call HF Inference API (TripoSR) with the given prompt.
+    Returns raw GLB bytes.
     Requirement 3.1: generate or retrieve a 3D model in GLTF format.
     """
-    result = await fal_client.run_async(
-        _FAL_MODEL,
-        arguments={
-            "prompt": prompt,
-            "num_inference_steps": 50,
-            "guidance_scale": 7.5,
-            "output_format": "glb",  # GLB = binary GLTF with embedded textures
-        },
-    )
-    # result["model_mesh"]["url"] — download the GLTF/GLB file
-    model_url: str = result["model_mesh"]["url"]
-    async with httpx.AsyncClient(timeout=120) as client:
-        resp = await client.get(model_url)
+    hf_token = os.environ.get("HF_API_TOKEN", "")
+    headers = {"Authorization": f"Bearer {hf_token}"} if hf_token else {}
+    payload = {"inputs": prompt}
+
+    async with httpx.AsyncClient(timeout=180) as client:
+        resp = await client.post(_HF_API_URL, json=payload, headers=headers)
         resp.raise_for_status()
-        return resp.content
+        return resp.content  # HF returns raw GLB bytes
 
 
 def _store_asset_record(
@@ -135,8 +130,8 @@ async def generate_model3d(
     # 1. Build prompt via Groq
     model_prompt = await prompt_builder.build_3d_prompt(object_name, category)
 
-    # 2. Generate 3D model via Fal.ai
-    glb_bytes = await _call_fal_model3d(model_prompt)
+    # 2. Generate 3D model via HF TripoSR
+    glb_bytes = await _call_hf_model3d(model_prompt)
 
     # 3. Upload to R2
     key = f"model3d/{job_id}/{uuid.uuid4()}.glb"

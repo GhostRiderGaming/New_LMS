@@ -1,8 +1,8 @@
 """
 Anime image and animation generation service.
 
-Uses Fal.ai Animagine XL 4.0 for image generation, Pillow for caption overlay,
-FFmpeg for WebM animation assembly, and Cloudflare R2 for storage.
+Uses Hugging Face Inference API (free) with Animagine XL 4.0 for image generation,
+Pillow for caption overlay, FFmpeg for WebM animation assembly, and AWS S3 for storage.
 
 Public API:
   generate_anime_image(topic, style, caption, job_id, session_id) -> Asset
@@ -20,7 +20,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Literal
 
-import fal_client
 import httpx
 from PIL import Image, ImageDraw, ImageFont
 
@@ -32,7 +31,8 @@ from app.services.prompt_builder import prompt_builder
 # Constants
 # ---------------------------------------------------------------------------
 
-_FAL_MODEL = "fal-ai/animagine-xl"
+_HF_MODEL = "cagliostrolab/animagine-xl-4.0"
+_HF_API_URL = f"https://api-inference.huggingface.co/models/{_HF_MODEL}"
 _IMAGE_SIZE = {"width": 832, "height": 1216}  # portrait — standard anime aspect ratio
 _CAPTION_FONT_SIZE = 20
 _CAPTION_PADDING = 12
@@ -54,20 +54,17 @@ def _add_caption_overlay(image_bytes: bytes, caption: str) -> bytes:
     img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
     w, h = img.size
 
-    # Try to load a bundled font; fall back to PIL default
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", _CAPTION_FONT_SIZE)
     except (IOError, OSError):
         font = ImageFont.load_default()
 
-    # Measure text to size the caption bar
     dummy = Image.new("RGBA", (1, 1))
     draw_dummy = ImageDraw.Draw(dummy)
     bbox = draw_dummy.textbbox((0, 0), caption, font=font)
     text_h = bbox[3] - bbox[1]
     bar_h = text_h + _CAPTION_PADDING * 2
 
-    # Draw semi-transparent bar
     overlay = Image.new("RGBA", (w, bar_h), (0, 0, 0, _CAPTION_BG_ALPHA))
     img.paste(overlay, (0, h - bar_h), overlay)
 
@@ -84,24 +81,24 @@ def _add_caption_overlay(image_bytes: bytes, caption: str) -> bytes:
     return out.getvalue()
 
 
-async def _call_fal_image(prompt: str) -> bytes:
-    """Call Fal.ai Animagine XL 4.0 and return raw image bytes."""
-    result = await fal_client.run_async(
-        _FAL_MODEL,
-        arguments={
-            "prompt": prompt,
+async def _call_hf_image(prompt: str) -> bytes:
+    """Call Hugging Face Inference API (Animagine XL 4.0) and return raw image bytes."""
+    hf_token = os.environ.get("HF_API_TOKEN", "")
+    headers = {"Authorization": f"Bearer {hf_token}"} if hf_token else {}
+    payload = {
+        "inputs": prompt,
+        "parameters": {
             "negative_prompt": "nsfw, lowres, bad anatomy, bad hands, text, error, missing fingers",
-            **_IMAGE_SIZE,
+            "width": _IMAGE_SIZE["width"],
+            "height": _IMAGE_SIZE["height"],
             "num_inference_steps": 28,
             "guidance_scale": 7.0,
         },
-    )
-    # result["images"][0]["url"] — download the image
-    image_url: str = result["images"][0]["url"]
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.get(image_url)
+    }
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(_HF_API_URL, json=payload, headers=headers)
         resp.raise_for_status()
-        return resp.content
+        return resp.content  # HF returns raw image bytes directly
 
 
 def _store_asset_record(
@@ -165,7 +162,7 @@ async def generate_anime_image(
     anime_prompt = await prompt_builder.build_anime_prompt(topic, style)
 
     # 2. Generate image
-    raw_bytes = await _call_fal_image(anime_prompt)
+    raw_bytes = await _call_hf_image(anime_prompt)
 
     # 3. Caption overlay
     final_bytes = _add_caption_overlay(raw_bytes, caption)
@@ -221,7 +218,7 @@ async def generate_anime_animation(
     frame_bytes_list: list[bytes] = []
     for i in range(n_frames):
         variation = f"{base_prompt}, frame {i + 1} of {n_frames}, slight motion"
-        raw = await _call_fal_image(variation)
+        raw = await _call_hf_image(variation)
         captioned = _add_caption_overlay(raw, caption)
         frame_bytes_list.append(captioned)
 

@@ -1,22 +1,96 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? 'dev-api-key'
+
+/** Map HTTP status codes to human-readable messages when no server message is available. */
+function httpStatusMessage(status: number): string {
+  switch (status) {
+    case 400: return 'Invalid request. Please check your input and try again.'
+    case 401: return 'Authentication required. Please refresh the page.'
+    case 403: return 'You do not have permission to perform this action.'
+    case 404: return 'The requested resource was not found.'
+    case 422: return 'Your request was rejected — it may contain unsafe or invalid content.'
+    case 429: return 'Storage quota exceeded. Please delete some assets before generating more.'
+    case 500: return 'The server encountered an error. Please try again in a moment.'
+    case 502: return 'The server is temporarily unavailable. Please try again shortly.'
+    case 503: return 'The service is currently unavailable. Please try again later.'
+    default: return `Unexpected error (HTTP ${status}). Please try again.`
+  }
+}
+
+/** Extract a human-readable message from a FastAPI error response body. */
+function extractErrorMessage(body: unknown, status: number): string {
+  if (!body || typeof body !== 'object') return httpStatusMessage(status)
+  const b = body as Record<string, unknown>
+
+  // FastAPI validation errors: { detail: [ { msg: "..." }, ... ] }
+  if (Array.isArray(b.detail)) {
+    const msgs = (b.detail as Array<Record<string, unknown>>)
+      .map((d) => d.msg ?? d.message)
+      .filter(Boolean)
+    if (msgs.length > 0) return `Validation error: ${msgs.join('; ')}`
+  }
+
+  // FastAPI HTTPException with structured detail: { detail: { error: "...", reason: "..." } }
+  if (b.detail && typeof b.detail === 'object') {
+    const d = b.detail as Record<string, unknown>
+    if (d.reason) return String(d.reason)
+    if (d.error) return humanizeErrorCode(String(d.error))
+  }
+
+  // FastAPI HTTPException with string detail: { detail: "..." }
+  if (typeof b.detail === 'string') return b.detail
+
+  // Direct error field: { error: "..." }
+  if (typeof b.error === 'string') return humanizeErrorCode(b.error)
+
+  return httpStatusMessage(status)
+}
+
+/** Convert snake_case error codes to readable sentences. */
+function humanizeErrorCode(code: string): string {
+  const map: Record<string, string> = {
+    not_found: 'The requested resource was not found.',
+    unauthorized: 'Authentication required. Please refresh the page.',
+    safety_violation: 'Your request was rejected due to content safety policy.',
+    quota_exceeded: 'Storage quota exceeded. Please delete some assets before generating more.',
+    validation_error: 'Invalid request. Please check your input and try again.',
+    timeout: 'The generation timed out. Please try again.',
+    model_unavailable: 'The AI model is temporarily unavailable. Please try again shortly.',
+    unknown: 'An unexpected error occurred. Please try again.',
+  }
+  return map[code] ?? code.replace(/_/g, ' ')
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
-    ...options,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY, ...options?.headers },
+      ...options,
+    })
+  } catch {
+    throw new Error('Unable to reach the server. Please check your connection and try again.')
+  }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'unknown' }))
-    throw new Error(err.error ?? `HTTP ${res.status}`)
+    const body = await res.json().catch(() => null)
+    throw new Error(extractErrorMessage(body, res.status))
   }
   return res.json()
 }
 
 async function requestRaw(path: string, options?: RequestInit): Promise<Response> {
-  const res = await fetch(`${BASE}${path}`, options)
+  let res: Response
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      ...options,
+      headers: { 'X-API-Key': API_KEY, ...options?.headers },
+    })
+  } catch {
+    throw new Error('Unable to reach the server. Please check your connection and try again.')
+  }
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'unknown' }))
-    throw new Error(err.error ?? `HTTP ${res.status}`)
+    const body = await res.json().catch(() => null)
+    throw new Error(extractErrorMessage(body, res.status))
   }
   return res
 }
@@ -24,6 +98,12 @@ async function requestRaw(path: string, options?: RequestInit): Promise<Response
 // --- Job types ---
 export type JobStatus = 'queued' | 'processing' | 'complete' | 'failed'
 export interface Job { job_id: string; status: JobStatus; asset_id?: string; asset_url?: string; error_message?: string }
+
+/** Returns the WebSocket URL for streaming job status updates. */
+export function getJobWsUrl(job_id: string): string {
+  const wsBase = BASE.replace(/^http/, 'ws')
+  return `${wsBase}/api/v1/jobs/${job_id}/ws`
+}
 
 // --- Asset types ---
 export interface AssetRecord {
@@ -61,9 +141,13 @@ export const api = {
   // --- Jobs ---
   getJob: (job_id: string) => request<Job>(`/api/v1/jobs/${job_id}`),
   listJobs: () => request<Job[]>('/api/v1/jobs'),
+  getJobWsUrl: (job_id: string) => {
+    const wsBase = BASE.replace(/^http/, 'ws')
+    return `${wsBase}/api/v1/jobs/${job_id}/ws`
+  },
 
   // --- Assets ---
-  getAsset: (asset_id: string) => request<{ asset_id: string; asset_url: string; metadata: Record<string, unknown> }>(`/api/v1/assets/${asset_id}`),
+  getAsset: (asset_id: string) => request<AssetRecord>(`/api/v1/assets/${asset_id}`),
   listAssets: () => request<AssetRecord[]>('/api/v1/assets'),
   deleteAsset: (asset_id: string) => request<void>(`/api/v1/assets/${asset_id}`, { method: 'DELETE' }),
   downloadAsset: (asset_id: string) => `${BASE}/api/v1/assets/${asset_id}/download`,
@@ -71,17 +155,19 @@ export const api = {
 
   // --- Bella ---
   bellaChat: (message: string, session_id: string) =>
-    request<{ reply: string }>('/bella/chat', { method: 'POST', body: JSON.stringify({ message, session_id }) }),
+    request<{ reply: string; audio_b64?: string; phonemes?: { phoneme: string; time: number }[]; tts_available: boolean }>(
+      '/api/v1/bella/chat', { method: 'POST', body: JSON.stringify({ message, session_id }) }
+    ),
   bellaTTS: async (text: string): Promise<ArrayBuffer> => {
-    const res = await requestRaw('/bella/tts', { method: 'POST', body: JSON.stringify({ text }), headers: { 'Content-Type': 'application/json' } })
+    const res = await requestRaw('/api/v1/bella/tts', { method: 'POST', body: JSON.stringify({ text }), headers: { 'Content-Type': 'application/json' } })
     return res.arrayBuffer()
   },
   bellaTranscribe: (audioBlob: Blob) => {
     const form = new FormData(); form.append('audio', audioBlob)
-    return request<{ transcript: string }>('/bella/transcribe', { method: 'POST', body: form, headers: {} })
+    return request<{ transcript: string }>('/api/v1/bella/transcribe', { method: 'POST', body: form, headers: {} })
   },
   bellaHistory: (session_id: string) =>
-    request<{ messages: HistoryMessage[] }>(`/bella/history?session_id=${session_id}`),
+    request<{ messages: HistoryMessage[] }>(`/api/v1/bella/history?session_id=${session_id}`),
 
   // --- Story ---
   getStory: (story_id: string) => request<{ story_id: string; status: string; episodes: unknown[] }>(`/api/v1/story/${story_id}`),

@@ -378,81 +378,81 @@ Build the Education Anime Generator as a standalone full-stack application (Fast
     - Call backend ZIP export endpoint, trigger browser download
     - _Requirements: 5.9_
 
-- [ ] 20. Frontend: Bella 3D assistant overlay
-  - [ ] 20.1 Set up @pixiv/three-vrm VRM rendering in a React component
+- [x] 20. Frontend: Bella 3D assistant overlay
+  - [x] 20.1 Set up @pixiv/three-vrm VRM rendering in a React component
     - Load open-source VRM model (CC0 license from VRoid Hub)
     - Implement idle animation loop (breathing, eye blink)
     - _Requirements: 10.1, 10.2_
 
-  - [ ] 20.2 Implement Bella emotional state animations
+  - [x] 20.2 Implement Bella emotional state animations
     - Neutral: idle breathing
     - Thinking: head tilt + finger-to-chin BlendShape
     - Happy: smile BlendShape + small wave bone animation
     - Celebrate: jump + clap animation
     - _Requirements: 10.8, 10.9_
 
-  - [ ] 20.3 Implement Bella chat UI
+  - [x] 20.3 Implement Bella chat UI
     - Chat bubble for text responses
     - Microphone button for voice input (Web Speech API → POST /bella/transcribe)
     - Text input fallback
     - _Requirements: 10.3_
 
-  - [ ] 20.4 Implement Bella lip sync
+  - [x] 20.4 Implement Bella lip sync
     - Receive phoneme timestamps from TTS response
     - Map phonemes to VRM BlendShape viseme targets
     - Animate BlendShapes synchronized to audio playback
     - _Requirements: 10.4_
 
-  - [ ] 20.5 Implement Bella proactive hints and contextual explanations
+  - [x] 20.5 Implement Bella proactive hints and contextual explanations
     - 60-second idle timer → trigger hint message
     - On job completion → send generated content context to Bella for explanation
     - _Requirements: 10.6, 10.7_
 
-  - [ ] 20.6 Add Bella overlay to root layout
+  - [x] 20.6 Add Bella overlay to root layout
     - Add BellaOverlay component to `app/layout.tsx` (persists across all pages)
     - Minimize/hide toggle with session context preservation
     - _Requirements: 10.2, 10.10_
 
-- [ ] 21. Checkpoint — Ensure all frontend components render correctly and all tests pass
+- [x] 21. Checkpoint — Ensure all frontend components render correctly and all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 22. Integration wiring and end-to-end flows
-  - [ ] 22.1 Wire all frontend pages to backend API with proper error handling
+- [x] 22. Integration wiring and end-to-end flows
+  - [x] 22.1 Wire all frontend pages to backend API with proper error handling
     - All API errors display human-readable messages + retry buttons
     - _Requirements: 5.8_
 
-  - [ ] 22.2 Implement WebSocket connection for real-time job progress
+  - [x] 22.2 Implement WebSocket connection for real-time job progress
     - Backend: add WebSocket endpoint that pushes job status updates
     - Frontend: connect JobProgressBar to WebSocket
     - _Requirements: 5.2_
 
-  - [ ] 22.3 Add OpenAPI documentation endpoint
+  - [x] 22.3 Add OpenAPI documentation endpoint
     - FastAPI auto-generates /openapi.json — verify it's accessible and complete
     - _Requirements: 4.4_
 
-  - [ ] 22.4 Wire content safety filter into all generation endpoints
+  - [x] 22.4 Wire content safety filter into all generation endpoints
     - Pre-generation: check topic before enqueuing job
     - Post-generation: check generated content before storing asset
     - _Requirements: 8.1, 8.2, 8.4_
 
-  - [ ] 22.5 Write property test for post-generation safety enforcement (Property 6)
+  - [x] 22.5 Write property test for post-generation safety enforcement (Property 6)
 
     - **Property 6: Post-generation safety enforcement**
     - **Validates: Requirements 8.1, 8.2, 8.3**
 
-- [ ] 23. CatchupXV1 integration preparation
-  - [ ] 23.1 Document integration steps in INTEGRATION.md
+- [x] 23. CatchupXV1 integration preparation
+  - [x] 23.1 Document integration steps in INTEGRATION.md
     - List all new files to copy into CatchupXV1 backend/frontend
     - List router registration lines to add to main.py
     - List new env vars to add to .env
     - List npm/pip packages to install
     - _Requirements: 4.1, 4.6_
 
-  - [ ] 23.2 Create integration test suite
+  - [x] 23.2 Create integration test suite
     - Tests that verify the module works when mounted under CatchupXV1's auth and database
     - _Requirements: 4.7_
 
-- [ ] 24. Final checkpoint — Full end-to-end test
+- [x] 24. Final checkpoint — Full end-to-end test
   - Ensure all tests pass, ask the user if questions arise.
   - Verify: anime generation → simulation → 3D model → story → Bella all work end-to-end
   - Verify: asset storage, retrieval, deletion, quota enforcement all work

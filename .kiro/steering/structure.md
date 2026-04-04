@@ -26,7 +26,7 @@ Monorepo with `backend/` (FastAPI) and `frontend/` (Next.js 14).
 │   │       ├── model3d_engine.py    # Fal.ai Hunyuan3D-2.1 calls
 │   │       ├── story_engine.py      # Groq LLM → StoryPlan JSON + scene orchestration
 │   │       ├── prompt_builder.py    # Groq LLM → structured prompts for each pipeline
-│   │       ├── asset_manager.py     # boto3 R2: upload, presigned URL, delete
+│   │       ├── asset_manager.py     # boto3 S3: upload, presigned URL, delete
 │   │       ├── safety.py            # LlamaGuard via Groq + keyword blocklist
 │   │       └── bella_service.py     # Groq LLM chat + Fal.ai Kokoro TTS + history
 │   ├── tests/
@@ -65,7 +65,7 @@ Monorepo with `backend/` (FastAPI) and `frontend/` (Next.js 14).
 - **Router pattern:** Each router file registers one domain. Add to `main.py` via `app.include_router(x.router, prefix="/api/v1/...", tags=[...])`.
 - **Async jobs:** All generation endpoints return `202 { job_id, status: "queued" }` immediately. Actual work runs in Celery tasks.
 - **Error responses:** Always return `{ "error": "<code>", ... }` with a `request_id` field for tracing.
-- **Asset URLs:** All assets stored in Cloudflare R2; served via presigned URLs (24h minimum TTL).
+- **Asset URLs:** All assets stored in AWS S3; served via presigned URLs (24h minimum TTL).
 - **Safety:** Every generation endpoint runs `safety.check_topic()` before enqueuing. Post-generation runs `safety.check_content()` before storing.
 - **Frontend pages:** Follow Next.js App Router conventions. All pages are wrapped with existing `AuthContext`.
 - **API calls (frontend):** All backend calls go through `lib/api.ts` typed wrappers — never raw fetch in components.

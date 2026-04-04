@@ -55,7 +55,7 @@ export default function AnimePage() {
                 ...prev,
                 {
                   asset_id: asset.asset_id,
-                  asset_url: asset.asset_url,
+                  asset_url: asset.presigned_url,
                   topic: currentTopic,
                   caption: meta?.caption ?? `This scene illustrates "${currentTopic}" in an anime ${currentStyle} setting.`,
                   style: currentStyle,

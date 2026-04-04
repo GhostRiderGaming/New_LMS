@@ -12,7 +12,7 @@ interface Props {
 async function resolveSceneUrl(asset_id: string): Promise<string | null> {
   try {
     const asset = await api.getAsset(asset_id)
-    return asset.asset_url ?? null
+    return asset.presigned_url ?? null
   } catch {
     return null
   }

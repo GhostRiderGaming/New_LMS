@@ -51,12 +51,12 @@ export default function SimulationPage() {
               const asset = await api.getAsset(job.asset_id)
               setResult({
                 asset_id: asset.asset_id,
-                asset_url: asset.asset_url,
+                asset_url: asset.presigned_url,
                 topic: currentTopic,
                 category: currentCategory,
               })
               // Fetch the HTML bundle from the asset URL
-              const res = await fetch(asset.asset_url)
+              const res = await fetch(asset.presigned_url)
               const html = await res.text()
               setSimulationHtml(html)
             } catch {

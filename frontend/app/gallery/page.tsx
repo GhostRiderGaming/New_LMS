@@ -34,6 +34,7 @@ function formatBytes(bytes: number): string {
 
 function AssetCard({ asset, onDelete }: { asset: AssetRecord; onDelete: (id: string) => void }) {
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const isImage = asset.mime_type.startsWith('image/')
   const isVideo = asset.mime_type.startsWith('video/')
   const meta = asset.metadata as Record<string, string>
@@ -41,10 +42,12 @@ function AssetCard({ asset, onDelete }: { asset: AssetRecord; onDelete: (id: str
   const handleDelete = async () => {
     if (!confirm('Delete this asset? This cannot be undone.')) return
     setDeleting(true)
+    setDeleteError(null)
     try {
       await api.deleteAsset(asset.asset_id)
       onDelete(asset.asset_id)
-    } catch {
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete asset.')
       setDeleting(false)
     }
   }
@@ -98,6 +101,21 @@ function AssetCard({ asset, onDelete }: { asset: AssetRecord; onDelete: (id: str
           <span>{new Date(asset.created_at).toLocaleDateString()}</span>
         </div>
       </div>
+
+      {/* Delete error */}
+      {deleteError && (
+        <div className="px-3 pb-2">
+          <div className="flex items-center gap-2 bg-red-950/30 border border-red-500/30 rounded-lg px-3 py-2">
+            <span className="text-red-400 text-xs flex-1">{deleteError}</span>
+            <button
+              onClick={handleDelete}
+              className="text-xs text-red-400 hover:text-red-300 font-medium shrink-0"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Actions — visible on hover */}
       <div className="px-3 pb-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
