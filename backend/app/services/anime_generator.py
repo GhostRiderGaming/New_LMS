@@ -33,7 +33,7 @@ from app.services.prompt_builder import prompt_builder
 
 _HF_MODEL = "cagliostrolab/animagine-xl-4.0"
 _HF_API_URL = f"https://api-inference.huggingface.co/models/{_HF_MODEL}"
-_IMAGE_SIZE = {"width": 832, "height": 1216}  # portrait — standard anime aspect ratio
+_IMAGE_SIZE = {"width": 512, "height": 768}  # portrait — optimized for speed
 _CAPTION_FONT_SIZE = 20
 _CAPTION_PADDING = 12
 _CAPTION_BG_ALPHA = 180  # semi-transparent black bar
@@ -91,11 +91,11 @@ async def _call_hf_image(prompt: str) -> bytes:
             "negative_prompt": "nsfw, lowres, bad anatomy, bad hands, text, error, missing fingers",
             "width": _IMAGE_SIZE["width"],
             "height": _IMAGE_SIZE["height"],
-            "num_inference_steps": 28,
+            "num_inference_steps": 20,
             "guidance_scale": 7.0,
         },
     }
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=180) as client:
         resp = await client.post(_HF_API_URL, json=payload, headers=headers)
         resp.raise_for_status()
         return resp.content  # HF returns raw image bytes directly
@@ -198,7 +198,7 @@ async def generate_anime_animation(
     caption: str,
     job_id: str,
     session_id: str,
-    n_frames: int = 8,
+    n_frames: int = 4,
 ) -> Asset:
     """
     Generate a short looping WebM animation for the given topic.

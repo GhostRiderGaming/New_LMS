@@ -88,15 +88,26 @@ async def generate_anime(
     db.add(job)
     db.commit()
 
-    # Enqueue Celery task
-    from app.worker import generate_anime_task
-    generate_anime_task.delay(
-        job_id=job_id,
-        topic=body.topic,
-        style=body.style,
-        include_animation=body.include_animation,
-        session_id=session["session_id"],
-    )
+    # Enqueue Celery task, fall back to in-process execution if broker is down
+    try:
+        from app.worker import generate_anime_task
+        generate_anime_task.delay(
+            job_id=job_id,
+            topic=body.topic,
+            style=body.style,
+            include_animation=body.include_animation,
+            session_id=session["session_id"],
+        )
+    except Exception:
+        from app.services.task_executor import run_anime_job
+        from app.services.task_runner import dispatch_async
+        dispatch_async(run_anime_job(
+            job_id=job_id,
+            topic=body.topic,
+            style=body.style,
+            include_animation=body.include_animation,
+            session_id=session["session_id"],
+        ))
 
     return AnimeGenerateResponse(
         job_id=job_id,

@@ -105,14 +105,24 @@ async def generate_model3d(
     db.add(job)
     db.commit()
 
-    # Enqueue Celery task
-    from app.worker import generate_model3d_task
-    generate_model3d_task.delay(
-        job_id=job_id,
-        object_name=body.object_name,
-        category=body.category,
-        session_id=session["session_id"],
-    )
+    # Enqueue Celery task, fall back to in-process execution if broker is down
+    try:
+        from app.worker import generate_model3d_task
+        generate_model3d_task.delay(
+            job_id=job_id,
+            object_name=body.object_name,
+            category=body.category,
+            session_id=session["session_id"],
+        )
+    except Exception:
+        from app.services.task_executor import run_model3d_job
+        from app.services.task_runner import dispatch_async
+        dispatch_async(run_model3d_job(
+            job_id=job_id,
+            object_name=body.object_name,
+            category=body.category,
+            session_id=session["session_id"],
+        ))
 
     return Model3DResponse(
         job_id=job_id,

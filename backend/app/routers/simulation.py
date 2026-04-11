@@ -82,14 +82,24 @@ async def generate_simulation(
     db.add(job)
     db.commit()
 
-    # Enqueue Celery task
-    from app.worker import generate_simulation_task
-    generate_simulation_task.delay(
-        job_id=job_id,
-        topic=body.topic,
-        category=body.category.value,
-        session_id=session["session_id"],
-    )
+    # Enqueue Celery task, fall back to in-process execution if broker is down
+    try:
+        from app.worker import generate_simulation_task
+        generate_simulation_task.delay(
+            job_id=job_id,
+            topic=body.topic,
+            category=body.category.value,
+            session_id=session["session_id"],
+        )
+    except Exception:
+        from app.services.task_executor import run_simulation_job
+        from app.services.task_runner import dispatch_async
+        dispatch_async(run_simulation_job(
+            job_id=job_id,
+            topic=body.topic,
+            category=body.category.value,
+            session_id=session["session_id"],
+        ))
 
     return SimulationResponse(
         job_id=job_id,

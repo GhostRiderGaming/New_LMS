@@ -83,6 +83,7 @@ def generate_anime_task(
     from app.models.anime_assets import Job, SessionLocal
     from app.services.anime_generator import generate_anime_image, generate_anime_animation
     from app.services.safety import safety_service
+    from app.services.job_notifier import notify
 
     db = SessionLocal()
     try:
@@ -93,6 +94,7 @@ def generate_anime_task(
         job.status = "processing"
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
+        notify(job_id, {"job_id": job_id, "status": "processing"})
 
         # Build a caption from the topic
         caption = f"{topic} — educational anime scene"
@@ -137,12 +139,14 @@ def generate_anime_task(
             job.error_message = f"safety_violation: {safety_result.reason}"
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
+            notify(job_id, {"job_id": job_id, "status": "failed", "error_message": job.error_message})
             return
 
         job.status = "complete"
         job.asset_id = asset.asset_id
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
+        notify(job_id, {"job_id": job_id, "status": "complete", "asset_id": asset.asset_id})
 
     except Exception as exc:
         db.rollback()
@@ -152,6 +156,7 @@ def generate_anime_task(
             if job.retry_count >= 3:
                 job.status = "failed"
                 job.error_message = str(exc)
+                notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
         countdown = _retry_countdown(self.request.retries)
@@ -189,6 +194,7 @@ def generate_simulation_task(
     from app.models.anime_assets import Job, SessionLocal
     from app.services.simulation_engine import generate_simulation
     from app.services.safety import safety_service
+    from app.services.job_notifier import notify
 
     db = SessionLocal()
     try:
@@ -199,6 +205,7 @@ def generate_simulation_task(
         job.status = "processing"
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
+        notify(job_id, {"job_id": job_id, "status": "processing"})
 
         loop = asyncio.new_event_loop()
         try:
@@ -227,12 +234,14 @@ def generate_simulation_task(
             job.error_message = f"safety_violation: {safety_result.reason}"
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
+            notify(job_id, {"job_id": job_id, "status": "failed", "error_message": job.error_message})
             return
 
         job.status = "complete"
         job.asset_id = asset.asset_id
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
+        notify(job_id, {"job_id": job_id, "status": "complete", "asset_id": asset.asset_id})
 
     except Exception as exc:
         db.rollback()
@@ -242,6 +251,7 @@ def generate_simulation_task(
             if job.retry_count >= 3:
                 job.status = "failed"
                 job.error_message = str(exc)
+                notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
         countdown = _retry_countdown(self.request.retries)
@@ -280,6 +290,7 @@ def generate_model3d_task(
     from app.models.anime_assets import Job, SessionLocal
     from app.services.model3d_engine import generate_model3d, get_suggestions_for_category
     from app.services.safety import safety_service
+    from app.services.job_notifier import notify
 
     db = SessionLocal()
     try:
@@ -290,6 +301,7 @@ def generate_model3d_task(
         job.status = "processing"
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
+        notify(job_id, {"job_id": job_id, "status": "processing"})
 
         loop = asyncio.new_event_loop()
         try:
@@ -317,12 +329,14 @@ def generate_model3d_task(
             job.error_message = f"safety_violation: {safety_result.reason}"
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
+            notify(job_id, {"job_id": job_id, "status": "failed", "error_message": job.error_message})
             return
 
         job.status = "complete"
         job.asset_id = asset.asset_id
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
+        notify(job_id, {"job_id": job_id, "status": "complete", "asset_id": asset.asset_id})
 
     except Exception as exc:
         db.rollback()
@@ -337,6 +351,7 @@ def generate_model3d_task(
                     f"model_unavailable: {exc}. "
                     f"Suggestions: {', '.join(suggestions)}"
                 )
+                notify(job_id, {"job_id": job_id, "status": "failed", "error_message": job.error_message})
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
         countdown = _retry_countdown(self.request.retries)
@@ -378,6 +393,7 @@ def generate_story_task(
     from app.models.anime_assets import Job, SessionLocal
     from app.services.story_engine import generate_story_plan, _placeholder_scene
     from app.services.safety import safety_service
+    from app.services.job_notifier import notify
 
     db = SessionLocal()
     try:
@@ -388,6 +404,7 @@ def generate_story_task(
         job.status = "processing"
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
+        notify(job_id, {"job_id": job_id, "status": "processing"})
 
         loop = asyncio.new_event_loop()
         try:
@@ -414,6 +431,7 @@ def generate_story_task(
             job.error_message = f"safety_violation: {safety_result.reason}"
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
+            notify(job_id, {"job_id": job_id, "status": "failed", "error_message": job.error_message})
             return
 
         # Step 2: Dispatch per-scene anime generation tasks (Requirement 9.2)
@@ -459,6 +477,7 @@ def generate_story_task(
         job.status = "complete"
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
+        notify(job_id, {"job_id": job_id, "status": "complete"})
 
     except Exception as exc:
         db.rollback()
@@ -468,6 +487,7 @@ def generate_story_task(
             if job.retry_count >= 3:
                 job.status = "failed"
                 job.error_message = str(exc)
+                notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
         countdown = _retry_countdown(self.request.retries)
