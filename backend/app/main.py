@@ -1,3 +1,6 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -58,6 +61,13 @@ app.include_router(simulation.router, prefix="/api/v1/simulation", tags=["simula
 app.include_router(model3d.router, prefix="/api/v1/model3d", tags=["model3d"])
 app.include_router(story.router, prefix="/api/v1/story", tags=["story"])
 app.include_router(webhooks.router, prefix="/api/v1/webhooks", tags=["webhooks"])
+
+from fastapi.staticfiles import StaticFiles
+import os
+
+storage_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "storage"))
+os.makedirs(storage_path, exist_ok=True)
+app.mount("/api/v1/storage", StaticFiles(directory=storage_path), name="storage")
 
 
 @app.get("/health")

@@ -6,6 +6,7 @@ import TopicInput from '@/components/shared/TopicInput'
 import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import { api } from '@/lib/api'
+import { useGameProgress } from '@/lib/useGameProgress'
 
 // Avoid SSR issues with Three.js Canvas
 const ModelViewer3D = dynamic(() => import('@/components/model3d/ModelViewer3D'), { ssr: false })
@@ -38,6 +39,7 @@ export default function Model3DPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const { completeMission } = useGameProgress()
 
   const startPolling = (id: string, currentObjectName: string) => {
     if (pollRef.current) clearInterval(pollRef.current)
@@ -48,6 +50,7 @@ export default function Model3DPage() {
         if (job.status === 'complete') {
           clearInterval(pollRef.current!)
           setLoading(false)
+          completeMission('model3d')
           if (job.asset_id) {
             try {
               const asset = await api.getAsset(job.asset_id)
@@ -110,11 +113,11 @@ export default function Model3DPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-8 animate-fadeInUp">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-accent-pink/20 flex items-center justify-center text-xl">🧊</div>
+          <div className="w-12 h-12 rounded-xl bg-accent-pink/20 flex items-center justify-center text-2xl border border-accent-pink/20">🧊</div>
           <div>
-            <h1 className="text-2xl font-bold text-white">3D Model Generator</h1>
+            <h1 className="text-2xl font-black text-white">Holodeck</h1>
             <p className="text-slate-400 text-sm">Generate interactive 3D models of real-world objects</p>
           </div>
         </div>

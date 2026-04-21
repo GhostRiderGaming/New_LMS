@@ -1,46 +1,48 @@
 'use client'
-import { useState } from 'react'
+import { useState, ReactNode } from 'react'
 
 interface Props {
   onSubmit: (topic: string) => void
   loading?: boolean
+  defaultValue?: string
   placeholder?: string
   buttonLabel?: string
-  defaultValue?: string
-  children?: React.ReactNode
+  children?: ReactNode
 }
 
 export default function TopicInput({
   onSubmit,
   loading = false,
-  placeholder = 'Enter a topic — e.g. Photosynthesis, Newton\'s Laws...',
-  buttonLabel = 'Generate',
   defaultValue = '',
+  placeholder = 'Enter a topic — e.g. Photosynthesis, Newton\'s Laws, World War II...',
+  buttonLabel = '⚡ Generate',
   children,
 }: Props) {
-  const [topic, setTopic] = useState(defaultValue)
+  const [value, setValue] = useState(defaultValue)
 
   const handleSubmit = () => {
-    if (!topic.trim() || loading) return
-    onSubmit(topic.trim())
+    if (value.trim() && !loading) onSubmit(value.trim())
   }
 
   return (
-    <div className="w-full bg-bg-card border border-border rounded-2xl p-5">
-      <div className="flex gap-3 mb-4">
-        <input
-          type="text"
-          value={topic}
-          onChange={(e) => setTopic(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-          placeholder={placeholder}
-          disabled={loading}
-          className="flex-1 bg-bg-elevated border border-border rounded-xl px-4 py-3 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-accent-purple transition-all disabled:opacity-50"
-        />
+    <div className="card-game p-5">
+      {children && <div className="mb-4">{children}</div>}
+      <div className="flex gap-2">
+        <div className="flex-1 relative">
+          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-accent-purple/40 text-xs">⚡</div>
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            placeholder={placeholder}
+            className="w-full bg-bg-elevated/80 border border-border rounded-xl pl-8 pr-4 py-3 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-accent-purple focus:shadow-glow-purple transition-all"
+          />
+        </div>
         <button
           onClick={handleSubmit}
-          disabled={!topic.trim() || loading}
-          className="px-6 py-3 rounded-xl font-semibold text-white bg-gradient-anime hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-all text-sm whitespace-nowrap shadow-glow-purple"
+          disabled={!value.trim() || loading}
+          className="px-6 py-3 rounded-xl font-bold text-white bg-gradient-game hover:opacity-90 disabled:opacity-30 disabled:cursor-not-allowed transition-all text-sm whitespace-nowrap shadow-glow-purple"
         >
           {loading ? (
             <span className="flex items-center gap-2">
@@ -48,11 +50,10 @@ export default function TopicInput({
               Working...
             </span>
           ) : (
-            `${buttonLabel} ✨`
+            buttonLabel
           )}
         </button>
       </div>
-      {children}
     </div>
   )
 }

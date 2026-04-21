@@ -128,13 +128,22 @@ def enforce_expires_at(created_at: datetime, expires_at: Optional[datetime] = No
 class AssetManager:
     def __init__(self):
         self._bucket = os.getenv("AWS_S3_BUCKET", "catchupx-anime-assets")
-        self._client = boto3.client(
-            "s3",
-            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID", ""),
-            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
-            region_name=os.getenv("AWS_REGION", "us-east-1"),
-            config=Config(signature_version="s3v4"),
-        )
+        self._aws_ak = os.getenv("AWS_ACCESS_KEY_ID", "")
+        self._use_s3 = bool(self._aws_ak)
+        
+        if self._use_s3:
+            self._client = boto3.client(
+                "s3",
+                aws_access_key_id=self._aws_ak,
+                aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY", ""),
+                region_name=os.getenv("AWS_REGION", "us-east-1"),
+                config=Config(signature_version="s3v4"),
+            )
+        else:
+            # Fallback to Local Storage
+            self._local_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "storage")
+            os.makedirs(self._local_dir, exist_ok=True)
+            print("[AssetManager] AWS credentials naturally missing. Defaulting to local disk storage fallback.")
 
     def store_asset(
         self,
@@ -147,13 +156,6 @@ class AssetManager:
         created_at: Optional[datetime] = None,
         expires_at: Optional[datetime] = None,
     ) -> tuple[str, datetime]:
-        """
-        Validate asset metadata completeness (Requirement 6.2) then upload to R2.
-        Enforces expires_at >= created_at + 24h (Requirement 4.3).
-
-        Raises ValueError if any required metadata field is missing or invalid.
-        Returns (object_key, enforced_expires_at).
-        """
         if created_at is None:
             created_at = datetime.now(timezone.utc)
 
@@ -169,39 +171,62 @@ class AssetManager:
         return self.upload_file(data, key, content_type), expires_at
 
     def upload_file(self, data: bytes, key: str, content_type: str) -> str:
-        """Upload bytes to R2 under `key`. Returns the object key."""
-        self._client.put_object(
-            Bucket=self._bucket,
-            Key=key,
-            Body=data,
-            ContentType=content_type,
-        )
+        if self._use_s3:
+            self._client.put_object(
+                Bucket=self._bucket,
+                Key=key,
+                Body=data,
+                ContentType=content_type,
+            )
+        else:
+            local_path = os.path.join(self._local_dir, key.replace("/", os.sep))
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            with open(local_path, "wb") as f:
+                f.write(data)
         return key
 
     def get_presigned_url(self, key: str, expires: int = 86400) -> str:
-        """Return a presigned GET URL valid for `expires` seconds (default 24h)."""
-        return self._client.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": self._bucket, "Key": key},
-            ExpiresIn=expires,
-        )
+        if self._use_s3:
+            return self._client.generate_presigned_url(
+                "get_object",
+                Params={"Bucket": self._bucket, "Key": key},
+                ExpiresIn=expires,
+            )
+        else:
+            # Local fallback: Serve via the mounted Starlette StaticFiles endpoint
+            # We don't strictly need localhost:8000 if frontend prepends BASE organically,
+            # but providing absolute URL ensures next/image loads it safely.
+            return f"http://localhost:8000/api/v1/storage/{key}"
 
     def delete_file(self, key: str) -> None:
-        """Delete an object from R2. Silently succeeds if the key doesn't exist."""
-        try:
-            self._client.delete_object(Bucket=self._bucket, Key=key)
-        except ClientError:
-            pass
+        if self._use_s3:
+            try:
+                self._client.delete_object(Bucket=self._bucket, Key=key)
+            except ClientError:
+                pass
+        else:
+            local_path = os.path.join(self._local_dir, key.replace("/", os.sep))
+            if os.path.exists(local_path):
+                os.remove(local_path)
 
     def download_file(self, key: str) -> Optional[bytes]:
-        """Download and return raw bytes for `key`, or None if not found."""
-        try:
-            response = self._client.get_object(Bucket=self._bucket, Key=key)
-            return response["Body"].read()
-        except ClientError as e:
-            if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+        if self._use_s3:
+            try:
+                response = self._client.get_object(Bucket=self._bucket, Key=key)
+                return response["Body"].read()
+            except ClientError as e:
+                if e.response["Error"]["Code"] in ("NoSuchKey", "404"):
+                    return None
+                raise
+        else:
+            local_path = os.path.join(self._local_dir, key.replace("/", os.sep))
+            if not os.path.exists(local_path):
                 return None
-            raise
+            try:
+                with open(local_path, "rb") as f:
+                    return f.read()
+            except IOError:
+                return None
 
 
 asset_manager = AssetManager()

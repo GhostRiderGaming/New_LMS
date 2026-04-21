@@ -6,6 +6,7 @@ import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import StoryPlayer from '@/components/story/StoryPlayer'
 import { api } from '@/lib/api'
+import { useGameProgress } from '@/lib/useGameProgress'
 
 export interface ScenePlan {
   scene_number: number
@@ -44,6 +45,7 @@ export default function StoryPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const { completeMission } = useGameProgress()
 
   const startPolling = (id: string) => {
     if (pollRef.current) clearInterval(pollRef.current)
@@ -59,9 +61,9 @@ export default function StoryPage() {
         }
 
         if (job.status === 'complete') {
-          clearInterval(pollRef.current!)
           setLoading(false)
           setProgressLabel('Story complete!')
+          completeMission('story')
 
           // Get story_id from the job's asset metadata
           if (job.asset_id) {
@@ -129,11 +131,11 @@ export default function StoryPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-8">
+      <div className="mb-8 animate-fadeInUp">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-accent-purple/20 flex items-center justify-center text-xl">📖</div>
+          <div className="w-12 h-12 rounded-xl bg-accent-purple/20 flex items-center justify-center text-2xl border border-accent-purple/20">📖</div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Anime Story Generator</h1>
+            <h1 className="text-2xl font-black text-white">Chronicle</h1>
             <p className="text-slate-400 text-sm">Transform topics into full multi-episode educational anime series</p>
           </div>
         </div>

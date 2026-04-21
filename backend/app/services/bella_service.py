@@ -65,24 +65,35 @@ class BellaService:
         """Send *message* to Groq LLaMA 3.3 70B, attempt TTS, return ChatResult.
 
         TTS failure is non-fatal: returns tts_available=False with text reply intact.
+        If GROQ_API_KEY is not set, uses a local fallback response.
         Appends both the user message and Bella's reply to session history.
         """
-        # Build conversation context from history
-        prior = self._history.get(session_id, [])
-        groq_messages: list[dict[str, str]] = [
-            {"role": "system", "content": _SYSTEM_PROMPT}
-        ]
-        for entry in prior:
-            groq_role = "user" if entry["role"] == "user" else "assistant"
-            groq_messages.append({"role": groq_role, "content": entry["text"]})
-        groq_messages.append({"role": "user", "content": message})
+        # Check if API key is available
+        api_key = os.environ.get("GROQ_API_KEY", "")
+        
+        if not api_key:
+            # Graceful fallback when no API key is configured
+            reply = self._local_fallback(message)
+        else:
+            # Build conversation context from history
+            prior = self._history.get(session_id, [])
+            groq_messages: list[dict[str, str]] = [
+                {"role": "system", "content": _SYSTEM_PROMPT}
+            ]
+            for entry in prior:
+                groq_role = "user" if entry["role"] == "user" else "assistant"
+                groq_messages.append({"role": groq_role, "content": entry["text"]})
+            groq_messages.append({"role": "user", "content": message})
 
-        completion = await self._groq.chat.completions.create(
-            model=_GROQ_CHAT_MODEL,
-            messages=groq_messages,  # type: ignore[arg-type]
-            max_tokens=512,
-        )
-        reply: str = completion.choices[0].message.content or ""
+            try:
+                completion = await self._groq.chat.completions.create(
+                    model=_GROQ_CHAT_MODEL,
+                    messages=groq_messages,  # type: ignore[arg-type]
+                    max_tokens=512,
+                )
+                reply = completion.choices[0].message.content or ""
+            except Exception:
+                reply = self._local_fallback(message)
 
         # Persist to history (Requirement 10.11)
         now = datetime.now(timezone.utc).isoformat()
@@ -106,6 +117,24 @@ class BellaService:
             phonemes=phonemes,
             tts_available=tts_available,
         )
+
+    @staticmethod
+    def _local_fallback(message: str) -> str:
+        """Generate a helpful response without an LLM API key."""
+        msg_lower = message.lower().strip()
+        if any(w in msg_lower for w in ["hello", "hi", "hey", "sup"]):
+            return "Hello! I'm Bella, your learning companion! I'm currently running in offline mode. To enable my full AI capabilities, please add your GROQ_API_KEY to the backend .env file. In the meantime, I can still help navigate the platform!"
+        if any(w in msg_lower for w in ["how are you", "how's it going"]):
+            return "I'm doing great, thanks for asking! I'm in offline mode right now, but I'm still here to help you navigate the learning platform. Add a GROQ_API_KEY to unlock my full conversational abilities!"
+        if any(w in msg_lower for w in ["help", "what can you do"]):
+            return "I'm Bella, your AI learning assistant! Here's what I can help with:\n• 🎨 Scene Forge — Generate anime-style educational images\n• 🔬 Lab Engine — Create interactive simulations\n• 🧊 Holodeck — Build 3D models\n• 📖 Chronicle — Write multi-episode educational stories\n\nJust pick a module from the top navigation to get started!"
+        if any(w in msg_lower for w in ["photosynthesis", "plant", "chlorophyll"]):
+            return "Photosynthesis is an amazing process! 🌱 Plants use sunlight, water, and CO₂ to create glucose (sugar) and oxygen. The chemical equation is: 6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂. Want to explore this further? Try generating a simulation in the Lab Engine!"
+        if any(w in msg_lower for w in ["newton", "gravity", "physics", "force"]):
+            return "Newton's Laws of Motion are fundamental to physics! 🍎\n1. An object stays at rest or in motion unless acted on by a force\n2. F = ma (Force = mass × acceleration)\n3. Every action has an equal and opposite reaction\n\nWant to see these in action? Try the Lab Engine simulation!"
+        if any(w in msg_lower for w in ["math", "calculus", "algebra", "equation"]):
+            return "Mathematics is the language of the universe! 📐 Whether you're working on algebra, geometry, or calculus, I can help explain concepts step by step. Try generating a visual explanation in the Scene Forge!"
+        return f"Great question about '{message}'! I'm currently in offline mode (no GROQ_API_KEY configured). To get detailed AI-powered answers, add your free Groq API key to the backend/.env file. You can get one at console.groq.com. In the meantime, explore the learning modules in the top navigation!"
 
     # ------------------------------------------------------------------
     # TTS — edge-tts (free, no API key required)

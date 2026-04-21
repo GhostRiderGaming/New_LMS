@@ -1,4 +1,4 @@
-﻿"""
+"""
 Simulation code generation service.
 Requirements: 2.1, 2.2, 2.4, 2.5
 """
@@ -31,13 +31,22 @@ class SimulationCategory(str, Enum):
 
 
 _SIMULATION_SYSTEM = (
-    "You are an expert educational simulation developer.\n"
-    "Generate a complete, self-contained HTML5 simulation.\n"
-    "RULES: Output ONLY raw HTML starting with <!DOCTYPE html>. "
-    "ALL JS inline in <script> tags. ALL CSS inline in <style> tags. "
-    "No external URLs, no CDN. Vanilla JS only. "
-    "Include at least one interactive control. "
-    "Dark background #1a1a2e, purple/cyan accents. Under 8000 chars."
+    "You are a world-class educational simulation developer building interactive learning tools for 6th-grade students (ages 11-12).\n"
+    "Generate a COMPLETE, self-contained HTML5 simulation that makes complex concepts visually intuitive.\n\n"
+    "MANDATORY REQUIREMENTS:\n"
+    "1. Output ONLY raw HTML starting with <!DOCTYPE html>. No markdown fencing, no explanation.\n"
+    "2. ALL JavaScript inline in <script> tags. ALL CSS inline in <style> tags.\n"
+    "3. ZERO external URLs — no CDN links, no external scripts/stylesheets. Vanilla JS only.\n"
+    "4. You MUST use an HTML5 <canvas> element with a requestAnimationFrame() loop for smooth, continuous animation.\n"
+    "5. Include a CONTROL PANEL with at least 2 interactive elements (sliders, buttons, toggles) that change the simulation in real-time.\n"
+    "6. Include a 'LEARN' info box that explains what's happening in simple language a 6th grader can understand.\n"
+    "7. Use this premium dark theme: background #0f172a, accent colors #8b5cf6 (purple) and #06b6d4 (cyan), white text.\n"
+    "8. The canvas must show ANIMATED MOVEMENT — particles, objects, waves, orbits, chemical reactions, etc. NOT just static shapes.\n"
+    "9. Add visual labels ON the canvas (drawText) to explain what each element represents.\n"
+    "10. Use clear variable names and add brief code comments so students can learn from the code too.\n\n"
+    "STYLE: glassmorphism panels (backdrop-filter: blur), rounded corners, subtle box shadows, glowing accents.\n"
+    "LANGUAGE: All text in the UI must use simple words a 6th grader would understand. Avoid jargon.\n"
+    "LENGTH: The simulation should be thorough and complete. Do NOT cut corners or truncate code.\n"
 )
 
 
@@ -145,7 +154,7 @@ async def generate_simulation(
                 {"role": "system", "content": _SIMULATION_SYSTEM},
                 {"role": "user", "content": code_gen_prompt},
             ],
-            max_tokens=4096,
+            max_tokens=8192,
             temperature=0.4,
         )
         raw_output = (completion.choices[0].message.content or "").strip()

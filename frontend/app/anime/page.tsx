@@ -6,6 +6,7 @@ import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import AnimeSceneCard from '@/components/anime/AnimeSceneCard'
 import { api } from '@/lib/api'
+import { useGameProgress } from '@/lib/useGameProgress'
 
 const styles = ['classroom', 'laboratory', 'outdoor', 'fantasy'] as const
 type Style = typeof styles[number]
@@ -22,7 +23,7 @@ interface Scene {
   asset_url: string
   topic: string
   caption: string
-  style: Style
+  style: string
 }
 
 export default function AnimePage() {
@@ -36,8 +37,8 @@ export default function AnimePage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const { completeMission } = useGameProgress()
 
-  // Poll job status until terminal state
   const startPolling = (id: string, currentTopic: string, currentStyle: Style) => {
     if (pollRef.current) clearInterval(pollRef.current)
     pollRef.current = setInterval(async () => {
@@ -47,6 +48,7 @@ export default function AnimePage() {
         if (job.status === 'complete') {
           clearInterval(pollRef.current!)
           setLoading(false)
+          completeMission('anime')
           if (job.asset_id) {
             try {
               const asset = await api.getAsset(job.asset_id)
@@ -62,7 +64,6 @@ export default function AnimePage() {
                 },
               ])
             } catch {
-              // asset fetch failed — use job url if available
               if (job.asset_url) {
                 setScenes((prev) => [
                   ...prev,
@@ -107,12 +108,11 @@ export default function AnimePage() {
     }
   }
 
-  // Auto-generate if topic is in query params
   useEffect(() => {
     const t = searchParams.get('topic')
     if (t) handleGenerate(t)
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAddToStory = (scene: Scene) => {
     window.location.href = `/story?topic=${encodeURIComponent(scene.topic)}`
@@ -121,23 +121,23 @@ export default function AnimePage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-8 animate-fadeInUp">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-accent-purple/20 flex items-center justify-center text-xl">🎨</div>
+          <div className="w-12 h-12 rounded-xl bg-accent-purple/20 flex items-center justify-center text-2xl border border-accent-purple/20">🎨</div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Anime Generator</h1>
+            <h1 className="text-2xl font-black text-white">Scene Forge</h1>
             <p className="text-slate-400 text-sm">Transform topics into anime-style educational scenes</p>
           </div>
         </div>
       </div>
 
       {/* Input */}
-      <div className="mb-6">
+      <div className="mb-6 animate-fadeInUp" style={{ animationDelay: '0.1s' }}>
         <TopicInput
           onSubmit={handleGenerate}
           loading={loading}
           defaultValue={topic}
-          buttonLabel="Generate Scene"
+          buttonLabel="⚡ Generate Scene"
         >
           {/* Style selector */}
           <div className="flex flex-wrap gap-2 mb-3">
@@ -184,9 +184,9 @@ export default function AnimePage() {
 
       {/* Results */}
       {scenes.length > 0 && (
-        <div>
+        <div className="animate-fadeInUp">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-white">Generated Scenes</h2>
+            <h2 className="text-lg font-bold text-white">Generated Scenes</h2>
             <span className="text-xs text-slate-500">{scenes.length} scene{scenes.length !== 1 ? 's' : ''}</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

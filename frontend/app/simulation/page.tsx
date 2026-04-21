@@ -6,6 +6,7 @@ import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import SimulationFrame from '@/components/simulation/SimulationFrame'
 import { api } from '@/lib/api'
+import { useGameProgress } from '@/lib/useGameProgress'
 
 const categories = ['physics', 'chemistry', 'biology', 'mathematics', 'history'] as const
 type Category = typeof categories[number]
@@ -36,6 +37,7 @@ export default function SimulationPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const { completeMission } = useGameProgress()
 
   const startPolling = (id: string, currentTopic: string, currentCategory: Category) => {
     if (pollRef.current) clearInterval(pollRef.current)
@@ -46,6 +48,7 @@ export default function SimulationPage() {
         if (job.status === 'complete') {
           clearInterval(pollRef.current!)
           setLoading(false)
+          completeMission('simulation')
           if (job.asset_id) {
             try {
               const asset = await api.getAsset(job.asset_id)
@@ -119,11 +122,11 @@ export default function SimulationPage() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-8 animate-fadeInUp">
         <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-accent-cyan/20 flex items-center justify-center text-xl">🔬</div>
+          <div className="w-12 h-12 rounded-xl bg-accent-cyan/20 flex items-center justify-center text-2xl border border-accent-cyan/20">🔬</div>
           <div>
-            <h1 className="text-2xl font-bold text-white">Simulation Engine</h1>
+            <h1 className="text-2xl font-black text-white">Lab Engine</h1>
             <p className="text-slate-400 text-sm">Generate interactive browser-based educational simulations</p>
           </div>
         </div>

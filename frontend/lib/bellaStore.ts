@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { EmotionState } from '@/components/bella/BellaOverlay'
+
+export type EmotionState = 'neutral' | 'thinking' | 'happy' | 'celebrate'
 
 export interface BellaMessage {
   id: string

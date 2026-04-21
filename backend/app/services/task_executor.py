@@ -201,16 +201,17 @@ async def run_story_job(
     episode_count: int,
     session_id: str,
 ) -> None:
-    """Execute story generation directly (no Celery)."""
+    """Execute story generation with video assembly (no Celery)."""
     logger.info("task_executor: starting story job %s", job_id)
     try:
         _update_job(job_id, status="processing")
-        notify(job_id, {"job_id": job_id, "status": "processing", "progress": 10, "step": "Starting story planning..."})
+        notify(job_id, {"job_id": job_id, "status": "processing", "progress": 5, "step": "Planning story structure..."})
 
         from app.services.story_engine import generate_story_plan
         from app.services.safety import safety_service
 
-        notify(job_id, {"job_id": job_id, "status": "processing", "progress": 20, "step": "Generating story plan..."})
+        # Phase 1: Generate story plan
+        notify(job_id, {"job_id": job_id, "status": "processing", "progress": 10, "step": "AI is writing your story plan..."})
 
         db = SessionLocal()
         try:
@@ -218,62 +219,88 @@ async def run_story_job(
                 topic=topic, episode_count=episode_count,
                 session_id=session_id, job_id=job_id, db=db,
             )
+            # Get the plan asset_id
+            from app.models.anime_assets import Asset
+            plan_asset = (
+                db.query(Asset)
+                .filter(Asset.job_id == job_id, Asset.type == "story")
+                .first()
+            )
+            plan_asset_id = plan_asset.asset_id if plan_asset else None
         finally:
             db.close()
 
-        notify(job_id, {"job_id": job_id, "status": "processing", "progress": 70, "step": "Safety check..."})
+        notify(job_id, {"job_id": job_id, "status": "processing", "progress": 20, "step": f"Story plan ready: {plan.title}"})
 
+        # Safety check
         safety_result = await safety_service.check_content(f"{plan.title} {plan.synopsis}")
         if not safety_result.safe:
             _update_job(job_id, status="failed", error_message=f"safety_violation: {safety_result.reason}")
             notify(job_id, {"job_id": job_id, "status": "failed", "error_message": f"safety_violation: {safety_result.reason}"})
             return
 
-        # Dispatch per-scene anime generation tasks
-        import uuid as _uuid
-        from app.models.anime_assets import Job as JobModel
+        # Phase 2: Generate scene images sequentially
+        import asyncio
+        from app.services.anime_generator import generate_anime_image
 
-        notify(job_id, {"job_id": job_id, "status": "processing", "progress": 80, "step": "Dispatching scene generation..."})
+        total_scenes = sum(len(ep.scenes) for ep in plan.episodes)
+        scene_images: dict[str, bytes] = {}
+        scene_count = 0
 
-        db = SessionLocal()
-        try:
-            for episode in plan.episodes:
-                for scene in episode.scenes:
-                    scene_job_id = str(_uuid.uuid4())
-                    scene_job = JobModel(
-                        job_id=scene_job_id,
-                        type="anime",
-                        status="queued",
-                        topic=topic,
-                        parameters={
-                            "style": "classroom",
-                            "caption": scene.caption,
-                            "story_id": plan.story_id,
-                            "episode_number": episode.episode_number,
-                            "scene_number": scene.scene_number,
-                        },
-                        session_id=session_id,
-                    )
-                    db.add(scene_job)
-                    db.commit()
+        for episode in plan.episodes:
+            for scene in episode.scenes:
+                scene_count += 1
+                scene_key = f"ep{episode.episode_number}_s{scene.scene_number}"
+                progress = 20 + int(50 * scene_count / max(total_scenes, 1))
+                
+                notify(job_id, {
+                    "job_id": job_id, "status": "processing", "progress": progress,
+                    "step": f"Generating scene {scene_count}/{total_scenes}: {scene.description[:40]}..."
+                })
 
-                    # Dispatch scene generation as another background task
-                    import asyncio
-                    asyncio.create_task(run_anime_job(
-                        job_id=scene_job_id,
+                try:
+                    asset = await generate_anime_image(
                         topic=f"{topic} — {scene.description}",
                         style="classroom",
-                        include_animation=False,
+                        caption=scene.caption,
+                        job_id=job_id,
                         session_id=session_id,
-                    ))
-        finally:
-            db.close()
+                    )
+                    # Read the generated image bytes from storage
+                    from app.services.asset_manager import asset_manager
+                    img_bytes = asset_manager.download_file(asset.file_path)
+                    if img_bytes:
+                        scene_images[scene_key] = img_bytes
+                except Exception as e:
+                    logger.warning("Scene %s generation failed: %s", scene_key, e)
+                
+                # Throttle to avoid 429
+                await asyncio.sleep(1.5)
 
-        _update_job(job_id, status="complete")
-        notify(job_id, {"job_id": job_id, "status": "complete", "progress": 100})
+        # Phase 3: Assemble video
+        notify(job_id, {"job_id": job_id, "status": "processing", "progress": 75, "step": "Assembling anime video with narration..."})
+
+        try:
+            from app.services.video_assembler import assemble_story_video
+            video_asset = await assemble_story_video(
+                story_plan=plan.model_dump(),
+                scene_images=scene_images,
+                job_id=job_id,
+                session_id=session_id,
+            )
+            notify(job_id, {"job_id": job_id, "status": "processing", "progress": 95, "step": "Video ready! Finalizing..."})
+            logger.info("task_executor: video assembled for story job %s", job_id)
+        except Exception as e:
+            logger.warning("Video assembly failed for story job %s: %s", job_id, e)
+            # Video assembly is optional — story plan is still complete
+
+        # Phase 4: Complete
+        _update_job(job_id, status="complete", asset_id=plan_asset_id)
+        notify(job_id, {"job_id": job_id, "status": "complete", "asset_id": plan_asset_id, "progress": 100})
         logger.info("task_executor: story job %s completed", job_id)
 
     except Exception as exc:
         logger.exception("task_executor: story job %s failed", job_id)
         _update_job(job_id, status="failed", error_message=str(exc))
         notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
+

@@ -14,9 +14,8 @@ from __future__ import annotations
 
 import io
 import os
-import subprocess
-import tempfile
 import uuid
+import urllib.parse
 from datetime import datetime, timezone
 from typing import Literal
 
@@ -31,9 +30,7 @@ from app.services.prompt_builder import prompt_builder
 # Constants
 # ---------------------------------------------------------------------------
 
-_HF_MODEL = "cagliostrolab/animagine-xl-4.0"
-_HF_API_URL = f"https://api-inference.huggingface.co/models/{_HF_MODEL}"
-_IMAGE_SIZE = {"width": 512, "height": 768}  # portrait — optimized for speed
+_IMAGE_SIZE = {"width": 512, "height": 768}  # portrait
 _CAPTION_FONT_SIZE = 20
 _CAPTION_PADDING = 12
 _CAPTION_BG_ALPHA = 180  # semi-transparent black bar
@@ -49,13 +46,12 @@ def _add_caption_overlay(image_bytes: bytes, caption: str) -> bytes:
     """
     Render a semi-transparent caption bar at the bottom of the image.
     Returns PNG bytes with the overlay applied.
-    Requirement 1.3: System SHALL attach a text caption explaining the concept.
     """
     img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
     w, h = img.size
 
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", _CAPTION_FONT_SIZE)
+        font = ImageFont.truetype("arial.ttf", _CAPTION_FONT_SIZE) # Standard Windows font
     except (IOError, OSError):
         font = ImageFont.load_default()
 
@@ -81,24 +77,28 @@ def _add_caption_overlay(image_bytes: bytes, caption: str) -> bytes:
     return out.getvalue()
 
 
-async def _call_hf_image(prompt: str) -> bytes:
-    """Call Hugging Face Inference API (Animagine XL 4.0) and return raw image bytes."""
-    hf_token = os.environ.get("HF_API_TOKEN", "")
-    headers = {"Authorization": f"Bearer {hf_token}"} if hf_token else {}
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "negative_prompt": "nsfw, lowres, bad anatomy, bad hands, text, error, missing fingers",
-            "width": _IMAGE_SIZE["width"],
-            "height": _IMAGE_SIZE["height"],
-            "num_inference_steps": 20,
-            "guidance_scale": 7.0,
-        },
-    }
-    async with httpx.AsyncClient(timeout=180) as client:
-        resp = await client.post(_HF_API_URL, json=payload, headers=headers)
-        resp.raise_for_status()
-        return resp.content  # HF returns raw image bytes directly
+import asyncio
+
+async def _call_pollinations_image(prompt: str) -> bytes:
+    """Call pollinations.ai (free, tokenless) to generate an image, with robust 429 handling."""
+    encoded_prompt = urllib.parse.quote(prompt)
+    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={_IMAGE_SIZE['width']}&height={_IMAGE_SIZE['height']}&nologo=true&seed={uuid.uuid4().int % 100000}"
+    
+    max_retries = 5
+    base_delay = 2.0
+    
+    async with httpx.AsyncClient(timeout=60) as client:
+        for attempt in range(max_retries):
+            resp = await client.get(url)
+            if resp.status_code == 429:
+                if attempt == max_retries - 1:
+                    resp.raise_for_status()
+                # Exponential backoff
+                await asyncio.sleep(base_delay * (2 ** attempt))
+                continue
+            resp.raise_for_status()
+            return resp.content
+    raise RuntimeError("Failed to fetch image after retries")
 
 
 def _store_asset_record(
@@ -147,27 +147,18 @@ async def generate_anime_image(
     session_id: str,
 ) -> Asset:
     """
-    Generate a single anime-style image for the given topic and style.
-
-    Flow:
-      1. Build structured Animagine XL prompt via Groq (Requirement 1.2)
-      2. Call Fal.ai Animagine XL 4.0
-      3. Add caption overlay (Requirement 1.3)
-      4. Upload to Cloudflare R2
-      5. Persist Asset record and return it
-
-    Requirements: 1.1, 1.3, 1.6
+    Generate a single anime-style image using Pollinations.ai.
     """
     # 1. Build prompt
     anime_prompt = await prompt_builder.build_anime_prompt(topic, style)
 
-    # 2. Generate image
-    raw_bytes = await _call_hf_image(anime_prompt)
+    # 2. Generate image (tokenless)
+    raw_bytes = await _call_pollinations_image(anime_prompt + " anime style masterpiece")
 
     # 3. Caption overlay
     final_bytes = _add_caption_overlay(raw_bytes, caption)
 
-    # 4. Upload to R2
+    # 4. Upload to local/R2
     key = f"anime/{job_id}/{uuid.uuid4()}.png"
     metadata = {"caption": caption, "style": style, "prompt": anime_prompt}
     asset_manager.store_asset(
@@ -201,32 +192,35 @@ async def generate_anime_animation(
     n_frames: int = 4,
 ) -> Asset:
     """
-    Generate a short looping WebM animation for the given topic.
-
-    Flow:
-      1. Build base prompt via Groq
-      2. Generate N frames with slight prompt variation via Fal.ai
-      3. Assemble frames into WebM using FFmpeg subprocess
-      4. Upload to Cloudflare R2
-      5. Persist Asset record and return it
-
-    Requirement 1.7: Generator SHALL produce a short looping animation (WebM, min 2s).
+    Generate a GIF animation without needing ffmpeg.
     """
     base_prompt = await prompt_builder.build_anime_prompt(topic, style)
 
-    # Generate N frames with slight variation
-    frame_bytes_list: list[bytes] = []
+    # Generate N frames
+    pil_frames = []
     for i in range(n_frames):
-        variation = f"{base_prompt}, frame {i + 1} of {n_frames}, slight motion"
-        raw = await _call_hf_image(variation)
+        variation = f"{base_prompt}, dynamic motion sequence, animation frame {i + 1}"
+        raw = await _call_pollinations_image(variation)
         captioned = _add_caption_overlay(raw, caption)
-        frame_bytes_list.append(captioned)
+        img = Image.open(io.BytesIO(captioned)).convert("RGB")
+        pil_frames.append(img)
+        # Stagger requests to preserve rate limit
+        await asyncio.sleep(1.0)
 
-    # Assemble into WebM via FFmpeg
-    webm_bytes = _assemble_webm(frame_bytes_list, fps=4)
+    # Assemble into GIF via Pillow (no ffmpeg needed!)
+    out_buf = io.BytesIO()
+    pil_frames[0].save(
+        out_buf,
+        format="GIF",
+        save_all=True,
+        append_images=pil_frames[1:],
+        duration=300, # 300ms per frame
+        loop=0 # infinite loop
+    )
+    gif_bytes = out_buf.getvalue()
 
     # Upload to R2
-    key = f"anime/{job_id}/{uuid.uuid4()}.webm"
+    key = f"anime/{job_id}/{uuid.uuid4()}.gif"
     metadata = {
         "caption": caption,
         "style": style,
@@ -234,9 +228,9 @@ async def generate_anime_animation(
         "prompt": base_prompt,
     }
     asset_manager.store_asset(
-        data=webm_bytes,
+        data=gif_bytes,
         key=key,
-        content_type="video/webm",
+        content_type="image/gif",
         topic=topic,
         asset_type="animation",
         metadata=metadata,
@@ -247,36 +241,8 @@ async def generate_anime_animation(
         asset_type="animation",
         topic=topic,
         file_path=key,
-        file_size=len(webm_bytes),
-        mime_type="video/webm",
+        file_size=len(gif_bytes),
+        mime_type="image/gif",
         metadata=metadata,
         session_id=session_id,
     )
-
-
-def _assemble_webm(frames: list[bytes], fps: int = 4) -> bytes:
-    """
-    Write PNG frames to a temp directory and use FFmpeg to produce a WebM.
-    Returns raw WebM bytes.
-    Requirement 1.7: minimum 2 seconds → at fps=4, need ≥8 frames.
-    """
-    with tempfile.TemporaryDirectory() as tmpdir:
-        for i, frame in enumerate(frames):
-            path = os.path.join(tmpdir, f"frame_{i:04d}.png")
-            with open(path, "wb") as f:
-                f.write(frame)
-
-        output_path = os.path.join(tmpdir, "output.webm")
-        cmd = [
-            "ffmpeg", "-y",
-            "-framerate", str(fps),
-            "-i", os.path.join(tmpdir, "frame_%04d.png"),
-            "-c:v", "libvpx-vp9",
-            "-b:v", "0", "-crf", "33",
-            "-loop", "0",  # loop forever
-            output_path,
-        ]
-        subprocess.run(cmd, check=True, capture_output=True)
-
-        with open(output_path, "rb") as f:
-            return f.read()

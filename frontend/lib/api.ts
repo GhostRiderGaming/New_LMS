@@ -1,5 +1,6 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? 'dev-api-key'
+const REQUEST_TIMEOUT = 30000 // 30 second timeout
 
 /** Map HTTP status codes to human-readable messages when no server message is available. */
 function httpStatusMessage(status: number): string {
@@ -9,7 +10,7 @@ function httpStatusMessage(status: number): string {
     case 403: return 'You do not have permission to perform this action.'
     case 404: return 'The requested resource was not found.'
     case 422: return 'Your request was rejected — it may contain unsafe or invalid content.'
-    case 429: return 'Storage quota exceeded. Please delete some assets before generating more.'
+    case 429: return 'Rate limit exceeded. Please wait a moment and try again.'
     case 500: return 'The server encountered an error. Please try again in a moment.'
     case 502: return 'The server is temporarily unavailable. Please try again shortly.'
     case 503: return 'The service is currently unavailable. Please try again later.'
@@ -30,17 +31,14 @@ function extractErrorMessage(body: unknown, status: number): string {
     if (msgs.length > 0) return `Validation error: ${msgs.join('; ')}`
   }
 
-  // FastAPI HTTPException with structured detail: { detail: { error: "...", reason: "..." } }
+  // FastAPI HTTPException with structured detail
   if (b.detail && typeof b.detail === 'object') {
     const d = b.detail as Record<string, unknown>
     if (d.reason) return String(d.reason)
     if (d.error) return humanizeErrorCode(String(d.error))
   }
 
-  // FastAPI HTTPException with string detail: { detail: "..." }
   if (typeof b.detail === 'string') return b.detail
-
-  // Direct error field: { error: "..." }
   if (typeof b.error === 'string') return humanizeErrorCode(b.error)
 
   return httpStatusMessage(status)
@@ -61,16 +59,30 @@ function humanizeErrorCode(code: string): string {
   return map[code] ?? code.replace(/_/g, ' ')
 }
 
+/** Create an AbortController with timeout */
+function createTimeoutController(timeoutMs: number = REQUEST_TIMEOUT): { controller: AbortController; clear: () => void } {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  return { controller, clear: () => clearTimeout(timeoutId) }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const { controller, clear } = createTimeoutController()
   let res: Response
   try {
     res = await fetch(`${BASE}${path}`, {
       headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY, ...options?.headers },
+      signal: controller.signal,
       ...options,
     })
-  } catch {
+  } catch (err) {
+    clear()
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Request timed out. The server may be busy — please try again.')
+    }
     throw new Error('Unable to reach the server. Please check your connection and try again.')
   }
+  clear()
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     throw new Error(extractErrorMessage(body, res.status))
@@ -79,15 +91,22 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 }
 
 async function requestRaw(path: string, options?: RequestInit): Promise<Response> {
+  const { controller, clear } = createTimeoutController()
   let res: Response
   try {
     res = await fetch(`${BASE}${path}`, {
       ...options,
       headers: { 'X-API-Key': API_KEY, ...options?.headers },
+      signal: controller.signal,
     })
-  } catch {
+  } catch (err) {
+    clear()
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Request timed out. The server may be busy — please try again.')
+    }
     throw new Error('Unable to reach the server. Please check your connection and try again.')
   }
+  clear()
   if (!res.ok) {
     const body = await res.json().catch(() => null)
     throw new Error(extractErrorMessage(body, res.status))
@@ -97,12 +116,12 @@ async function requestRaw(path: string, options?: RequestInit): Promise<Response
 
 // --- Job types ---
 export type JobStatus = 'queued' | 'processing' | 'complete' | 'failed'
-export interface Job { job_id: string; status: JobStatus; asset_id?: string; asset_url?: string; error_message?: string }
+export interface Job { job_id: string; status: JobStatus; asset_id?: string; asset_url?: string; error_message?: string; progress?: number; step?: string }
 
 /** Returns the WebSocket URL for streaming job status updates. */
 export function getJobWsUrl(job_id: string): string {
   const wsBase = BASE.replace(/^http/, 'ws')
-  return `${wsBase}/api/v1/jobs/${job_id}/ws`
+  return `${wsBase}/api/v1/jobs/${job_id}/ws?api_key=${encodeURIComponent(API_KEY)}`
 }
 
 // --- Asset types ---

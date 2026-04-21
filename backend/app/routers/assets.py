@@ -139,6 +139,7 @@ async def export_all_zip(
     )
 
 
+
 @router.get("/{asset_id}", response_model=AssetResponse)
 async def get_asset(
     asset_id: str,
