@@ -4,7 +4,10 @@ import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useBellaStore } from "@/lib/bellaStore";
 import dynamic from "next/dynamic";
 
-const Bella3D = dynamic(() => import("./Bella3D"), { ssr: false });
+const Live2DViewer = dynamic(
+  () => import("./Live2DViewer").then(mod => ({ default: mod.Live2DViewer as any })),
+  { ssr: false }
+) as any;
 
 declare global {
   interface Window {
@@ -247,14 +250,18 @@ export function BellaPresence() {
 
   return (
     <>
-      {/* Bella 3D Model */}
-      <div className="fixed inset-0 pointer-events-none z-[9999]">
-        <Bella3D
-          isTalking={isTalking}
-          isThinking={isThinking}
-          isHappy={isHappy}
-          isListening={isVoiceActive && !isThinking && !isTalking}
-        />
+      {/* Bella 2.5D Model */}
+      <div className="fixed bottom-20 right-6 z-[9999] pointer-events-auto">
+        <div 
+          className="relative rounded-2xl overflow-hidden shadow-2xl transition-all duration-700 border border-slate-800" 
+          style={{ width: 220, height: 320, background: 'radial-gradient(ellipse at bottom, #1a0a2e 0%, #0a0a0f 70%)' }}
+        >
+          <Live2DViewer
+            emotion={isHappy ? 'happy' : (isThinking ? 'thinking' : 'neutral')}
+            isTalking={isTalking}
+            onLoaded={() => console.log('Bella Live2D Loaded')}
+          />
+        </div>
       </div>
 
       {/* Activation Button — Required for browser autoplay policies */}
@@ -296,8 +303,8 @@ export function BellaPresence() {
 
       {/* Chat Bubble */}
       {lastReply && (
-        <div className="fixed bottom-20 right-6 z-[10000] max-w-sm pointer-events-auto animate-fadeInUp">
-          <div className="bg-bg-elevated/90 backdrop-blur-xl border border-accent-purple/30 rounded-2xl p-4 shadow-2xl shadow-purple-900/30">
+        <div className="fixed bottom-[420px] right-6 z-[10000] max-w-sm pointer-events-auto animate-fadeInUp">
+          <div className="bg-slate-900/90 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-4 shadow-2xl shadow-purple-900/30">
             <div className="flex items-start gap-2">
               <span className="text-lg shrink-0">💬</span>
               <p className="text-sm text-slate-200 leading-relaxed">{lastReply}</p>
