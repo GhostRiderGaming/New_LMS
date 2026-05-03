@@ -124,10 +124,10 @@ export function Live2DViewer({ emotion, isTalking, onLoaded }: Live2DViewerProps
         const canvasW = canvas.clientWidth
         const canvasH = canvas.clientHeight
 
-        // Scale model to fill the viewport nicely
+        // Scale model to fill the viewport nicely without overflowing
         const modelW = model.width
         const modelH = model.height
-        const scale = Math.min(canvasW / modelW, canvasH / modelH) * 1.1
+        const scale = Math.min(canvasW / modelW, canvasH / modelH) * 0.95
         model.scale.set(scale, scale)
 
         // Center horizontally, align bottom

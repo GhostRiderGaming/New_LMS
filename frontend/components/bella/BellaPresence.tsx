@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
+import { motion } from "framer-motion";
 import { useBellaStore } from "@/lib/bellaStore";
 import dynamic from "next/dynamic";
 
@@ -251,18 +252,24 @@ export function BellaPresence() {
   return (
     <>
       {/* Bella 2.5D Model */}
-      <div className="fixed bottom-20 right-6 z-[9999] pointer-events-auto">
-        <div 
-          className="relative rounded-2xl overflow-hidden shadow-2xl transition-all duration-700 border border-slate-800" 
-          style={{ width: 220, height: 320, background: 'radial-gradient(ellipse at bottom, #1a0a2e 0%, #0a0a0f 70%)' }}
+      <motion.div 
+        className="fixed bottom-20 right-6 z-[9999] pointer-events-auto cursor-grab active:cursor-grabbing"
+        drag
+        dragMomentum={false}
+      >
+        <motion.div
+          animate={{ y: [0, -8, 0] }}
+          transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+          style={{ width: 280, height: 400 }}
+          className="relative drop-shadow-2xl transition-transform"
         >
           <Live2DViewer
             emotion={isHappy ? 'happy' : (isThinking ? 'thinking' : 'neutral')}
             isTalking={isTalking}
             onLoaded={() => console.log('Bella Live2D Loaded')}
           />
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Activation Button — Required for browser autoplay policies */}
       {!userActivated && (
