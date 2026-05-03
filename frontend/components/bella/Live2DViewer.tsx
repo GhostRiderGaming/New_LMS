@@ -154,6 +154,12 @@ export function Live2DViewer({ emotion, isTalking, onLoaded }: Live2DViewerProps
         let browTarget = 0
         let browActual = 0
 
+        // Cursor Tracking variables
+        let targetCursorX = 0
+        let targetCursorY = 0
+        let currentCursorX = 0
+        let currentCursorY = 0
+
         // Use the native Live2D model update event instead of a disconnected requestAnimationFrame
         // This ensures our parameter overrides don't conflict with the model's internal physics/focus updates.
         model.internalModel.on('beforeModelUpdate', () => {
@@ -199,14 +205,37 @@ export function Live2DViewer({ emotion, isTalking, onLoaded }: Live2DViewerProps
           } catch {}
         })
 
+        // ── Cursor Tracking (Continuous Ticker) ──
+        pixiApp.ticker.add(() => {
+          if (destroyedRef.current) return
+          
+          const coreModel: any = model?.internalModel?.coreModel
+          if (!coreModel) return
+
+          // Smoothly lerp toward target
+          currentCursorX += (targetCursorX - currentCursorX) * 0.08
+          currentCursorY += (targetCursorY - currentCursorY) * 0.08
+
+          // Clamp values to prevent over-rotation
+          const clampedX = Math.max(-1, Math.min(1, currentCursorX))
+          const clampedY = Math.max(-1, Math.min(1, currentCursorY))
+
+          try {
+            // Set parameters EVERY FRAME to ensure it overrides Live2D motions
+            coreModel.setParameterValueById('ParamAngleX', clampedX * 30)
+            coreModel.setParameterValueById('ParamAngleY', clampedY * 30)
+            coreModel.setParameterValueById('ParamEyeBallX', clampedX)
+            coreModel.setParameterValueById('ParamEyeBallY', clampedY)
+          } catch {}
+        })
+
         // ─── MOUSE TRACKING ──────────────────────────────────────────
         const onMouseMove = (e: MouseEvent) => {
           if (!model || destroyedRef.current) return
           // Normalize mouse coordinates to [-1, 1] for the Live2D model
           // Center of screen is (0, 0)
-          const x = (e.clientX / window.innerWidth) * 2 - 1
-          const y = (e.clientY / window.innerHeight) * 2 - 1
-          model.focus(x, y)
+          targetCursorX = (e.clientX / window.innerWidth) * 2 - 1
+          targetCursorY = -((e.clientY / window.innerHeight) * 2 - 1)
         }
         window.addEventListener('mousemove', onMouseMove)
 

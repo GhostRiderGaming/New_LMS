@@ -26,7 +26,7 @@ export default function RootLayout({
           strategy="beforeInteractive"
         />
       </head>
-      <body className={`${inter.className} min-h-screen overflow-x-hidden bg-black text-white selection:bg-indigo-500/30`}>
+      <body suppressHydrationWarning className={`${inter.className} min-h-screen overflow-x-hidden bg-black text-white selection:bg-indigo-500/30`}>
         {/* Animated Simulated Universe Background */}
         <div className="universe-bg" />
         
