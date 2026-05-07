@@ -1,8 +1,8 @@
 """
 3D model generation service.
 
-Uses Hugging Face Inference API (free) with stabilityai/TripoSR for text-to-3D generation,
-uploads to AWS S3, and attaches required metadata.
+Uses Hugging Face Inference API (free) with openai/shap-e for text-to-3D generation.
+Falls back to a descriptive error (not a silent placeholder) if generation fails.
 
 Public API:
   generate_model3d(object_name, category, job_id, session_id) -> Asset
@@ -11,7 +11,9 @@ Requirements: 3.1, 3.4, 3.7
 """
 from __future__ import annotations
 
+import base64
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Literal
@@ -26,18 +28,19 @@ from app.services.prompt_builder import prompt_builder
 # Constants
 # ---------------------------------------------------------------------------
 
-# TripoSR via HF Inference API — free, no key required (rate-limited)
-_HF_MODEL = "stabilityai/TripoSR"
+# Shap-E via HF Inference API — text-to-3D, free tier
+_HF_MODEL = "openai/shap-e"
 _HF_API_URL = f"https://api-inference.huggingface.co/models/{_HF_MODEL}"
+_HF_TIMEOUT = 120  # seconds — 3D generation is slow
+_MAX_RETRIES = 3
+_RETRY_DELAY = 10  # seconds between retries
 
 Model3DCategory = Literal["anatomy", "chemistry", "astronomy", "historical", "mechanical"]
 
-# Supported categories for validation
 SUPPORTED_CATEGORIES: set[str] = {
     "anatomy", "chemistry", "astronomy", "historical", "mechanical"
 }
 
-# Suggested alternatives when an object cannot be generated
 _FALLBACK_SUGGESTIONS: dict[str, list[str]] = {
     "anatomy": ["human heart", "neuron", "DNA double helix", "cell membrane"],
     "chemistry": ["water molecule", "benzene ring", "ATP molecule", "glucose"],
@@ -46,34 +49,54 @@ _FALLBACK_SUGGESTIONS: dict[str, list[str]] = {
     "mechanical": ["gear assembly", "piston engine", "turbine blade", "ball bearing"],
 }
 
+# Minimal valid GLB (single triangle) — used only as absolute last resort
+_FALLBACK_GLB_B64 = (
+    "Z2xURgIAAAANAAAALgAAAEpTT057ImFzc2V0Ijp7InZlcnNpb24iOiIyLjAifSwic2NlbmVzIjpb"
+    "eyJub2RlcyI6WzBdfV0sIm5vZGVzIjpbeyJtZXNoIjowfV0sIm1lc2hlcyI6W3sicHJpbWl0aXZl"
+    "cyI6W3siYXR0cmlidXRlcyI6eyJQT1NJVElPTiI6MX0sImluZGljZXMiOjB9XX1dLCJidWZmZXJz"
+    "IjpbeyJieXRlTGVuZ3RoIjoxOH1dLCJidWZmZXJWaWV3cyI6W3siYnVmZmVyIjowLCJieXRlT2Zm"
+    "c2V0IjowLCJieXRlTGVuZ3RoIjo2LCJ0YXJnZXQiOjM0OTYzfSx7ImJ1ZmZlciI6MCwiYnl0ZU9m"
+    "ZnNldCI6NiwiYnl0ZUxlbmd0aCI6MTIsInRhcmdldCI6MzQ5NjJ9XSwiYWNjZXNzb3JzIjpbeyJi"
+    "dWZmZXJWaWV3IjowLCJieXRlT2Zmc2V0IjowLCJjb21wb25lbnRUeXBlIjo1MTIzLCJjb3VudCI6"
+    "MywidHlwZSI6IlNDQUxBUiJ9LHsiYnVmZmVyVmlldyI6MSwiYnl0ZU9mZnNldCI6MCwiY29tcG9u"
+    "ZW50VHlwZSI6NTEyNiwiY291bnQiOjMsInR5cGUiOiJWRUMzIiwibWF4IjpbMS4xLDEuMSwxLjFd"
+    "LCJtaW4iOlswLjAsMC4wLDAuMF19XX0NAAAAQklOAAABAAIAAAAAAAAAAAAAgD8AAAAAAACAPwAAAA"
+    "AAAAAAAAAAAAAAAACAP"
+    "w=="
+)
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-import base64
-
-# Minimal valid GLB file (a single triangle) purely as a safe fallback
-_FALLBACK_GLB_B64 = "Z2xURgIAAAANAAAALgAAAEpTT057ImFzc2V0Ijp7InZlcnNpb24iOiIyLjAifSwic2NlbmVzIjpbeyJub2RlcyI6WzBdfV0sIm5vZGVzIjpbeyJtZXNoIjowfV0sIm1lc2hlcyI6W3sicHJpbWl0aXZlcyI6W3siYXR0cmlidXRlcyI6eyJQT1NJVElPTiI6MX0sImluZGljZXMiOjB9XX1dLCJidWZmZXJzIjpbeyJieXRlTGVuZ3RoIjoxOH1dLCJidWZmZXJWaWV3cyI6W3siYnVmZmVyIjowLCJieXRlT2Zmc2V0IjowLCJieXRlTGVuZ3RoIjo2LCJ0YXJnZXQiOjM0OTYzfSx7ImJ1ZmZlciI6MCwiYnl0ZU9mZnNldCI6NiwiYnl0ZUxlbmd0aCI6MTIsInRhcmdldCI6MzQ5NjJ9XSwiYWNjZXNzb3JzIjpbeyJidWZmZXJWaWV3IjowLCJieXRlT2Zmc2V0IjowLCJjb21wb25lbnRUeXBlIjo1MTIzLCJjb3VudCI6MywidHlwZSI6IlNDQUxBUiJ9LHsiYnVmZmVyVmlldyI6MSwiYnl0ZU9mZnNldCI6MCwiY29tcG9uZW50VHlwZSI6NTEyNiwiY291bnQiOjMsInR5cGUiOiJWRUMzIiwibWF4IjpbMS4xLDEuMSwxLjFdLCJtaW4iOlswLjAsMC4wLDAuMF19XX0NAAAAQklOAAABAAIAAAAAAAAAAAAAgD8AAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8="
 
 async def _call_hf_model3d(prompt: str) -> bytes:
     """
-    Call HF Inference API (TripoSR) with the given prompt.
-    Returns raw GLB bytes. Uses a graceful fallback on failure.
-    Requirement 3.1: generate or retrieve a 3D model in GLTF format.
+    Call HF Inference API (Shap-E) with retries.
+    Returns raw GLB bytes on success, raises RuntimeError on all failures.
     """
     hf_token = os.environ.get("HF_API_TOKEN", "")
     headers = {"Authorization": f"Bearer {hf_token}"} if hf_token else {}
     payload = {"inputs": prompt}
 
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(_HF_API_URL, json=payload, headers=headers)
-            resp.raise_for_status()
-            return resp.content  # HF returns raw GLB bytes
-    except Exception as e:
-        print(f"HF Inference API Failed. Falling back to generic 3D model. Reason: {e}")
-        return base64.b64decode(_FALLBACK_GLB_B64)
+    last_error: Exception = RuntimeError("Unknown error")
+    for attempt in range(_MAX_RETRIES):
+        try:
+            async with httpx.AsyncClient(timeout=_HF_TIMEOUT) as client:
+                resp = await client.post(_HF_API_URL, json=payload, headers=headers)
+                if resp.status_code == 503:
+                    # Model loading — wait and retry
+                    wait = _RETRY_DELAY * (attempt + 1)
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                content = resp.content
+                # HF returns GLB bytes directly for 3D models
+                if len(content) < 100:
+                    raise RuntimeError(f"HF returned suspiciously small response ({len(content)} bytes)")
+                return content
+        except Exception as e:
+            last_error = e
+            if attempt < _MAX_RETRIES - 1:
+                time.sleep(_RETRY_DELAY)
+
+    raise RuntimeError(f"3D model generation failed after {_MAX_RETRIES} attempts: {last_error}")
 
 
 def _store_asset_record(
@@ -128,23 +151,20 @@ async def generate_model3d(
     Generate a 3D model for the given object name and category.
 
     Flow:
-      1. Build a detailed Hunyuan3D-2.1 prompt via Groq (Requirement 3.4)
-      2. Call Fal.ai Hunyuan3D-2.1 → returns GLB (binary GLTF with embedded textures)
-      3. Upload to Cloudflare R2
+      1. Build a detailed text-to-3D prompt via Groq
+      2. Call HF Shap-E API → returns GLB bytes
+      3. Upload to AWS S3
       4. Persist Asset record with required metadata and return it
 
     Requirements: 3.1, 3.4, 3.7
-    Metadata attached: object_name, description, scale_reference, category (Requirement 3.4)
+    Raises RuntimeError if generation fails (caller handles retry/fallback).
     """
-    # 1. Build prompt via Groq
     model_prompt = await prompt_builder.build_3d_prompt(object_name, category)
 
-    # 2. Generate 3D model via HF TripoSR
+    # Raises RuntimeError on failure — Celery task will retry
     glb_bytes = await _call_hf_model3d(model_prompt)
 
-    # 3. Upload to R2
     key = f"model3d/{job_id}/{uuid.uuid4()}.glb"
-    # Requirement 3.4: attach metadata including object_name, description, scale_reference, category
     metadata = {
         "object_name": object_name,
         "description": model_prompt,
@@ -160,7 +180,6 @@ async def generate_model3d(
         metadata=metadata,
     )
 
-    # 4. Persist DB record
     return _store_asset_record(
         job_id=job_id,
         object_name=object_name,

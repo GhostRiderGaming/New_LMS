@@ -86,7 +86,11 @@ class SafetyService:
     """Stateless safety filter — one instance shared across the app."""
 
     def __init__(self) -> None:
-        self._groq = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY", ""))
+        self._groq = AsyncGroq(
+            api_key=os.environ.get("GROQ_API_KEY", ""),
+            timeout=10.0,
+            max_retries=2,
+        )
         self._model = "llama-guard-3-8b"
 
     # ------------------------------------------------------------------

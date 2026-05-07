@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import TopicInput from '@/components/shared/TopicInput'
 import JobProgressBar from '@/components/shared/JobProgressBar'
@@ -35,6 +35,14 @@ export interface StoryPlan {
 }
 
 export default function StoryPage() {
+  return (
+    <Suspense fallback={<div className="p-6 max-w-5xl mx-auto text-center py-20 text-slate-600"><div className="text-5xl mb-4 animate-pulse">📖</div><p className="text-sm">Loading Chronicle...</p></div>}>
+      <StoryPageInner />
+    </Suspense>
+  )
+}
+
+function StoryPageInner() {
   const searchParams = useSearchParams()
   const [topic, setTopic] = useState(searchParams.get('topic') || '')
   const [episodeCount, setEpisodeCount] = useState(3)

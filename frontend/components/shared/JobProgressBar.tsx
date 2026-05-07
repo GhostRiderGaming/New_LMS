@@ -30,6 +30,8 @@ export default function JobProgressBar({ jobId, status: initialStatus, label, on
   const [msgIndex, setMsgIndex] = useState(0)
   const [retryCount, setRetryCount] = useState(0)
   const [elapsed, setElapsed] = useState(0)
+  const [timedOut, setTimedOut] = useState(false)
+  const MAX_WAIT_SECONDS = 300 // 5 minutes
   const wsRef = useRef<WebSocket | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -42,12 +44,17 @@ export default function JobProgressBar({ jobId, status: initialStatus, label, on
     if (initialStatus && !status) setStatus(initialStatus)
   }, [initialStatus]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Timer for elapsed time
+  // Timer for elapsed time + timeout detection
   useEffect(() => {
     if (status === 'complete' || status === 'failed') return
     startTimeRef.current = Date.now()
     timerRef.current = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startTimeRef.current) / 1000))
+      const s = Math.floor((Date.now() - startTimeRef.current) / 1000)
+      setElapsed(s)
+      if (s >= MAX_WAIT_SECONDS) {
+        setTimedOut(true)
+        if (timerRef.current) clearInterval(timerRef.current)
+      }
     }, 1000)
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [status])
@@ -175,6 +182,23 @@ export default function JobProgressBar({ jobId, status: initialStatus, label, on
   }, [jobId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!status || !jobId) return null
+
+  // Timeout state — show a helpful message instead of spinning forever
+  if (timedOut && status !== 'complete' && status !== 'failed') {
+    return (
+      <div className="w-full bg-bg-card border border-yellow-500/30 rounded-2xl p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-yellow-400">⏱</span>
+          <span className="text-sm font-medium text-yellow-400">Taking longer than expected</span>
+        </div>
+        <p className="text-xs text-slate-400 mb-3">
+          This job is still running in the background. Generation can take up to 5 minutes for complex content.
+          You can wait or try again with a simpler topic.
+        </p>
+        <div className="text-[10px] text-slate-600 font-mono">job: {jobId.slice(0, 8)}... · {elapsed}s elapsed</div>
+      </div>
+    )
+  }
 
   const msgs = statusMessages[status] || []
   const currentMsg = step || label || msgs[msgIndex % msgs.length] || ''

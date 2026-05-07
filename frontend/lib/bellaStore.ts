@@ -15,6 +15,7 @@ interface BellaStore {
   messages: BellaMessage[]
   emotionalState: EmotionState
   lastJobContext: string | null
+  appearance: string
 
   // Actions
   show: () => void
@@ -23,6 +24,7 @@ interface BellaStore {
   addMessage: (msg: Omit<BellaMessage, 'id' | 'timestamp'>) => void
   setEmotionalState: (state: EmotionState) => void
   setLastJobContext: (ctx: string | null) => void
+  setAppearance: (path: string) => void
 }
 
 export const useBellaStore = create<BellaStore>((set) => ({
@@ -31,6 +33,7 @@ export const useBellaStore = create<BellaStore>((set) => ({
   messages: [],
   emotionalState: 'neutral',
   lastJobContext: null,
+  appearance: '/live2d/bella/bella.model3.json',
 
   show: () => set({ isVisible: true }),
   hide: () => set({ isVisible: false }),
@@ -44,4 +47,5 @@ export const useBellaStore = create<BellaStore>((set) => ({
     })),
   setEmotionalState: (emotionalState) => set({ emotionalState }),
   setLastJobContext: (lastJobContext) => set({ lastJobContext }),
+  setAppearance: (appearance) => set({ appearance }),
 }))

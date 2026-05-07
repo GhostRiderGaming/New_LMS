@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import TopicInput from '@/components/shared/TopicInput'
 import JobProgressBar from '@/components/shared/JobProgressBar'
@@ -27,6 +27,14 @@ interface Scene {
 }
 
 export default function AnimePage() {
+  return (
+    <Suspense fallback={<div className="p-6 max-w-4xl mx-auto text-center py-20 text-slate-600"><div className="text-5xl mb-4 animate-pulse">🎨</div><p className="text-sm">Loading Scene Forge...</p></div>}>
+      <AnimePageInner />
+    </Suspense>
+  )
+}
+
+function AnimePageInner() {
   const searchParams = useSearchParams()
   const [topic, setTopic] = useState(searchParams.get('topic') || '')
   const [style, setStyle] = useState<Style>('classroom')

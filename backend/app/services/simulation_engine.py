@@ -99,37 +99,115 @@ def _inline_external_scripts(html: str) -> str:
 
 
 def _fallback_simulation(topic: str, category: str) -> str:
+    """
+    Fallback simulation with a real canvas + requestAnimationFrame loop.
+    Used when Groq generation fails or times out.
+    Satisfies Requirement 2.4: MUST use HTML5 canvas with requestAnimationFrame.
+    """
     t = topic.replace("<", "&lt;").replace(">", "&gt;")
     c = category.replace("<", "&lt;").replace(">", "&gt;")
-    return (
-        "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'>"
-        f"<title>{t}</title>"
-        "<style>body{{background:#1a1a2e;color:#e2e8f0;font-family:sans-serif;"
-        "padding:2rem;text-align:center}}h1{{color:#7c3aed}}"
-        ".card{{background:#16213e;border:1px solid #7c3aed;border-radius:12px;"
-        "padding:2rem;max-width:600px;margin:2rem auto}}"
-        ".badge{{display:inline-block;background:#06b6d4;color:#0a0a0f;"
-        "border-radius:6px;padding:.25rem .75rem;font-size:.85rem;margin-bottom:1rem}}"
-        "button{{background:#7c3aed;color:white;border:none;border-radius:8px;"
-        "padding:.5rem 1.5rem;cursor:pointer;font-size:1rem;margin-top:1rem}}"
-        "#info{{margin-top:1rem;color:#06b6d4;min-height:2rem}}</style></head>"
-        f"<body><h1>{t}</h1><div class='card'><span class='badge'>{c}</span>"
-        f"<p>Interactive simulation: <strong>{t}</strong></p>"
-        "<label for='p'>Parameter: <span id='v'>50</span></label><br>"
-        "<input type='range' id='p' min='0' max='100' value='50' "
-        "style='width:80%;margin:1rem 0'><br>"
-        "<button id='b'>Explain</button><div id='info'></div></div>"
-        "<script>"
-        "var s=document.getElementById('p'),v=document.getElementById('v'),"
-        "i=document.getElementById('info');"
-        "var f=['Increasing amplifies the effect.','At max, system saturates.',"
-        "'Relationship is approximately linear.','Try different values.'];"
-        "s.addEventListener('input',function(){v.textContent=s.value;"
-        "i.textContent='Value: '+s.value+' - '+f[Math.floor(s.value/26)];});"
-        "document.getElementById('b').addEventListener('click',function(){"
-        f"i.textContent='Topic: {t}. Category: {c}. Adjust slider to explore.'"
-        ";});</script></body></html>"
-    )
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>{t} Simulation</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ background: #0f172a; color: #e2e8f0; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 1.5rem; min-height: 100vh; }}
+  h1 {{ color: #8b5cf6; font-size: 1.4rem; margin-bottom: 0.25rem; }}
+  .badge {{ background: #06b6d4; color: #0f172a; border-radius: 6px; padding: 2px 10px; font-size: 0.8rem; margin-bottom: 1rem; display: inline-block; }}
+  canvas {{ border-radius: 12px; border: 1px solid #1e293b; background: #0a0f1e; margin: 1rem 0; }}
+  .controls {{ display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; margin-bottom: 1rem; }}
+  .ctrl {{ background: #1e293b; border-radius: 10px; padding: 0.75rem 1rem; min-width: 160px; }}
+  label {{ font-size: 0.75rem; color: #94a3b8; display: block; margin-bottom: 4px; }}
+  input[type=range] {{ width: 100%; accent-color: #8b5cf6; }}
+  .info {{ background: #1e293b; border-left: 3px solid #06b6d4; border-radius: 8px; padding: 0.75rem 1rem; max-width: 560px; font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }}
+  .info strong {{ color: #e2e8f0; }}
+</style>
+</head>
+<body>
+<h1>{t}</h1>
+<span class="badge">{c}</span>
+<canvas id="c" width="560" height="320"></canvas>
+<div class="controls">
+  <div class="ctrl">
+    <label>Speed: <span id="sv">50</span></label>
+    <input type="range" id="speed" min="1" max="100" value="50">
+  </div>
+  <div class="ctrl">
+    <label>Particles: <span id="pv">20</span></label>
+    <input type="range" id="count" min="5" max="60" value="20">
+  </div>
+</div>
+<div class="info">
+  <strong>About this simulation:</strong> This interactive visualization represents concepts from <strong>{t}</strong>.
+  Adjust the sliders to explore how speed and particle count affect the system.
+  Each glowing dot represents a unit of energy or matter in motion.
+</div>
+<script>
+var canvas = document.getElementById('c');
+var ctx = canvas.getContext('2d');
+var W = canvas.width, H = canvas.height;
+var speedSlider = document.getElementById('speed');
+var countSlider = document.getElementById('count');
+var sv = document.getElementById('sv');
+var pv = document.getElementById('pv');
+
+var particles = [];
+function makeParticle() {{
+  return {{
+    x: Math.random() * W,
+    y: Math.random() * H,
+    vx: (Math.random() - 0.5) * 2,
+    vy: (Math.random() - 0.5) * 2,
+    r: 3 + Math.random() * 5,
+    hue: 200 + Math.random() * 120,
+    life: Math.random() * Math.PI * 2
+  }};
+}}
+
+function syncParticles() {{
+  var n = parseInt(countSlider.value);
+  while (particles.length < n) particles.push(makeParticle());
+  while (particles.length > n) particles.pop();
+}}
+syncParticles();
+
+speedSlider.addEventListener('input', function() {{ sv.textContent = speedSlider.value; }});
+countSlider.addEventListener('input', function() {{ pv.textContent = countSlider.value; syncParticles(); }});
+
+function draw() {{
+  var spd = parseInt(speedSlider.value) / 50;
+  ctx.fillStyle = 'rgba(10,15,30,0.18)';
+  ctx.fillRect(0, 0, W, H);
+
+  for (var i = 0; i < particles.length; i++) {{
+    var p = particles[i];
+    p.life += 0.04;
+    p.x += p.vx * spd;
+    p.y += p.vy * spd;
+    if (p.x < 0 || p.x > W) p.vx *= -1;
+    if (p.y < 0 || p.y > H) p.vy *= -1;
+
+    var glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 3);
+    glow.addColorStop(0, 'hsla(' + p.hue + ',90%,70%,0.9)');
+    glow.addColorStop(1, 'hsla(' + p.hue + ',90%,50%,0)');
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = 'hsla(' + p.hue + ',100%,80%,1)';
+    ctx.fill();
+  }}
+  requestAnimationFrame(draw);
+}}
+draw();
+</script>
+</body>
+</html>"""
 
 
 async def generate_simulation(
@@ -143,9 +221,25 @@ async def generate_simulation(
     Generate a self-contained HTML simulation.
     Requirements: 2.1, 2.2, 2.4, 2.5
     """
-    groq = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY", ""))
+    groq = AsyncGroq(
+        api_key=os.environ.get("GROQ_API_KEY", ""),
+        timeout=120.0,
+        max_retries=3,
+    )
 
-    code_gen_prompt = await prompt_builder.build_simulation_prompt(topic, category)
+    # Build a structured prompt via the prompt builder (first Groq call).
+    # If this fails (e.g. Groq connection error), fall back to a direct prompt
+    # so the main generation call still has a chance to succeed.
+    try:
+        code_gen_prompt = await prompt_builder.build_simulation_prompt(topic, category)
+    except Exception:
+        code_gen_prompt = (
+            f"Create a complete, self-contained HTML5 interactive simulation about "
+            f"'{topic}' in the '{category}' category for 6th-grade students. "
+            f"Use an HTML5 canvas with requestAnimationFrame for smooth animation. "
+            f"Include a control panel with at least 2 interactive sliders/buttons "
+            f"and a 'Learn' info box explaining the concept in simple language."
+        )
 
     try:
         completion = await groq.chat.completions.create(

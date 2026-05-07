@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import TopicInput from '@/components/shared/TopicInput'
@@ -30,6 +30,14 @@ interface Model3DResult {
 }
 
 export default function Model3DPage() {
+  return (
+    <Suspense fallback={<div className="p-6 max-w-4xl mx-auto text-center py-20 text-slate-600"><div className="text-5xl mb-4 animate-pulse">🧊</div><p className="text-sm">Loading Holodeck...</p></div>}>
+      <Model3DPageInner />
+    </Suspense>
+  )
+}
+
+function Model3DPageInner() {
   const searchParams = useSearchParams()
   const [objectName, setObjectName] = useState(searchParams.get('object') || '')
   const [category, setCategory] = useState<Category>('anatomy')

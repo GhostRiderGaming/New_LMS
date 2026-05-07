@@ -1,4 +1,4 @@
-﻿"""
+"""
 Property-based tests for asset storage.
 
 Feature: education-anime-generator
@@ -59,6 +59,7 @@ def _make_asset_manager(fake_r2: FakeR2):
     mgr = AssetManager.__new__(AssetManager)
     mgr._bucket = "test-bucket"
     mgr._client = fake_r2
+    mgr._use_s3 = True
     return mgr
 
 

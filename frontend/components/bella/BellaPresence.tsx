@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { motion } from "framer-motion";
 import { useBellaStore } from "@/lib/bellaStore";
 import dynamic from "next/dynamic";
 
@@ -21,7 +20,7 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "dev-api-key";
 
 export function BellaPresence() {
   const [mounted, setMounted] = useState(false);
-  const { isVisible, show, hide, addMessage } = useBellaStore();
+  const { isVisible, show, hide, addMessage, appearance } = useBellaStore();
 
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isTalking, setIsTalking] = useState(false);
@@ -34,6 +33,46 @@ export function BellaPresence() {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const intentionalStopRef = useRef(false);
   const processingRef = useRef(false); // Prevent double-trigger
+
+  // ─── DRAGGING (pure DOM, zero React re-renders) ─────────────────────
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ dragging: false, startX: 0, startY: 0, offsetX: 0, offsetY: 0 });
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      dragState.current.dragging = true;
+      dragState.current.startX = e.clientX - dragState.current.offsetX;
+      dragState.current.startY = e.clientY - dragState.current.offsetY;
+      el.setPointerCapture(e.pointerId);
+      el.style.cursor = 'grabbing';
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragState.current.dragging) return;
+      dragState.current.offsetX = e.clientX - dragState.current.startX;
+      dragState.current.offsetY = e.clientY - dragState.current.startY;
+      el.style.transform = `translate(${dragState.current.offsetX}px, ${dragState.current.offsetY}px)`;
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      dragState.current.dragging = false;
+      el.releasePointerCapture(e.pointerId);
+      el.style.cursor = 'grab';
+    };
+
+    el.addEventListener('pointerdown', onPointerDown);
+    el.addEventListener('pointermove', onPointerMove);
+    el.addEventListener('pointerup', onPointerUp);
+    el.addEventListener('pointercancel', onPointerUp);
+
+    return () => {
+      el.removeEventListener('pointerdown', onPointerDown);
+      el.removeEventListener('pointermove', onPointerMove);
+      el.removeEventListener('pointerup', onPointerUp);
+      el.removeEventListener('pointercancel', onPointerUp);
+    };
+  }, []);
 
   // Stop Bella completely — fully deactivates until user clicks Activate again
   const stopAll = useCallback(() => {
@@ -251,25 +290,25 @@ export function BellaPresence() {
 
   return (
     <>
-      {/* Bella 2.5D Model */}
-      <motion.div 
-        className="fixed bottom-20 right-6 z-[9999] pointer-events-auto cursor-grab active:cursor-grabbing"
-        drag
-        dragMomentum={false}
+      {/* Bella 2.5D Model — pure DOM drag (no React re-renders) */}
+      <div
+        ref={containerRef}
+        className="fixed bottom-20 right-6 z-[9999] pointer-events-auto cursor-grab touch-none"
+        style={{ willChange: 'transform' }}
       >
-        <motion.div
-          animate={{ y: [0, -8, 0] }}
-          transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
-          style={{ width: 280, height: 400 }}
-          className="relative drop-shadow-2xl transition-transform"
+        <div
+          style={{ width: 280, height: 400, contain: 'layout style paint' }}
+          className="relative bella-float"
         >
           <Live2DViewer
+            key={appearance}
+            modelPath={appearance}
             emotion={isHappy ? 'happy' : (isThinking ? 'thinking' : 'neutral')}
             isTalking={isTalking}
-            onLoaded={() => console.log('Bella Live2D Loaded')}
+            onLoaded={() => console.log('Bella Live2D Loaded:', appearance)}
           />
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
 
       {/* Activation Button — Required for browser autoplay policies */}
       {!userActivated && (

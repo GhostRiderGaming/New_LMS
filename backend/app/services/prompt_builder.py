@@ -65,7 +65,11 @@ _MODEL3D_SYSTEM = (
 
 class PromptBuilder:
     def __init__(self) -> None:
-        self._groq = AsyncGroq(api_key=os.environ.get("GROQ_API_KEY", ""))
+        self._groq = AsyncGroq(
+            api_key=os.environ.get("GROQ_API_KEY", ""),
+            timeout=120.0,
+            max_retries=5
+        )
 
     async def _call(self, system: str, user: str) -> str:
         completion = await self._groq.chat.completions.create(

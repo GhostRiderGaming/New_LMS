@@ -1,6 +1,14 @@
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? 'dev-api-key'
-const REQUEST_TIMEOUT = 30000 // 30 second timeout
+
+// Per-endpoint timeouts (ms)
+const TIMEOUTS = {
+  default: 30_000,
+  simulation: 90_000,
+  model3d: 120_000,
+  story: 30_000,   // job submission only — actual work is async
+  bella: 15_000,
+}
 
 /** Map HTTP status codes to human-readable messages when no server message is available. */
 function httpStatusMessage(status: number): string {
@@ -60,20 +68,21 @@ function humanizeErrorCode(code: string): string {
 }
 
 /** Create an AbortController with timeout */
-function createTimeoutController(timeoutMs: number = REQUEST_TIMEOUT): { controller: AbortController; clear: () => void } {
+function createTimeoutController(timeoutMs: number = TIMEOUTS.default): { controller: AbortController; clear: () => void } {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
   return { controller, clear: () => clearTimeout(timeoutId) }
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const { controller, clear } = createTimeoutController()
+async function request<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
+  const { timeoutMs, ...fetchOptions } = options ?? {}
+  const { controller, clear } = createTimeoutController(timeoutMs ?? TIMEOUTS.default)
   let res: Response
   try {
     res = await fetch(`${BASE}${path}`, {
-      headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY, ...options?.headers },
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': API_KEY, ...fetchOptions?.headers },
       signal: controller.signal,
-      ...options,
+      ...fetchOptions,
     })
   } catch (err) {
     clear()
@@ -149,13 +158,13 @@ export const api = {
     request<Job>('/api/v1/anime/generate', { method: 'POST', body: JSON.stringify({ topic, style, include_animation }) }),
 
   generateSimulation: (topic: string, category: string) =>
-    request<Job>('/api/v1/simulation/generate', { method: 'POST', body: JSON.stringify({ topic, category }) }),
+    request<Job>('/api/v1/simulation/generate', { method: 'POST', body: JSON.stringify({ topic, category }), timeoutMs: TIMEOUTS.simulation }),
 
   generateModel3D: (object_name: string, category: string) =>
-    request<Job>('/api/v1/model3d/generate', { method: 'POST', body: JSON.stringify({ object_name, category }) }),
+    request<Job>('/api/v1/model3d/generate', { method: 'POST', body: JSON.stringify({ object_name, category }), timeoutMs: TIMEOUTS.model3d }),
 
   generateStory: (topic: string, episode_count: number) =>
-    request<Job>('/api/v1/story/generate', { method: 'POST', body: JSON.stringify({ topic, episode_count }) }),
+    request<Job>('/api/v1/story/generate', { method: 'POST', body: JSON.stringify({ topic, episode_count }), timeoutMs: TIMEOUTS.story }),
 
   // --- Jobs ---
   getJob: (job_id: string) => request<Job>(`/api/v1/jobs/${job_id}`),

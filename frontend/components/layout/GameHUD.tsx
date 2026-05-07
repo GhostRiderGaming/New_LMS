@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { useGameProgress } from '@/lib/useGameProgress'
+import { useBellaStore } from '@/lib/bellaStore'
 
 const navItems = [
   { href: '/', label: 'Home', icon: '⚡', desc: 'Mission Control' },
@@ -18,6 +19,7 @@ export default function GameHUD() {
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { progress } = useGameProgress()
+  const { appearance, setAppearance } = useBellaStore()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
@@ -110,6 +112,24 @@ export default function GameHUD() {
               <div className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-lg bg-bg-card/80 border border-orange-500/20">
                 <span className="text-[10px]">🔥</span>
                 <span className="text-[10px] text-orange-400 font-medium">{progress.streak}d</span>
+              </div>
+            )}
+
+            {/* Appearance Selector */}
+            {mounted && (
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-bg-card border border-border">
+                <span className="text-[10px] text-slate-400">Mate:</span>
+                <select
+                  value={appearance}
+                  onChange={(e) => setAppearance(e.target.value)}
+                  className="bg-transparent text-[10px] text-white outline-none cursor-pointer"
+                >
+                  <option value="/live2d/bella/bella.model3.json" className="bg-bg-card text-white">Default Bella</option>
+                  <option value="/live2d/model1/base/【雪熊企划】雪熊少女.model3.json" className="bg-bg-card text-white">Snow Bear</option>
+                  <option value="/live2d/model2/base/Alexia.model3.json" className="bg-bg-card text-white">Alexia</option>
+                  <option value="/live2d/model3/base/march 7th.model3.json" className="bg-bg-card text-white">March 7th</option>
+                  <option value="/live2d/model4/base/free.model3.json" className="bg-bg-card text-white">Eara (Free)</option>
+                </select>
               </div>
             )}
 

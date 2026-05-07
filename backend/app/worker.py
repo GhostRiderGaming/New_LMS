@@ -35,8 +35,8 @@ celery_app.conf.update(
 
 
 def _retry_countdown(retries: int) -> int:
-    """Exponential backoff: 2^retries seconds (2, 4, 8)."""
-    return 2 ** retries
+    """Exponential backoff: 30s, 60s, 120s — long enough for API recovery."""
+    return 30 * (2 ** retries)
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +250,16 @@ def generate_simulation_task(
             job.retry_count = min((job.retry_count or 0) + 1, 3)
             if job.retry_count >= 3:
                 job.status = "failed"
-                job.error_message = str(exc)
-                notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
+                # Provide a user-friendly error message for Groq connection issues
+                exc_str = str(exc)
+                if "Connection error" in exc_str or "APIConnectionError" in exc_str:
+                    job.error_message = (
+                        "The AI service is temporarily unreachable. "
+                        "This is usually a brief network issue — please try again in a moment."
+                    )
+                else:
+                    job.error_message = exc_str
+                notify(job_id, {"job_id": job_id, "status": "failed", "error_message": job.error_message})
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
         countdown = _retry_countdown(self.request.retries)
