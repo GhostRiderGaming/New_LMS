@@ -1,8 +1,11 @@
 """
 3D model generation service.
 
-Uses Hugging Face Inference API (free) with openai/shap-e for text-to-3D generation.
-Falls back to a descriptive error (not a silent placeholder) if generation fails.
+Uses a two-step pipeline — both steps are completely free:
+  Step 1: Generate a reference image via HF Inference API (Animagine XL / FLUX)
+  Step 2: Convert image to 3D GLB via HF Inference API (stabilityai/stable-fast-3d)
+
+No API key required beyond the existing HF_API_TOKEN.
 
 Public API:
   generate_model3d(object_name, category, job_id, session_id) -> Asset
@@ -11,7 +14,7 @@ Requirements: 3.1, 3.4, 3.7
 """
 from __future__ import annotations
 
-import base64
+import asyncio
 import os
 import time
 import uuid
@@ -28,12 +31,17 @@ from app.services.prompt_builder import prompt_builder
 # Constants
 # ---------------------------------------------------------------------------
 
-# Shap-E via HF Inference API — text-to-3D, free tier
-_HF_MODEL = "openai/shap-e"
-_HF_API_URL = f"https://api-inference.huggingface.co/models/{_HF_MODEL}"
-_HF_TIMEOUT = 120  # seconds — 3D generation is slow
+# Step 1: Generate a reference image (reuse the anime image pipeline)
+_HF_IMAGE_MODEL = "black-forest-labs/FLUX.1-schnell"
+_HF_IMAGE_URL = f"https://api-inference.huggingface.co/models/{_HF_IMAGE_MODEL}"
+
+# Step 2: Image → 3D GLB via Stable Fast 3D
+_HF_3D_MODEL = "stabilityai/stable-fast-3d"
+_HF_3D_URL = f"https://api-inference.huggingface.co/models/{_HF_3D_MODEL}"
+
+_HF_TIMEOUT = 120
 _MAX_RETRIES = 3
-_RETRY_DELAY = 10  # seconds between retries
+_RETRY_DELAY = 15  # seconds — HF models need time to warm up
 
 Model3DCategory = Literal["anatomy", "chemistry", "astronomy", "historical", "mechanical"]
 
@@ -49,54 +57,80 @@ _FALLBACK_SUGGESTIONS: dict[str, list[str]] = {
     "mechanical": ["gear assembly", "piston engine", "turbine blade", "ball bearing"],
 }
 
-# Minimal valid GLB (single triangle) — used only as absolute last resort
-_FALLBACK_GLB_B64 = (
-    "Z2xURgIAAAANAAAALgAAAEpTT057ImFzc2V0Ijp7InZlcnNpb24iOiIyLjAifSwic2NlbmVzIjpb"
-    "eyJub2RlcyI6WzBdfV0sIm5vZGVzIjpbeyJtZXNoIjowfV0sIm1lc2hlcyI6W3sicHJpbWl0aXZl"
-    "cyI6W3siYXR0cmlidXRlcyI6eyJQT1NJVElPTiI6MX0sImluZGljZXMiOjB9XX1dLCJidWZmZXJz"
-    "IjpbeyJieXRlTGVuZ3RoIjoxOH1dLCJidWZmZXJWaWV3cyI6W3siYnVmZmVyIjowLCJieXRlT2Zm"
-    "c2V0IjowLCJieXRlTGVuZ3RoIjo2LCJ0YXJnZXQiOjM0OTYzfSx7ImJ1ZmZlciI6MCwiYnl0ZU9m"
-    "ZnNldCI6NiwiYnl0ZUxlbmd0aCI6MTIsInRhcmdldCI6MzQ5NjJ9XSwiYWNjZXNzb3JzIjpbeyJi"
-    "dWZmZXJWaWV3IjowLCJieXRlT2Zmc2V0IjowLCJjb21wb25lbnRUeXBlIjo1MTIzLCJjb3VudCI6"
-    "MywidHlwZSI6IlNDQUxBUiJ9LHsiYnVmZmVyVmlldyI6MSwiYnl0ZU9mZnNldCI6MCwiY29tcG9u"
-    "ZW50VHlwZSI6NTEyNiwiY291bnQiOjMsInR5cGUiOiJWRUMzIiwibWF4IjpbMS4xLDEuMSwxLjFd"
-    "LCJtaW4iOlswLjAsMC4wLDAuMF19XX0NAAAAQklOAAABAAIAAAAAAAAAAAAAgD8AAAAAAACAPwAAAA"
-    "AAAAAAAAAAAAAAAACAP"
-    "w=="
-)
 
+# ---------------------------------------------------------------------------
+# Two-step pipeline helpers
+# ---------------------------------------------------------------------------
 
-async def _call_hf_model3d(prompt: str) -> bytes:
+async def _generate_reference_image(object_name: str, category: str) -> bytes:
     """
-    Call HF Inference API (Shap-E) with retries.
-    Returns raw GLB bytes on success, raises RuntimeError on all failures.
+    Step 1: Generate a clean reference image of the object using FLUX.1-schnell.
+    Returns raw PNG bytes.
     """
     hf_token = os.environ.get("HF_API_TOKEN", "")
     headers = {"Authorization": f"Bearer {hf_token}"} if hf_token else {}
-    payload = {"inputs": prompt}
+
+    # Clean, white-background product-style prompt works best for image-to-3D
+    prompt = (
+        f"A single {object_name}, {category} subject, "
+        "clean white background, studio lighting, high detail, "
+        "no shadows, centered, product photography style"
+    )
 
     last_error: Exception = RuntimeError("Unknown error")
     for attempt in range(_MAX_RETRIES):
         try:
             async with httpx.AsyncClient(timeout=_HF_TIMEOUT) as client:
-                resp = await client.post(_HF_API_URL, json=payload, headers=headers)
+                resp = await client.post(
+                    _HF_IMAGE_URL,
+                    json={"inputs": prompt, "parameters": {"width": 512, "height": 512}},
+                    headers=headers,
+                )
                 if resp.status_code == 503:
-                    # Model loading — wait and retry
-                    wait = _RETRY_DELAY * (attempt + 1)
-                    time.sleep(wait)
+                    await asyncio.sleep(_RETRY_DELAY * (attempt + 1))
                     continue
                 resp.raise_for_status()
-                content = resp.content
-                # HF returns GLB bytes directly for 3D models
-                if len(content) < 100:
-                    raise RuntimeError(f"HF returned suspiciously small response ({len(content)} bytes)")
-                return content
+                if len(resp.content) < 1000:
+                    raise RuntimeError(f"Image too small ({len(resp.content)} bytes)")
+                return resp.content
         except Exception as e:
             last_error = e
             if attempt < _MAX_RETRIES - 1:
-                time.sleep(_RETRY_DELAY)
+                await asyncio.sleep(_RETRY_DELAY)
 
-    raise RuntimeError(f"3D model generation failed after {_MAX_RETRIES} attempts: {last_error}")
+    raise RuntimeError(f"Reference image generation failed: {last_error}")
+
+
+async def _image_to_3d(image_bytes: bytes) -> bytes:
+    """
+    Step 2: Convert a PNG image to a GLB 3D model via stabilityai/stable-fast-3d.
+    Returns raw GLB bytes.
+    """
+    hf_token = os.environ.get("HF_API_TOKEN", "")
+    headers = {"Authorization": f"Bearer {hf_token}"} if hf_token else {}
+
+    last_error: Exception = RuntimeError("Unknown error")
+    for attempt in range(_MAX_RETRIES):
+        try:
+            async with httpx.AsyncClient(timeout=_HF_TIMEOUT) as client:
+                resp = await client.post(
+                    _HF_3D_URL,
+                    content=image_bytes,
+                    headers={**headers, "Content-Type": "image/png"},
+                )
+                if resp.status_code == 503:
+                    await asyncio.sleep(_RETRY_DELAY * (attempt + 1))
+                    continue
+                resp.raise_for_status()
+                if len(resp.content) < 1000:
+                    raise RuntimeError(f"GLB too small ({len(resp.content)} bytes)")
+                return resp.content
+        except Exception as e:
+            last_error = e
+            if attempt < _MAX_RETRIES - 1:
+                await asyncio.sleep(_RETRY_DELAY)
+
+    raise RuntimeError(f"Image-to-3D conversion failed: {last_error}")
 
 
 def _store_asset_record(
@@ -148,26 +182,22 @@ async def generate_model3d(
     session_id: str,
 ) -> Asset:
     """
-    Generate a 3D model for the given object name and category.
-
-    Flow:
-      1. Build a detailed text-to-3D prompt via Groq
-      2. Call HF Shap-E API → returns GLB bytes
-      3. Upload to AWS S3
-      4. Persist Asset record with required metadata and return it
+    Generate a 3D model using a two-step free pipeline:
+      1. Generate reference image via FLUX.1-schnell (HF free)
+      2. Convert image to GLB via stable-fast-3d (HF free)
 
     Requirements: 3.1, 3.4, 3.7
-    Raises RuntimeError if generation fails (caller handles retry/fallback).
     """
-    model_prompt = await prompt_builder.build_3d_prompt(object_name, category)
+    # Step 1: reference image
+    image_bytes = await _generate_reference_image(object_name, category)
 
-    # Raises RuntimeError on failure — Celery task will retry
-    glb_bytes = await _call_hf_model3d(model_prompt)
+    # Step 2: image → GLB
+    glb_bytes = await _image_to_3d(image_bytes)
 
     key = f"model3d/{job_id}/{uuid.uuid4()}.glb"
     metadata = {
         "object_name": object_name,
-        "description": model_prompt,
+        "description": f"3D model of {object_name} ({category})",
         "scale_reference": _infer_scale_reference(category, object_name),
         "category": category,
     }

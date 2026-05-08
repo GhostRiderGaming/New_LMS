@@ -27,18 +27,16 @@ logger = logging.getLogger(__name__)
 
 _BLOCKLIST: frozenset[str] = frozenset(
     {
-        # Violence / harm
-        "kill", "murder", "suicide", "self-harm", "torture", "gore",
-        "massacre", "genocide", "terrorism", "bomb", "explosive",
-        # Sexual / adult
-        "porn", "pornography", "nude", "nudity", "explicit", "nsfw",
-        "hentai", "erotic", "sexual",
-        # Hate speech
-        "racist", "racism", "nazi", "slur", "hate speech",
-        # Drugs
-        "cocaine", "heroin", "meth", "methamphetamine", "drug synthesis",
-        # Weapons
-        "weapon synthesis", "gun making", "how to make a bomb",
+        # Sexual / adult — never educational
+        "porn", "pornography", "nude", "nudity", "nsfw",
+        "hentai", "erotic",
+        # Hate speech — never educational
+        "racist", "racism", "slur", "hate speech",
+        # Specific harmful instructions — not general terms
+        "drug synthesis", "weapon synthesis", "gun making",
+        "how to make a bomb", "how to make drugs",
+        # Self-harm instructions
+        "suicide method", "self-harm method",
     }
 )
 
@@ -88,10 +86,10 @@ class SafetyService:
     def __init__(self) -> None:
         self._groq = AsyncGroq(
             api_key=os.environ.get("GROQ_API_KEY", ""),
-            timeout=10.0,
-            max_retries=2,
+            timeout=5.0,   # fail fast — decommissioned/slow models shouldn't block requests
+            max_retries=0, # no retries — we fail open, so retrying just adds latency
         )
-        self._model = "llama-guard-3-8b"
+        self._model = "meta-llama/llama-guard-4-12b"
 
     # ------------------------------------------------------------------
     # Public API

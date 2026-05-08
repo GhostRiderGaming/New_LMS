@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import io
 import os
 import tempfile
 from datetime import datetime, timezone
@@ -150,16 +149,21 @@ class BellaService:
         self, text: str
     ) -> tuple[bytes, list[dict[str, Any]]]:
         """
-        Use edge-tts to synthesize speech. Returns (mp3_bytes, phonemes).
-        edge-tts doesn't provide phoneme timestamps, so phonemes is always [].
-        Lip sync will fall back to amplitude-based animation on the frontend.
+        Use edge-tts to synthesize speech via file save (more reliable than streaming).
+        Returns (mp3_bytes, phonemes). Phonemes are always [] — lip sync uses amplitude.
         """
         communicate = edge_tts.Communicate(text, _EDGE_TTS_VOICE)
-        buf = io.BytesIO()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                buf.write(chunk["data"])
-        audio_bytes = buf.getvalue()
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            tmp_path = f.name
+        try:
+            await communicate.save(tmp_path)
+            with open(tmp_path, "rb") as f:
+                audio_bytes = f.read()
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
         if not audio_bytes:
             raise RuntimeError("edge-tts returned empty audio")
         return audio_bytes, []
