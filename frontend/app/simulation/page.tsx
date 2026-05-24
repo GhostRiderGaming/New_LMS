@@ -66,22 +66,14 @@ function SimulationPageInner() {
                 topic: currentTopic,
                 category: currentCategory,
               })
-              // Fetch the HTML bundle from the asset URL
-              const res = await fetch(asset.presigned_url)
+              // Fetch HTML through the backend proxy — avoids S3 CORS issues
+              const res = await fetch(api.downloadAsset(asset.asset_id), {
+                headers: { 'X-API-Key': process.env.NEXT_PUBLIC_API_KEY ?? 'dev-api-key' }
+              })
               const html = await res.text()
               setSimulationHtml(html)
             } catch {
-              if (job.asset_url) {
-                setResult({
-                  asset_id: job.asset_id!,
-                  asset_url: job.asset_url!,
-                  topic: currentTopic,
-                  category: currentCategory,
-                })
-                const res = await fetch(job.asset_url)
-                const html = await res.text()
-                setSimulationHtml(html)
-              }
+              setError('Simulation generated but failed to load. Please try again.')
             }
           }
         } else if (job.status === 'failed') {

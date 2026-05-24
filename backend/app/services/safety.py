@@ -59,6 +59,13 @@ def _contains_blocked_keyword(text: str) -> str | None:
 _LLAMAGUARD_SYSTEM = (
     "You are a content safety classifier for an educational platform used by students. "
     "Classify the following text as SAFE or UNSAFE for educational use. "
+    "Historical events (wars, revolutions, conflicts, political movements), "
+    "scientific topics, literary analysis, and all standard academic subjects "
+    "are SAFE — even if they involve historical violence, political upheaval, "
+    "or sensitive historical periods. "
+    "Only classify content as UNSAFE if it contains explicit sexual content, "
+    "instructions for creating weapons or drugs, promotion of self-harm, "
+    "or targeted hate speech. "
     "Respond with exactly one word: SAFE or UNSAFE."
 )
 
@@ -89,7 +96,7 @@ class SafetyService:
             timeout=5.0,   # fail fast — decommissioned/slow models shouldn't block requests
             max_retries=0, # no retries — we fail open, so retrying just adds latency
         )
-        self._model = "meta-llama/llama-guard-4-12b"
+        self._model = "openai/gpt-oss-safeguard-20b"
 
     # ------------------------------------------------------------------
     # Public API
@@ -142,28 +149,70 @@ class SafetyService:
     # ------------------------------------------------------------------
 
     async def _classify(self, text: str) -> SafetyResult:
-        """Call LlamaGuard 3 8B via Groq and parse the response."""
+        """Call safety classifier via Groq and parse the response.
+
+        The GPT-OSS-Safeguard model may return structured "Harmony" format
+        output rather than a plain SAFE/UNSAFE token.  We search the full
+        response for explicit "unsafe" signals and default to *safe* when the
+        output is empty or unrecognisable — the keyword blocklist already
+        catches obviously harmful content, so failing open here avoids
+        blocking legitimate educational topics.
+        """
         try:
+            # Wrap input with educational context to reduce false positives
+            # on legitimate academic topics (e.g. "the french revolution")
+            contextualised_input = (
+                f"The following is a topic submitted by a student on an educational "
+                f"learning platform for educational content generation:\n\n{text}"
+            )
             completion = await self._groq.chat.completions.create(
                 model=self._model,
                 messages=[
                     {"role": "system", "content": _LLAMAGUARD_SYSTEM},
-                    {"role": "user", "content": text},
+                    {"role": "user", "content": contextualised_input},
                 ],
-                max_tokens=10,
+                max_tokens=50,  # allow room for Harmony-format responses
                 temperature=0,
             )
-            raw: str = (completion.choices[0].message.content or "").strip().upper()
+            raw: str = (completion.choices[0].message.content or "").strip()
         except Exception as exc:
             # Fail open with a warning — don't block generation on API errors
-            logger.warning("LlamaGuard API call failed: %s — defaulting to SAFE", exc)
+            logger.warning("Safety classifier API call failed: %s — defaulting to SAFE", exc)
             return SafetyResult(
                 safe=True,
                 reason="Safety classifier unavailable — defaulting to safe",
                 classifier_output="ERROR",
             )
 
-        is_safe = raw.startswith("SAFE")
+        upper = raw.upper()
+
+        # Empty / whitespace-only response → fail open
+        if not upper:
+            logger.warning("Safety classifier returned empty response — defaulting to SAFE")
+            return SafetyResult(
+                safe=True,
+                reason="Safety classifier returned empty response — defaulting to safe",
+                classifier_output=raw,
+            )
+
+        # Determine safety: only flag as unsafe when the response explicitly
+        # contains the word "unsafe" (handles both plain and Harmony formats).
+        # A response containing "safe" (but NOT "unsafe") is considered safe.
+        has_unsafe = "UNSAFE" in upper
+        has_safe = "SAFE" in upper and not has_unsafe
+
+        if has_unsafe:
+            is_safe = False
+        elif has_safe:
+            is_safe = True
+        else:
+            # Unrecognisable output — fail open
+            logger.warning(
+                "Safety classifier returned unrecognisable output: %r — defaulting to SAFE",
+                raw[:200],
+            )
+            is_safe = True
+
         result = SafetyResult(
             safe=is_safe,
             reason="" if is_safe else f"LlamaGuard classified content as unsafe: {raw}",

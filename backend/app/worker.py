@@ -31,6 +31,12 @@ celery_app.conf.update(
     # Upstash Redis requires SSL for remote connections; local dev uses plain redis://
     broker_use_ssl=REDIS_URL.startswith("rediss://"),
     redis_backend_use_ssl=REDIS_URL.startswith("rediss://"),
+    # Short Redis timeouts so .delay() fails fast when broker is down,
+    # allowing the in-process fallback to kick in without blocking the endpoint.
+    broker_transport_options={
+        "socket_connect_timeout": 3,
+        "socket_timeout": 3,
+    },
 )
 
 

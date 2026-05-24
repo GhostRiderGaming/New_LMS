@@ -80,25 +80,51 @@ def _add_caption_overlay(image_bytes: bytes, caption: str) -> bytes:
 import asyncio
 
 async def _call_pollinations_image(prompt: str) -> bytes:
-    """Call pollinations.ai (free, tokenless) to generate an image, with robust 429 handling."""
+    """
+    Call pollinations.ai (free, tokenless) to generate an image.
+    Uses the /prompt/ endpoint with robust retry and fallback seed logic.
+    """
     encoded_prompt = urllib.parse.quote(prompt)
-    url = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={_IMAGE_SIZE['width']}&height={_IMAGE_SIZE['height']}&nologo=true&seed={uuid.uuid4().int % 100000}"
+    seed = uuid.uuid4().int % 100000
+    
+    # Two URL formats — v1 is more stable, v2 has more options
+    urls = [
+        f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={_IMAGE_SIZE['width']}&height={_IMAGE_SIZE['height']}&nologo=true&seed={seed}&model=flux",
+        f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={_IMAGE_SIZE['width']}&height={_IMAGE_SIZE['height']}&nologo=true&seed={seed+1}",
+    ]
     
     max_retries = 5
-    base_delay = 2.0
+    base_delay = 3.0
     
-    async with httpx.AsyncClient(timeout=60) as client:
-        for attempt in range(max_retries):
-            resp = await client.get(url)
-            if resp.status_code == 429:
-                if attempt == max_retries - 1:
+    for url_idx, url in enumerate(urls):
+        async with httpx.AsyncClient(timeout=90) as client:
+            for attempt in range(max_retries):
+                try:
+                    resp = await client.get(url)
+                    if resp.status_code == 429:
+                        await asyncio.sleep(base_delay * (2 ** attempt))
+                        continue
+                    if resp.status_code == 500 and attempt < max_retries - 1:
+                        # Pollinations 500s are usually transient — retry with backoff
+                        await asyncio.sleep(base_delay * (attempt + 1))
+                        continue
                     resp.raise_for_status()
-                # Exponential backoff
-                await asyncio.sleep(base_delay * (2 ** attempt))
-                continue
-            resp.raise_for_status()
-            return resp.content
-    raise RuntimeError("Failed to fetch image after retries")
+                    content = resp.content
+                    if len(content) < 1000:
+                        # Too small — likely an error page, retry
+                        await asyncio.sleep(base_delay)
+                        continue
+                    return content
+                except httpx.HTTPStatusError:
+                    if attempt == max_retries - 1 and url_idx == len(urls) - 1:
+                        raise
+                    await asyncio.sleep(base_delay * (attempt + 1))
+                except Exception:
+                    if attempt == max_retries - 1 and url_idx == len(urls) - 1:
+                        raise
+                    await asyncio.sleep(base_delay)
+    
+    raise RuntimeError("Failed to fetch image after all retries")
 
 
 def _store_asset_record(

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
 interface Props {
   html: string
@@ -11,6 +11,18 @@ export default function SimulationFrame({ html, topic, shareUrl }: Props) {
   const [fullscreen, setFullscreen] = useState(false)
   const [copied, setCopied] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
+
+  // Write HTML directly into the iframe document after mount
+  // This is more reliable than srcDoc for complex HTML with canvas/scripts
+  useEffect(() => {
+    const iframe = iframeRef.current
+    if (!iframe || !html) return
+    const doc = iframe.contentDocument || iframe.contentWindow?.document
+    if (!doc) return
+    doc.open()
+    doc.write(html)
+    doc.close()
+  }, [html])
 
   const handleCopyUrl = () => {
     if (shareUrl) {
@@ -64,12 +76,12 @@ export default function SimulationFrame({ html, topic, shareUrl }: Props) {
         </div>
       </div>
 
-      {/* Iframe */}
+      {/* Iframe — sandbox allows scripts for canvas animations */}
       <iframe
         ref={iframeRef}
-        srcDoc={html}
         sandbox="allow-scripts allow-same-origin"
-        className={`w-full bg-bg-primary ${fullscreen ? 'h-[calc(100%-48px)]' : 'h-[480px]'}`}
+        className={`w-full border-0 block ${fullscreen ? 'h-[calc(100%-48px)]' : 'h-[520px]'}`}
+        style={{ background: '#0f172a' }}
         title={`${topic} simulation`}
       />
     </div>

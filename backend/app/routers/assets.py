@@ -147,7 +147,7 @@ async def get_asset(
     session: dict = Depends(get_current_session),
 ):
     """Return asset metadata + presigned download URL. 404 if not found."""
-    asset = _get_asset_or_404(asset_id, db, session_id=session["session_id"])
+    asset = _get_asset_or_404(asset_id, db, session_id=None)  # UUID is the secret
     return _asset_to_response(asset)
 
 
@@ -172,8 +172,12 @@ async def download_asset(
     db: Session = Depends(get_db),
     session: dict = Depends(get_current_session),
 ):
-    """Stream raw asset bytes. 404 if not found in DB or R2."""
-    asset = _get_asset_or_404(asset_id, db, session_id=session["session_id"])
+    """Stream raw asset bytes. 404 if not found in DB or R2.
+    
+    Note: no session filter on download — the asset_id is a UUID secret,
+    so possession of it is sufficient authorization.
+    """
+    asset = _get_asset_or_404(asset_id, db, session_id=None)  # no session filter
     data = asset_manager.download_file(asset.file_path)
     if data is None:
         raise HTTPException(

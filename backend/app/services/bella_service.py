@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 import base64
 import os
-import tempfile
 from datetime import datetime, timezone
 from typing import Any
 
@@ -149,23 +148,19 @@ class BellaService:
         self, text: str
     ) -> tuple[bytes, list[dict[str, Any]]]:
         """
-        Use edge-tts to synthesize speech via file save (more reliable than streaming).
+        Use edge-tts to synthesize speech.
         Returns (mp3_bytes, phonemes). Phonemes are always [] — lip sync uses amplitude.
+        Uses streaming approach which is more reliable cross-platform.
         """
+        import io as _io
         communicate = edge_tts.Communicate(text, _EDGE_TTS_VOICE)
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-            tmp_path = f.name
-        try:
-            await communicate.save(tmp_path)
-            with open(tmp_path, "rb") as f:
-                audio_bytes = f.read()
-        finally:
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
+        buf = _io.BytesIO()
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                buf.write(chunk["data"])
+        audio_bytes = buf.getvalue()
         if not audio_bytes:
-            raise RuntimeError("edge-tts returned empty audio")
+            raise RuntimeError("edge-tts returned empty audio — check internet connection")
         return audio_bytes, []
 
     # ------------------------------------------------------------------
@@ -174,10 +169,11 @@ class BellaService:
     # ------------------------------------------------------------------
 
     async def transcribe_audio(self, audio_bytes: bytes, filename: str) -> str:
-        """Transcribe *audio_bytes* via Groq Whisper Large v3."""
+        """Transcribe *audio_bytes* via Groq Whisper."""
+        # Use a fixed valid audio filename to prevent Groq API 500 errors
         transcription = await self._groq.audio.transcriptions.create(
-            model=_GROQ_WHISPER_MODEL,
-            file=(filename, audio_bytes, "audio/webm"),
+            model="whisper-large-v3-turbo",
+            file=("audio.webm", audio_bytes),
         )
         return transcription.text
 
