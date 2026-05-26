@@ -33,7 +33,7 @@ export const useBellaStore = create<BellaStore>((set) => ({
   messages: [],
   emotionalState: 'neutral',
   lastJobContext: null,
-  appearance: '/live2d/bella/bella.model3.json',
+  appearance: '/live2d/model3/base/march 7th.model3.json',
 
   show: () => set({ isVisible: true }),
   hide: () => set({ isVisible: false }),
