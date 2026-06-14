@@ -293,7 +293,7 @@ export function BellaPresence() {
       {/* Bella 2.5D Model — pure DOM drag (no React re-renders) */}
       <div
         ref={containerRef}
-        className="fixed bottom-20 right-6 z-[9999] pointer-events-auto cursor-grab touch-none"
+        className="fixed bottom-20 right-2 z-[9999] pointer-events-auto cursor-grab touch-none"
         style={{ willChange: 'transform' }}
       >
         <div

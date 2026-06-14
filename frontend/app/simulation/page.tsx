@@ -1,11 +1,11 @@
 'use client'
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import TopicInput from '@/components/shared/TopicInput'
 import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import SimulationFrame from '@/components/simulation/SimulationFrame'
-import { api } from '@/lib/api'
+import { api, type Job } from '@/lib/api'
 import { useGameProgress } from '@/lib/useGameProgress'
 
 const categories = ['physics', 'chemistry', 'biology', 'mathematics', 'history'] as const
@@ -44,49 +44,38 @@ function SimulationPageInner() {
   const [simulationHtml, setSimulationHtml] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { completeMission } = useGameProgress()
 
-  const startPolling = (id: string, currentTopic: string, currentCategory: Category) => {
-    if (pollRef.current) clearInterval(pollRef.current)
-    pollRef.current = setInterval(async () => {
-      try {
-        const job = await api.getJob(id)
-        setJobStatus(job.status)
-        if (job.status === 'complete') {
-          clearInterval(pollRef.current!)
-          setLoading(false)
-          completeMission('simulation')
-          if (job.asset_id) {
-            try {
-              const asset = await api.getAsset(job.asset_id)
-              setResult({
-                asset_id: asset.asset_id,
-                asset_url: asset.presigned_url,
-                topic: currentTopic,
-                category: currentCategory,
-              })
-              // Fetch HTML through the backend proxy — avoids S3 CORS issues
-              const res = await fetch(api.downloadAsset(asset.asset_id), {
-                headers: { 'X-API-Key': process.env.NEXT_PUBLIC_API_KEY ?? 'dev-api-key' }
-              })
-              const html = await res.text()
-              setSimulationHtml(html)
-            } catch {
-              setError('Simulation generated but failed to load. Please try again.')
-            }
-          }
-        } else if (job.status === 'failed') {
-          clearInterval(pollRef.current!)
-          setLoading(false)
-          setError(job.error_message ?? 'Simulation generation failed. Please try again.')
+  // Handles job completion/failure — called by JobProgressBar's resilient polling
+  const handleJobComplete = async (job: Job) => {
+    setJobStatus(job.status)
+    setLoading(false)
+
+    if (job.status === 'complete') {
+      setError(null)
+      completeMission('simulation')
+      if (job.asset_id) {
+        try {
+          const asset = await api.getAsset(job.asset_id)
+          setResult({
+            asset_id: asset.asset_id,
+            asset_url: asset.presigned_url,
+            topic,
+            category,
+          })
+          // Fetch HTML through the backend proxy — avoids S3 CORS issues
+          const res = await fetch(api.downloadAsset(asset.asset_id), {
+            headers: { 'X-API-Key': process.env.NEXT_PUBLIC_API_KEY ?? 'dev-api-key' }
+          })
+          const html = await res.text()
+          setSimulationHtml(html)
+        } catch {
+          setError('Simulation generated but failed to load. Please try again.')
         }
-      } catch {
-        clearInterval(pollRef.current!)
-        setLoading(false)
-        setError('Lost connection while polling job status.')
       }
-    }, 2000)
+    } else if (job.status === 'failed') {
+      setError(job.error_message ?? 'Simulation generation failed. Please try again.')
+    }
   }
 
   const handleGenerate = async (t: string) => {
@@ -101,7 +90,6 @@ function SimulationPageInner() {
       const job = await api.generateSimulation(t, category)
       setJobId(job.job_id)
       setJobStatus(job.status)
-      startPolling(job.job_id, t, category)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit simulation job. Please try again.')
       setLoading(false)
@@ -112,7 +100,6 @@ function SimulationPageInner() {
   useEffect(() => {
     const t = searchParams.get('topic')
     if (t) handleGenerate(t)
-    return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [])
 
   const shareUrl = result
@@ -158,10 +145,10 @@ function SimulationPageInner() {
         </TopicInput>
       </div>
 
-      {/* Progress */}
-      {jobId && jobStatus !== 'complete' && jobStatus !== 'failed' && (
+      {/* Progress — JobProgressBar handles polling resiliently */}
+      {jobId && jobStatus && jobStatus !== 'complete' && jobStatus !== 'failed' && (
         <div className="mb-6">
-          <JobProgressBar jobId={jobId} status={jobStatus} label="Generating simulation code..." />
+          <JobProgressBar jobId={jobId} status={jobStatus} label="Generating simulation code..." onComplete={handleJobComplete} />
         </div>
       )}
 

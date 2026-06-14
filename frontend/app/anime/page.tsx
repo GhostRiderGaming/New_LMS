@@ -1,11 +1,11 @@
 'use client'
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import TopicInput from '@/components/shared/TopicInput'
 import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import AnimeSceneCard from '@/components/anime/AnimeSceneCard'
-import { api } from '@/lib/api'
+import { api, type Job } from '@/lib/api'
 import { useGameProgress } from '@/lib/useGameProgress'
 
 const styles = ['classroom', 'laboratory', 'outdoor', 'fantasy'] as const
@@ -44,59 +44,49 @@ function AnimePageInner() {
   const [scenes, setScenes] = useState<Scene[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { completeMission } = useGameProgress()
 
-  const startPolling = (id: string, currentTopic: string, currentStyle: Style) => {
-    if (pollRef.current) clearInterval(pollRef.current)
-    pollRef.current = setInterval(async () => {
-      try {
-        const job = await api.getJob(id)
-        setJobStatus(job.status)
-        if (job.status === 'complete') {
-          clearInterval(pollRef.current!)
-          setLoading(false)
-          completeMission('anime')
-          if (job.asset_id) {
-            try {
-              const asset = await api.getAsset(job.asset_id)
-              const meta = asset.metadata as Record<string, string>
-              setScenes((prev) => [
-                ...prev,
-                {
-                  asset_id: asset.asset_id,
-                  asset_url: asset.presigned_url,
-                  topic: currentTopic,
-                  caption: meta?.caption ?? `This scene illustrates "${currentTopic}" in an anime ${currentStyle} setting.`,
-                  style: currentStyle,
-                },
-              ])
-            } catch {
-              if (job.asset_url) {
-                setScenes((prev) => [
-                  ...prev,
-                  {
-                    asset_id: job.asset_id!,
-                    asset_url: job.asset_url!,
-                    topic: currentTopic,
-                    caption: `This scene illustrates "${currentTopic}" in an anime ${currentStyle} setting.`,
-                    style: currentStyle,
-                  },
-                ])
-              }
-            }
+  // Handles job completion/failure — called by JobProgressBar's resilient polling
+  const handleJobComplete = async (job: Job) => {
+    setJobStatus(job.status)
+    setLoading(false)
+
+    if (job.status === 'complete') {
+      setError(null)
+      completeMission('anime')
+      if (job.asset_id) {
+        try {
+          const asset = await api.getAsset(job.asset_id)
+          const meta = asset.metadata as Record<string, string>
+          setScenes((prev) => [
+            ...prev,
+            {
+              asset_id: asset.asset_id,
+              asset_url: asset.presigned_url,
+              topic,
+              caption: meta?.caption ?? `This scene illustrates "${topic}" in an anime ${style} setting.`,
+              style,
+            },
+          ])
+        } catch {
+          // Fallback: use asset_url from job if asset fetch fails
+          if (job.asset_url) {
+            setScenes((prev) => [
+              ...prev,
+              {
+                asset_id: job.asset_id!,
+                asset_url: job.asset_url!,
+                topic,
+                caption: `This scene illustrates "${topic}" in an anime ${style} setting.`,
+                style,
+              },
+            ])
           }
-        } else if (job.status === 'failed') {
-          clearInterval(pollRef.current!)
-          setLoading(false)
-          setError(job.error_message ?? 'Generation failed. Please try again.')
         }
-      } catch {
-        clearInterval(pollRef.current!)
-        setLoading(false)
-        setError('Lost connection while polling job status.')
       }
-    }, 2000)
+    } else if (job.status === 'failed') {
+      setError(job.error_message ?? 'Generation failed. Please try again.')
+    }
   }
 
   const handleGenerate = async (t: string) => {
@@ -109,7 +99,6 @@ function AnimePageInner() {
       const job = await api.generateAnime(t, style, includeAnimation)
       setJobId(job.job_id)
       setJobStatus(job.status)
-      startPolling(job.job_id, t, style)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit generation job. Please try again.')
       setLoading(false)
@@ -119,7 +108,6 @@ function AnimePageInner() {
   useEffect(() => {
     const t = searchParams.get('topic')
     if (t) handleGenerate(t)
-    return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAddToStory = (scene: Scene) => {
@@ -176,10 +164,10 @@ function AnimePageInner() {
         </TopicInput>
       </div>
 
-      {/* Progress */}
-      {jobId && jobStatus !== 'complete' && jobStatus !== 'failed' && (
+      {/* Progress — shown for all active job states; JobProgressBar handles polling resiliently */}
+      {jobId && jobStatus && jobStatus !== 'complete' && jobStatus !== 'failed' && (
         <div className="mb-6">
-          <JobProgressBar jobId={jobId} status={jobStatus} />
+          <JobProgressBar jobId={jobId} status={jobStatus} onComplete={handleJobComplete} />
         </div>
       )}
 

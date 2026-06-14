@@ -34,8 +34,8 @@ celery_app.conf.update(
     # Short Redis timeouts so .delay() fails fast when broker is down,
     # allowing the in-process fallback to kick in without blocking the endpoint.
     broker_transport_options={
-        "socket_connect_timeout": 3,
-        "socket_timeout": 3,
+        "socket_connect_timeout": 1,
+        "socket_timeout": 1,
     },
 )
 

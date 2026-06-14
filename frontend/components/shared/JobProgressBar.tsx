@@ -108,20 +108,20 @@ export default function JobProgressBar({ jobId, status: initialStatus, label, on
           if (job.progress) setProgress(job.progress)
           if (job.step) setStep(job.step)
           failCount = 0
+          setRetryCount(0)
           if (job.status === 'complete' || job.status === 'failed') {
             if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
             return
           }
         } catch {
+          // Connection error — keep retrying silently, never mark as failed
+          // The backend is likely still processing and will respond eventually
           failCount++
-          if (failCount > 20) {
-            if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-            setStatus('failed')
-          }
           setRetryCount(failCount)
+          // No setStatus('failed') here — only the backend can mark a job failed
         }
       }
-      pollRef.current = setInterval(poll, 2500)
+      pollRef.current = setInterval(poll, 3000)
       // Also poll once immediately
       poll()
     }
@@ -253,7 +253,9 @@ export default function JobProgressBar({ jobId, status: initialStatus, label, on
         {retryCount > 0 && !isComplete && !isFailed && (
           <div className="text-[10px] text-yellow-500 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
-            Reconnecting... ({retryCount})
+            {retryCount > 5
+              ? `Backend busy — still waiting (${retryCount} retries)`
+              : `Reconnecting... (${retryCount})`}
           </div>
         )}
       </div>

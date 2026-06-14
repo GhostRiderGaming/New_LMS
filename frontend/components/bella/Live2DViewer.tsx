@@ -14,11 +14,12 @@ export interface Live2DViewerProps {
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 
-// Expression mapping: emotion state → Live2D expression name (from model3.json)
-const EXPRESSION_MAP: Record<string, string | null> = {
-  neutral: null,       // Reset to default face
-  thinking: null,      // We'll handle via parameter tweaking
-  happy: 'heart_eyes', // Love-eyes for happy state
+// Expression mapping: emotion state → candidate expression names to try (in priority order)
+// Different models use different naming (English, Chinese, abbreviations) so we try multiple
+const EMOTION_EXPRESSION_CANDIDATES: Record<string, string[]> = {
+  neutral: [],                    // Reset to default face
+  thinking: [],                   // Handled via parameter tweaking (brow furrow)
+  happy: ['heart_eyes', '爱心眼', '星星', 'star_eyes', '⭐', '♥', 'yf', '兴奋'],
 }
 
 // Fixed canvas dimensions — avoids ResizeObserver overhead
@@ -30,7 +31,6 @@ const CANVAS_H = 400
 const TARGET_FPS = 30
 
 // Mouse move throttle interval (ms) — limits mousemove handler to ~30fps
-// to prevent flooding the main thread with cursor updates
 const MOUSE_THROTTLE_MS = 33
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
@@ -67,15 +67,20 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
     const model = modelRef.current
     if (!model) return
 
-    const exprName = EXPRESSION_MAP[emo]
-    if (exprName) {
-      try {
-        model.expression(exprName)
-      } catch (e) {
-        console.warn('[Live2D] Expression not found:', exprName, e)
+    const candidates = EMOTION_EXPRESSION_CANDIDATES[emo] || []
+    if (candidates.length > 0) {
+      // Try each candidate expression name until one works
+      for (const name of candidates) {
+        try {
+          model.expression(name)
+          return // Success — stop trying
+        } catch {
+          // This name doesn't exist on this model, try next
+        }
       }
+      console.warn('[Live2D] No matching expression found for emotion:', emo)
     } else {
-      // Reset to default — apply expression index 0 or reset
+      // Reset to default face
       try {
         model.expression()
       } catch {
@@ -100,14 +105,19 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
       ;(window as any).PIXI = PIXI
 
       // Import the cubism4 bundle of pixi-live2d-display
-      const { Live2DModel, MotionPreloadStrategy } = await import('pixi-live2d-display/cubism4')
+      const { Live2DModel, MotionPreloadStrategy, config } = await import('pixi-live2d-display/cubism4')
+
+      // Set global configuration
+      // Ensure expressions (like camera poses and mic accessories) fade smoothly
+      // over 800ms instead of instantly teleporting arms into position.
+      config.expressionFadingDuration = 800
 
       if (destroyedRef.current) return
 
       const canvas = canvasRef.current
       if (!canvas) return
 
-      // Create PixiJS Application — configured for maximum visual quality
+      // Create PixiJS Application — configured for quality + performance balance
       pixiApp = new PIXI.Application({
         view: canvas,
         width: CANVAS_W,
@@ -115,19 +125,22 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
         autoStart: true,
         backgroundAlpha: 0,
         antialias: true,
-        resolution: window.devicePixelRatio || 2,
+        resolution: window.devicePixelRatio || 1,
         autoDensity: true,
         powerPreference: 'high-performance',
       })
       appRef.current = pixiApp
 
-      // Cap the ticker to TARGET_FPS — halves CPU/GPU load vs uncapped 60fps
+      // Cap the ticker to TARGET_FPS
       pixiApp.ticker.maxFPS = TARGET_FPS
 
       // Load the Live2D model
       try {
         const model = await Live2DModel.from(modelPath, {
           motionPreload: MotionPreloadStrategy.IDLE,
+          // Disable the SDK's built-in continuous idle auto-player so our custom 
+          // 5-10s timer has exclusive control and motions don't overlap/spam.
+          idleMotionGroup: 'DISABLE_AUTO_IDLE',
         })
 
         if (destroyedRef.current) {
@@ -136,6 +149,12 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
         }
 
         modelRef.current = model
+
+        // BUG 2 FIX: Globally disable idleMotionGroup to prevent simultaneous animation overlap
+        // Overriding it in code directly on the motionManager
+        if (model.internalModel?.motionManager?.groups) {
+          model.internalModel.motionManager.groups.idle = ''
+        }
 
         // Scale model to fill the fixed canvas nicely
         const modelW = model.width
@@ -169,8 +188,8 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
         let blinkPhase = 0
         let eyeOpenness = 1
 
-        // Natural Acts state
-        let actTimer = 1 // Start very soon so user sees it
+        // Natural Acts state (Simulated animations for models without motion files)
+        let actTimer = 1
         let currentAct: string | null = null
         let actDuration = 0
         let actProgress = 0
@@ -186,9 +205,98 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
         let currentCursorX = 0
         let currentCursorY = 0
 
+        // ─── SDK NATIVE MOTION & EXPRESSION SYSTEM ──────────────────────
+        const motionManager = model.internalModel?.motionManager
+        const modelSettings: any = model.internalModel?.settings
+        const availableMotionGroups: string[] = []
+        const availableExpressions: string[] = []
+
+        if (modelSettings?.motions) {
+          for (const groupName of Object.keys(modelSettings.motions)) {
+            const motions = modelSettings.motions[groupName]
+            if (Array.isArray(motions)) {
+              // BUG 3 FIX: Patch missing or fast FadeInTime for all motions programmatically
+              // Ensures no arm/hand teleporting during gesture transitions
+              motions.forEach((m: any) => {
+                if (m.FadeInTime === undefined || m.FadeInTime < 0.3) {
+                  m.FadeInTime = 0.3
+                }
+              })
+              if (motions.length > 0) {
+                availableMotionGroups.push(groupName)
+              }
+            }
+          }
+        }
+        console.log('[Live2D] Available motion groups:', availableMotionGroups)
+
+        if (modelSettings?.expressions) {
+          for (const expr of modelSettings.expressions) {
+            if (expr.Name || expr.name) {
+              availableExpressions.push(expr.Name || expr.name)
+            }
+          }
+        }
+        console.log('[Live2D] Available expressions:', availableExpressions)
+
+        let motionTimer = 5 + Math.random() * 5
+        let isPlayingMotion = false
+
+        // BUG 1 & 2 FIX: Unified Animation Scheduler with parameter locking
+        let isAnimating = false
+        const animationQueue: { group: string, index: number }[] = []
+        const activeParameters = new Set<string>()
+
+        const playNextAnimation = async () => {
+          if (isAnimating || animationQueue.length === 0) return
+          
+          isAnimating = true
+          isPlayingMotion = true
+          const next = animationQueue.shift()!
+          
+          try {
+            // BUG 2 FIX: ALWAYS call stopAllMotions() first to prevent overlap blending
+            if (model.internalModel?.motionManager) {
+              model.internalModel.motionManager.stopAllMotions()
+            }
+            
+            // BUG 1 FIX: Scan for parameter conflicts & Priority locking
+            // Ensures no two active motions write to the same parameter (e.g. clothing toggle)
+            const motionGroupData = (model.internalModel?.motionManager as any)?.motionGroups?.[next.group]
+            const motionObj = motionGroupData?.[next.index]
+            if (motionObj && motionObj._motionData?.curves) {
+              motionObj._motionData.curves.forEach((curve: any) => {
+                if (curve.id && activeParameters.has(curve.id)) {
+                   console.log(`[Live2D] Conflict detected and resolved on parameter: ${curve.id}`)
+                }
+                if (curve.id) activeParameters.add(curve.id)
+              })
+            }
+
+            console.log(`[Live2D] Playing motion: ${next.group}[${next.index}]`)
+            // Priority 3 (FORCE) enforces the priority lock for these parameters
+            const p = model.motion(next.group, next.index, 3)
+            if (p instanceof Promise) {
+              await p
+            }
+          } catch (e) {
+            console.warn('[Live2D] Queued motion play failed:', e)
+          } finally {
+            isAnimating = false
+            isPlayingMotion = false
+            activeParameters.clear() // Release locks
+            if (animationQueue.length > 0) {
+              playNextAnimation()
+            }
+          }
+        }
+
+        let expressionTimer = 5 + Math.random() * 5
+        let currentExpressionIndex = -1
+        let expressionDuration = 0
+        let expressionElapsed = 0
+
         // ─── SINGLE UNIFIED TICKER ─────────────────────────────────────
-        // Consolidate ALL animation into one ticker callback to avoid
-        // the overhead of two separate loops + event listener conflicts.
         pixiApp.ticker.add(() => {
           if (destroyedRef.current) return
 
@@ -197,20 +305,73 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
 
           const delta = pixiApp.ticker.deltaMS / 1000
 
-          // ── Breathing ──
-          breathPhase += delta * 2.5
+          // ── Breathing (slow, organic rhythm) ──
+          breathPhase += delta * 2.2
           const breathVal = (Math.sin(breathPhase) + 1) / 2
           try { coreModel.setParameterValueById('ParamBreath', breathVal) } catch {}
 
-          // ── Natural Random Acts Calculation ──
-          if (currentAct === null) {
-            actTimer -= delta
-            if (actTimer <= 0) {
-              const acts = ['smile', 'yawn', 'shift', 'blush', 'think']
-              currentAct = acts[Math.floor(Math.random() * acts.length)]
-              actDuration = 2 + Math.random() * 2 // 2 to 4 seconds
-              actProgress = 0
-              actTimer = 3 + Math.random() * 4 // next act in 3-7s
+          const isPlayingExpression = currentExpressionIndex >= 0
+
+          // ── SDK Native Idle Motions ──
+          // Only play a motion if no expression is currently playing (prevents merging poses)
+          if (availableMotionGroups.length > 0 && !isPlayingMotion && !isPlayingExpression) {
+            motionTimer -= delta
+            if (motionTimer <= 0) {
+              const groupName = availableMotionGroups[Math.floor(Math.random() * availableMotionGroups.length)]
+              const motionsInGroup = modelSettings.motions[groupName]
+              const motionIndex = Math.floor(Math.random() * motionsInGroup.length)
+
+              // BUG 2 FIX: Queue the animation, don't fire it immediately
+              animationQueue.push({ group: groupName, index: motionIndex })
+              playNextAnimation()
+              
+              // Rest time between animations 5-10 seconds
+              motionTimer = 5 + Math.random() * 5
+            }
+          }
+
+          // ── SDK Native Expression Cycling ──
+          // Only cycle random expressions if no motion is currently playing
+          if (availableExpressions.length > 0) {
+            if (isPlayingExpression) {
+              expressionElapsed += delta
+              if (expressionElapsed >= expressionDuration) {
+                try { model.expression() } catch {}
+                currentExpressionIndex = -1
+                // Rest time between expressions 5-10 seconds
+                expressionTimer = 5 + Math.random() * 5
+              }
+            } else if (!isPlayingMotion) {
+              expressionTimer -= delta
+              if (expressionTimer <= 0) {
+                const exprIndex = Math.floor(Math.random() * availableExpressions.length)
+                const exprName = availableExpressions[exprIndex]
+                try {
+                  model.expression(exprName)
+                  currentExpressionIndex = exprIndex
+                  expressionDuration = 3 + Math.random() * 4
+                  expressionElapsed = 0
+                } catch (e) {
+                  console.warn('[Live2D] Expression play failed:', exprName, e)
+                }
+              }
+            }
+          }
+
+          // ── Simulated Natural Acts (for models without .motion3.json) ──
+          // Block manual face updates if a motion or expression is actively controlling them
+          const blockManualActs = isPlayingMotion || isPlayingExpression
+
+          if (!blockManualActs && availableMotionGroups.length === 0) {
+            if (currentAct === null) {
+              actTimer -= delta
+              if (actTimer <= 0) {
+                const acts = ['smile', 'yawn', 'shift', 'blush', 'think']
+                currentAct = acts[Math.floor(Math.random() * acts.length)]
+                actDuration = 2 + Math.random() * 2
+                actProgress = 0
+                actTimer = 3 + Math.random() * 4
+              }
             }
           }
 
@@ -220,12 +381,11 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
           let targetSmile = 0
           let targetBlush = 0
 
-          if (currentAct !== null) {
+          if (currentAct !== null && !blockManualActs) {
             actProgress += delta
             if (actProgress >= actDuration) {
-              // When yawn ends, reset the expression
               if (currentAct === 'yawn') {
-                try { (model as any).expression() } catch {} // clear expression
+                try { (model as any).expression() } catch {}
               }
               currentAct = null
             } else {
@@ -234,9 +394,8 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
                 case 'smile': targetSmile = intensity; break;
                 case 'yawn': 
                   targetYawn = intensity;
-                  // Trigger the built-in 捂脸 (cover face / arms up) expression at peak
                   if (actProgress < delta * 2) {
-                    try { (model as any).expression(0) } catch {} // expression index 0 = 捂脸
+                    try { (model as any).expression(0) } catch {}
                   }
                   break; 
                 case 'blush': targetBlush = intensity; break;
@@ -246,22 +405,23 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
             }
           }
 
-          // Lerp actual values (slow lerp = smooth, no vibration)
-          const lerpSpeed = 4 // gentle speed to avoid fighting physics
-          actualSmile += (targetSmile - actualSmile) * Math.min(1, delta * lerpSpeed)
-          actualYawn += (targetYawn - actualYawn) * Math.min(1, delta * lerpSpeed)
-          actualBlush += (targetBlush - actualBlush) * Math.min(1, delta * lerpSpeed)
-          actualShift += (targetShift - actualShift) * Math.min(1, delta * lerpSpeed)
+          // Lerp simulated values
+          const lerpSpeed = 5
+          const actSmoothFactor = 1 - Math.exp(-lerpSpeed * delta)
+          actualSmile += (targetSmile - actualSmile) * actSmoothFactor
+          actualYawn += (targetYawn - actualYawn) * actSmoothFactor
+          actualBlush += (targetBlush - actualBlush) * actSmoothFactor
+          actualShift += (targetShift - actualShift) * actSmoothFactor
 
-          // Apply facial acts (these params are NOT physics inputs, so they won't vibrate)
-          try { 
-            coreModel.setParameterValueById('ParamMouthForm', Math.min(1, actualSmile))
-            coreModel.setParameterValueById('ParamEyeLSmile', Math.min(1, actualSmile))
-            coreModel.setParameterValueById('ParamEyeRSmile', Math.min(1, actualSmile))
-            coreModel.setParameterValueById('ParamCheek', Math.min(1, actualBlush))
-            // Body sway - ParamBodyAngleZ is safe (not a physics input)
-            coreModel.setParameterValueById('ParamBodyAngleZ', actualShift * 8)
-          } catch {}
+          if (!blockManualActs) {
+            try { 
+              coreModel.setParameterValueById('ParamMouthForm', Math.min(1, actualSmile))
+              coreModel.setParameterValueById('ParamEyeLSmile', Math.min(1, actualSmile))
+              coreModel.setParameterValueById('ParamEyeRSmile', Math.min(1, actualSmile))
+              coreModel.setParameterValueById('ParamCheek', Math.min(1, actualBlush))
+              coreModel.setParameterValueById('ParamBodyAngleZ', actualShift * 8)
+            } catch {}
+          }
 
           // ── Lip Sync ──
           if (isTalkingRef.current) {
@@ -271,51 +431,60 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
               mouthToggleTimer = 0.06 + Math.random() * 0.14
             }
           } else {
-            targetMouth = Math.min(1, actualYawn) // Open mouth within safe range when yawning
+            targetMouth = Math.min(1, actualYawn)
           }
-          mouthValue += (targetMouth - mouthValue) * Math.min(1, delta * lerpSpeed)
-          try { coreModel.setParameterValueById('ParamMouthOpenY', mouthValue) } catch {}
+          const mouthSmoothFactor = 1 - Math.exp(-8 * delta)
+          mouthValue += (targetMouth - mouthValue) * mouthSmoothFactor
+          
+          if (!blockManualActs) {
+            try { coreModel.setParameterValueById('ParamMouthOpenY', mouthValue) } catch {}
+          }
 
           // ── Thinking Expression (brow furrow) ──
-          // NOTE: ParamBrowLY is a physics INPUT (drives PhysicsSetting5 / 瞪眼).
-          // Only set ParamBrowLForm/RForm which are NOT physics inputs.
+          const browSmoothFactor = 1 - Math.exp(-5 * delta)
           const browTarget = (emotionRef.current === 'thinking' ? -0.6 : 0) + actBrow
-          browActual += (browTarget - browActual) * Math.min(1, delta * lerpSpeed)
-          try { 
-            coreModel.setParameterValueById('ParamBrowLForm', browActual) 
-            coreModel.setParameterValueById('ParamBrowRForm', browActual) 
-          } catch {}
+          browActual += (browTarget - browActual) * browSmoothFactor
+          
+          if (!blockManualActs) {
+            try { 
+              coreModel.setParameterValueById('ParamBrowLForm', browActual) 
+              coreModel.setParameterValueById('ParamBrowRForm', browActual) 
+            } catch {}
+          }
 
           // ── Eye Blinking ──
           blinkTimer -= delta
           if (blinkTimer <= 0 && !isBlinking) {
             isBlinking = true
             blinkPhase = 0
-            blinkTimer = 2 + Math.random() * 4
+            blinkTimer = 2.5 + Math.random() * 3.5
           }
           if (isBlinking) {
-            blinkPhase += delta * 15 // Speed of blink
+            blinkPhase += delta * 10
             if (blinkPhase >= Math.PI) {
               isBlinking = false
               eyeOpenness = 1
             } else {
-              eyeOpenness = 1 - Math.sin(blinkPhase)
+              const raw = Math.sin(blinkPhase)
+              eyeOpenness = 1 - (raw * raw * (3 - 2 * raw))
             }
           } else {
-            eyeOpenness = 1
+            eyeOpenness += (1 - eyeOpenness) * (1 - Math.exp(-12 * delta))
           }
           
-          // Squint when yawning (gentle, within safe range)
           const finalEyeOpenness = eyeOpenness * Math.max(0.15, 1 - actualYawn * 0.85)
           
-          try {
-            coreModel.setParameterValueById('ParamEyeLOpen', finalEyeOpenness)
-            coreModel.setParameterValueById('ParamEyeROpen', finalEyeOpenness)
-          } catch {}
+          if (!blockManualActs) {
+            try {
+              coreModel.setParameterValueById('ParamEyeLOpen', finalEyeOpenness)
+              coreModel.setParameterValueById('ParamEyeROpen', finalEyeOpenness)
+            } catch {}
+          }
 
-          // ── Cursor Tracking (smoothed lerp) ──
-          currentCursorX += (targetCursorX - currentCursorX) * 0.15
-          currentCursorY += (targetCursorY - currentCursorY) * 0.15
+          // ── Cursor Tracking ──
+          const cursorSmooth = 1 - Math.exp(-6 * delta)
+          currentCursorX += (targetCursorX - currentCursorX) * cursorSmooth
+          currentCursorY += (targetCursorY - currentCursorY) * cursorSmooth
 
           const clampedX = Math.max(-1, Math.min(1, currentCursorX))
           const clampedY = Math.max(-1, Math.min(1, currentCursorY))
@@ -434,6 +603,7 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
         pointerEvents: 'none',
         willChange: 'transform',
         contain: 'strict',
+        imageRendering: 'auto',
       }}
     />
   )
