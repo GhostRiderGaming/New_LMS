@@ -138,6 +138,24 @@ Story generation returns a `job_id` for the overall story job. The story itself 
 ### 10. Three.js + SSR
 `ModelViewer3D` uses `@react-three/fiber` which requires a browser environment. Always import it with `dynamic(() => import(...), { ssr: false })` or ensure the component is only rendered client-side.
 
+### 11. `onComplete` must fire directly from polling, not via useEffect
+The `JobProgressBar` calls `onComplete` directly from the polling loop when `job.status === 'complete'` is detected. It does NOT use a `useEffect` to watch `status`. Reason: the parent unmounts the bar when `jobStatus === 'complete'`, so a `useEffect` on `status` would fire on an already-unmounted component. The callback is stored in a `useRef` to stay fresh across renders.
+
+### 12. Asset fetch after job completion needs retries
+The Celery worker marks the job complete in the DB, but the asset may not yet be fully written to S3 when the frontend polls. Always wrap `api.getAsset()` in a retry loop (5 attempts, 2s delay) when called immediately after job completion.
+
+### 13. Progress bar stays visible during result loading
+All generation pages use a `resultLoading` boolean. The bar hides only when `jobStatus === 'complete' && !resultLoading`. This prevents the white-screen flash between 100% progress and the result appearing.
+
+### 14. Groq safety model rotates frequently
+Groq decommissions LlamaGuard variants regularly. The current model is `openai/gpt-oss-safeguard-20b`. If job submissions suddenly take 110+ seconds, check that this model name is still valid at `https://console.groq.com/docs/models`. The safety service fails open on any classifier error, so a decommissioned model won't block generation — it will just be slow until the timeout (5s) kicks in.
+
+### 15. Windows requires `--pool=solo` for Celery
+On Windows, Celery's default multiprocessing pool doesn't work. Always run:
+```powershell
+py -3.11 -m celery -A app.worker worker --loglevel=info --pool=solo
+```
+
 ---
 
 ## 7. File Naming Conventions
@@ -185,20 +203,32 @@ API_KEY=<secure-random-string>
 
 ## 9. Development Workflow
 
+### Windows — one command
+```powershell
+# Start everything (Redis + backend + Celery + frontend) and open browser:
+cd C:\CatchupX\New_LMS
+./start
+
+# Stop everything:
+./stop
+```
+
+### Manual (all platforms)
 ```bash
-# 1. Start Redis (WSL or Docker)
-redis-server
+# 1. Start Redis
+"C:\Program Files\Redis\redis-server.exe"   # Windows
+redis-server                                  # macOS/Linux
 
 # 2. Start backend (terminal 1)
-cd backend && uvicorn app.main:app --reload --port 8000
+cd backend && py -3.11 -m uvicorn app.main:app --reload --port 8000
 
 # 3. Start Celery worker (terminal 2)
-cd backend && celery -A app.worker worker --loglevel=info
+cd backend && py -3.11 -m celery -A app.worker worker --loglevel=info --pool=solo
 
 # 4. Start frontend (terminal 3)
 cd frontend && npm run dev
 
-# 5. Run tests (whenever)
+# 5. Run tests
 cd backend && pytest --tb=short
 cd frontend && npx vitest --run
 ```

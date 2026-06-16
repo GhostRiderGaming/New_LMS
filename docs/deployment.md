@@ -6,10 +6,24 @@ Complete instructions for local development, staging, and production deployment.
 
 ## 1. Local Development Setup
 
-### Prerequisites
+### Quick Start (Windows — one command)
+```powershell
+cd C:\CatchupX\New_LMS
+./start
+```
+This single script starts Redis, backend API, Celery worker, and frontend in sequence, then opens http://localhost:3000 automatically.
+
+To stop everything:
+```powershell
+./stop
+```
+
+### Manual Setup (all platforms)
+
+#### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- Redis (local) OR Upstash account (cloud)
+- Redis (local at `C:\Program Files\Redis\redis-server.exe` on Windows, or Docker)
 - Git
 
 ### Step 1 — Clone and set up backend
