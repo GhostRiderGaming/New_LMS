@@ -223,8 +223,8 @@ async def generate_simulation(
     """
     groq = AsyncGroq(
         api_key=os.environ.get("GROQ_API_KEY", ""),
-        timeout=120.0,
-        max_retries=3,
+        timeout=60.0,
+        max_retries=2,
     )
 
     # Build a structured prompt via the prompt builder (first Groq call).

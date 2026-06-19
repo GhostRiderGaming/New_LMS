@@ -5,6 +5,16 @@ Task retry policy: max_retries=3, exponential backoff (countdown doubles each re
 All generation tasks are imported here so Celery discovers them.
 """
 import os
+from pathlib import Path
+
+# Load .env so Celery worker has all API keys when started directly
+# (uvicorn loads it via FastAPI startup, but Celery is a separate process)
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parent.parent / ".env"
+    load_dotenv(_env_path)
+except ImportError:
+    pass  # python-dotenv not installed — rely on env vars being set externally
 
 from celery import Celery
 
@@ -43,6 +53,33 @@ celery_app.conf.update(
 def _retry_countdown(retries: int) -> int:
     """Exponential backoff: 30s, 60s, 120s — long enough for API recovery."""
     return 30 * (2 ** retries)
+
+
+def _friendly_error(exc: Exception) -> str:
+    """Convert raw exceptions into user-friendly error messages."""
+    msg = str(exc)
+    if "Connection error" in msg or "APIConnectionError" in msg or "ConnectError" in msg:
+        return (
+            "The AI service is temporarily unreachable. "
+            "This is usually a brief network issue — please try again in a moment."
+        )
+    if "timeout" in msg.lower() or "timed out" in msg.lower():
+        return (
+            "The generation timed out. The AI service may be busy — "
+            "please try again in a moment."
+        )
+    if "rate" in msg.lower() and "limit" in msg.lower() or "429" in msg:
+        return (
+            "Rate limit reached. Too many requests — "
+            "please wait a minute and try again."
+        )
+    if "401" in msg or "unauthorized" in msg.lower() or "invalid api key" in msg.lower():
+        return "API authentication error. Please check the API key configuration."
+    if "TRIPO_API_KEY not set" in msg:
+        return "3D model generation is not configured. Please set up a Tripo API key."
+    if len(msg) > 200:
+        return msg[:200] + "..."
+    return msg
 
 
 # ---------------------------------------------------------------------------
@@ -161,8 +198,8 @@ def generate_anime_task(
             job.retry_count = min((job.retry_count or 0) + 1, 3)
             if job.retry_count >= 3:
                 job.status = "failed"
-                job.error_message = str(exc)
-                notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
+                job.error_message = _friendly_error(exc)
+                notify(job_id, {"job_id": job_id, "status": "failed", "error_message": job.error_message})
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
         countdown = _retry_countdown(self.request.retries)
@@ -256,15 +293,8 @@ def generate_simulation_task(
             job.retry_count = min((job.retry_count or 0) + 1, 3)
             if job.retry_count >= 3:
                 job.status = "failed"
-                # Provide a user-friendly error message for Groq connection issues
-                exc_str = str(exc)
-                if "Connection error" in exc_str or "APIConnectionError" in exc_str:
-                    job.error_message = (
-                        "The AI service is temporarily unreachable. "
-                        "This is usually a brief network issue — please try again in a moment."
-                    )
-                else:
-                    job.error_message = exc_str
+                # Provide a user-friendly error message
+                job.error_message = _friendly_error(exc)
                 notify(job_id, {"job_id": job_id, "status": "failed", "error_message": job.error_message})
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
@@ -361,8 +391,9 @@ def generate_model3d_task(
                 job.status = "failed"
                 # Include suggestions for unsupported object errors (Requirement 3.5)
                 suggestions = get_suggestions_for_category(category)
+                friendly = _friendly_error(exc)
                 job.error_message = (
-                    f"model_unavailable: {exc}. "
+                    f"{friendly} "
                     f"Suggestions: {', '.join(suggestions)}"
                 )
                 notify(job_id, {"job_id": job_id, "status": "failed", "error_message": job.error_message})
@@ -500,8 +531,8 @@ def generate_story_task(
             job.retry_count = min((job.retry_count or 0) + 1, 3)
             if job.retry_count >= 3:
                 job.status = "failed"
-                job.error_message = str(exc)
-                notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
+                job.error_message = _friendly_error(exc)
+                notify(job_id, {"job_id": job_id, "status": "failed", "error_message": job.error_message})
             job.updated_at = datetime.now(timezone.utc)
             db.commit()
         countdown = _retry_countdown(self.request.retries)

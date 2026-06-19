@@ -21,6 +21,34 @@ from app.services.job_notifier import notify
 logger = logging.getLogger(__name__)
 
 
+def _friendly_error(exc: Exception) -> str:
+    """Convert raw exceptions into user-friendly error messages."""
+    msg = str(exc)
+    if "Connection error" in msg or "APIConnectionError" in msg or "ConnectError" in msg:
+        return (
+            "The AI service is temporarily unreachable. "
+            "This is usually a brief network issue — please try again in a moment."
+        )
+    if "timeout" in msg.lower() or "timed out" in msg.lower():
+        return (
+            "The generation timed out. The AI service may be busy — "
+            "please try again in a moment."
+        )
+    if "rate" in msg.lower() and "limit" in msg.lower() or "429" in msg:
+        return (
+            "Rate limit reached. Too many requests — "
+            "please wait a minute and try again."
+        )
+    if "401" in msg or "unauthorized" in msg.lower() or "invalid api key" in msg.lower():
+        return "API authentication error. Please check the API key configuration."
+    if "TRIPO_API_KEY not set" in msg:
+        return "3D model generation is not configured. Please set up a Tripo API key."
+    # Truncate very long error messages
+    if len(msg) > 200:
+        return msg[:200] + "..."
+    return msg
+
+
 def _update_job(job_id: str, **fields) -> None:
     """Helper: update a Job row with the given fields in a fresh session."""
     db = SessionLocal()
@@ -91,8 +119,9 @@ async def run_anime_job(
 
     except Exception as exc:
         logger.exception("task_executor: anime job %s failed", job_id)
-        _update_job(job_id, status="failed", error_message=str(exc))
-        notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
+        friendly = _friendly_error(exc)
+        _update_job(job_id, status="failed", error_message=friendly)
+        notify(job_id, {"job_id": job_id, "status": "failed", "error_message": friendly})
 
 
 # ---------------------------------------------------------------------------
@@ -141,8 +170,9 @@ async def run_simulation_job(
 
     except Exception as exc:
         logger.exception("task_executor: simulation job %s failed", job_id)
-        _update_job(job_id, status="failed", error_message=str(exc))
-        notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
+        friendly = _friendly_error(exc)
+        _update_job(job_id, status="failed", error_message=friendly)
+        notify(job_id, {"job_id": job_id, "status": "failed", "error_message": friendly})
 
 
 # ---------------------------------------------------------------------------
@@ -187,8 +217,9 @@ async def run_model3d_job(
 
     except Exception as exc:
         logger.exception("task_executor: model3d job %s failed", job_id)
-        _update_job(job_id, status="failed", error_message=str(exc))
-        notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
+        friendly = _friendly_error(exc)
+        _update_job(job_id, status="failed", error_message=friendly)
+        notify(job_id, {"job_id": job_id, "status": "failed", "error_message": friendly})
 
 
 # ---------------------------------------------------------------------------
@@ -301,6 +332,7 @@ async def run_story_job(
 
     except Exception as exc:
         logger.exception("task_executor: story job %s failed", job_id)
-        _update_job(job_id, status="failed", error_message=str(exc))
-        notify(job_id, {"job_id": job_id, "status": "failed", "error_message": str(exc)})
+        friendly = _friendly_error(exc)
+        _update_job(job_id, status="failed", error_message=friendly)
+        notify(job_id, {"job_id": job_id, "status": "failed", "error_message": friendly})
 

@@ -198,7 +198,12 @@ def _store_story_asset(
         asset_metadata={
             "story_id": story_plan.story_id,
             "title": story_plan.title,
+            "synopsis": story_plan.synopsis,
+            "topic": story_plan.topic,
             "total_scenes": story_plan.total_scenes,
+            # Include full episode/scene data so frontend StoryPlayer can render without a separate fetch
+            "episodes": [ep.model_dump() for ep in story_plan.episodes],
+            "characters": [c.model_dump() for c in story_plan.characters],
         },
         created_at=now,
         session_id=session_id,
@@ -228,8 +233,8 @@ async def generate_story_plan(
     """
     groq = AsyncGroq(
         api_key=os.environ.get("GROQ_API_KEY", ""),
-        timeout=180.0,
-        max_retries=5
+        timeout=300.0,  # 5 minutes — large stories (10 episodes) can be slow
+        max_retries=3
     )
     story_prompt = await prompt_builder.build_story_prompt(topic, episode_count)
 
@@ -239,7 +244,7 @@ async def generate_story_plan(
             {"role": "system", "content": _STORY_PLAN_SYSTEM},
             {"role": "user", "content": story_prompt},
         ],
-        max_tokens=4096,
+        max_tokens=8192,  # increased from 4096 — 10 episodes × 3 scenes needs more tokens
         temperature=0.6,
     )
     raw = (completion.choices[0].message.content or "").strip()

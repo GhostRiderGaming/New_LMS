@@ -67,21 +67,29 @@ class PromptBuilder:
     def __init__(self) -> None:
         self._groq = AsyncGroq(
             api_key=os.environ.get("GROQ_API_KEY", ""),
-            timeout=120.0,
-            max_retries=5
+            timeout=30.0,
+            max_retries=2,
         )
 
     async def _call(self, system: str, user: str) -> str:
-        completion = await self._groq.chat.completions.create(
-            model=_MODEL,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            max_tokens=300,
-            temperature=0.7,
-        )
-        return (completion.choices[0].message.content or "").strip()
+        """Call Groq to build a structured prompt.  Returns empty string on failure."""
+        try:
+            completion = await self._groq.chat.completions.create(
+                model=_MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                max_tokens=300,
+                temperature=0.7,
+            )
+            return (completion.choices[0].message.content or "").strip()
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "PromptBuilder Groq call failed (%s) — using fallback prompt", exc
+            )
+            return ""
 
     async def build_anime_prompt(self, topic: str, style: str) -> str:
         """
@@ -89,12 +97,33 @@ class PromptBuilder:
         Style: classroom | laboratory | outdoor | fantasy
         """
         user = f"Topic: {topic}\nStyle: {style}"
-        return await self._call(_ANIME_SYSTEM, user)
+        result = await self._call(_ANIME_SYSTEM, user)
+        if result:
+            return result
+        # Quality fallback — still produces good images with Pollinations
+        style_tags = {
+            "classroom": "school classroom, chalkboard, desks, bright lighting",
+            "laboratory": "science laboratory, test tubes, beakers, equipment",
+            "outdoor": "nature, outdoor scene, sunlight, trees, sky",
+            "fantasy": "magical, fantasy world, glowing effects, ethereal",
+        }
+        return (
+            f"{topic}, {style_tags.get(style, 'educational scene')}, "
+            f"anime style, masterpiece, best quality, detailed, "
+            f"educational illustration, vibrant colors"
+        )
 
     async def build_story_prompt(self, topic: str, episode_count: int) -> str:
         """Build a story planning prompt for the given topic and episode count."""
         user = f"Topic: {topic}\nEpisode count: {episode_count}"
-        return await self._call(_STORY_SYSTEM, user)
+        result = await self._call(_STORY_SYSTEM, user)
+        if result:
+            return result
+        return (
+            f"Create a structured JSON StoryPlan about '{topic}' with {episode_count} episodes. "
+            f"Include: title, synopsis, list of characters, and for each episode: "
+            f"episode_number, title, scenes with description and caption."
+        )
 
     async def build_simulation_prompt(self, topic: str, category: str) -> str:
         """
@@ -102,7 +131,16 @@ class PromptBuilder:
         Category: physics | chemistry | biology | mathematics | history
         """
         user = f"Topic: {topic}\nCategory: {category}"
-        return await self._call(_SIMULATION_SYSTEM, user)
+        result = await self._call(_SIMULATION_SYSTEM, user)
+        if result:
+            return result
+        return (
+            f"Create a complete, self-contained HTML5 interactive simulation about "
+            f"'{topic}' in the '{category}' category for 6th-grade students. "
+            f"Use an HTML5 canvas with requestAnimationFrame for smooth animation. "
+            f"Include a control panel with at least 2 interactive sliders/buttons "
+            f"and a 'Learn' info box explaining the concept in simple language."
+        )
 
     async def build_3d_prompt(self, object_name: str, category: str) -> str:
         """
@@ -110,7 +148,13 @@ class PromptBuilder:
         Category: anatomy | chemistry | astronomy | historical | mechanical
         """
         user = f"Object: {object_name}\nCategory: {category}"
-        return await self._call(_MODEL3D_SYSTEM, user)
+        result = await self._call(_MODEL3D_SYSTEM, user)
+        if result:
+            return result
+        return (
+            f"A detailed, high-quality 3D model of a {object_name} for educational purposes. "
+            f"Category: {category}. Realistic materials, accurate proportions, clean geometry."
+        )
 
 
 # ---------------------------------------------------------------------------

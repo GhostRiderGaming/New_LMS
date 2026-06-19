@@ -93,11 +93,12 @@ async def _call_pollinations_image(prompt: str) -> bytes:
         f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={_IMAGE_SIZE['width']}&height={_IMAGE_SIZE['height']}&nologo=true&seed={seed+1}",
     ]
     
-    max_retries = 5
-    base_delay = 3.0
+    max_retries = 3
+    base_delay = 4.0
+    last_error = None
     
     for url_idx, url in enumerate(urls):
-        async with httpx.AsyncClient(timeout=90) as client:
+        async with httpx.AsyncClient(timeout=120) as client:
             for attempt in range(max_retries):
                 try:
                     resp = await client.get(url)
@@ -115,16 +116,26 @@ async def _call_pollinations_image(prompt: str) -> bytes:
                         await asyncio.sleep(base_delay)
                         continue
                     return content
-                except httpx.HTTPStatusError:
+                except httpx.TimeoutException as exc:
+                    last_error = exc
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(base_delay * (attempt + 1))
+                    continue
+                except httpx.HTTPStatusError as exc:
+                    last_error = exc
                     if attempt == max_retries - 1 and url_idx == len(urls) - 1:
                         raise
                     await asyncio.sleep(base_delay * (attempt + 1))
-                except Exception:
+                except Exception as exc:
+                    last_error = exc
                     if attempt == max_retries - 1 and url_idx == len(urls) - 1:
                         raise
                     await asyncio.sleep(base_delay)
     
-    raise RuntimeError("Failed to fetch image after all retries")
+    raise RuntimeError(
+        f"Failed to generate image after all retries. "
+        f"Last error: {last_error}"
+    )
 
 
 def _store_asset_record(

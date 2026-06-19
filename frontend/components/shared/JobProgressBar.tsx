@@ -31,7 +31,7 @@ export default function JobProgressBar({ jobId, status: initialStatus, label, on
   const [retryCount, setRetryCount] = useState(0)
   const [elapsed, setElapsed] = useState(0)
   const [timedOut, setTimedOut] = useState(false)
-  const MAX_WAIT_SECONDS = 300 // 5 minutes
+  const MAX_WAIT_SECONDS = 600 // 10 minutes — story with 10 episodes needs more time
   const wsRef = useRef<WebSocket | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -79,10 +79,10 @@ export default function JobProgressBar({ jobId, status: initialStatus, label, on
     }
   }, [status])
 
-  // Fire onComplete callback
+  // Fire onComplete callback for terminal states
   useEffect(() => {
-    if (status === 'complete') {
-      onComplete?.(completedJobRef.current ?? { job_id: jobId ?? '', status: 'complete' })
+    if (status === 'complete' || status === 'failed') {
+      onComplete?.(completedJobRef.current ?? { job_id: jobId ?? '', status })
     }
   }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
 

@@ -59,85 +59,116 @@ _FALLBACK_SUGGESTIONS: dict[str, list[str]] = {
 async def _call_tripo_model3d(prompt: str) -> bytes:
     """
     Generate a 3D model via Tripo AI text-to-3D API.
-
-    Flow:
-      1. POST /v2/openapi/task with type=text_to_model
-      2. Poll GET /v2/openapi/task/{task_id} until status == "success"
-      3. Download GLB from result.model.url
-
-    Raises RuntimeError with a clear message if generation fails.
+    Falls back to HF two-step pipeline (FLUX image → stable-fast-3d) if Tripo key is missing.
     """
-    api_key = os.environ.get("TRIPO_API_KEY", "")
+    api_key = os.environ.get("TRIPO_API_KEY", "").strip()
     if not api_key:
-        raise RuntimeError(
-            "TRIPO_API_KEY not set. Get a free key at https://platform.tripo3d.ai/api-keys "
-            "and add TRIPO_API_KEY=your_key to backend/.env"
-        )
+        # No Tripo key — use free HF pipeline instead
+        return await _call_hf_two_step(prompt)
 
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient(timeout=_TRIPO_TIMEOUT) as client:
-        # Step 1: Submit task
-        create_resp = await client.post(
-            f"{_TRIPO_BASE}/task",
-            headers=headers,
-            json={
-                "type": "text_to_model",
-                "prompt": prompt[:1024],  # Tripo max prompt length
-                "model_version": "v2.0-20240919",
-                "face_limit": 10000,
-                "texture": True,
-                "pbr": False,
-            },
-        )
-        create_resp.raise_for_status()
-        resp_data = create_resp.json()
-
-        # Tripo wraps response in { "code": 0, "data": { "task_id": "..." } }
-        if resp_data.get("code", -1) != 0:
-            raise RuntimeError(f"Tripo task creation failed: {resp_data}")
-
-        task_id: str = resp_data["data"]["task_id"]
-
-        # Step 2: Poll until complete
-        for _ in range(_TRIPO_MAX_POLLS):
-            await asyncio.sleep(_TRIPO_POLL_INTERVAL)
-
-            poll_resp = await client.get(
-                f"{_TRIPO_BASE}/task/{task_id}",
+    try:
+        async with httpx.AsyncClient(timeout=_TRIPO_TIMEOUT) as client:
+            create_resp = await client.post(
+                f"{_TRIPO_BASE}/task",
                 headers=headers,
+                json={
+                    "type": "text_to_model",
+                    "prompt": prompt[:1024],
+                    "model_version": "v2.0-20240919",
+                    "face_limit": 10000,
+                    "texture": True,
+                    "pbr": False,
+                },
             )
-            poll_resp.raise_for_status()
-            poll_data = poll_resp.json()
+            if create_resp.status_code in (401, 403):
+                # Key invalid — fall back to HF pipeline silently
+                return await _call_hf_two_step(prompt)
+            create_resp.raise_for_status()
+            resp_data = create_resp.json()
 
-            if poll_data.get("code", -1) != 0:
-                raise RuntimeError(f"Tripo poll error: {poll_data}")
+            if resp_data.get("code", -1) != 0:
+                raise RuntimeError(f"Tripo task creation failed: {resp_data}")
 
-            task = poll_data["data"]
-            status = task.get("status", "")
+            task_id: str = resp_data["data"]["task_id"]
 
-            if status == "success":
-                # Step 3: Download GLB
-                glb_url: str = task["result"]["model"]["url"]
-                glb_resp = await client.get(glb_url, headers={})
-                glb_resp.raise_for_status()
-                if len(glb_resp.content) < 1000:
-                    raise RuntimeError(f"GLB too small ({len(glb_resp.content)} bytes)")
-                return glb_resp.content
+            for _ in range(_TRIPO_MAX_POLLS):
+                await asyncio.sleep(_TRIPO_POLL_INTERVAL)
+                poll_resp = await client.get(f"{_TRIPO_BASE}/task/{task_id}", headers=headers)
+                poll_resp.raise_for_status()
+                poll_data = poll_resp.json()
+                if poll_data.get("code", -1) != 0:
+                    raise RuntimeError(f"Tripo poll error: {poll_data}")
+                task = poll_data["data"]
+                status = task.get("status", "")
+                if status == "success":
+                    glb_url: str = task["result"]["model"]["url"]
+                    glb_resp = await client.get(glb_url, headers={})
+                    glb_resp.raise_for_status()
+                    if len(glb_resp.content) < 1000:
+                        raise RuntimeError(f"GLB too small ({len(glb_resp.content)} bytes)")
+                    return glb_resp.content
+                if status in ("failed", "cancelled", "unknown"):
+                    raise RuntimeError(f"Tripo task {task_id} ended with status: {status}")
 
-            if status in ("failed", "cancelled", "unknown"):
-                raise RuntimeError(
-                    f"Tripo task {task_id} ended with status: {status}. "
-                    f"Error: {task.get('error', 'unknown')}"
+            raise RuntimeError(f"Tripo task timed out")
+    except Exception:
+        # Any Tripo failure — fall back to HF
+        return await _call_hf_two_step(prompt)
+
+
+async def _call_hf_two_step(prompt: str) -> bytes:
+    """
+    Free fallback: FLUX.1-schnell image → stabilityai/stable-fast-3d GLB.
+    Used when Tripo API key is missing or returns an error.
+    """
+    hf_token = os.environ.get("HF_API_TOKEN", "")
+    headers = {"Authorization": f"Bearer {hf_token}"} if hf_token else {}
+
+    # Step 1: Generate reference image
+    image_url = f"https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell"
+    image_bytes: bytes | None = None
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                r = await client.post(image_url, json={"inputs": prompt}, headers=headers)
+                if r.status_code == 503:
+                    await asyncio.sleep(10 * (attempt + 1))
+                    continue
+                r.raise_for_status()
+                if len(r.content) > 1000:
+                    image_bytes = r.content
+                    break
+        except Exception:
+            await asyncio.sleep(10)
+
+    if not image_bytes:
+        raise RuntimeError("HF image generation failed — unable to generate reference image for 3D model")
+
+    # Step 2: Image → 3D
+    model3d_url = "https://api-inference.huggingface.co/models/stabilityai/stable-fast-3d"
+    for attempt in range(3):
+        try:
+            async with httpx.AsyncClient(timeout=120) as client:
+                r = await client.post(
+                    model3d_url,
+                    content=image_bytes,
+                    headers={**headers, "Content-Type": "image/png"},
                 )
-            # Still queued/running — keep polling
+                if r.status_code == 503:
+                    await asyncio.sleep(15 * (attempt + 1))
+                    continue
+                r.raise_for_status()
+                if len(r.content) > 1000:
+                    return r.content
+        except Exception:
+            await asyncio.sleep(15)
 
-        raise RuntimeError(
-            f"Tripo task {task_id} timed out after {_TRIPO_MAX_POLLS * _TRIPO_POLL_INTERVAL}s"
-        )
+    raise RuntimeError("HF 3D model generation failed — stable-fast-3d unavailable")
 
 
 def _store_asset_record(

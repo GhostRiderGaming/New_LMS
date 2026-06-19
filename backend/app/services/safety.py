@@ -93,8 +93,8 @@ class SafetyService:
     def __init__(self) -> None:
         self._groq = AsyncGroq(
             api_key=os.environ.get("GROQ_API_KEY", ""),
-            timeout=5.0,   # fail fast — decommissioned/slow models shouldn't block requests
-            max_retries=0, # no retries — we fail open, so retrying just adds latency
+            timeout=10.0,   # enough for a response, but won't block long
+            max_retries=1,  # one retry for transient network blips
         )
         self._model = "openai/gpt-oss-safeguard-20b"
 
