@@ -99,18 +99,28 @@ async def generate_story(
     db.add(job)
     db.commit()
 
-    # Enqueue Celery task, fall back to in-process execution if broker is down
-    try:
-        from app.worker import generate_story_task
-        generate_story_task.delay(
-            job_id=job_id,
-            topic=body.topic,
-            episode_count=body.episode_count,
-            session_id=session["session_id"],
-        )
-    except Exception:
+    # Dispatch: prefer Celery workers, fall back to in-process execution
+    from app.services.task_runner import has_celery_workers, dispatch_async
+
+    if has_celery_workers():
+        try:
+            from app.worker import generate_story_task
+            generate_story_task.delay(
+                job_id=job_id,
+                topic=body.topic,
+                episode_count=body.episode_count,
+                session_id=session["session_id"],
+            )
+        except Exception:
+            from app.services.task_executor import run_story_job
+            dispatch_async(run_story_job(
+                job_id=job_id,
+                topic=body.topic,
+                episode_count=body.episode_count,
+                session_id=session["session_id"],
+            ))
+    else:
         from app.services.task_executor import run_story_job
-        from app.services.task_runner import dispatch_async
         dispatch_async(run_story_job(
             job_id=job_id,
             topic=body.topic,

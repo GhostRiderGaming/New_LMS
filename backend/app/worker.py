@@ -435,7 +435,7 @@ def generate_story_task(
     import asyncio
     from datetime import datetime, timezone
 
-    from app.models.anime_assets import Job, SessionLocal
+    from app.models.anime_assets import Asset, Job, SessionLocal
     from app.services.story_engine import generate_story_plan, _placeholder_scene
     from app.services.safety import safety_service
     from app.services.job_notifier import notify
@@ -519,10 +519,17 @@ def generate_story_task(
                     scene_job.error_message = "dispatch_failed"
                     db.commit()
 
+        # Query the plan asset so we can set job.asset_id for the frontend
+        plan_asset = (
+            db.query(Asset)
+            .filter(Asset.job_id == job_id, Asset.type == "story")
+            .first()
+        )
         job.status = "complete"
+        job.asset_id = plan_asset.asset_id if plan_asset else None
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
-        notify(job_id, {"job_id": job_id, "status": "complete"})
+        notify(job_id, {"job_id": job_id, "status": "complete", "asset_id": job.asset_id})
 
     except Exception as exc:
         db.rollback()

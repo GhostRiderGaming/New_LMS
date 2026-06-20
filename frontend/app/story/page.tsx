@@ -54,7 +54,6 @@ function StoryPageInner() {
   const [loading, setLoading] = useState(false)
   const { completeMission } = useGameProgress()
 
-  // Handles job completion/failure — called by JobProgressBar's resilient polling
   const handleJobComplete = async (job: Job) => {
     setJobStatus(job.status)
     setLoading(false)
@@ -64,31 +63,49 @@ function StoryPageInner() {
       setProgressLabel('Story complete!')
       completeMission('story')
 
-      // Get story_id from the job's asset metadata
+      // Helper to build StoryPlan from asset metadata
+      const buildStoryFromMeta = (meta: Record<string, unknown>) => {
+        const storyId = meta?.story_id as string | undefined
+        if (!storyId) return false
+        setStory({
+          story_id: storyId,
+          title: (meta.title as string) ?? 'Untitled Story',
+          synopsis: (meta.synopsis as string) ?? '',
+          topic: (meta.topic as string) ?? topic,
+          characters: (meta.characters as StoryPlan['characters']) ?? [],
+          episodes: (meta.episodes as EpisodePlan[]) ?? [],
+          total_scenes: (meta.total_scenes as number) ?? 0,
+          status: 'complete',
+        })
+        return true
+      }
+
+      // Primary path: fetch via asset_id
       if (job.asset_id) {
         try {
           const planAsset = await api.getAsset(job.asset_id)
           const meta = planAsset.metadata as Record<string, unknown>
-          const storyId = meta?.story_id as string | undefined
-
-          if (storyId) {
-            // Fetch full StoryPlan from asset metadata
-            const storyPlan = meta as unknown as StoryPlan
-            setStory({
-              story_id: storyId,
-              title: (meta.title as string) ?? 'Untitled Story',
-              synopsis: (meta.synopsis as string) ?? '',
-              topic: (meta.topic as string) ?? topic,
-              characters: (meta.characters as StoryPlan['characters']) ?? [],
-              episodes: (meta.episodes as EpisodePlan[]) ?? [],
-              total_scenes: (meta.total_scenes as number) ?? 0,
-              status: 'complete',
-            })
-          }
+          if (buildStoryFromMeta(meta)) return
         } catch {
-          setError('Story generated but failed to load plan. Please refresh.')
+          // Fall through to fallback
         }
       }
+
+      // Fallback: if asset_id missing, search assets by job_id
+      try {
+        const assets = await api.listAssets()
+        const planAsset = assets.find(
+          (a) => a.job_id === job.job_id && a.type === 'story'
+        )
+        if (planAsset) {
+          const meta = planAsset.metadata as Record<string, unknown>
+          if (buildStoryFromMeta(meta)) return
+        }
+      } catch {
+        // ignore
+      }
+
+      setError('Story generated but failed to load plan. Please refresh.')
     } else if (job.status === 'failed') {
       setError(job.error_message ?? 'Story generation failed. Please try again.')
     }

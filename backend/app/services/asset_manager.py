@@ -113,7 +113,7 @@ class _LocalBackend:
         # storage/ lives next to the backend/ package root
         self._root = Path(__file__).resolve().parent.parent.parent / "storage"
         self._root.mkdir(parents=True, exist_ok=True)
-        print(f"[AssetManager] LOCAL storage active → {self._root}")
+        print(f"[AssetManager] LOCAL storage active -> {self._root}")
 
     def upload(self, data: bytes, key: str, content_type: str) -> str:
         dest = self._root / Path(key)
@@ -175,7 +175,7 @@ class _GCSBackend:
             self._client = gcs.Client()
 
         self._bucket = self._client.bucket(self._bucket_name)
-        print(f"[AssetManager] GCS storage active → bucket: {self._bucket_name}")
+        print(f"[AssetManager] GCS storage active -> bucket: {self._bucket_name}")
 
     def upload(self, data: bytes, key: str, content_type: str) -> str:
         blob = self._bucket.blob(key)

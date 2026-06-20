@@ -12,9 +12,9 @@ function Kill-Port {
     $lines = netstat -ano 2>$null | Select-String ":$port "
     foreach ($line in $lines) {
         $parts = ($line -split '\s+') | Where-Object { $_ -ne '' }
-        $pid = $parts[-1]
-        if ($pid -match '^\d+$' -and $pid -ne '0') {
-            try { Stop-Process -Id ([int]$pid) -Force -ErrorAction SilentlyContinue } catch {}
+        $procId = $parts[-1]
+        if ($procId -match '^\d+$' -and $procId -ne '0') {
+            try { Stop-Process -Id ([int]$procId) -Force -ErrorAction SilentlyContinue } catch {}
         }
     }
 }
