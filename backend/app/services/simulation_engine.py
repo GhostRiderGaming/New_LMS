@@ -31,22 +31,20 @@ class SimulationCategory(str, Enum):
 
 
 _SIMULATION_SYSTEM = (
-    "You are a world-class educational simulation developer building interactive learning tools for 6th-grade students (ages 11-12).\n"
-    "Generate a COMPLETE, self-contained HTML5 simulation that makes complex concepts visually intuitive.\n\n"
+    "You are an elite educational simulation engineer building interactive learning tools for middle and high school students.\n"
+    "Generate a COMPLETE, self-contained HTML5 simulation that makes complex mathematical or scientific concepts visually intuitive.\n\n"
     "MANDATORY REQUIREMENTS:\n"
     "1. Output ONLY raw HTML starting with <!DOCTYPE html>. No markdown fencing, no explanation.\n"
     "2. ALL JavaScript inline in <script> tags. ALL CSS inline in <style> tags.\n"
     "3. ZERO external URLs — no CDN links, no external scripts/stylesheets. Vanilla JS only.\n"
-    "4. You MUST use an HTML5 <canvas> element with a requestAnimationFrame() loop for smooth, continuous animation.\n"
-    "5. Include a CONTROL PANEL with at least 2 interactive elements (sliders, buttons, toggles) that change the simulation in real-time.\n"
-    "6. Include a 'LEARN' info box that explains what's happening in simple language a 6th grader can understand.\n"
-    "7. Use this premium dark theme: background #0f172a, accent colors #8b5cf6 (purple) and #06b6d4 (cyan), white text.\n"
-    "8. The canvas must show ANIMATED MOVEMENT — particles, objects, waves, orbits, chemical reactions, etc. NOT just static shapes.\n"
-    "9. Add visual labels ON the canvas (drawText) to explain what each element represents.\n"
-    "10. Use clear variable names and add brief code comments so students can learn from the code too.\n\n"
-    "STYLE: glassmorphism panels (backdrop-filter: blur), rounded corners, subtle box shadows, glowing accents.\n"
-    "LANGUAGE: All text in the UI must use simple words a 6th grader would understand. Avoid jargon.\n"
-    "LENGTH: The simulation should be thorough and complete. Do NOT cut corners or truncate code.\n"
+    "4. Canvas & Loop: You MUST use an HTML5 <canvas> element with a requestAnimationFrame() loop for smooth 60fps animation.\n"
+    "5. Interactivity: Include a CONTROL PANEL with at least 3 interactive elements (sliders, dropdowns, buttons) that change the simulation in real-time.\n"
+    "6. Scenarios: You MUST include a <select> dropdown that lets the user switch between at least 2 distinct 'Cases' or 'Scenarios' (e.g. Reflection vs Refraction, Isotope A vs B).\n"
+    "7. Dynamic Pedagogy: Include a 'LEARN' info box whose text updates dynamically via JavaScript based on the current slider/dropdown values. Do not just use static text.\n"
+    "8. High-Quality Graphics: The canvas must feature complex rendering. Use paths, dashed lines (setLineDash) for rays/vectors, trails (rgba clear trick) for orbits, and glowing effects (shadowBlur).\n"
+    "9. Visual Pedagogy: Draw explicit vectors, force arrows, light rays, or grid lines to make invisible forces visible. Label them dynamically.\n"
+    "10. Styling: Use a premium dark theme: background #0f172a, panels #1e293b, accent colors #8b5cf6 (purple) and #06b6d4 (cyan). Use glassmorphism (backdrop-filter: blur) and rounded corners.\n"
+    "11. DO NOT truncate the code. The JavaScript physics math must be rigorous and fully implemented.\n"
 )
 
 
@@ -112,99 +110,221 @@ def _fallback_simulation(topic: str, category: str) -> str:
 <meta charset="UTF-8">
 <title>{t} Simulation</title>
 <style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ background: #0f172a; color: #e2e8f0; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 1.5rem; min-height: 100vh; }}
-  h1 {{ color: #8b5cf6; font-size: 1.4rem; margin-bottom: 0.25rem; }}
-  .badge {{ background: #06b6d4; color: #0f172a; border-radius: 6px; padding: 2px 10px; font-size: 0.8rem; margin-bottom: 1rem; display: inline-block; }}
-  canvas {{ border-radius: 12px; border: 1px solid #1e293b; background: #0a0f1e; margin: 1rem 0; }}
-  .controls {{ display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; margin-bottom: 1rem; }}
-  .ctrl {{ background: #1e293b; border-radius: 10px; padding: 0.75rem 1rem; min-width: 160px; }}
-  label {{ font-size: 0.75rem; color: #94a3b8; display: block; margin-bottom: 4px; }}
-  input[type=range] {{ width: 100%; accent-color: #8b5cf6; }}
-  .info {{ background: #1e293b; border-left: 3px solid #06b6d4; border-radius: 8px; padding: 0.75rem 1rem; max-width: 560px; font-size: 0.85rem; color: #94a3b8; line-height: 1.5; }}
-  .info strong {{ color: #e2e8f0; }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }}
+  body {{ background: #0f172a; color: #e2e8f0; display: flex; flex-direction: column; align-items: center; padding: 1.5rem; min-height: 100vh; }}
+  .container {{ width: 100%; max-width: 800px; display: flex; flex-direction: column; gap: 1rem; }}
+  .header {{ display: flex; justify-content: space-between; align-items: center; background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); padding: 1rem 1.5rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }}
+  h1 {{ color: #8b5cf6; font-size: 1.5rem; }}
+  .badge {{ background: #06b6d4; color: #0f172a; border-radius: 6px; padding: 4px 12px; font-size: 0.85rem; font-weight: bold; text-transform: uppercase; }}
+  
+  .main-content {{ display: flex; flex-direction: column; gap: 1rem; }}
+  canvas {{ width: 100%; height: 400px; border-radius: 12px; background: #050811; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 20px rgba(0,0,0,0.5); }}
+  
+  .panel {{ background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); padding: 1.5rem; }}
+  
+  .controls {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 1rem; }}
+  .ctrl-group {{ display: flex; flex-direction: column; gap: 0.5rem; }}
+  label {{ font-size: 0.85rem; color: #94a3b8; font-weight: 500; display: flex; justify-content: space-between; }}
+  input[type=range] {{ width: 100%; accent-color: #8b5cf6; cursor: pointer; }}
+  select {{ background: #0f172a; color: #e2e8f0; border: 1px solid rgba(255,255,255,0.2); padding: 0.5rem; border-radius: 6px; outline: none; cursor: pointer; }}
+  
+  .info-box {{ border-left: 4px solid #06b6d4; background: rgba(6, 182, 212, 0.1); padding: 1rem 1.5rem; border-radius: 0 8px 8px 0; margin-top: 0.5rem; }}
+  .info-box h3 {{ color: #06b6d4; font-size: 1rem; margin-bottom: 0.5rem; }}
+  .info-box p {{ font-size: 0.9rem; line-height: 1.6; color: #cbd5e1; }}
+  
 </style>
 </head>
 <body>
-<h1>{t}</h1>
-<span class="badge">{c}</span>
-<canvas id="c" width="560" height="320"></canvas>
-<div class="controls">
-  <div class="ctrl">
-    <label>Speed: <span id="sv">50</span></label>
-    <input type="range" id="speed" min="1" max="100" value="50">
+<div class="container">
+  <div class="header">
+    <h1>{t}</h1>
+    <span class="badge">{c}</span>
   </div>
-  <div class="ctrl">
-    <label>Particles: <span id="pv">20</span></label>
-    <input type="range" id="count" min="5" max="60" value="20">
+  
+  <div class="main-content">
+    <canvas id="c"></canvas>
+    
+    <div class="panel">
+      <div class="controls">
+        <div class="ctrl-group">
+          <label>Scenario</label>
+          <select id="scenario">
+            <option value="orbit">Orbital Mechanics</option>
+            <option value="bounce">Kinetic Bouncing</option>
+          </select>
+        </div>
+        <div class="ctrl-group">
+          <label><span>Speed / Energy</span> <span id="sv">1.0x</span></label>
+          <input type="range" id="speed" min="1" max="100" value="50">
+        </div>
+        <div class="ctrl-group">
+          <label><span>Particle Count</span> <span id="pv">30</span></label>
+          <input type="range" id="count" min="5" max="100" value="30">
+        </div>
+      </div>
+      
+      <div class="info-box">
+        <h3>Learn: Dynamics</h3>
+        <p id="learn-text">Loading explanation...</p>
+      </div>
+    </div>
   </div>
 </div>
-<div class="info">
-  <strong>About this simulation:</strong> This interactive visualization represents concepts from <strong>{t}</strong>.
-  Adjust the sliders to explore how speed and particle count affect the system.
-  Each glowing dot represents a unit of energy or matter in motion.
-</div>
+
 <script>
-var canvas = document.getElementById('c');
-var ctx = canvas.getContext('2d');
-var W = canvas.width, H = canvas.height;
-var speedSlider = document.getElementById('speed');
-var countSlider = document.getElementById('count');
-var sv = document.getElementById('sv');
-var pv = document.getElementById('pv');
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
 
-var particles = [];
-function makeParticle() {{
-  return {{
-    x: Math.random() * W,
-    y: Math.random() * H,
-    vx: (Math.random() - 0.5) * 2,
-    vy: (Math.random() - 0.5) * 2,
-    r: 3 + Math.random() * 5,
-    hue: 200 + Math.random() * 120,
-    life: Math.random() * Math.PI * 2
-  }};
+// Make canvas crisp on high DPI
+function resizeCanvas() {{
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * window.devicePixelRatio;
+  canvas.height = rect.height * window.devicePixelRatio;
+  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+}}
+window.addEventListener('resize', resizeCanvas);
+
+const speedSlider = document.getElementById('speed');
+const countSlider = document.getElementById('count');
+const scenarioSelect = document.getElementById('scenario');
+const svLabel = document.getElementById('sv');
+const pvLabel = document.getElementById('pv');
+const learnText = document.getElementById('learn-text');
+
+let particles = [];
+let W, H;
+
+function getSpeed() {{ return speedSlider.value / 50; }}
+
+function makeParticle(scenario) {{
+  if (scenario === 'orbit') {{
+    const angle = Math.random() * Math.PI * 2;
+    const radius = 50 + Math.random() * 150;
+    return {{
+      angle: angle,
+      radius: radius,
+      speed: (Math.random() * 0.02 + 0.01) * (Math.random() > 0.5 ? 1 : -1),
+      hue: 280 + Math.random() * 60, // Purples/Pinks
+      size: 2 + Math.random() * 4
+    }};
+  }} else {{
+    return {{
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4,
+      hue: 180 + Math.random() * 60, // Cyans/Blues
+      size: 3 + Math.random() * 6
+    }};
+  }}
 }}
 
-function syncParticles() {{
-  var n = parseInt(countSlider.value);
-  while (particles.length < n) particles.push(makeParticle());
-  while (particles.length > n) particles.pop();
+function initParticles() {{
+  const rect = canvas.getBoundingClientRect();
+  W = rect.width;
+  H = rect.height;
+  
+  const n = parseInt(countSlider.value);
+  const scenario = scenarioSelect.value;
+  particles = [];
+  for (let i = 0; i < n; i++) {{
+    particles.push(makeParticle(scenario));
+  }}
+  updateLearnText();
 }}
-syncParticles();
 
-speedSlider.addEventListener('input', function() {{ sv.textContent = speedSlider.value; }});
-countSlider.addEventListener('input', function() {{ pv.textContent = countSlider.value; syncParticles(); }});
+function updateLearnText() {{
+  const s = scenarioSelect.value;
+  const spd = getSpeed().toFixed(1);
+  const n = countSlider.value;
+  if (s === 'orbit') {{
+    learnText.innerHTML = `Observing <strong>${{n}} bodies</strong> in orbit around a central mass. The simulation is running at <strong>${{spd}}x</strong> standard speed. Notice how bodies closer to the center generally need higher orbital velocities to avoid falling in, though this simplified model uses fixed paths.`;
+  }} else {{
+    learnText.innerHTML = `Observing <strong>${{n}} particles</strong> exhibiting kinetic motion. They are moving at <strong>${{spd}}x</strong> standard speed. As they bounce off the invisible boundaries, their momentum is conserved but direction changes.`;
+  }}
+}}
+
+speedSlider.addEventListener('input', () => {{ svLabel.textContent = getSpeed().toFixed(1) + 'x'; updateLearnText(); }});
+countSlider.addEventListener('input', () => {{ pvLabel.textContent = countSlider.value; initParticles(); }});
+scenarioSelect.addEventListener('change', () => {{ initParticles(); }});
+
+// Initialization
+setTimeout(() => {{
+  resizeCanvas();
+  initParticles();
+  requestAnimationFrame(draw);
+}}, 100);
+
+function drawOrbit(p, spd, cx, cy) {{
+  p.angle += p.speed * spd;
+  const x = cx + Math.cos(p.angle) * p.radius;
+  const y = cy + Math.sin(p.angle) * p.radius;
+  
+  // Draw path
+  ctx.beginPath();
+  ctx.arc(cx, cy, p.radius, 0, Math.PI * 2);
+  ctx.strokeStyle = `hsla(${{p.hue}}, 50%, 50%, 0.1)`;
+  ctx.setLineDash([5, 5]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Draw body
+  ctx.beginPath();
+  ctx.arc(x, y, p.size, 0, Math.PI * 2);
+  ctx.fillStyle = `hsl(${{p.hue}}, 80%, 60%)`;
+  ctx.shadowBlur = 10;
+  ctx.shadowColor = ctx.fillStyle;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}}
+
+function drawBounce(p, spd) {{
+  p.x += p.vx * spd;
+  p.y += p.vy * spd;
+  
+  if (p.x < p.size || p.x > W - p.size) p.vx *= -1;
+  if (p.y < p.size || p.y > H - p.size) p.vy *= -1;
+  
+  p.x = Math.max(p.size, Math.min(W - p.size, p.x));
+  p.y = Math.max(p.size, Math.min(H - p.size, p.y));
+  
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+  ctx.fillStyle = `hsl(${{p.hue}}, 80%, 60%)`;
+  ctx.shadowBlur = 15;
+  ctx.shadowColor = ctx.fillStyle;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+}}
 
 function draw() {{
-  var spd = parseInt(speedSlider.value) / 50;
-  ctx.fillStyle = 'rgba(10,15,30,0.18)';
+  // Trail effect (semi-transparent clear)
+  ctx.fillStyle = 'rgba(5, 8, 17, 0.2)';
   ctx.fillRect(0, 0, W, H);
-
-  for (var i = 0; i < particles.length; i++) {{
-    var p = particles[i];
-    p.life += 0.04;
-    p.x += p.vx * spd;
-    p.y += p.vy * spd;
-    if (p.x < 0 || p.x > W) p.vx *= -1;
-    if (p.y < 0 || p.y > H) p.vy *= -1;
-
-    var glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 3);
-    glow.addColorStop(0, 'hsla(' + p.hue + ',90%,70%,0.9)');
-    glow.addColorStop(1, 'hsla(' + p.hue + ',90%,50%,0)');
+  
+  const scenario = scenarioSelect.value;
+  const spd = getSpeed();
+  const cx = W / 2;
+  const cy = H / 2;
+  
+  if (scenario === 'orbit') {{
+    // Central mass
     ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r * 3, 0, Math.PI * 2);
-    ctx.fillStyle = glow;
+    ctx.arc(cx, cy, 15, 0, Math.PI * 2);
+    ctx.fillStyle = '#fcd34d';
+    ctx.shadowBlur = 30;
+    ctx.shadowColor = '#f59e0b';
     ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fillStyle = 'hsla(' + p.hue + ',100%,80%,1)';
-    ctx.fill();
+    ctx.shadowBlur = 0;
   }}
+
+  for (let i = 0; i < particles.length; i++) {{
+    if (scenario === 'orbit') drawOrbit(particles[i], spd, cx, cy);
+    else drawBounce(particles[i], spd);
+  }}
+  
   requestAnimationFrame(draw);
 }}
-draw();
 </script>
 </body>
 </html>"""

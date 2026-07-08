@@ -59,7 +59,11 @@ def _get_asset_or_404(asset_id: str, db: Session, session_id: str | None = None)
 
 
 def _asset_to_response(asset: Asset) -> AssetResponse:
-    presigned_url = asset_manager.get_presigned_url(asset.file_path)
+    # External URLs (Wikipedia diagrams) are already public — no presigning needed
+    if asset.file_path.startswith("https://"):
+        presigned_url = asset.file_path
+    else:
+        presigned_url = asset_manager.get_presigned_url(asset.file_path)
     return AssetResponse(
         asset_id=asset.asset_id,
         job_id=asset.job_id,

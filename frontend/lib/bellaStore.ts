@@ -9,6 +9,13 @@ export interface BellaMessage {
   timestamp: Date
 }
 
+/** Pending explanation that BellaPresence will pick up and play */
+export interface PendingExplanation {
+  topic: string
+  text: string
+  audioB64: string | null
+}
+
 interface BellaStore {
   isVisible: boolean
   isMinimized: boolean
@@ -16,6 +23,9 @@ interface BellaStore {
   emotionalState: EmotionState
   lastJobContext: string | null
   appearance: string
+  pendingExplanation: PendingExplanation | null
+  isExplaining: boolean
+  stopSpeakingRequested: boolean
 
   // Actions
   show: () => void
@@ -25,6 +35,11 @@ interface BellaStore {
   setEmotionalState: (state: EmotionState) => void
   setLastJobContext: (ctx: string | null) => void
   setAppearance: (path: string) => void
+  triggerExplanation: (explanation: PendingExplanation) => void
+  clearExplanation: () => void
+  setIsExplaining: (v: boolean) => void
+  requestStopSpeaking: () => void
+  clearStopRequest: () => void
 }
 
 export const useBellaStore = create<BellaStore>((set) => ({
@@ -34,6 +49,9 @@ export const useBellaStore = create<BellaStore>((set) => ({
   emotionalState: 'neutral',
   lastJobContext: null,
   appearance: '/live2d/model3/base/march 7th.model3.json',
+  pendingExplanation: null,
+  isExplaining: false,
+  stopSpeakingRequested: false,
 
   show: () => set({ isVisible: true }),
   hide: () => set({ isVisible: false }),
@@ -48,4 +66,9 @@ export const useBellaStore = create<BellaStore>((set) => ({
   setEmotionalState: (emotionalState) => set({ emotionalState }),
   setLastJobContext: (lastJobContext) => set({ lastJobContext }),
   setAppearance: (appearance) => set({ appearance }),
+  triggerExplanation: (pendingExplanation) => set({ pendingExplanation }),
+  clearExplanation: () => set({ pendingExplanation: null }),
+  setIsExplaining: (isExplaining) => set({ isExplaining }),
+  requestStopSpeaking: () => set({ stopSpeakingRequested: true }),
+  clearStopRequest: () => set({ stopSpeakingRequested: false }),
 }))

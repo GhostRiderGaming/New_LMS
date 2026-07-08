@@ -68,15 +68,13 @@ def _friendly_error(exc: Exception) -> str:
             "The generation timed out. The AI service may be busy — "
             "please try again in a moment."
         )
-    if "rate" in msg.lower() and "limit" in msg.lower() or "429" in msg:
+    if ("rate" in msg.lower() and "limit" in msg.lower()) or "429" in msg:
         return (
             "Rate limit reached. Too many requests — "
             "please wait a minute and try again."
         )
     if "401" in msg or "unauthorized" in msg.lower() or "invalid api key" in msg.lower():
         return "API authentication error. Please check the API key configuration."
-    if "TRIPO_API_KEY not set" in msg:
-        return "3D model generation is not configured. Please set up a Tripo API key."
     if len(msg) > 200:
         return msg[:200] + "..."
     return msg
@@ -112,6 +110,7 @@ def generate_anime_task(
     style: str,
     include_animation: bool,
     session_id: str,
+    story_metadata: dict | None = None,
 ):
     """
     Celery task: generate anime image (and optionally animation) for a job.
@@ -119,6 +118,9 @@ def generate_anime_task(
     On success: updates job status to 'complete' and sets asset_id.
     On failure: retries up to 3 times with exponential backoff, then marks 'failed'.
     Post-generation safety check runs before storing the asset (Requirement 8.1).
+
+    story_metadata: optional dict with story_id, episode_number, scene_number
+    for scene images that belong to a story (Bug 6 Round 2).
     """
     import asyncio
     from datetime import datetime, timezone
@@ -163,6 +165,7 @@ def generate_anime_task(
                         caption=caption,
                         job_id=job_id,
                         session_id=session_id,
+                        story_metadata=story_metadata,
                     )
                 )
 
@@ -493,7 +496,7 @@ def generate_story_task(
                     status="queued",
                     topic=topic,
                     parameters={
-                        "style": "classroom",
+                        "style": plan.setting_style,
                         "caption": scene.caption,
                         "story_id": plan.story_id,
                         "episode_number": episode.episode_number,
@@ -505,12 +508,18 @@ def generate_story_task(
                 db.commit()
 
                 try:
+                    # Bug 6 Round 2: pass story_metadata so scene images carry position info
                     generate_anime_task.delay(
                         job_id=scene_job_id,
-                        topic=f"{topic} — {scene.description}",
-                        style="classroom",
+                        topic=f"{topic} — Episode {episode.episode_number}: {episode.title} — {scene.description}",
+                        style=plan.setting_style,
                         include_animation=False,
                         session_id=session_id,
+                        story_metadata={
+                            "story_id": plan.story_id,
+                            "episode_number": episode.episode_number,
+                            "scene_number": scene.scene_number,
+                        },
                     )
                 except Exception:
                     # Substitute placeholder on dispatch failure (Requirement 9.10)

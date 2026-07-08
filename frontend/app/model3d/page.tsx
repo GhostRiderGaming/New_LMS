@@ -7,6 +7,9 @@ import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import { api } from '@/lib/api'
 import { useGameProgress } from '@/lib/useGameProgress'
+import { useModel3DCache, type CachedModel3D } from '@/components/Model3DEngine/useModel3DCache'
+import Model3DGallery from '@/components/Model3DEngine/Model3DGallery'
+import '@/components/Model3DEngine/Model3DEngine.css'
 
 // Avoid SSR issues with Three.js Canvas
 const ModelViewer3D = dynamic(() => import('@/components/model3d/ModelViewer3D'), { ssr: false })
@@ -46,10 +49,15 @@ function Model3DPageInner() {
   const [result, setResult] = useState<Model3DResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [fromCache, setFromCache] = useState(false)
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [galleryKey, setGalleryKey] = useState(0)
+  
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { completeMission } = useGameProgress()
+  const { getCached, setCached } = useModel3DCache()
 
-  const startPolling = (id: string, currentObjectName: string) => {
+  const startPolling = (id: string, currentObjectName: string, currentCategory: Category) => {
     if (pollRef.current) clearInterval(pollRef.current)
     pollRef.current = setInterval(async () => {
       try {
@@ -63,20 +71,36 @@ function Model3DPageInner() {
             try {
               const asset = await api.getAsset(job.asset_id)
               const meta = asset.metadata as Record<string, string>
-              setResult({
+              const newResult = {
                 asset_id: asset.asset_id,
                 asset_url: asset.presigned_url,
                 object_name: meta?.object_name ?? currentObjectName,
                 description: meta?.description ?? '',
+              }
+              setResult(newResult)
+              setCached({
+                object_name: newResult.object_name,
+                category: currentCategory,
+                asset_url: newResult.asset_url,
+                description: newResult.description
               })
+              setGalleryKey(prev => prev + 1)
             } catch {
               if (job.asset_url) {
-                setResult({
+                const newResult = {
                   asset_id: job.asset_id!,
                   asset_url: job.asset_url!,
                   object_name: currentObjectName,
                   description: '',
+                }
+                setResult(newResult)
+                setCached({
+                  object_name: newResult.object_name,
+                  category: currentCategory,
+                  asset_url: newResult.asset_url,
+                  description: newResult.description
                 })
+                setGalleryKey(prev => prev + 1)
               }
             }
           }
@@ -99,12 +123,30 @@ function Model3DPageInner() {
     setJobId(null)
     setJobStatus(null)
     setResult(null)
+    setFromCache(false)
     setLoading(true)
+
+    // Check cache first
+    const cached = getCached(name)
+    if (cached) {
+      setResult({
+        asset_id: 'cached',
+        asset_url: cached.asset_url,
+        object_name: cached.object_name,
+        description: cached.description
+      })
+      setCategory(cached.category as Category)
+      setFromCache(true)
+      setLoading(false)
+      completeMission('model3d')
+      return
+    }
+
     try {
       const job = await api.generateModel3D(name, category)
       setJobId(job.job_id)
       setJobStatus(job.status)
-      startPolling(job.job_id, name)
+      startPolling(job.job_id, name, category)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit 3D model job. Please try again.')
       setLoading(false)
@@ -121,14 +163,22 @@ function Model3DPageInner() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-8 animate-fadeInUp">
-        <div className="flex items-center gap-3 mb-2">
+      <div className="mb-8 animate-fadeInUp flex items-center justify-between">
+        <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl bg-accent-pink/20 flex items-center justify-center text-2xl border border-accent-pink/20">🧊</div>
           <div>
             <h1 className="text-2xl font-black text-white">Holodeck</h1>
             <p className="text-slate-400 text-sm">Generate interactive 3D models of real-world objects</p>
           </div>
         </div>
+        <button
+          className="sim-engine__gallery-btn"
+          onClick={() => setGalleryOpen(true)}
+          title="View cached models"
+        >
+          <span className="sim-engine__gallery-btn-icon">📚</span>
+          <span className="sim-engine__gallery-btn-label">Gallery</span>
+        </button>
       </div>
 
       {/* Input */}
@@ -174,10 +224,19 @@ function Model3DPageInner() {
 
       {/* Result */}
       {result && (
-        <ModelViewer3D
-          gltfUrl={result.asset_url}
-          metadata={{ name: result.object_name, description: result.description, object_name: result.object_name }}
-        />
+        <div className="animate-fadeInUp">
+          {fromCache && (
+            <div className="sim-engine__cache-badge">
+              <span className="sim-engine__cache-badge-icon">⚡</span>
+              <span>Loaded from cache</span>
+              <span className="sim-engine__cache-badge-dot" />
+            </div>
+          )}
+          <ModelViewer3D
+            gltfUrl={result.asset_url}
+            metadata={{ name: result.object_name, description: result.description, object_name: result.object_name }}
+          />
+        </div>
       )}
 
       {/* Empty state */}
@@ -186,6 +245,28 @@ function Model3DPageInner() {
           <div className="text-5xl mb-4">🧊</div>
           <p className="text-sm">Enter an object name to generate a 3D model</p>
         </div>
+      )}
+
+      {/* Gallery Sidebar */}
+      {galleryOpen && (
+        <Model3DGallery
+          key={galleryKey}
+          onSelect={(entry) => {
+            setObjectName(entry.object_name)
+            setCategory(entry.category as Category)
+            setResult({
+              asset_id: 'cached',
+              asset_url: entry.asset_url,
+              object_name: entry.object_name,
+              description: entry.description
+            })
+            setFromCache(true)
+            setGalleryOpen(false)
+            setError(null)
+          }}
+          onClose={() => setGalleryOpen(false)}
+          onCleared={() => setGalleryKey(prev => prev + 1)}
+        />
       )}
     </div>
   )

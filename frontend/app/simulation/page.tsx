@@ -5,6 +5,7 @@ import TopicInput from '@/components/shared/TopicInput'
 import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import SimulationFrame from '@/components/simulation/SimulationFrame'
+import SimulationEngine from '@/components/SimulationEngine/SimulationEngine'
 import { api, type Job } from '@/lib/api'
 import { useGameProgress } from '@/lib/useGameProgress'
 
@@ -175,6 +176,11 @@ function SimulationPageInner() {
           <p className="text-sm">Enter a topic to generate an interactive simulation</p>
         </div>
       )}
+
+      {/* ── AI Simulation Engine (Client-Side / Nemotron) ──────────────── */}
+      <div className="mt-12 pt-8 border-t border-border">
+        <SimulationEngine />
+      </div>
     </div>
   )
 }

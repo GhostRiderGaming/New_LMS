@@ -8,6 +8,7 @@ interface Scene {
   topic: string
   caption: string
   style: string
+  source?: string  // "external" for Wikipedia URLs, undefined for normal S3
 }
 
 interface Props {
@@ -30,13 +31,23 @@ export default function AnimeSceneCard({ scene, onAddToStory }: Props) {
       {/* Image */}
       <div className="relative aspect-square bg-bg-elevated overflow-hidden">
         {!imgError ? (
-          <Image
-            src={scene.asset_url}
-            alt={scene.topic}
-            fill
-            className="object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={() => setImgError(true)}
-          />
+          scene.source === 'external' ? (
+            <img
+              src={scene.asset_url}
+              alt={scene.topic}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              referrerPolicy="no-referrer"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <Image
+              src={scene.asset_url}
+              alt={scene.topic}
+              fill
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
+              onError={() => setImgError(true)}
+            />
+          )
         ) : (
           <div className="w-full h-full flex items-center justify-center text-slate-600">
             <div className="text-center">
@@ -76,14 +87,26 @@ export default function AnimeSceneCard({ scene, onAddToStory }: Props) {
         <p className="text-slate-300 text-sm leading-relaxed mb-3">{scene.caption}</p>
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate-600 font-mono truncate max-w-[140px]">{scene.topic}</span>
-          {onAddToStory && (
-            <button
-              onClick={() => onAddToStory(scene)}
-              className="text-xs text-accent-purple hover:text-accent-purple-light transition-colors font-medium"
-            >
-              + Add to Story
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {scene.style === 'character' && (
+              <a
+                href={`https://www.google.com/search?q=${encodeURIComponent(scene.topic)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent-cyan hover:text-accent-cyan-light transition-colors font-medium"
+              >
+                Know More
+              </a>
+            )}
+            {onAddToStory && (
+              <button
+                onClick={() => onAddToStory(scene)}
+                className="text-xs text-accent-purple hover:text-accent-purple-light transition-colors font-medium"
+              >
+                + Add to Story
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

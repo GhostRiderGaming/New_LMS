@@ -23,16 +23,26 @@ export interface EpisodePlan {
   scenes: ScenePlan[]
 }
 
+export interface CharacterPlan {
+  name: string
+  role: string
+  description: string
+  justification?: string
+}
+
 export interface StoryPlan {
   story_id: string
   title: string
   synopsis: string
   topic: string
-  characters: { name: string; role: string; description: string }[]
+  topic_category?: string
+  setting_style?: string
+  characters: CharacterPlan[]
   episodes: EpisodePlan[]
   total_scenes: number
-  status: 'planning' | 'generating' | 'complete' | 'failed'
+  status: 'planning' | 'generating_assets' | 'generating_video' | 'complete' | 'failed'
 }
+
 
 export default function StoryPage() {
   return (

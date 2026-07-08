@@ -186,6 +186,10 @@ export const api = {
     request<{ reply: string; audio_b64?: string; phonemes?: { phoneme: string; time: number }[]; tts_available: boolean }>(
       '/api/v1/bella/chat', { method: 'POST', body: JSON.stringify({ message, session_id }) }
     ),
+  bellaExplain: (topic: string, image_context?: { source?: string; category?: string; caption?: string; prompt?: string }) =>
+    request<{ explanation: string; audio_b64?: string; tts_available: boolean }>(
+      '/api/v1/bella/explain', { method: 'POST', body: JSON.stringify({ topic, image_context }) }
+    ),
   bellaTTS: async (text: string): Promise<ArrayBuffer> => {
     const res = await requestRaw('/api/v1/bella/tts', { method: 'POST', body: JSON.stringify({ text }), headers: { 'Content-Type': 'application/json' } })
     return res.arrayBuffer()
@@ -200,4 +204,8 @@ export const api = {
   // --- Story ---
   getStory: (story_id: string) => request<{ story_id: string; status: string; episodes: unknown[] }>(`/api/v1/story/${story_id}`),
   exportStoryZip: (story_id: string) => `${BASE}/api/v1/story/${story_id}/export`,
+  getCharacterPortrait: (name: string, sourceWork: string = '', topicSummary: string = '') =>
+    request<{ url: string | null; source: string; label: string }>(
+      `/api/v1/story/character-portrait?name=${encodeURIComponent(name)}&source_work=${encodeURIComponent(sourceWork)}&topic_summary=${encodeURIComponent(topicSummary)}`
+    ),
 }

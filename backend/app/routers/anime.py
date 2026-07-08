@@ -30,7 +30,7 @@ router = APIRouter()
 
 class AnimeGenerateRequest(BaseModel):
     topic: str = Field(..., min_length=1, max_length=500)
-    style: Literal["classroom", "laboratory", "outdoor", "fantasy"] = "classroom"
+    style: Literal["classroom", "laboratory", "outdoor", "fantasy", "character"] = "classroom"
     include_animation: bool = False
     character_name: Optional[str] = Field(default=None, max_length=100)
 

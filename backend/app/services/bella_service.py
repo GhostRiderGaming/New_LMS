@@ -135,6 +135,58 @@ class BellaService:
         return f"Great question about '{message}'! I'm currently in offline mode (no GROQ_API_KEY configured). To get detailed AI-powered answers, add your free Groq API key to the backend/.env file. You can get one at console.groq.com. In the meantime, explore the learning modules in the top navigation!"
 
     # ------------------------------------------------------------------
+    # Topic Explanation — used after image generation in Scene Forge
+    # ------------------------------------------------------------------
+
+    async def explain_topic(self, topic: str, image_context: dict | None = None) -> ChatResult:
+        """Generate a spoken educational explanation of a topic.
+
+        Called automatically after Scene Forge image generation.
+        Uses a dedicated prompt (not chat history) to produce a concise,
+        engaging explanation with TTS audio for Bella's voice narration.
+
+        image_context: optional dict with {source, category, caption, prompt}
+        describing the actual generated image, so the explanation references
+        what the student is looking at.
+        """
+        from app.services.prompt_builder import prompt_builder
+
+        api_key = os.environ.get("GROQ_API_KEY", "")
+
+        if not api_key:
+            explanation = (
+                f"You just generated an awesome image about {topic}! "
+                f"I'd love to explain it in detail, but I need my AI brain connected. "
+                f"Add a GROQ_API_KEY to the backend .env file to unlock my full explanation powers!"
+            )
+        else:
+            try:
+                explanation = await prompt_builder.build_explanation_prompt(topic, image_context=image_context)
+            except Exception:
+                explanation = (
+                    f"Great image of {topic}! This is a really interesting topic. "
+                    f"Unfortunately I had a small hiccup generating the full explanation. "
+                    f"Try asking me about it by saying 'Hey Bella, tell me about {topic}'!"
+                )
+
+        # Synthesize TTS audio
+        try:
+            audio_bytes, phonemes = await self._synthesize_speech_with_phonemes(explanation)
+            audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+            tts_available = True
+        except Exception:
+            audio_b64 = None
+            phonemes = []
+            tts_available = False
+
+        return ChatResult(
+            reply=explanation,
+            audio_b64=audio_b64,
+            phonemes=phonemes,
+            tts_available=tts_available,
+        )
+
+    # ------------------------------------------------------------------
     # TTS — edge-tts (free, no API key required)
     # Requirements: 10.4, 10.5
     # ------------------------------------------------------------------

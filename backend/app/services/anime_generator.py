@@ -24,7 +24,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from app.models.anime_assets import Asset, SessionLocal
 from app.services.asset_manager import asset_manager
-from app.services.prompt_builder import prompt_builder
+from app.services.image_resolver import image_resolver
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -35,7 +35,7 @@ _CAPTION_FONT_SIZE = 20
 _CAPTION_PADDING = 12
 _CAPTION_BG_ALPHA = 180  # semi-transparent black bar
 
-AnimeStyle = Literal["classroom", "laboratory", "outdoor", "fantasy"]
+AnimeStyle = Literal["classroom", "laboratory", "outdoor", "fantasy", "character"]
 
 
 # ---------------------------------------------------------------------------
@@ -79,18 +79,36 @@ def _add_caption_overlay(image_bytes: bytes, caption: str) -> bytes:
 
 import asyncio
 
-async def _call_pollinations_image(prompt: str) -> bytes:
+# Negative prompt for scientific diagrams — blocks human characters at the model level
+_SCIENTIFIC_NEGATIVE = (
+    "humans, people, children, students, classroom, teacher, anime characters, "
+    "text, watermark, blurry, low quality"
+)
+
+
+async def _call_pollinations_image(
+    prompt: str,
+    negative: str = "",
+    reference_image_url: str | None = None,
+) -> bytes:
     """
     Call pollinations.ai (free, tokenless) to generate an image.
     Uses the /prompt/ endpoint with robust retry and fallback seed logic.
+    Accepts an optional negative prompt passed as a separate URL parameter
+    that the Flux model actually respects.
+
+    If reference_image_url is provided, passes it as the `image` query parameter
+    so the model uses it as a visual reference for identity-preserving generation.
     """
     encoded_prompt = urllib.parse.quote(prompt)
     seed = uuid.uuid4().int % 100000
+    neg_param = f"&negative={urllib.parse.quote(negative)}" if negative else ""
+    ref_param = f"&image={urllib.parse.quote(reference_image_url)}" if reference_image_url else ""
     
-    # Two URL formats — v1 is more stable, v2 has more options
+    # Two URL variants with different seeds for fallback
     urls = [
-        f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={_IMAGE_SIZE['width']}&height={_IMAGE_SIZE['height']}&nologo=true&seed={seed}&model=flux",
-        f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={_IMAGE_SIZE['width']}&height={_IMAGE_SIZE['height']}&nologo=true&seed={seed+1}",
+        f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={_IMAGE_SIZE['width']}&height={_IMAGE_SIZE['height']}&nologo=true&enhance=false&seed={seed}{neg_param}{ref_param}",
+        f"https://image.pollinations.ai/prompt/{encoded_prompt}?width={_IMAGE_SIZE['width']}&height={_IMAGE_SIZE['height']}&nologo=true&enhance=false&seed={seed+1}{neg_param}{ref_param}",
     ]
     
     max_retries = 3
@@ -182,22 +200,155 @@ async def generate_anime_image(
     caption: str,
     job_id: str,
     session_id: str,
+    story_metadata: dict | None = None,
+    reference_image_url: str | None = None,
 ) -> Asset:
     """
-    Generate a single anime-style image using Pollinations.ai.
+    Generate a single anime-style image using Pollinations.ai,
+    or fetch a real textbook diagram from Wikimedia for scientific topics.
+
+    If story_metadata is provided (keys: story_id, episode_number, scene_number),
+    those fields are merged into the asset metadata so the frontend can look up
+    scene images by their position in a story (Bug 6 Round 2).
+
+    If reference_image_url is provided, it's passed to Pollinations as a visual
+    reference for identity-preserving generation (character accuracy pipeline).
     """
-    # 1. Build prompt
-    anime_prompt = await prompt_builder.build_anime_prompt(topic, style)
+    # 1. Resolve image source (Wikimedia for scientific diagrams, AI for everything else)
+    result = await image_resolver.resolve_image(topic=topic, style=style)
 
-    # 2. Generate image (tokenless)
-    raw_bytes = await _call_pollinations_image(anime_prompt + " anime style masterpiece")
+    # Determine negative prompt for scientific diagrams
+    neg = _SCIENTIFIC_NEGATIVE if result.category == "SCIENTIFIC_DIAGRAM" else ""
 
-    # 3. Caption overlay
+    if result.source == "wikimedia" and result.url:
+        # ── External URL path ─────────────────────────────────────────────
+        # Return the Wikipedia/Commons URL directly — do NOT fetch bytes.
+        # The backend network cannot reach upload.wikimedia.org (egress
+        # restriction). The frontend will load the URL via a normal <img>
+        # tag — browsers have no such restriction.
+        # Skip Pillow caption overlay and S3 upload for this path.
+        key = result.url  # Store the external URL as the "file_path"
+        metadata = {
+            "caption": caption,
+            "style": style,
+            "source": "external",
+            "category": result.category,
+            "external_url": result.url,
+            "prompt": f"[Wikimedia] {result.search_query}",
+        }
+        if story_metadata:
+            metadata.update(story_metadata)
+        return _store_asset_record(
+            job_id=job_id,
+            asset_type="image",
+            topic=topic,
+            file_path=key,
+            file_size=0,
+            mime_type="image/png",
+            metadata=metadata,
+            session_id=session_id,
+        )
+    else:
+        # AI generation path
+        if style == "character":
+            import json
+            import asyncio
+            from app.services.prompt_builder import prompt_builder
+            
+            system_prompt = (
+                "You are an elite expert art director. A user wants an image of a specific character or person.\n"
+                "You MUST output a valid JSON object with EXACTLY these four keys:\n"
+                "- 'wiki_query': The exact, canonical Wikipedia article title (e.g., 'Monkey D. Luffy', 'Isaac Newton').\n"
+                "- 'visual_appearance': Highly detailed physical description (hair, eyes, clothing, facial features).\n"
+                "- 'positive_prompt': An incredibly descriptive image generation prompt (max 75 words). Must include: 1) Full body portrait, flawless face. 2) Breathtaking, perfectly structured environment. 3) Exact art style. 4) Professional cinematography (e.g., f/1.8 aperture, volumetric rim lighting, masterpiece, 8k resolution).\n"
+                "- 'negative_prompt': Custom negative constraints to prevent style drift. For anime characters, penalize realistic/3D. For real people, penalize anime/cartoon/illustration."
+            )
+            
+            # OPTIMISTIC CONCURRENCY: Fetch Wikipedia for raw topic while LLaMA generates the prompt
+            if not reference_image_url:
+                response_task = asyncio.create_task(
+                    prompt_builder._call(
+                        system_prompt, 
+                        f"Character: {topic}", 
+                        max_tokens=500, 
+                        response_format={"type": "json_object"}
+                    )
+                )
+                optimistic_wiki_task = asyncio.create_task(
+                    image_resolver._fetch_wikimedia_image(topic)
+                )
+                response, optimistic_ref_url = await asyncio.gather(response_task, optimistic_wiki_task)
+            else:
+                optimistic_ref_url = reference_image_url
+                response = await prompt_builder._call(
+                    system_prompt, 
+                    f"Character: {topic}", 
+                    max_tokens=500, 
+                    response_format={"type": "json_object"}
+                )
+            
+            wiki_query = topic
+            visual_appearance = ""
+            anime_prompt = ""
+            dynamic_negative = "inaccurate face, deformed, poor quality, bad anatomy, out of character, messy background, incoherent environment, poorly drawn, blurry, generic, boring, ugly, amateur photography"
+            
+            if response:
+                try:
+                    data = json.loads(response)
+                    wiki_query = data.get("wiki_query", topic).strip()
+                    visual_appearance = data.get("visual_appearance", "").strip()
+                    anime_prompt = data.get("positive_prompt", "").strip()
+                    neg = data.get("negative_prompt", "").strip()
+                    if neg:
+                        dynamic_negative = f"{neg}, {dynamic_negative}"
+                except json.JSONDecodeError:
+                    pass
+            
+            if not anime_prompt:
+                anime_prompt = (
+                    f"Full body portrait of exactly {topic}, 100% accurate flawless face, true appearance. "
+                    f"Place {topic} in an incredibly detailed, breathtaking environment themed to them. "
+                    f"Masterpiece, 8k resolution, extreme detail, cinematic volumetric lighting, f/1.8 aperture."
+                )
+
+            # Determine reference image (Optimistic hit or Secondary fetch)
+            if not reference_image_url:
+                if wiki_query.lower() == topic.lower():
+                    reference_image_url = optimistic_ref_url
+                else:
+                    reference_image_url = await image_resolver._fetch_wikimedia_image(wiki_query)
+
+            # ALWAYS-ON TEXTUAL REINFORCEMENT: Combine visual appearance with positive prompt
+            if visual_appearance:
+                anime_prompt = f"({visual_appearance}), {anime_prompt}"
+                
+            # URI SAFETY BOUNDS: Truncate to safe limits (approx 1500 chars total for prompts)
+            if len(anime_prompt) > 1000:
+                anime_prompt = anime_prompt[:1000]
+            if len(dynamic_negative) > 500:
+                dynamic_negative = dynamic_negative[:500]
+
+            raw_bytes = await _call_pollinations_image(
+                anime_prompt,
+                negative=dynamic_negative,
+                reference_image_url=reference_image_url,
+            )
+        else:
+            anime_prompt = result.ai_prompt or f"{topic}, educational illustration, anime style, masterpiece, best quality"
+            raw_bytes = await _call_pollinations_image(
+                anime_prompt + " anime style masterpiece",
+                negative=neg,
+                reference_image_url=reference_image_url,
+            )
+
+    # 2. Caption overlay
     final_bytes = _add_caption_overlay(raw_bytes, caption)
 
-    # 4. Upload to local/R2
+    # 3. Upload to local/R2
     key = f"anime/{job_id}/{uuid.uuid4()}.png"
-    metadata = {"caption": caption, "style": style, "prompt": anime_prompt}
+    metadata = {"caption": caption, "style": style, "prompt": anime_prompt, "source": result.source, "category": result.category}
+    if story_metadata:
+        metadata.update(story_metadata)
     asset_manager.store_asset(
         data=final_bytes,
         key=key,
@@ -230,8 +381,19 @@ async def generate_anime_animation(
 ) -> Asset:
     """
     Generate a GIF animation without needing ffmpeg.
+    Uses the image resolver to get a smarter prompt for non-scientific topics.
+    For scientific diagrams (Google source), falls back to AI generation for animation.
     """
-    base_prompt = await prompt_builder.build_anime_prompt(topic, style)
+    result = await image_resolver.resolve_image(topic=topic, style=style)
+
+    # For animations we always need AI generation (can't animate a Google image)
+    if result.source == "google" or not result.ai_prompt:
+        base_prompt = (
+            f"{topic}, simple children's science illustration, bold saturated colors, "
+            f"large clear shapes, friendly anime illustration style, masterpiece, best quality"
+        )
+    else:
+        base_prompt = result.ai_prompt
 
     # Generate N frames
     pil_frames = []

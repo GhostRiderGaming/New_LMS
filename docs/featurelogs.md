@@ -4,6 +4,87 @@ Chronological record of all features, fixes, and technical decisions. Most recen
 
 ---
 
+## v1.2.0 — Project Audit: Bug Fixes & Improvements (Current)
+
+### [FIXED] Operator precedence bug in error handler
+- **Change:** Added parentheses around `("rate" in msg and "limit" in msg) or "429" in msg` in `_friendly_error()`
+- **Why:** Python `or` has lower precedence than `and`, so the original expression could evaluate incorrectly for edge cases
+- **Files:** `backend/app/worker.py`, `backend/app/services/task_executor.py`
+- **Status:** ✅ Fixed
+
+### [FIXED] Temp file leak in video assembler
+- **Change:** `_create_title_card()` and `_create_scene_clip()` now return `(clip, temp_path)` tuples; all temp paths are collected and cleaned up
+- **Why:** Each video generation created dozens of temp PNG files that were never deleted, accumulating on disk
+- **File:** `backend/app/services/video_assembler.py`
+- **Status:** ✅ Fixed
+
+### [FIXED] Docker Compose used wrong env file
+- **Change:** `docker-compose.yml` now references `./backend/.env` instead of `./backend/.env.example`
+- **Why:** Container builds would start with empty API keys and nothing would work
+- **File:** `docker-compose.yml`
+- **Status:** ✅ Fixed
+
+### [FIXED] Missing moviepy dependency
+- **Change:** Added `moviepy>=2.0.0` and `imageio-ffmpeg>=0.5.1` to `requirements.txt`
+- **Why:** `video_assembler.py` imports moviepy but it wasn't listed, causing `ModuleNotFoundError` on fresh installs
+- **File:** `backend/requirements.txt`
+- **Status:** ✅ Fixed
+
+### [FIXED] Google image fetch crashes on broken URLs
+- **Change:** Wrapped Google image fetch in try/except with fallback to AI generation
+- **Why:** If the Google image URL was broken, slow, or returned a redirect loop, the raw httpx exception leaked to the user
+- **File:** `backend/app/services/anime_generator.py`
+- **Status:** ✅ Fixed
+
+### [FIXED] Bella endpoints missing authentication
+- **Change:** Added `Depends(get_current_session)` to all Bella router endpoints
+- **Why:** All other routers enforce API key auth, but Bella endpoints were open to any caller
+- **File:** `backend/app/routers/bella.py`
+- **Status:** ✅ Fixed
+
+### [FIXED] Video metadata missing caption field
+- **Change:** Added `"caption": f"{title} — {topic}"` to video asset metadata
+- **Why:** Gallery view would show an empty caption for video assets
+- **File:** `backend/app/services/video_assembler.py`
+- **Status:** ✅ Fixed
+
+### [IMPROVED] Enhanced /health endpoint
+- **Change:** `/health` now returns DB connectivity, Redis status, API key configuration status, and Celery worker availability
+- **File:** `backend/app/main.py`
+- **Status:** ✅ Done
+
+### [IMPROVED] Request logging middleware
+- **Change:** Added middleware that logs method, path, status code, and response time for every API request (skips health/static)
+- **File:** `backend/app/main.py`
+- **Status:** ✅ Done
+
+### [IMPROVED] Dynamic CORS origins
+- **Change:** CORS origins can now be configured via `CORS_ORIGINS` env var (comma-separated); localhost is always allowed
+- **File:** `backend/app/main.py`
+- **Status:** ✅ Done
+
+### [IMPROVED] Retry count tracking in task_executor
+- **Change:** `_update_job()` now automatically increments `retry_count` when status is 'failed', maintaining parity with Celery's retry tracking
+- **File:** `backend/app/services/task_executor.py`
+- **Status:** ✅ Done
+
+### [IMPROVED] Better 3D model error messages
+- **Change:** When both Tripo (out of credits) and HF fallback fail, users now see a clear, actionable error message instead of raw exception text
+- **File:** `backend/app/services/model3d_engine.py`
+- **Status:** ✅ Done
+
+### [DOCS] README.md rewritten
+- **Change:** Replaced informal notes with professional README including architecture diagram, API reference, env var table, and project structure
+- **File:** `README.md`
+- **Status:** ✅ Done
+
+### [DOCS] .env.example updated
+- **Change:** Added descriptive comments for every variable explaining what it does, whether it's required, and where to get free keys
+- **File:** `backend/.env.example`
+- **Status:** ✅ Done
+
+---
+
 ## v1.1.0 — UX & Reliability Fixes (Current)
 
 ### [FIXED] Progress bar now fills smoothly from the start

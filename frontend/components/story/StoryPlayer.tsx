@@ -1,11 +1,15 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '@/lib/api'
-import type { StoryPlan, EpisodePlan, ScenePlan } from '@/app/story/page'
+import type { StoryPlan, EpisodePlan, ScenePlan, CharacterPlan } from '@/app/story/page'
 
 interface Props {
   story: StoryPlan
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 // Resolve a scene's image URL from its asset_id
 async function resolveSceneUrl(asset_id: string): Promise<string | null> {
@@ -17,31 +21,221 @@ async function resolveSceneUrl(asset_id: string): Promise<string | null> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Image component with loading skeleton + error fallback (Bug 4)
+// ---------------------------------------------------------------------------
+
+function SafeImage({
+  src,
+  alt,
+  className = '',
+  fallbackIcon = '🎨',
+  fallbackText = 'Image unavailable',
+  badge,
+  objectFit = 'object-cover',
+}: {
+  src: string | undefined | null
+  alt: string
+  className?: string
+  fallbackIcon?: string
+  fallbackText?: string
+  badge?: string
+  objectFit?: string
+}) {
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+
+  // Reset states when src changes
+  useEffect(() => {
+    setLoaded(false)
+    setError(false)
+  }, [src])
+
+  if (!src || error) {
+    return (
+      <div className={`flex items-center justify-center bg-bg-elevated ${className}`}>
+        <div className="text-center px-4">
+          <div className="text-4xl mb-2">{fallbackIcon}</div>
+          <p className="text-xs text-slate-500">{fallbackText}</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`relative bg-bg-elevated ${className}`}>
+      {/* Loading skeleton */}
+      {!loaded && (
+        <div className="absolute inset-0 bg-bg-elevated animate-pulse flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full border-2 border-accent-purple/30 border-t-accent-purple animate-spin" />
+        </div>
+      )}
+      <img
+        src={src}
+        alt={alt}
+        className={`w-full h-full ${objectFit} transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        referrerPolicy="no-referrer"
+        onLoad={() => setLoaded(true)}
+        onError={() => setError(true)}
+      />
+      {/* Source badge */}
+      {badge && loaded && (
+        <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-[10px] text-white font-medium">
+          {badge}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Portrait component with server-side resolution (Bug 3)
+// ---------------------------------------------------------------------------
+
+function CharacterPortrait({
+  character,
+  topic,
+  className = '',
+}: {
+  character: CharacterPlan
+  topic: string
+  className?: string
+}) {
+  const [portrait, setPortrait] = useState<{
+    url: string | null
+    source: string
+    label: string
+  } | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      setLoading(true)
+      try {
+        const result = await api.getCharacterPortrait(character.name, topic, character.description)
+        if (!cancelled) setPortrait(result)
+      } catch {
+        if (!cancelled) setPortrait(null)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [character.name, topic, character.description])
+
+  // Restricted figure — respectful non-figurative representation
+  if (portrait?.source === 'restricted') {
+    return (
+      <div className={`flex items-center justify-center bg-gradient-to-br from-bg-elevated to-bg-card ${className}`}>
+        <div className="text-center px-6">
+          <div className="text-5xl mb-3">☪️</div>
+          <p className="text-xs text-slate-400 font-medium">{portrait.label}</p>
+          <p className="text-[10px] text-slate-500 mt-1">Figurative depiction not shown<br />out of respect</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className={`flex items-center justify-center bg-bg-elevated animate-pulse ${className}`}>
+        <div className="w-8 h-8 rounded-full border-2 border-accent-purple/30 border-t-accent-purple animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <SafeImage
+      src={portrait?.url}
+      alt={character.name}
+      className={className}
+      fallbackIcon="👤"
+      fallbackText={`Portrait of ${character.name}`}
+      badge={portrait?.label}
+    />
+  )
+}
+
+
+// ---------------------------------------------------------------------------
+// Main StoryPlayer
+// ---------------------------------------------------------------------------
+
 export default function StoryPlayer({ story }: Props) {
   const [activeEpisode, setActiveEpisode] = useState(-1) // -1 = overview mode
   const [activeScene, setActiveScene] = useState(0)
   const [sceneUrls, setSceneUrls] = useState<Record<string, string>>({})
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [showVideo, setShowVideo] = useState(false)
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterPlan | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Load scene image URLs
+  // Bug 6 Round 2: Two-phase resolution — first try asset_id from plan,
+  // then fall back to looking up scene images by story metadata from the asset list.
   useEffect(() => {
     const load = async () => {
       const updates: Record<string, string> = {}
+      const missingScenes: { ei: number; si: number; ep_num: number; sc_num: number }[] = []
+
+      // Phase 1: resolve via asset_id (works when backend wrote it back)
       for (let ei = 0; ei < story.episodes.length; ei++) {
         const ep = story.episodes[ei]
         for (let si = 0; si < ep.scenes.length; si++) {
           const sc = ep.scenes[si]
+          const key = `${ei}-${si}`
+          if (sceneUrls[key]) continue // already resolved
           if (sc.asset_id) {
-            const key = `${ei}-${si}`
-            if (!sceneUrls[key]) {
-              const url = await resolveSceneUrl(sc.asset_id)
-              if (url) updates[key] = url
+            const url = await resolveSceneUrl(sc.asset_id)
+            if (url) {
+              updates[key] = url
+              continue
             }
           }
+          // No asset_id or resolution failed — track for fallback
+          missingScenes.push({ ei, si, ep_num: ep.episode_number, sc_num: sc.scene_number })
         }
       }
+
+      // Phase 2: fallback — query asset list by story metadata
+      if (missingScenes.length > 0) {
+        try {
+          const allAssets = await api.listAssets()
+          const storyImageAssets = allAssets.filter(
+            (a) =>
+              a.type === 'image' &&
+              (a.metadata as Record<string, unknown>)?.story_id === story.story_id
+          )
+
+          for (const missing of missingScenes) {
+            const key = `${missing.ei}-${missing.si}`
+            if (updates[key]) continue // already resolved in phase 1
+
+            const match = storyImageAssets.find((a) => {
+              const meta = a.metadata as Record<string, unknown>
+              return (
+                meta?.episode_number === missing.ep_num &&
+                meta?.scene_number === missing.sc_num
+              )
+            })
+            if (match) {
+              // For external (Wikimedia) images, use the external_url directly
+              const meta = match.metadata as Record<string, unknown>
+              if (meta?.source === 'external' && meta?.external_url) {
+                updates[key] = meta.external_url as string
+              } else {
+                updates[key] = match.presigned_url
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[StoryPlayer] Fallback asset lookup failed:', err)
+        }
+      }
+
       if (Object.keys(updates).length > 0) {
         setSceneUrls((prev) => ({ ...prev, ...updates }))
       }
@@ -71,26 +265,50 @@ export default function StoryPlayer({ story }: Props) {
   const scene = episode?.scenes[activeScene]
   const totalScenes = story.episodes.reduce((s, e) => s + e.scenes.length, 0)
 
-  const handleNext = () => {
-    if (!episode) return
-    if (activeScene < episode.scenes.length - 1) {
-      setActiveScene(activeScene + 1)
-    } else if (activeEpisode < story.episodes.length - 1) {
-      setActiveEpisode(activeEpisode + 1)
-      setActiveScene(0)
-    }
-  }
+  // Bug 7 fix: Use functional state updates to avoid stale closures
+  const handleNext = useCallback(() => {
+    setActiveEpisode(prevEp => {
+      if (prevEp < 0) return prevEp
+      const currentEpisode = story.episodes[prevEp]
+      if (!currentEpisode) return prevEp
 
-  const handlePrev = () => {
-    if (!episode) return
-    if (activeScene > 0) {
-      setActiveScene(activeScene - 1)
-    } else if (activeEpisode > 0) {
-      const prevEp = story.episodes[activeEpisode - 1]
-      setActiveEpisode(activeEpisode - 1)
-      setActiveScene(prevEp.scenes.length - 1)
-    }
-  }
+      setActiveScene(prevScene => {
+        if (prevScene < currentEpisode.scenes.length - 1) {
+          return prevScene + 1
+        } else if (prevEp < story.episodes.length - 1) {
+          // Move to next episode — setActiveEpisode runs below
+          setTimeout(() => {
+            setActiveEpisode(prevEp + 1)
+            setActiveScene(0)
+          }, 0)
+          return prevScene
+        }
+        return prevScene
+      })
+      return prevEp
+    })
+  }, [story.episodes])
+
+  const handlePrev = useCallback(() => {
+    setActiveEpisode(prevEp => {
+      if (prevEp < 0) return prevEp
+
+      setActiveScene(prevScene => {
+        if (prevScene > 0) {
+          return prevScene - 1
+        } else if (prevEp > 0) {
+          const prevEpisode = story.episodes[prevEp - 1]
+          setTimeout(() => {
+            setActiveEpisode(prevEp - 1)
+            setActiveScene(prevEpisode.scenes.length - 1)
+          }, 0)
+          return prevScene
+        }
+        return prevScene
+      })
+      return prevEp
+    })
+  }, [story.episodes])
 
   // Overview / Story Hub mode
   if (activeEpisode === -1) {
@@ -98,9 +316,9 @@ export default function StoryPlayer({ story }: Props) {
       <div className="space-y-6 animate-fadeInUp">
         {/* Cinematic Story Header */}
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-bg-card via-bg-elevated to-bg-card border border-accent-purple/20">
-          {/* Decorative glow */}
-          <div className="absolute -top-20 -right-20 w-64 h-64 bg-accent-purple/10 rounded-full blur-3xl" />
-          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-accent-cyan/10 rounded-full blur-3xl" />
+          {/* Decorative glow — pointer-events-none to prevent click interception (Bug 7) */}
+          <div className="absolute -top-20 -right-20 w-64 h-64 bg-accent-purple/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-accent-cyan/10 rounded-full blur-3xl pointer-events-none" />
           
           <div className="relative p-6 sm:p-8">
             <div className="flex items-start justify-between gap-4 mb-6">
@@ -136,15 +354,15 @@ export default function StoryPlayer({ story }: Props) {
                 <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Cast</h3>
                 <div className="flex flex-wrap gap-3">
                   {story.characters.map((c) => (
-                    <div key={c.name} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-bg-elevated/60 border border-border hover:border-accent-purple/30 transition-colors group">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent-purple to-accent-cyan flex items-center justify-center text-sm font-black text-white shadow-lg">
+                    <button key={c.name} onClick={() => setSelectedCharacter(c)} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-bg-elevated/60 border border-border hover:border-accent-purple/30 transition-colors group text-left">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-accent-purple to-accent-cyan flex items-center justify-center text-sm font-black text-white shadow-lg shrink-0">
                         {c.name[0]}
                       </div>
                       <div>
                         <div className="text-sm font-bold text-white group-hover:text-accent-purple transition-colors">{c.name}</div>
                         <div className="text-[11px] text-slate-500">{c.role}</div>
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -165,8 +383,8 @@ export default function StoryPlayer({ story }: Props) {
 
         {/* Video Player Modal */}
         {showVideo && videoUrl && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-            <div className="w-full max-w-4xl">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md" onClick={() => setShowVideo(false)}>
+            <div className="w-full max-w-4xl" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-white font-bold text-lg">{story.title}</h3>
                 <button onClick={() => setShowVideo(false)} className="text-slate-400 hover:text-white text-sm px-3 py-1 rounded-lg bg-bg-elevated border border-border">
@@ -183,51 +401,94 @@ export default function StoryPlayer({ story }: Props) {
           </div>
         )}
 
-        {/* Episode Grid — Game Level Select */}
+        {/* Character Details Modal (Bug 3 — server-side portrait) */}
+        {selectedCharacter && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedCharacter(null)}>
+            <div className="w-full max-w-md bg-bg-card border border-border rounded-2xl overflow-hidden shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="relative aspect-square">
+                <CharacterPortrait
+                  character={selectedCharacter}
+                  topic={story.topic}
+                  className="w-full h-full"
+                />
+                <button onClick={() => setSelectedCharacter(null)} className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/80 transition-colors z-10">
+                  ✕
+                </button>
+              </div>
+              <div className="p-6">
+                <div className="text-xs text-accent-purple font-bold uppercase tracking-wider mb-1">{selectedCharacter.role}</div>
+                <h3 className="text-2xl font-black text-white mb-3">{selectedCharacter.name}</h3>
+                {/* Bug 2 fix: no height constraint — allow full description to show */}
+                <p className="text-slate-300 text-sm leading-relaxed">{selectedCharacter.description}</p>
+                {selectedCharacter.justification && (
+                  <p className="text-slate-500 text-xs mt-3 italic border-t border-border pt-3">
+                    <span className="text-accent-cyan font-semibold not-italic">Why in this story: </span>
+                    {selectedCharacter.justification}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Episode Grid — with thumbnails (Bug 6 fix) */}
         <div>
           <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
             <span className="text-accent-cyan">📋</span> Episode Guide
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {story.episodes.map((ep, ei) => (
-              <button
-                key={ep.episode_number}
-                onClick={() => { setActiveEpisode(ei); setActiveScene(0); }}
-                className="group text-left relative overflow-hidden rounded-2xl bg-bg-card border border-border hover:border-accent-purple/50 transition-all hover:shadow-lg hover:shadow-purple-900/20 hover:-translate-y-1"
-              >
-                {/* Episode number accent */}
-                <div className="absolute top-0 right-0 w-20 h-20 bg-accent-purple/5 rounded-bl-[80px]" />
-                <div className="absolute top-3 right-4 text-3xl font-black text-accent-purple/20 group-hover:text-accent-purple/40 transition-colors">
-                  {String(ep.episode_number).padStart(2, '0')}
-                </div>
-                
-                <div className="p-5 relative">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-bold text-accent-cyan uppercase tracking-wider">Episode {ep.episode_number}</span>
-                    <div className="flex gap-0.5">
-                      {ep.scenes.map((s, si) => (
-                        <div key={si} className={`w-1.5 h-1.5 rounded-full ${
-                          s.status === 'complete' ? 'bg-green-500' : s.status === 'failed' ? 'bg-red-500' : 'bg-slate-600'
-                        }`} />
-                      ))}
+            {story.episodes.map((ep, ei) => {
+              // Bug 6 fix: use first scene's image as episode thumbnail
+              const thumbnailUrl = sceneUrls[`${ei}-0`]
+              return (
+                <button
+                  key={ep.episode_number}
+                  onClick={() => { setActiveEpisode(ei); setActiveScene(0); }}
+                  className="group text-left relative overflow-hidden rounded-2xl bg-bg-card border border-border hover:border-accent-purple/50 transition-all hover:shadow-lg hover:shadow-purple-900/20 hover:-translate-y-1"
+                >
+                  {/* Episode thumbnail (Bug 6) */}
+                  <div className="relative aspect-video bg-bg-elevated overflow-hidden">
+                    <SafeImage
+                      src={thumbnailUrl}
+                      alt={ep.title}
+                      className="w-full h-full"
+                      fallbackIcon="🎬"
+                      fallbackText={`Episode ${ep.episode_number}`}
+                    />
+                    {/* Episode number overlay */}
+                    <div className="absolute top-2 right-2 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-sm text-xs text-white font-bold">
+                      EP {String(ep.episode_number).padStart(2, '0')}
                     </div>
                   </div>
-                  <h4 className="text-sm font-bold text-white group-hover:text-accent-purple transition-colors mb-1">{ep.title}</h4>
-                  <p className="text-xs text-slate-500 line-clamp-2">{ep.educational_concept}</p>
-                  <div className="mt-3 flex items-center gap-1 text-[10px] text-slate-600">
-                    <span>🎬 {ep.scenes.length} scenes</span>
-                  </div>
-                </div>
 
-                {/* Bottom progress bar */}
-                <div className="h-1 bg-bg-elevated">
-                  <div
-                    className="h-full bg-gradient-to-r from-accent-purple to-accent-cyan transition-all"
-                    style={{ width: `${(ep.scenes.filter(s => s.status === 'complete').length / ep.scenes.length) * 100}%` }}
-                  />
-                </div>
-              </button>
-            ))}
+                  <div className="p-4 relative">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold text-accent-cyan uppercase tracking-wider">Episode {ep.episode_number}</span>
+                      <div className="flex gap-0.5">
+                        {ep.scenes.map((s, si) => (
+                          <div key={si} className={`w-1.5 h-1.5 rounded-full ${
+                            s.status === 'complete' ? 'bg-green-500' : s.status === 'failed' ? 'bg-red-500' : 'bg-slate-600'
+                          }`} />
+                        ))}
+                      </div>
+                    </div>
+                    <h4 className="text-sm font-bold text-white group-hover:text-accent-purple transition-colors mb-1">{ep.title}</h4>
+                    <p className="text-xs text-slate-500 line-clamp-2">{ep.educational_concept}</p>
+                    <div className="mt-3 flex items-center gap-1 text-[10px] text-slate-600">
+                      <span>🎬 {ep.scenes.length} scenes</span>
+                    </div>
+                  </div>
+
+                  {/* Bottom progress bar */}
+                  <div className="h-1 bg-bg-elevated">
+                    <div
+                      className="h-full bg-gradient-to-r from-accent-purple to-accent-cyan transition-all"
+                      style={{ width: `${(ep.scenes.filter(s => s.status === 'complete').length / ep.scenes.length) * 100}%` }}
+                    />
+                  </div>
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>
@@ -235,9 +496,7 @@ export default function StoryPlayer({ story }: Props) {
   }
 
   // Episode/Scene viewer mode
-  const currentSceneUrl = scene?.asset_id
-    ? sceneUrls[`${activeEpisode}-${activeScene}`]
-    : undefined
+  const currentSceneUrl = sceneUrls[`${activeEpisode}-${activeScene}`]
 
   const isFirst = activeEpisode === 0 && activeScene === 0
   const isLast = activeEpisode === story.episodes.length - 1 && activeScene === (episode?.scenes.length ?? 1) - 1
@@ -254,14 +513,14 @@ export default function StoryPlayer({ story }: Props) {
 
       {/* Episode Title Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-bg-card to-bg-elevated border border-accent-purple/20 p-5">
-        <div className="absolute -top-10 -right-10 w-40 h-40 bg-accent-purple/5 rounded-full blur-2xl" />
+        <div className="absolute -top-10 -right-10 w-40 h-40 bg-accent-purple/5 rounded-full blur-2xl pointer-events-none" />
         <div className="relative flex items-center justify-between">
           <div>
             <span className="text-xs text-accent-cyan font-bold uppercase tracking-wider">Episode {episode?.episode_number}</span>
             <h3 className="text-xl font-bold text-white mt-1">{episode?.title}</h3>
             <p className="text-xs text-slate-500 mt-1">{episode?.educational_concept}</p>
           </div>
-          <div className="text-4xl font-black text-accent-purple/15">
+          <div className="text-4xl font-black text-accent-purple/15 pointer-events-none">
             {String(episode?.episode_number ?? 0).padStart(2, '0')}
           </div>
         </div>
@@ -269,25 +528,19 @@ export default function StoryPlayer({ story }: Props) {
 
       {/* Scene Viewer */}
       <div className="rounded-2xl bg-bg-card border border-border overflow-hidden">
-        {/* Scene image / placeholder */}
-        <div className="relative aspect-video bg-bg-elevated">
-          {currentSceneUrl ? (
-            <img
-              src={currentSceneUrl}
-              alt={scene?.description ?? ''}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="text-center px-6">
-                <div className="text-5xl mb-3 animate-pulse">🎨</div>
-                <p className="text-sm text-slate-500">{scene?.description}</p>
-              </div>
-            </div>
-          )}
+        {/* Scene image / placeholder (Bug 4 — SafeImage with fallback) */}
+        <div className="relative aspect-video">
+          <SafeImage
+            src={currentSceneUrl}
+            alt={scene?.description ?? ''}
+            className="w-full h-full"
+            fallbackIcon="🎨"
+            fallbackText={scene?.description ?? 'Scene loading...'}
+            objectFit="object-contain"
+          />
 
           {/* Scene number badge */}
-          <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/70 backdrop-blur-sm text-xs text-white font-medium">
+          <div className="absolute top-3 right-3 px-3 py-1.5 rounded-xl bg-black/70 backdrop-blur-sm text-xs text-white font-medium z-10">
             Scene {activeScene + 1} / {episode?.scenes.length}
           </div>
         </div>
@@ -300,8 +553,8 @@ export default function StoryPlayer({ story }: Props) {
           </div>
         </div>
 
-        {/* Navigation */}
-        <div className="px-5 py-4 border-t border-border flex items-center justify-between">
+        {/* Navigation — Bug 7: relative + z-10 ensures it stays above any overlays */}
+        <div className="px-5 py-4 border-t border-border flex items-center justify-between relative z-10">
           <button
             onClick={handlePrev}
             disabled={isFirst}
@@ -333,7 +586,7 @@ export default function StoryPlayer({ story }: Props) {
         </div>
       </div>
 
-      {/* Scene thumbnails strip */}
+      {/* Scene thumbnails strip (Bug 4 — SafeImage with fallback) */}
       <div className="flex gap-2 overflow-x-auto pb-2">
         {episode?.scenes.map((s, si) => {
           const url = sceneUrls[`${activeEpisode}-${si}`]
@@ -345,13 +598,13 @@ export default function StoryPlayer({ story }: Props) {
                 si === activeScene ? 'border-accent-purple shadow-glow-purple' : 'border-transparent hover:border-border'
               }`}
             >
-              {url ? (
-                <img src={url} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-bg-elevated flex items-center justify-center text-xs text-slate-600">
-                  {si + 1}
-                </div>
-              )}
+              <SafeImage
+                src={url}
+                alt={`Scene ${si + 1}`}
+                className="w-full h-full"
+                fallbackIcon=""
+                fallbackText={`${si + 1}`}
+              />
             </button>
           )
         })}

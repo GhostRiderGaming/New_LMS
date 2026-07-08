@@ -34,15 +34,13 @@ def _friendly_error(exc: Exception) -> str:
             "The generation timed out. The AI service may be busy — "
             "please try again in a moment."
         )
-    if "rate" in msg.lower() and "limit" in msg.lower() or "429" in msg:
+    if ("rate" in msg.lower() and "limit" in msg.lower()) or "429" in msg:
         return (
             "Rate limit reached. Too many requests — "
             "please wait a minute and try again."
         )
     if "401" in msg or "unauthorized" in msg.lower() or "invalid api key" in msg.lower():
         return "API authentication error. Please check the API key configuration."
-    if "TRIPO_API_KEY not set" in msg:
-        return "3D model generation is not configured. Please set up a Tripo API key."
     # Truncate very long error messages
     if len(msg) > 200:
         return msg[:200] + "..."
@@ -50,7 +48,11 @@ def _friendly_error(exc: Exception) -> str:
 
 
 def _update_job(job_id: str, **fields) -> None:
-    """Helper: update a Job row with the given fields in a fresh session."""
+    """Helper: update a Job row with the given fields in a fresh session.
+    
+    Automatically increments retry_count when status transitions to 'failed',
+    maintaining parity with the Celery worker's retry tracking.
+    """
     db = SessionLocal()
     try:
         job = db.query(Job).filter(Job.job_id == job_id).first()
@@ -58,6 +60,9 @@ def _update_job(job_id: str, **fields) -> None:
             return
         for k, v in fields.items():
             setattr(job, k, v)
+        # Track retry attempts on failure (I3)
+        if fields.get("status") == "failed":
+            job.retry_count = (job.retry_count or 0) + 1
         job.updated_at = datetime.now(timezone.utc)
         db.commit()
     finally:
@@ -274,6 +279,26 @@ async def run_story_job(
         import asyncio
         from app.services.anime_generator import generate_anime_image
 
+        # Pre-resolve reference images for cast characters (for scene accuracy)
+        character_refs: dict[str, str] = {}  # name_lower -> reference_url
+        try:
+            from app.services.image_resolver import image_resolver
+            for char in plan.characters:
+                char_name = char.name.strip()
+                if char_name.lower() in image_resolver._DEPICTION_RESTRICTED:
+                    continue
+                ref_url = await image_resolver._fetch_wikimedia_image(char_name)
+                if ref_url and await image_resolver._validate_image_url(ref_url):
+                    character_refs[char_name.lower()] = ref_url
+                    logger.info("task_executor: resolved reference for '%s': %s", char_name, ref_url[:80])
+                elif topic:
+                    ref_url = await image_resolver._fetch_wikimedia_image(f"{char_name} {topic}")
+                    if ref_url and await image_resolver._validate_image_url(ref_url):
+                        character_refs[char_name.lower()] = ref_url
+                        logger.info("task_executor: resolved reference for '%s' with topic: %s", char_name, ref_url[:80])
+        except Exception as e:
+            logger.warning("task_executor: character reference pre-resolution failed: %s", e)
+
         total_scenes = sum(len(ep.scenes) for ep in plan.episodes)
         scene_images: dict[str, bytes] = {}
         scene_count = 0
@@ -289,14 +314,31 @@ async def run_story_job(
                     "step": f"Generating scene {scene_count}/{total_scenes}: {scene.description[:40]}..."
                 })
 
+                # Find the first character reference that appears in this scene description
+                scene_ref_url = None
+                scene_desc_lower = scene.description.lower()
+                for char_name_lower, ref_url in character_refs.items():
+                    if char_name_lower in scene_desc_lower:
+                        scene_ref_url = ref_url
+                        break
+
                 try:
+                    # Bug 6 Round 2: pass story_metadata so scene images are queryable
                     asset = await generate_anime_image(
-                        topic=f"{topic} — {scene.description}",
-                        style="classroom",
+                        topic=f"{topic} — Episode {episode.episode_number}: {episode.title} — {scene.description}",
+                        style=plan.setting_style,
                         caption=scene.caption,
                         job_id=job_id,
                         session_id=session_id,
+                        story_metadata={
+                            "story_id": plan.story_id,
+                            "episode_number": episode.episode_number,
+                            "scene_number": scene.scene_number,
+                        },
+                        reference_image_url=scene_ref_url,
                     )
+                    # Bug 6 Round 2: write asset_id back onto the scene
+                    scene.asset_id = asset.asset_id
                     # Read the generated image bytes from storage
                     from app.services.asset_manager import asset_manager
                     img_bytes = asset_manager.download_file(asset.file_path)
@@ -307,6 +349,40 @@ async def run_story_job(
                 
                 # Throttle to avoid 429
                 await asyncio.sleep(1.5)
+
+        # Bug 6 Round 2: Re-save the StoryPlan asset metadata with populated asset_ids
+        db2 = SessionLocal()
+        try:
+            from app.models.anime_assets import Asset as AssetModel
+            plan_asset_obj = (
+                db2.query(AssetModel)
+                .filter(AssetModel.asset_id == plan_asset_id)
+                .first()
+            )
+            if plan_asset_obj and plan_asset_obj.asset_metadata:
+                updated_meta = dict(plan_asset_obj.asset_metadata)
+                updated_meta["episodes"] = [ep.model_dump() for ep in plan.episodes]
+                plan_asset_obj.asset_metadata = updated_meta
+                db2.commit()
+                logger.info("task_executor: updated plan asset %s with scene asset_ids", plan_asset_id)
+
+                # Fix: The frontend downloads plan.json from Cloud Storage. We MUST update the Cloud Storage file too!
+                from app.services.asset_manager import asset_manager
+                plan_bytes = plan.model_dump_json(indent=2).encode("utf-8")
+                asset_manager.store_asset(
+                    data=plan_bytes,
+                    key=plan_asset_obj.file_path,
+                    content_type="application/json",
+                    topic=plan_asset_obj.topic,
+                    asset_type="story",
+                    metadata=updated_meta,
+                    created_at=plan_asset_obj.created_at,
+                )
+        except Exception as e:
+            logger.warning("task_executor: failed to update plan asset metadata: %s", e)
+            db2.rollback()
+        finally:
+            db2.close()
 
         # Phase 3: Assemble video
         notify(job_id, {"job_id": job_id, "status": "processing", "progress": 75, "step": "Assembling anime video with narration..."})

@@ -287,6 +287,16 @@ function AssetCard({ asset, onDelete, onPreviewStory, onPreviewVideo, onPreviewS
 
       {/* Actions — visible on hover */}
       <div className="px-3 pb-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        {meta?.style === 'character' && (
+          <a
+            href={`https://www.google.com/search?q=${encodeURIComponent(asset.topic)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 py-1.5 rounded-lg bg-bg-elevated hover:bg-accent-cyan/20 text-accent-cyan hover:text-white text-xs font-medium transition-all border border-border text-center flex items-center justify-center"
+          >
+            Know More
+          </a>
+        )}
         <button
           onClick={handleDownload}
           className="flex-1 py-1.5 rounded-lg bg-bg-elevated hover:bg-accent-purple/20 text-slate-400 hover:text-white text-xs font-medium transition-all border border-border"

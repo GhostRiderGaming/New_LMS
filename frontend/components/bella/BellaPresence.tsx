@@ -20,7 +20,7 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "dev-api-key";
 
 export function BellaPresence() {
   const [mounted, setMounted] = useState(false);
-  const { isVisible, show, hide, addMessage, appearance } = useBellaStore();
+  const { isVisible, show, hide, addMessage, appearance, pendingExplanation, clearExplanation, setIsExplaining, stopSpeakingRequested, clearStopRequest } = useBellaStore();
 
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isTalking, setIsTalking] = useState(false);
@@ -285,6 +285,89 @@ export function BellaPresence() {
       try { recognition.stop(); } catch (e) {}
     };
   }, [userActivated, stopAll, processTranscript]);
+
+  // ─── EXPLANATION TRIGGER (from Scene Forge / other pages) ──────────
+  useEffect(() => {
+    if (!pendingExplanation) return;
+    const { text, audioB64 } = pendingExplanation;
+
+    // Clear immediately so it doesn't re-trigger
+    clearExplanation();
+
+    // Stop any current speech/recognition
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    window.speechSynthesis?.cancel();
+    intentionalStopRef.current = true;
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch(e) {}
+    }
+
+    // Show Bella and set talking state
+    show();
+    setLastReply(text);
+    addMessage({ role: 'bella', text });
+    setIsThinking(false);
+    setIsTalking(true);
+    setIsExplaining(true);
+
+    // Play audio
+    if (audioB64) {
+      const audio = new Audio("data:audio/mp3;base64," + audioB64);
+      currentAudioRef.current = audio;
+
+      audio.onended = () => {
+        setIsTalking(false);
+        setIsExplaining(false);
+        setIsHappy(true);
+        setTimeout(() => setIsHappy(false), 3000);
+        currentAudioRef.current = null;
+        processingRef.current = false;
+        intentionalStopRef.current = false;
+        // Resume recognition if activated
+        if (userActivated && recognitionRef.current) {
+          try { recognitionRef.current.start(); } catch(e) {}
+        }
+      };
+
+      audio.play().catch(() => {
+        // Fallback to native TTS
+        const dummyRecognition = recognitionRef.current || { start: () => {} };
+        speakNative(text, dummyRecognition);
+      });
+    } else {
+      // No audio — use native TTS
+      const dummyRecognition = recognitionRef.current || { start: () => {} };
+      speakNative(text, dummyRecognition);
+    }
+  }, [pendingExplanation, clearExplanation, show, addMessage, speakNative, userActivated, setIsExplaining]);
+
+  // ─── STOP SPEAKING REQUEST (from Scene Forge stop button) ──────────
+  useEffect(() => {
+    if (!stopSpeakingRequested) return;
+    clearStopRequest();
+
+    // Stop audio playback
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+    window.speechSynthesis?.cancel();
+
+    // Reset state
+    setIsTalking(false);
+    setIsExplaining(false);
+    setIsThinking(false);
+    processingRef.current = false;
+    intentionalStopRef.current = false;
+
+    // Resume recognition if activated
+    if (userActivated && recognitionRef.current) {
+      try { recognitionRef.current.start(); } catch(e) {}
+    }
+  }, [stopSpeakingRequested, clearStopRequest, userActivated, setIsExplaining]);
 
   if (!mounted) return null;
 

@@ -21,15 +21,116 @@ from groq import AsyncGroq
 _MODEL = "llama-3.3-70b-versatile"
 
 # ---------------------------------------------------------------------------
-# System prompts
+# Topic classifier system prompt
+# ---------------------------------------------------------------------------
+# Used BEFORE image prompt generation to understand what kind of visual
+# the topic actually needs — diagram, historical scene, or fictional lore.
+
+_CLASSIFIER_SYSTEM = (
+    "You are a topic classifier for an educational image generation pipeline. "
+    "Given a topic, classify it into exactly one of these categories and explain the key visual:\n\n"
+    "SCIENTIFIC_DIAGRAM — A biology/chemistry/physics/math concept that needs a clear visual explanation "
+    "(e.g. Photosynthesis, Newton's Laws, Cell Division, Pythagorean Theorem). "
+    "Focus: a SIMPLE, VISUAL SCENE showing the concept happening — like a children's science book illustration. "
+    "The KEY_VISUAL must describe what a 12-year-old would INSTANTLY understand: "
+    "show the process or result, not a complex diagram. "
+    "Example for Photosynthesis: 'a bright green cartoon leaf with sunlight arrows entering, "
+    "oxygen bubbles floating out, and glowing glucose energy at the base, clean blue sky background'. "
+    "NEVER describe a classroom, a student, a chalkboard, or a complex labeled cross-section.\n\n"
+    "HISTORICAL_EVENT — A real-world historical event, war, civilization, or period "
+    "(e.g. WWII, French Revolution, Ancient Egypt, Cold War). "
+    "Focus: the key scene, era, or iconic moment — soldiers, ruins, maps, leaders.\n\n"
+    "FICTIONAL_LORE — A fictional universe, character, or event from games, anime, literature, mythology "
+    "(e.g. Elden Ring, Naruto, Greek Mythology, Lord of the Rings). "
+    "Focus: the canonical visual — existing character design, iconic scene, lore-accurate depiction.\n\n"
+    "GEOGRAPHY_NATURE — A place, ecosystem, natural phenomenon, or geography topic "
+    "(e.g. Amazon Rainforest, Volcanoes, Solar System, Tectonic Plates). "
+    "Focus: the real visual of that place or phenomenon.\n\n"
+    "SOCIAL_CONCEPT — An abstract social, economic, or psychological concept "
+    "(e.g. Democracy, Supply and Demand, Maslow's Hierarchy). "
+    "Focus: an infographic-style or symbolic scene representing the concept.\n\n"
+    "Respond in this EXACT format (no markdown, no extra text):\n"
+    "CATEGORY: <one of the five above>\n"
+    "KEY_VISUAL: <one sentence describing the single most iconic/accurate visual for this topic>\n"
+    "AVOID: <one sentence describing what to NOT show — generic classroom, random students, etc.>"
+)
+
+# ---------------------------------------------------------------------------
+# Image prompt system prompts (one per topic category)
 # ---------------------------------------------------------------------------
 
-_ANIME_SYSTEM = (
-    "You are an anime art director for an educational platform. "
-    "Given a topic and style, output a single Animagine XL image prompt. "
-    "Format: comma-separated tags describing character, setting, educational element, "
-    "art quality tags. Include the topic keywords. "
-    "Output ONLY the prompt string — no explanation, no markdown."
+_ANIME_SCIENTIFIC = (
+    "You are a children's science book illustrator creating images for 6th–10th grade students. "
+    "Given a scientific topic and its key visual, generate an Animagine XL image prompt. "
+    "\n\n"
+    "GOLDEN RULE: The image must be INSTANTLY understandable to a 12-year-old who has never studied this topic. "
+    "Show the PROCESS or CONCEPT happening visually — not a complex diagram full of labels. "
+    "\n\n"
+    "HOW TO DESIGN IT:\n"
+    "- Show the concept as a simple, clear SCENE or STORY MOMENT (e.g. Photosynthesis = a bright cartoon "
+    "leaf with sunlight arrows going IN and oxygen bubbles coming OUT, glucose shown as glowing energy)\n"
+    "- Use a MAXIMUM of 3-4 visual elements — do not crowd the image\n"
+    "- Bold, saturated, friendly colors — like a children's science book, not a research paper\n"
+    "- Large, clear shapes that read well even as a thumbnail\n"
+    "- No tiny text labels in the image itself\n"
+    "- No complex cross-sections unless the topic specifically requires it (e.g. Earth's layers)\n"
+    "- If the concept has a direction/flow (energy, force, cycle), show it with arrows or glowing paths\n"
+    "\n"
+    "Art quality tags to always include: anime illustration style, children's educational book art, "
+    "bright saturated colors, simple clean composition, large clear shapes, "
+    "friendly and approachable style, masterpiece, best quality. "
+    "\n"
+    "Output ONLY the comma-separated prompt string — no explanation, no markdown."
+)
+
+_ANIME_HISTORICAL = (
+    "You are a historical anime art director. "
+    "Given a historical event and its key visual, generate an Animagine XL image prompt. "
+    "The image MUST depict the actual historical scene — soldiers, leaders, battles, ruins, or maps "
+    "from the correct era and location. Show the real environment (e.g. WWII: bombed European cities, "
+    "soldiers in period-accurate uniforms, warplanes; French Revolution: revolutionary crowd, guillotine, Bastille). "
+    "ABSOLUTELY DO NOT show: classrooms, modern furniture, contemporary technology, students sitting at desks, "
+    "whiteboards, projectors, or any modern educational setting. The scene must be period-accurate. "
+    "Art tags: anime style, cinematic composition, dramatic lighting, historical accuracy, "
+    "detailed environment, masterpiece, best quality. "
+    "Output ONLY the comma-separated prompt string — no explanation, no markdown."
+)
+
+_ANIME_FICTIONAL = (
+    "You are a lore-accurate anime art director. "
+    "Given a fictional universe topic and its key visual, generate an Animagine XL image prompt. "
+    "CRITICAL: If the topic involves a known character (e.g. Queen Marika, Naruto, Sauron), "
+    "describe their CANONICAL design as accurately as possible — hair, clothing, weapons, colors "
+    "as seen in the source material. Do NOT invent a generic character. "
+    "For events (e.g. Night of the Black Knives in Elden Ring), show the iconic scene from the lore. "
+    "ABSOLUTELY DO NOT show: classrooms, modern furniture, contemporary technology, students sitting at desks, "
+    "whiteboards, or any modern educational setting. Show the actual fantasy/fictional environment. "
+    "Art tags: anime style, official art style, lore-accurate, highly detailed, cinematic, "
+    "masterpiece, best quality. "
+    "Output ONLY the comma-separated prompt string — no explanation, no markdown."
+)
+
+_ANIME_GEOGRAPHY = (
+    "You are a nature and geography anime art director. "
+    "Given a geography or nature topic and its key visual, generate an Animagine XL image prompt. "
+    "The image MUST show the actual place or phenomenon — the Amazon canopy, a volcano erupting, "
+    "Saturn's rings, tectonic plates shifting. No classroom, no students, no modern educational setting, "
+    "no desks, no whiteboards. "
+    "Art tags: anime style, nature illustration, photorealistic detail, dramatic lighting, "
+    "wide establishing shot, masterpiece, best quality. "
+    "Output ONLY the comma-separated prompt string — no explanation, no markdown."
+)
+
+_ANIME_SOCIAL = (
+    "You are an infographic anime art director. "
+    "Given an abstract social or economic concept and its key visual, generate an Animagine XL image prompt. "
+    "The image should use symbolic visual metaphors or a clean infographic-style scene — "
+    "e.g. a pyramid for hierarchy, scales for balance, a network for democracy. "
+    "Minimal characters; focus on concept visualization. "
+    "DO NOT show a classroom, students at desks, a teacher at a whiteboard, or any modern school setting. "
+    "Art tags: anime style, symbolic illustration, infographic style, clean composition, "
+    "vibrant accent colors, masterpiece, best quality. "
+    "Output ONLY the comma-separated prompt string — no explanation, no markdown."
 )
 
 _STORY_SYSTEM = (
@@ -44,9 +145,11 @@ _STORY_SYSTEM = (
 _SIMULATION_SYSTEM = (
     "You are an educational simulation developer. "
     "Given a topic and category, output a concise code generation prompt "
-    "that instructs an LLM to produce a self-contained HTML/JS simulation "
-    "using D3.js, Matter.js, or Three.js (browser-only, no external URLs). "
-    "The prompt must reference the topic and category. "
+    "that instructs an LLM to produce a self-contained HTML/JS simulation. "
+    "The prompt MUST demand: "
+    "1) A dropdown to switch between multiple 'Scenarios' or 'Cases'. "
+    "2) High-quality canvas graphics (use path drawing, setLineDash for rays/vectors, trails for orbits). "
+    "3) A dynamic 'Learn' text box that updates when sliders/dropdowns change. "
     "Output ONLY the prompt string — no explanation, no markdown."
 )
 
@@ -57,6 +160,67 @@ _MODEL3D_SYSTEM = (
     "Include the object name. "
     "Output ONLY the prompt string — no explanation, no markdown."
 )
+
+_EXPLANATION_SYSTEM = (
+    "You are Bella, an enthusiastic and warm educational tutor with an anime personality. "
+    "A student just generated an educational image about a topic and is looking at it right now. "
+    "\n\n"
+    "YOUR JOB: Explain what the student is SEEING in the image, then teach the concept behind it. "
+    "\n\n"
+    "RULES:\n"
+    "- Start by describing what the image shows (e.g. 'You can see a diagram of...', "
+    "'This illustration shows...', 'In this image...')\n"
+    "- Then explain the concept in 2-3 brief sentences in very simple, clear, and easy-to-understand language\n"
+    "- End with one fun fact or cool detail about the topic\n"
+    "- Speak directly to the student. Be encouraging.\n"
+    "- Use basic language an 8-year-old would understand\n"
+    "- If the image is a real Wikipedia/textbook diagram, reference its labels and structure\n"
+    "- If the image is an AI-generated anime illustration, describe the scene depicted\n"
+    "- Output ONLY the spoken explanation — no markdown, no bullets, no headers, no emojis."
+)
+
+# ---------------------------------------------------------------------------
+# Category → system prompt mapping
+# ---------------------------------------------------------------------------
+
+_CATEGORY_TO_SYSTEM: dict[str, str] = {
+    "SCIENTIFIC_DIAGRAM": _ANIME_SCIENTIFIC,
+    "HISTORICAL_EVENT":   _ANIME_HISTORICAL,
+    "FICTIONAL_LORE":     _ANIME_FICTIONAL,
+    "GEOGRAPHY_NATURE":   _ANIME_GEOGRAPHY,
+    "SOCIAL_CONCEPT":     _ANIME_SOCIAL,
+}
+
+# Hard-coded fallback prompts per category (used when Groq is unavailable)
+_FALLBACK_BY_CATEGORY: dict[str, str] = {
+    "SCIENTIFIC_DIAGRAM": (
+        "{topic}, simple educational scene showing the concept visually, "
+        "bright cartoon-style illustration, only 3 to 4 key visual elements, "
+        "bold saturated colors, large clear shapes, process shown with glowing arrows or flow, "
+        "no complex labels, no classroom, no students, "
+        "anime children's book illustration style, friendly and approachable, masterpiece, best quality"
+    ),
+    "HISTORICAL_EVENT": (
+        "{topic}, historical scene, period-accurate environment, dramatic cinematic shot, "
+        "soldiers or leaders of the era, authentic architecture and clothing, "
+        "anime style, epic composition, dramatic lighting, masterpiece, best quality"
+    ),
+    "FICTIONAL_LORE": (
+        "{topic}, lore-accurate character or scene, canonical design from source material, "
+        "detailed fantasy environment, dramatic atmosphere, "
+        "anime style, official art quality, cinematic, masterpiece, best quality"
+    ),
+    "GEOGRAPHY_NATURE": (
+        "{topic}, wide establishing shot of the real environment or phenomenon, "
+        "dramatic natural lighting, no human characters, accurate geography, "
+        "anime nature art style, lush detail, masterpiece, best quality"
+    ),
+    "SOCIAL_CONCEPT": (
+        "{topic}, symbolic visual metaphor illustrating the concept, infographic style, "
+        "minimal characters, clean composition, vibrant accent colors, "
+        "anime illustration style, masterpiece, best quality"
+    ),
+}
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +235,8 @@ class PromptBuilder:
             max_retries=2,
         )
 
-    async def _call(self, system: str, user: str) -> str:
-        """Call Groq to build a structured prompt.  Returns empty string on failure."""
+    async def _call(self, system: str, user: str, max_tokens: int = 300, **kwargs) -> str:
+        """Call Groq and return the response text.  Returns empty string on failure."""
         try:
             completion = await self._groq.chat.completions.create(
                 model=_MODEL,
@@ -80,8 +244,9 @@ class PromptBuilder:
                     {"role": "system", "content": system},
                     {"role": "user", "content": user},
                 ],
-                max_tokens=300,
+                max_tokens=max_tokens,
                 temperature=0.7,
+                **kwargs,
             )
             return (completion.choices[0].message.content or "").strip()
         except Exception as exc:
@@ -91,27 +256,69 @@ class PromptBuilder:
             )
             return ""
 
+    # -----------------------------------------------------------------------
+    # Topic classification (internal)
+    # -----------------------------------------------------------------------
+
+    async def _classify_topic(self, topic: str) -> tuple[str, str]:
+        """
+        Classify the topic into a visual category and extract the key visual description.
+
+        Returns:
+            (category, key_visual) where category is one of SCIENTIFIC_DIAGRAM,
+            HISTORICAL_EVENT, FICTIONAL_LORE, GEOGRAPHY_NATURE, SOCIAL_CONCEPT.
+            Falls back to SCIENTIFIC_DIAGRAM if classification fails.
+        """
+        raw = await self._call(_CLASSIFIER_SYSTEM, f"Topic: {topic}", max_tokens=120)
+        category = "SCIENTIFIC_DIAGRAM"
+        key_visual = f"accurate educational visual of {topic}"
+
+        if raw:
+            for line in raw.splitlines():
+                line = line.strip()
+                if line.startswith("CATEGORY:"):
+                    cat = line.split(":", 1)[1].strip()
+                    if cat in _CATEGORY_TO_SYSTEM:
+                        category = cat
+                elif line.startswith("KEY_VISUAL:"):
+                    key_visual = line.split(":", 1)[1].strip()
+
+        return category, key_visual
+
+    # -----------------------------------------------------------------------
+    # Public API
+    # -----------------------------------------------------------------------
+
     async def build_anime_prompt(self, topic: str, style: str) -> str:
         """
         Build an Animagine XL prompt for the given topic and style.
         Style: classroom | laboratory | outdoor | fantasy
+
+        Flow:
+          1. Classify the topic → category + key_visual
+          2. Pick the matching system prompt for that category
+          3. Ask Groq to produce a precise, context-aware image prompt
+          4. Fall back to a hard-coded category-specific template if Groq fails
         """
-        user = f"Topic: {topic}\nStyle: {style}"
-        result = await self._call(_ANIME_SYSTEM, user)
+        # Step 1 — Classify
+        category, key_visual = await self._classify_topic(topic)
+
+        # Step 2 — Pick the right system prompt
+        system = _CATEGORY_TO_SYSTEM[category]
+
+        # Step 3 — Generate the image prompt
+        user = (
+            f"Topic: {topic}\n"
+            f"Style preference: {style}\n"
+            f"Key visual to depict: {key_visual}"
+        )
+        result = await self._call(system, user, max_tokens=350)
         if result:
             return result
-        # Quality fallback — still produces good images with Pollinations
-        style_tags = {
-            "classroom": "school classroom, chalkboard, desks, bright lighting",
-            "laboratory": "science laboratory, test tubes, beakers, equipment",
-            "outdoor": "nature, outdoor scene, sunlight, trees, sky",
-            "fantasy": "magical, fantasy world, glowing effects, ethereal",
-        }
-        return (
-            f"{topic}, {style_tags.get(style, 'educational scene')}, "
-            f"anime style, masterpiece, best quality, detailed, "
-            f"educational illustration, vibrant colors"
-        )
+
+        # Step 4 — Category-aware fallback
+        template = _FALLBACK_BY_CATEGORY[category]
+        return template.format(topic=topic)
 
     async def build_story_prompt(self, topic: str, episode_count: int) -> str:
         """Build a story planning prompt for the given topic and episode count."""
@@ -154,6 +361,50 @@ class PromptBuilder:
         return (
             f"A detailed, high-quality 3D model of a {object_name} for educational purposes. "
             f"Category: {category}. Realistic materials, accurate proportions, clean geometry."
+        )
+
+    async def build_explanation_prompt(self, topic: str, image_context: dict | None = None) -> str:
+        """
+        Generate a spoken educational explanation of the topic for Bella's voice narration.
+        Used after image generation in Scene Forge.
+
+        image_context: optional dict with {source, category, caption, prompt}
+        describing the actual generated image so the explanation references it.
+        """
+        # Build a rich user message that tells the LLM what image the student sees
+        parts = [f"Topic: {topic}"]
+
+        if image_context:
+            source = image_context.get("source", "")
+            category = image_context.get("category", "")
+            caption = image_context.get("caption", "")
+            prompt = image_context.get("prompt", "")
+
+            if source == "external":
+                parts.append("Image type: Real educational diagram from Wikipedia/Wikimedia Commons")
+                parts.append("The student is looking at a real textbook-quality diagram, not an AI illustration.")
+                parts.append("Reference the diagram's visual elements (labels, arrows, structure) in your explanation.")
+            else:
+                parts.append("Image type: AI-generated anime-style educational illustration")
+                if prompt:
+                    parts.append(f"The image was generated from this prompt: {prompt}")
+                parts.append("Reference the visual scene depicted in the anime illustration.")
+
+            if category:
+                parts.append(f"Category: {category}")
+            if caption:
+                parts.append(f"Image caption: {caption}")
+
+        user = "\n".join(parts)
+        result = await self._call(_EXPLANATION_SYSTEM, user, max_tokens=400)
+        if result:
+            return result
+        # Fallback — still gives a decent spoken explanation
+        return (
+            f"Great choice! So, {topic} is a really fascinating subject. "
+            f"It's an important concept that scientists and students study to understand "
+            f"how the world works. The image you just generated shows the key elements of {topic}. "
+            f"I'd love to tell you more — try asking me about it using your voice!"
         )
 
 

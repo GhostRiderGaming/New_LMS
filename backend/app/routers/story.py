@@ -56,6 +56,59 @@ class StoryStatusResponse(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Character portrait resolution (Bug 3)
+# IMPORTANT: This route MUST be registered BEFORE /{story_id} to prevent
+# FastAPI from matching "character-portrait" as a story_id path parameter.
+# ---------------------------------------------------------------------------
+
+class PortraitResponse(BaseModel):
+    url: Optional[str] = None
+    source: str  # "wikimedia" | "reference_styled" | "ai_interpretation" | "restricted"
+    label: str   # "Reference-Styled" | "AI Interpretation" | "Respectful Representation"
+
+
+@router.get("/character-portrait", response_model=PortraitResponse)
+async def get_character_portrait(
+    name: str,
+    source_work: str = "",
+    topic_summary: str = "",
+    session: dict = Depends(get_current_session),
+):
+    """
+    Resolve a character portrait image via multi-source pipeline.
+
+    Priority:
+      1. Cultural sensitivity check (restricted figures)
+      2. Wikipedia reference → restyle with Pollinations (reference-anchored)
+      3. AI blind generation (last resort, labeled "AI Interpretation")
+    """
+    import urllib.parse
+    from app.services.image_resolver import image_resolver
+
+    result = await image_resolver.resolve_character_portrait(
+        name=name,
+        source_work=source_work,
+        topic_summary=topic_summary,
+    )
+
+    url = result.url
+
+    # For AI interpretation fallback, build a Pollinations URL
+    if result.source == "ai_interpretation" and result.ai_prompt and not url:
+        encoded = urllib.parse.quote(result.ai_prompt)
+        url = (
+            f"https://image.pollinations.ai/prompt/{encoded}"
+            f"?width=512&height=512&nologo=true"
+        )
+
+    return PortraitResponse(
+        url=url,
+        source=result.source,
+        label=result.label,
+    )
+
+
 @router.post("/generate", response_model=StoryResponse, status_code=202)
 async def generate_story(
     body: StoryRequest,

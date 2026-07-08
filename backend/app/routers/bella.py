@@ -12,9 +12,11 @@ from __future__ import annotations
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel
+
+from app.core.auth import get_current_session
 
 from app.services.bella_service import bella_service
 
@@ -39,6 +41,17 @@ class TTSRequest(BaseModel):
     text: str
 
 
+class ExplainRequest(BaseModel):
+    topic: str
+    image_context: dict | None = None  # {source, category, caption, prompt}
+
+
+class ExplainResponse(BaseModel):
+    explanation: str
+    audio_b64: Optional[str] = None
+    tts_available: bool = False
+
+
 class TranscribeResponse(BaseModel):
     transcript: str
 
@@ -61,14 +74,15 @@ router = APIRouter()
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(body: ChatRequest):
+async def chat(body: ChatRequest, session: dict = Depends(get_current_session)):
     """Send a message to Bella and receive a reply with optional TTS audio.
 
     TTS failure is non-fatal — tts_available=False is returned with the text
     reply intact (Requirement 10.12).
     """
     try:
-        result = await bella_service.chat(body.message, body.session_id)
+        session_id = body.session_id or session["session_id"]
+        result = await bella_service.chat(body.message, session_id)
         return ChatResponse(
             reply=result.reply,
             audio_b64=result.audio_b64,
@@ -82,8 +96,29 @@ async def chat(body: ChatRequest):
         )
 
 
+@router.post("/explain", response_model=ExplainResponse)
+async def explain(body: ExplainRequest, session: dict = Depends(get_current_session)):
+    """Generate a spoken educational explanation of a topic.
+
+    Called automatically after Scene Forge image generation.
+    Returns explanation text + optional TTS audio for Bella's voice narration.
+    """
+    try:
+        result = await bella_service.explain_topic(body.topic, image_context=body.image_context)
+        return ExplainResponse(
+            explanation=result.reply,
+            audio_b64=result.audio_b64,
+            tts_available=result.tts_available,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "explain_failed", "request_id": str(uuid.uuid4())},
+        )
+
+
 @router.post("/tts")
-async def tts(body: TTSRequest):
+async def tts(body: TTSRequest, session: dict = Depends(get_current_session)):
     """Convert text to speech and return raw audio bytes."""
     try:
         audio_bytes = await bella_service.synthesize_speech(body.text)
@@ -96,7 +131,7 @@ async def tts(body: TTSRequest):
 
 
 @router.post("/transcribe", response_model=TranscribeResponse)
-async def transcribe(audio: UploadFile = File(...)):
+async def transcribe(audio: UploadFile = File(...), session: dict = Depends(get_current_session)):
     """Transcribe an audio blob to text via Groq Whisper Large v3.
 
     Requirement 10.3: accepts audio blob, returns transcript string.
@@ -114,7 +149,10 @@ async def transcribe(audio: UploadFile = File(...)):
 
 
 @router.get("/history", response_model=HistoryResponse)
-async def history(session_id: str = Query(default="")):
+async def history(
+    session_id: str = Query(default=""),
+    session: dict = Depends(get_current_session),
+):
     """Retrieve chat history for a session in insertion order.
 
     Requirement 10.11: history persists for the duration of the session.

@@ -7,8 +7,9 @@ import ErrorCard from '@/components/shared/ErrorCard'
 import AnimeSceneCard from '@/components/anime/AnimeSceneCard'
 import { api, type Job } from '@/lib/api'
 import { useGameProgress } from '@/lib/useGameProgress'
+import { useBellaStore } from '@/lib/bellaStore'
 
-const styles = ['classroom', 'laboratory', 'outdoor', 'fantasy'] as const
+const styles = ['classroom', 'laboratory', 'outdoor', 'fantasy', 'character'] as const
 type Style = typeof styles[number]
 
 const styleIcons: Record<Style, string> = {
@@ -16,6 +17,7 @@ const styleIcons: Record<Style, string> = {
   laboratory: '🧪',
   outdoor: '🌿',
   fantasy: '✨',
+  character: '👤',
 }
 
 interface Scene {
@@ -24,6 +26,7 @@ interface Scene {
   topic: string
   caption: string
   style: string
+  source?: string  // "external" for Wikipedia URLs, undefined for normal S3
 }
 
 export default function AnimePage() {
@@ -45,6 +48,7 @@ function AnimePageInner() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { completeMission } = useGameProgress()
+  const { triggerExplanation, isExplaining, requestStopSpeaking } = useBellaStore()
 
   // Handles job completion/failure — called by JobProgressBar's resilient polling
   const handleJobComplete = async (job: Job) => {
@@ -55,9 +59,10 @@ function AnimePageInner() {
       setError(null)
       completeMission('anime')
       if (job.asset_id) {
+        let meta: Record<string, string> | undefined
         try {
           const asset = await api.getAsset(job.asset_id)
-          const meta = asset.metadata as Record<string, string>
+          meta = asset.metadata as Record<string, string>
           setScenes((prev) => [
             ...prev,
             {
@@ -66,6 +71,7 @@ function AnimePageInner() {
               topic,
               caption: meta?.caption ?? `This scene illustrates "${topic}" in an anime ${style} setting.`,
               style,
+              source: (meta?.source as string) || undefined,
             },
           ])
         } catch {
@@ -79,10 +85,30 @@ function AnimePageInner() {
                 topic,
                 caption: `This scene illustrates "${topic}" in an anime ${style} setting.`,
                 style,
+                source: undefined,
               },
             ])
           }
         }
+
+        // Trigger Bella to explain the topic based on the generated image
+        const imageContext = meta ? {
+          source: meta.source as string | undefined,
+          category: meta.category as string | undefined,
+          caption: meta.caption as string | undefined,
+          prompt: meta.prompt as string | undefined,
+        } : undefined
+        api.bellaExplain(topic, imageContext)
+          .then((data) => {
+            triggerExplanation({
+              topic,
+              text: data.explanation,
+              audioB64: data.audio_b64 ?? null,
+            })
+          })
+          .catch((err) => {
+            console.warn('[SceneForge] Bella explain failed (non-fatal):', err)
+          })
       }
     } else if (job.status === 'failed') {
       setError(job.error_message ?? 'Generation failed. Please try again.')
@@ -183,7 +209,19 @@ function AnimePageInner() {
         <div className="animate-fadeInUp">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-white">Generated Scenes</h2>
-            <span className="text-xs text-slate-500">{scenes.length} scene{scenes.length !== 1 ? 's' : ''}</span>
+            <div className="flex items-center gap-3">
+              {/* Stop Bella button — shown when she's explaining */}
+              {isExplaining && (
+                <button
+                  onClick={requestStopSpeaking}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all animate-fadeInUp"
+                >
+                  <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                  🔇 Stop Bella
+                </button>
+              )}
+              <span className="text-xs text-slate-500">{scenes.length} scene{scenes.length !== 1 ? 's' : ''}</span>
+            </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {scenes.map((scene) => (
