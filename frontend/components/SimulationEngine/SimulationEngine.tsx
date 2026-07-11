@@ -17,6 +17,31 @@ import './SimulationEngine.css'
  *   3. If cached  → render instantly with ⚡ badge
  *   4. If not     → call Nemotron API → render in sandboxed iframe → cache it
  */
+
+/** Derive a category icon from concept text */
+function getConceptIcon(concept: string): string {
+  const c = concept.toLowerCase()
+  if (c.includes('newton') || c.includes('force') || c.includes('motion') || c.includes('gravity'))
+    return '⚛️'
+  if (c.includes('wave') || c.includes('harmonic') || c.includes('oscillat') || c.includes('sound'))
+    return '🌊'
+  if (c.includes('circuit') || c.includes('ohm') || c.includes('voltage') || c.includes('electric'))
+    return '⚡'
+  if (c.includes('theorem') || c.includes('pythagor') || c.includes('geometry') || c.includes('triangle'))
+    return '📐'
+  if (c.includes('projectile') || c.includes('trajectory') || c.includes('parabola'))
+    return '🎯'
+  if (c.includes('pendulum') || c.includes('spring'))
+    return '🔄'
+  if (c.includes('light') || c.includes('optic') || c.includes('refract') || c.includes('reflect'))
+    return '🔦'
+  if (c.includes('magnet') || c.includes('field'))
+    return '🧲'
+  if (c.includes('thermo') || c.includes('heat') || c.includes('temperature'))
+    return '🌡️'
+  return '🔬'
+}
+
 export default function SimulationEngine() {
   const [concept, setConcept] = useState('')
   const [simulationCode, setSimulationCode] = useState<string | null>(null)
@@ -25,15 +50,46 @@ export default function SimulationEngine() {
   const [error, setError] = useState<string | null>(null)
   const [fromCache, setFromCache] = useState(false)
   const [galleryOpen, setGalleryOpen] = useState(false)
-  const [galleryKey, setGalleryKey] = useState(0) // Force gallery re-render on new cache writes
+  const [galleryKey, setGalleryKey] = useState(0)
+
+  const [fullscreen, setFullscreen] = useState(false)
+  const [iframeLoaded, setIframeLoaded] = useState(false)
+  const [iframeError, setIframeError] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
   const { getCached, setCached } = useSimulationCache()
 
   // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // Load simulation HTML into iframe via direct DOM manipulation.
+  // React does NOT reliably update iframe `src` via state/props — this is a known React issue.
+  // Using ref-based approach (same pattern as SimulationFrame) is the proven fix.
+  useEffect(() => {
+    if (!simulationCode || !iframeRef.current) return
+    setIframeLoaded(false)
+    setIframeError(false)
+    const blob = new Blob([simulationCode], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    iframeRef.current.src = url
+    
+    return () => {
+      // Delay revocation so React Strict Mode doesn't break the iframe load
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    }
+  }, [simulationCode])
+
+  // Escape key exits fullscreen
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && fullscreen) setFullscreen(false)
+    }
+    window.addEventListener('keydown', handleEsc)
+    return () => window.removeEventListener('keydown', handleEsc)
+  }, [fullscreen])
 
   const handleSimulate = useCallback(async (conceptOverride?: string) => {
     const target = conceptOverride ?? concept
@@ -43,6 +99,7 @@ export default function SimulationEngine() {
     setSimulationCode(null)
     setFromCache(false)
     setActiveConcept(target.trim())
+    setFullscreen(false)
 
     // 1. Check cache first
     const cached = getCached(target.trim())
@@ -86,6 +143,44 @@ export default function SimulationEngine() {
 
   const handleGalleryCleared = () => {
     setGalleryKey(prev => prev + 1)
+  }
+
+  const handleDownload = () => {
+    if (!simulationCode || !activeConcept) return
+    const blob = new Blob([simulationCode], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${activeConcept.replace(/\s+/g, '-').toLowerCase()}-simulation.html`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleOpenNewTab = () => {
+    if (!simulationCode) return
+    const blob = new Blob([simulationCode], { type: 'text/html' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+  }
+
+  const handleRegenerate = () => {
+    if (activeConcept) {
+      // Clear from cache so it regenerates fresh
+      setFromCache(false)
+      setSimulationCode(null)
+      setLoading(true)
+      setError(null)
+
+      generateSimulation(activeConcept).then(html => {
+        setSimulationCode(html)
+        setCached(activeConcept, html)
+        setGalleryKey(prev => prev + 1)
+      }).catch(err => {
+        setError(err instanceof Error ? err.message : 'Regeneration failed. Please try again.')
+      }).finally(() => {
+        setLoading(false)
+      })
+    }
   }
 
   // Quick-start suggestion chips
@@ -227,9 +322,32 @@ export default function SimulationEngine() {
         </div>
       )}
 
+      {/* Concept Info Header — shown above viewport when simulation is active */}
+      {simulationCode && activeConcept && (
+        <div className="sim-engine__concept-info">
+          <div className="sim-engine__concept-icon">
+            {getConceptIcon(activeConcept)}
+          </div>
+          <div className="sim-engine__concept-details">
+            <p className="sim-engine__concept-label">Active Simulation</p>
+            <p className="sim-engine__concept-name">{activeConcept}</p>
+          </div>
+          <div className="sim-engine__concept-badges">
+            <span className="sim-engine__concept-badge sim-engine__concept-badge--interactive">
+              🎮 Interactive
+            </span>
+            {fromCache && (
+              <span className="sim-engine__concept-badge sim-engine__concept-badge--cached">
+                ⚡ Cached
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Simulation Iframe */}
       {simulationCode && (
-        <div className="sim-engine__viewport">
+        <div className={`sim-engine__viewport ${fullscreen ? 'sim-engine__viewport--fullscreen' : ''}`}>
           <div className="sim-engine__viewport-toolbar">
             <div className="sim-engine__viewport-dots">
               <span className="sim-engine__dot sim-engine__dot--red" />
@@ -243,15 +361,69 @@ export default function SimulationEngine() {
               {fromCache && (
                 <span className="sim-engine__viewport-cached">⚡ cached</span>
               )}
+              <button
+                className="sim-engine__action-btn sim-engine__action-btn--regen"
+                onClick={handleRegenerate}
+                title="Regenerate this simulation"
+              >
+                <span className="sim-engine__action-btn-icon">↻</span>
+                <span className="sim-engine__action-btn-label">Regenerate</span>
+              </button>
+              <button
+                className="sim-engine__action-btn"
+                onClick={handleDownload}
+                title="Download as HTML file"
+              >
+                <span className="sim-engine__action-btn-icon">↓</span>
+                <span className="sim-engine__action-btn-label">Download</span>
+              </button>
+              <button
+                className="sim-engine__action-btn"
+                onClick={handleOpenNewTab}
+                title="Open in a new browser tab"
+              >
+                <span className="sim-engine__action-btn-icon">↗</span>
+                <span className="sim-engine__action-btn-label">New Tab</span>
+              </button>
+              {fullscreen ? (
+                <button
+                  className="sim-engine__action-btn sim-engine__action-btn--close-fs"
+                  onClick={() => setFullscreen(false)}
+                  title="Exit fullscreen (Esc)"
+                >
+                  <span className="sim-engine__action-btn-icon">✕</span>
+                  <span className="sim-engine__action-btn-label">Exit</span>
+                </button>
+              ) : (
+                <button
+                  className="sim-engine__action-btn sim-engine__action-btn--fullscreen"
+                  onClick={() => setFullscreen(true)}
+                  title="Fullscreen mode"
+                >
+                  <span className="sim-engine__action-btn-icon">⊞</span>
+                  <span className="sim-engine__action-btn-label">Fullscreen</span>
+                </button>
+              )}
             </div>
           </div>
           <iframe
+            ref={iframeRef}
             id="simulation-iframe"
-            srcDoc={simulationCode}
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-same-origin"
             title="Interactive Simulation"
             className="sim-engine__iframe"
+            style={{ height: fullscreen ? 'calc(100vh - 3.25rem)' : '560px' }}
+            onLoad={() => { setIframeLoaded(true); setIframeError(false) }}
+            onError={() => { setIframeError(true); setIframeLoaded(false) }}
           />
+          {/* Status bar */}
+          {(iframeLoaded || iframeError) && (
+            <div className={`sim-engine__iframe-status ${iframeLoaded ? 'sim-engine__iframe-status--loaded' : ''} ${iframeError ? 'sim-engine__iframe-status--error' : ''}`}>
+              <span className="sim-engine__iframe-status-dot" />
+              {iframeLoaded && 'Simulation loaded successfully'}
+              {iframeError && 'Simulation failed to load — try regenerating'}
+            </div>
+          )}
         </div>
       )}
 
@@ -268,8 +440,25 @@ export default function SimulationEngine() {
             Enter a concept above to generate an interactive simulation
           </p>
           <p className="sim-engine__empty-hint">
-            Works with physics laws, math theorems, geometry, waves, circuits & more
+            Works with physics laws, math theorems, geometry, waves, circuits & more.
+            Each simulation includes real-time controls and educational explanations.
           </p>
+
+          {/* How it works steps */}
+          <div className="sim-engine__how-it-works">
+            <div className="sim-engine__step">
+              <div className="sim-engine__step-num">1</div>
+              <span className="sim-engine__step-label">Type a concept like "Projectile Motion"</span>
+            </div>
+            <div className="sim-engine__step">
+              <div className="sim-engine__step-num">2</div>
+              <span className="sim-engine__step-label">AI generates a full interactive simulation</span>
+            </div>
+            <div className="sim-engine__step">
+              <div className="sim-engine__step-num">3</div>
+              <span className="sim-engine__step-label">Interact with sliders, buttons & visuals</span>
+            </div>
+          </div>
         </div>
       )}
 

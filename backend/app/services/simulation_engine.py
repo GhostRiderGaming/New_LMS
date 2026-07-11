@@ -9,7 +9,6 @@ import re
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from html.parser import HTMLParser
 from typing import Optional
 
 from groq import AsyncGroq
@@ -37,63 +36,53 @@ _SIMULATION_SYSTEM = (
     "1. Output ONLY raw HTML starting with <!DOCTYPE html>. No markdown fencing, no explanation.\n"
     "2. ALL JavaScript inline in <script> tags. ALL CSS inline in <style> tags.\n"
     "3. ZERO external URLs — no CDN links, no external scripts/stylesheets. Vanilla JS only.\n"
-    "4. Canvas & Loop: You MUST use an HTML5 <canvas> element with a requestAnimationFrame() loop for smooth 60fps animation.\n"
-    "5. Interactivity: Include a CONTROL PANEL with at least 3 interactive elements (sliders, dropdowns, buttons) that change the simulation in real-time.\n"
-    "6. Scenarios: You MUST include a <select> dropdown that lets the user switch between at least 2 distinct 'Cases' or 'Scenarios' (e.g. Reflection vs Refraction, Isotope A vs B).\n"
-    "7. Dynamic Pedagogy: Include a 'LEARN' info box whose text updates dynamically via JavaScript based on the current slider/dropdown values. Do not just use static text.\n"
-    "8. High-Quality Graphics: The canvas must feature complex rendering. Use paths, dashed lines (setLineDash) for rays/vectors, trails (rgba clear trick) for orbits, and glowing effects (shadowBlur).\n"
-    "9. Visual Pedagogy: Draw explicit vectors, force arrows, light rays, or grid lines to make invisible forces visible. Label them dynamically.\n"
-    "10. Styling: Use a premium dark theme: background #0f172a, panels #1e293b, accent colors #8b5cf6 (purple) and #06b6d4 (cyan). Use glassmorphism (backdrop-filter: blur) and rounded corners.\n"
-    "11. DO NOT truncate the code. The JavaScript physics math must be rigorous and fully implemented.\n"
+    "4. Canvas & Loop: You MUST use an HTML5 <canvas> element with a requestAnimationFrame() loop for smooth 60fps animation. CRITICAL: Give the canvas CSS `width: 100%; height: 100%; display: block;` and size it via JS `canvas.width = canvas.parentElement.clientWidth; canvas.height = canvas.parentElement.clientHeight;` on load and window resize.\n"
+    "5. CRITICAL JAVASCRIPT RULES (PREVENT CRASHES):\n"
+    "   - NEVER use CSS variables like `var(--bg)` inside JS (e.g. `ctx.fillStyle = var(--bg)`). This causes a SyntaxError because `var` is a JS keyword. ALWAYS use hex strings (e.g. `ctx.fillStyle = '#0a0e1a'`).\n"
+    "   - Wrap your `requestAnimationFrame` drawing logic in a `try { ... } catch(e) { console.error(e) }` block to prevent complete crashes from a math error.\n"
+    "6. Interactivity: Include a CONTROL PANEL with at least 3 interactive elements (sliders, dropdowns, buttons) that change the simulation in real-time.\n"
+    "7. Scenarios: You MUST include a <select> dropdown that lets the user switch between at least 2 distinct 'Cases' or 'Scenarios'.\n"
+    "8. Dynamic Pedagogy: Include a 'LEARN' info box whose text updates dynamically via JavaScript based on the current slider/dropdown values.\n"
+    "9. High-Quality Graphics: The canvas must feature complex rendering. Use paths, dashed lines, trails (rgba clear trick), and glowing effects (shadowBlur).\n"
+    "10. Visual Pedagogy: Draw explicit vectors, force arrows, light rays, or grid lines to make invisible forces visible. Label them dynamically.\n"
+    "11. Styling: Use a premium dark theme: background #0f172a, panels #1e293b, accent colors #8b5cf6 (purple) and #06b6d4 (cyan). Use glassmorphism and rounded corners.\n"
+    "12. DO NOT truncate the code. The JavaScript physics math must be rigorous and fully implemented.\n"
 )
 
 
-class _ExternalURLChecker(HTMLParser):
-    _EXTERNAL = re.compile(r"^https?://", re.IGNORECASE)
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.external_urls: list[tuple[str, str]] = []
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, Optional[str]]]) -> None:
-        for attr_name, attr_value in attrs:
-            if attr_name in ("src", "href") and attr_value:
-                if self._EXTERNAL.match(attr_value):
-                    self.external_urls.append((attr_name, attr_value))
-
-
-def _validate_html(html: str) -> None:
-    checker = _ExternalURLChecker()
-    try:
-        checker.feed(html)
-    except Exception as exc:
-        raise ValueError(f"HTML parse error: {exc}") from exc
-    if checker.external_urls:
-        raise ValueError(
-            f"Simulation contains external URLs: {checker.external_urls[:3]}"
-        )
-
-
 def _extract_html(raw: str) -> str:
-    stripped = re.sub(r"^```(?:html)?\s*\n?", "", raw.strip(), flags=re.IGNORECASE)
-    stripped = re.sub(r"\n?```\s*$", "", stripped.strip())
-    return stripped.strip()
+    # Try to find a markdown html block
+    match = re.search(r"```(?:html)?\s*(.*?)```", raw, flags=re.IGNORECASE | re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # Otherwise try to extract <!DOCTYPE html> to </html>
+    match = re.search(r"(<!DOCTYPE html>.*?</html>)", raw, flags=re.IGNORECASE | re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return raw.strip()
 
 
-def _inline_external_scripts(html: str) -> str:
-    html = re.sub(
-        r'<script\s+[^>]*src=["\']https?://[^"\']+["\'][^>]*>.*?</script>',
-        "<!-- external script removed -->",
-        html,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    html = re.sub(
-        r'<link\s+[^>]*href=["\']https?://[^"\']+["\'][^>]*/?>',
-        "<!-- external link removed -->",
-        html,
-        flags=re.IGNORECASE,
-    )
-    return html
+def _sanitize_html(html: str) -> str:
+    """
+    Sanitize HTML by removing external scripts, stylesheets, and iframes.
+    Allows safe external URLs like <img> and <a>.
+    """
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    external = re.compile(r"^https?://", re.IGNORECASE)
+
+    for script in soup.find_all("script"):
+        if script.has_attr("src") and external.match(script["src"]):
+            script.decompose()
+
+    for link in soup.find_all("link"):
+        if link.has_attr("href") and external.match(link["href"]):
+            link.decompose()
+
+    for iframe in soup.find_all("iframe"):
+        iframe.decompose()
+
+    return str(soup)
 
 
 def _fallback_simulation(topic: str, category: str) -> str:
@@ -361,34 +350,34 @@ async def generate_simulation(
             f"and a 'Learn' info box explaining the concept in simple language."
         )
 
-    try:
-        completion = await groq.chat.completions.create(
-            model=_GROQ_MODEL,
-            messages=[
-                {"role": "system", "content": _SIMULATION_SYSTEM},
-                {"role": "user", "content": code_gen_prompt},
-            ],
-            max_tokens=8192,
-            temperature=0.4,
-        )
-        raw_output = (completion.choices[0].message.content or "").strip()
-    except Exception:
-        raw_output = ""
-
-    html = _extract_html(raw_output) if raw_output else ""
-    if html:
-        html = _inline_external_scripts(html)
-
+    html = ""
     use_fallback = False
-    if not html or "<!DOCTYPE" not in html.upper():
-        use_fallback = True
-    else:
-        try:
-            _validate_html(html)
-        except ValueError:
-            use_fallback = True
 
-    if use_fallback:
+    for attempt in range(2):
+        try:
+            completion = await groq.chat.completions.create(
+                model=_GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": _SIMULATION_SYSTEM},
+                    {"role": "user", "content": code_gen_prompt},
+                ],
+                max_tokens=8192,
+                temperature=0.4 + (attempt * 0.2), # Increase temp on retry
+            )
+            raw_output = (completion.choices[0].message.content or "").strip()
+        except Exception:
+            raw_output = ""
+
+        html = _extract_html(raw_output) if raw_output else ""
+        
+        if html and "<!DOCTYPE" in html.upper():
+            html = _sanitize_html(html)
+            break
+        else:
+            html = ""
+
+    if not html:
+        use_fallback = True
         html = _fallback_simulation(topic, category)
 
     html_bytes = html.encode("utf-8")

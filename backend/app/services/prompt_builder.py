@@ -143,13 +143,15 @@ _STORY_SYSTEM = (
 )
 
 _SIMULATION_SYSTEM = (
-    "You are an educational simulation developer. "
-    "Given a topic and category, output a concise code generation prompt "
-    "that instructs an LLM to produce a self-contained HTML/JS simulation. "
+    "You are an elite Principal Software Engineer and UI/UX Architect with 15+ years of experience, building breathtaking educational simulations. "
+    "Given a topic, output a concise code generation prompt that instructs an LLM to produce a self-contained HTML/JS simulation of exceptional quality. "
     "The prompt MUST demand: "
-    "1) A dropdown to switch between multiple 'Scenarios' or 'Cases'. "
-    "2) High-quality canvas graphics (use path drawing, setLineDash for rays/vectors, trails for orbits). "
-    "3) A dynamic 'Learn' text box that updates when sliders/dropdowns change. "
+    "1) A strict CSS Design System (CSS variables for a sleek #0f172a dark mode, system-ui typography, glassmorphism panels with backdrop-filter). "
+    "2) A professional layout (e.g. Flexbox/Grid with a sidebar for controls/info and a main stage for the canvas). "
+    "3) Beautifully styled custom UI controls (custom range sliders, buttons with hover transitions). "
+    "4) High-performance canvas graphics with vibrant, glowing colors and requestAnimationFrame 60fps loops. "
+    "5) A dynamic, flawlessly written 'Learn' info box that perfectly explains the concept and updates in real-time. "
+    "6) No external libraries. "
     "Output ONLY the prompt string — no explanation, no markdown."
 )
 
@@ -342,11 +344,14 @@ class PromptBuilder:
         if result:
             return result
         return (
-            f"Create a complete, self-contained HTML5 interactive simulation about "
-            f"'{topic}' in the '{category}' category for 6th-grade students. "
-            f"Use an HTML5 canvas with requestAnimationFrame for smooth animation. "
-            f"Include a control panel with at least 2 interactive sliders/buttons "
-            f"and a 'Learn' info box explaining the concept in simple language."
+            f"Create a breathtaking, production-ready interactive HTML5 simulation about '{topic}' in the '{category}' category. "
+            f"Act as a Principal SWE with 15+ years of experience. You MUST implement a strict modern design system: "
+            f"Use CSS variables for a sleek dark mode (--bg: #0f172a, panels with rgba(30,41,59,0.7), glassmorphism backdrop-filter, rounded corners, subtle borders). "
+            f"Use system-ui typography and a professional split layout (sidebar for controls/info, main stage for canvas). "
+            f"Custom-style all range sliders and buttons for a premium feel. "
+            f"The canvas must use vibrant, high-contrast graphics and requestAnimationFrame for 60fps smooth animations. "
+            f"Include a dynamic info panel that perfectly explains the concept and updates real-time variables. "
+            f"Ensure absolute visual excellence and a highly intuitive user experience."
         )
 
     async def build_3d_prompt(self, object_name: str, category: str) -> str:
