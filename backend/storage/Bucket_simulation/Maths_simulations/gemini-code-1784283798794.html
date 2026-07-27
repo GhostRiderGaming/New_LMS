@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curved Surface Area Simulation</title>
+    <style>
+        :root {
+            --bg-color: #060913;
+            --panel-bg: rgba(15, 23, 42, 0.6);
+            --panel-border: rgba(255, 255, 255, 0.1);
+            --cyan: #00E5FF;
+            --blue: #4FC3F7;
+            --purple: #8E44FF;
+            --orange: #FFA726;
+            --green: #00E676;
+            --text-main: #E2E8F0;
+            --text-muted: #94A3B8;
+            --font-main: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --shadow-glow: 0 0 20px rgba(0, 229, 255, 0.2);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(142, 68, 255, 0.08), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(0, 229, 255, 0.08), transparent 25%);
+            background-attachment: fixed;
+            line-height: 1.6;
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 0;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        h1 {
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            font-weight: 800;
+            letter-spacing: -1px;
+            background: linear-gradient(to right, var(--cyan), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 229, 255, 0.3);
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            grid-template-rows: auto auto auto;
+            gap: 24px;
+        }
+
+        /* Responsive Grid adjustments */
+        @media (max-width: 1200px) {
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+            .panel.simulation-panel {
+                min-height: 500px;
+            }
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .panel:hover {
+            border-color: rgba(0, 229, 255, 0.3);
+            box-shadow: var(--shadow-glow), 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        /* Specific Panel Placement */
+        .theory-panel { grid-column: 1 / 2; grid-row: 1 / 2; }
+        .controls-panel { grid-column: 1 / 2; grid-row: 2 / 3; }
+        .calc-panel { grid-column: 1 / 2; grid-row: 3 / 4; }
+        .simulation-panel { grid-column: 2 / 3; grid-row: 1 / 3; display: flex; flex-direction: column;}
+        .graph-panel { grid-column: 2 / 3; grid-row: 3 / 4; display: flex; flex-direction: column; min-height: 350px;}
+
+        @media (max-width: 1200px) {
+            .theory-panel { grid-column: 1 / 2; grid-row: 1 / 2; }
+            .simulation-panel { grid-column: 1 / 2; grid-row: 2 / 3; }
+            .controls-panel { grid-column: 1 / 2; grid-row: 3 / 4; }
+            .calc-panel { grid-column: 1 / 2; grid-row: 4 / 5; }
+            .graph-panel { grid-column: 1 / 2; grid-row: 5 / 6; }
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            color: #fff;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h2::before {
+            content: '';
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--cyan);
+            box-shadow: 0 0 10px var(--cyan);
+        }
+
+        .definition {
+            font-size: 1.05rem;
+            margin-bottom: 15px;
+            border-left: 3px solid var(--blue);
+            padding-left: 15px;
+            color: #E2E8F0;
+        }
+
+        .explanation {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin-bottom: 20px;
+        }
+
+        .formula-box {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(142, 68, 255, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .formula-box span.title {
+            display: block;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--purple);
+            margin-bottom: 8px;
+        }
+
+        .math-eq {
+            font-family: "Times New Roman", Times, serif;
+            font-size: 1.4rem;
+            color: #fff;
+            letter-spacing: 1px;
+        }
+        
+        .math-eq i {
+            font-style: italic;
+        }
+
+        .fact-box {
+            background: rgba(0, 230, 118, 0.05);
+            border: 1px solid rgba(0, 230, 118, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            font-size: 0.9rem;
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+        }
+
+        .fact-icon {
+            color: var(--green);
+            font-size: 1.2rem;
+        }
+
+        /* Controls */
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            color: var(--text-main);
+        }
+
+        .control-value {
+            font-family: monospace;
+            color: var(--cyan);
+            background: rgba(0,0,0,0.5);
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 229, 255, 0.2);
+        }
+
+        /* Custom Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--bg-color);
+            border: 3px solid var(--cyan);
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px var(--cyan);
+            transition: transform 0.1s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .slider-wrapper {
+            position: relative;
+            padding-top: 10px;
+        }
+        
+        .slider-fill {
+            position: absolute;
+            top: 10px;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, var(--blue), var(--cyan));
+            border-radius: 2px;
+            pointer-events: none;
+        }
+
+        /* Buttons */
+        .btn-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        button {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: var(--transition);
+            font-family: inherit;
+        }
+
+        button:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-2px);
+        }
+
+        button.primary {
+            background: rgba(0, 229, 255, 0.1);
+            border-color: var(--cyan);
+            color: var(--cyan);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
+        }
+
+        button.primary:hover {
+            background: rgba(0, 229, 255, 0.2);
+            box-shadow: 0 0 25px rgba(0, 229, 255, 0.4);
+        }
+        
+        button.warning {
+            border-color: var(--orange);
+            color: var(--orange);
+        }
+        button.warning:hover {
+            background: rgba(255, 167, 38, 0.1);
+        }
+
+        /* Live Calc Panel */
+        .calc-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .calc-card {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: var(--transition);
+        }
+
+        .calc-card.highlight {
+            border-color: var(--cyan);
+            box-shadow: inset 0 0 15px rgba(0, 229, 255, 0.1);
+        }
+
+        .calc-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .calc-val {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #fff;
+            font-family: monospace;
+        }
+        
+        .calc-unit {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-left: 4px;
+        }
+
+        .csa-result {
+            background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(142, 68, 255, 0.1));
+            border-color: rgba(142, 68, 255, 0.3);
+        }
+        
+        .csa-result .calc-val {
+            color: var(--cyan);
+            font-size: 1.5rem;
+            text-shadow: 0 0 10px rgba(0,229,255,0.5);
+        }
+
+        /* Canvas Containers */
+        .canvas-container {
+            width: 100%;
+            flex-grow: 1;
+            position: relative;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+            overflow: hidden;
+            min-height: 400px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+
+        /* Tooltip style */
+        .tooltip {
+            position: absolute;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid var(--cyan);
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            z-index: 100;
+            white-space: nowrap;
+            transform: translate(-50%, -100%);
+            margin-top: -10px;
+        }
+
+        .tooltip::after {
+            content: '';
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-width: 5px 5px 0;
+            border-style: solid;
+            border-color: var(--cyan) transparent transparent transparent;
+        }
+
+        .warning-msg {
+            color: var(--orange);
+            font-size: 0.8rem;
+            margin-top: 5px;
+            display: none;
+            animation: pulseText 2s infinite;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulseText {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; text-shadow: 0 0 5px var(--orange); }
+            100% { opacity: 0.7; }
+        }
+
+        /* Legends */
+        .legend {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+        }
+        .legend-item:last-child { margin-bottom: 0; }
+        
+        .color-box {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+    </style>
+</head>
+<body>
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        <header>
+            <h1>Curved Surface Area</h1>
+            <p class="subtitle">Interactive visualization of geometric unrolling and surface analysis.</p>
+        </header>
+
+        <main class="grid-layout">
+            
+            <!-- Theory Panel -->
+            <section class="panel theory-panel">
+                <h2>Concept Overview</h2>
+                <div class="definition">
+                    Curved Surface Area (CSA) is the area of all curved regions of a 3D solid, excluding its flat bases.
+                </div>
+                <p class="explanation">
+                    Imagine wrapping a label around a can. If you cut the label vertically and unroll it, it forms a rectangle. The area of this flat rectangle equals the curved surface area of the cylinder.
+                </p>
+                
+                <div class="formula-box">
+                    <span class="title">Cylinder CSA Equation</span>
+                    <div class="math-eq">
+                        CSA = 2&pi;<i>r</i><i>h</i>
+                    </div>
+                </div>
+
+                <div class="formula-box" style="margin-top:-10px; background: rgba(0,0,0,0.2); border-color: rgba(255,255,255,0.1);">
+                    <span class="title" style="color: var(--text-muted); font-size: 0.7rem;">Where</span>
+                    <div style="font-size: 0.9rem; color: #ccc;">
+                        2&pi;<i>r</i> = Circumference of base<br>
+                        <i>h</i> = Height of cylinder
+                    </div>
+                </div>
+
+                <div class="fact-box">
+                    <div class="fact-icon">💡</div>
+                    <div>
+                        <strong>Scientific Fact:</strong> Nature often minimizes surface area to conserve energy. A sphere has the smallest surface area for a given volume, which is why bubbles are round!
+                    </div>
+                </div>
+            </section>
+
+            <!-- Controls Panel -->
+            <section class="panel controls-panel">
+                <h2>Simulation Parameters</h2>
+                
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Radius (<i>r</i>)</span>
+                        <span class="control-value"><span id="val-r">3.00</span> m</span>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-fill" id="fill-r"></div>
+                        <input type="range" id="slider-r" min="1" max="6" step="0.1" value="3">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Height (<i>h</i>)</span>
+                        <span class="control-value"><span id="val-h">5.00</span> m</span>
+                    </div>
+                    <div class="slider-wrapper">
+                        <div class="slider-fill" id="fill-h" style="background: linear-gradient(90deg, var(--purple), var(--orange));"></div>
+                        <input type="range" id="slider-h" min="2" max="10" step="0.1" value="5">
+                    </div>
+                    <div id="warn-h" class="warning-msg">High value may clip in view!</div>
+                </div>
+
+                <div class="btn-group">
+                    <button class="primary" id="btn-play">▶ Unroll</button>
+                    <button id="btn-reset">⏹ Reset</button>
+                    <button id="btn-random" class="warning">🎲 Randomize</button>
+                </div>
+            </section>
+
+            <!-- Live Calc Panel -->
+            <section class="panel calc-panel">
+                <h2>Live Data Feed</h2>
+                <div class="calc-grid">
+                    <div class="calc-card" id="card-circ">
+                        <span class="calc-label">Base Circumference (2&pi;r)</span>
+                        <div><span class="calc-val" id="calc-circ">18.85</span><span class="calc-unit">m</span></div>
+                    </div>
+                    <div class="calc-card" id="card-rect">
+                        <span class="calc-label">Unrolled Rectangle (w &times; h)</span>
+                        <div style="text-align: right;">
+                            <span class="calc-val" id="calc-rect" style="font-size:1rem; color:var(--text-muted)">18.85 &times; 5.00</span>
+                        </div>
+                    </div>
+                    <div class="calc-card csa-result" id="card-csa">
+                        <span class="calc-label">Curved Surface Area</span>
+                        <div><span class="calc-val" id="calc-csa">94.25</span><span class="calc-unit">m&sup2;</span></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Simulation Canvas -->
+            <section class="panel simulation-panel">
+                <h2>Visual Simulation</h2>
+                <div class="canvas-container" id="sim-container">
+                    <canvas id="sim-canvas"></canvas>
+                    <div class="legend">
+                        <div class="legend-item">
+                            <div class="color-box" style="background: var(--purple);"></div>
+                            <span>Solid Core</span>
+                        </div>
+                        <div class="legend-item">
+                            <div class="color-box" style="background: linear-gradient(90deg, var(--blue), var(--cyan));"></div>
+                            <span>Curved Surface</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Graph Canvas -->
+            <section class="panel graph-panel">
+                <h2>CSA vs Radius <span style="font-size:0.8rem; font-weight:normal; color:var(--text-muted)">(at current height)</span></h2>
+                <div class="canvas-container" id="graph-container" style="min-height: 250px;">
+                    <canvas id="graph-canvas"></canvas>
+                    <div class="tooltip" id="graph-tooltip">x: 0, y: 0</div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <script>
+        /** 
+         * Application State 
+         */
+        const state = {
+            r: 3,
+            h: 5,
+            isUnrolling: false,
+            unrollProgress: 0, // 0 to 1
+            animFrame: null,
+            lastTime: 0,
+            simHover: {x: 0, y: 0, active: false}
+        };
+
+        /**
+         * DOM Elements
+         */
+        const els = {
+            rSlider: document.getElementById('slider-r'),
+            hSlider: document.getElementById('slider-h'),
+            rVal: document.getElementById('val-r'),
+            hVal: document.getElementById('val-h'),
+            rFill: document.getElementById('fill-r'),
+            hFill: document.getElementById('fill-h'),
+            playBtn: document.getElementById('btn-play'),
+            resetBtn: document.getElementById('btn-reset'),
+            randomBtn: document.getElementById('btn-random'),
+            calcCirc: document.getElementById('calc-circ'),
+            calcRect: document.getElementById('calc-rect'),
+            calcCsa: document.getElementById('calc-csa'),
+            cardCirc: document.getElementById('card-circ'),
+            cardRect: document.getElementById('card-rect'),
+            cardCsa: document.getElementById('card-csa'),
+            simCanvas: document.getElementById('sim-canvas'),
+            graphCanvas: document.getElementById('graph-canvas'),
+            bgCanvas: document.getElementById('bg-canvas'),
+            simContainer: document.getElementById('sim-container'),
+            graphContainer: document.getElementById('graph-container'),
+            graphTooltip: document.getElementById('graph-tooltip'),
+            warnH: document.getElementById('warn-h')
+        };
+
+        const ctxSim = els.simCanvas.getContext('2d', { alpha: false });
+        const ctxGraph = els.graphCanvas.getContext('2d', { alpha: false });
+        const ctxBg = els.bgCanvas.getContext('2d');
+
+        /**
+         * Utilities
+         */
+        const PI2 = Math.PI * 2;
+        function lerp(a, b, t) { return a + (b - a) * t; }
+        function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+        
+        function formatNumber(num) {
+            return num.toFixed(2);
+        }
+
+        function highlightCard(card) {
+            card.classList.remove('highlight');
+            void card.offsetWidth; // trigger reflow
+            card.classList.add('highlight');
+            setTimeout(() => card.classList.remove('highlight'), 500);
+        }
+
+        /**
+         * Background Particles
+         */
+        const particles = [];
+        for(let i=0; i<50; i++) {
+            particles.push({
+                x: Math.random() * window.innerWidth,
+                y: Math.random() * window.innerHeight,
+                size: Math.random() * 2 + 0.5,
+                speedX: (Math.random() - 0.5) * 0.5,
+                speedY: (Math.random() - 0.5) * 0.5,
+                alpha: Math.random() * 0.5
+            });
+        }
+
+        function drawBackground() {
+            els.bgCanvas.width = window.innerWidth;
+            els.bgCanvas.height = window.innerHeight;
+            
+            // clear
+            ctxBg.clearRect(0, 0, els.bgCanvas.width, els.bgCanvas.height);
+            
+            ctxBg.fillStyle = '#00E5FF';
+            particles.forEach(p => {
+                p.x += p.speedX;
+                p.y += p.speedY;
+                
+                if(p.x < 0) p.x = els.bgCanvas.width;
+                if(p.x > els.bgCanvas.width) p.x = 0;
+                if(p.y < 0) p.y = els.bgCanvas.height;
+                if(p.y > els.bgCanvas.height) p.y = 0;
+                
+                ctxBg.globalAlpha = p.alpha;
+                ctxBg.beginPath();
+                ctxBg.arc(p.x, p.y, p.size, 0, PI2);
+                ctxBg.fill();
+            });
+            ctxBg.globalAlpha = 1;
+        }
+
+        /**
+         * Resizing logic with High DPI support
+         */
+        function resizeCanvases() {
+            const dpr = window.devicePixelRatio || 1;
+            
+            // Sim Canvas
+            const simRect = els.simContainer.getBoundingClientRect();
+            els.simCanvas.width = simRect.width * dpr;
+            els.simCanvas.height = simRect.height * dpr;
+            ctxSim.scale(dpr, dpr);
+            
+            // Graph Canvas
+            const graphRect = els.graphContainer.getBoundingClientRect();
+            els.graphCanvas.width = graphRect.width * dpr;
+            els.graphCanvas.height = graphRect.height * dpr;
+            ctxGraph.scale(dpr, dpr);
+        }
+
+        window.addEventListener('resize', () => {
+            resizeCanvases();
+            drawFrame();
+        });
+
+        /**
+         * Update UI & Values
+         */
+        function updateValues(source) {
+            state.r = parseFloat(els.rSlider.value);
+            state.h = parseFloat(els.hSlider.value);
+
+            els.rVal.textContent = formatNumber(state.r);
+            els.hVal.textContent = formatNumber(state.h);
+
+            // Update slider fills
+            const rPercent = ((state.r - els.rSlider.min) / (els.rSlider.max - els.rSlider.min)) * 100;
+            els.rFill.style.width = rPercent + '%';
+            
+            const hPercent = ((state.h - els.hSlider.min) / (els.hSlider.max - els.hSlider.min)) * 100;
+            els.hFill.style.width = hPercent + '%';
+
+            // Warning
+            if(state.h > 8) els.warnH.style.display = 'block';
+            else els.warnH.style.display = 'none';
+
+            // Math
+            const circ = 2 * Math.PI * state.r;
+            const csa = circ * state.h;
+
+            els.calcCirc.textContent = formatNumber(circ);
+            els.calcRect.textContent = `${formatNumber(circ)} × ${formatNumber(state.h)}`;
+            els.calcCsa.textContent = formatNumber(csa);
+
+            if(source === 'slider') {
+                if(Math.random() > 0.8) highlightCard(els.cardCsa);
+            }
+            
+            // Reset unroll if parameters change drastically
+            if(state.unrollProgress > 0 && !state.isUnrolling && source === 'slider') {
+                state.unrollProgress = 0;
+                els.playBtn.innerHTML = '▶ Unroll';
+                els.playBtn.classList.remove('warning');
+                els.playBtn.classList.add('primary');
+            }
+        }
+
+        /**
+         * Drawing functions for Simulation Canvas
+         */
+        function drawIsometricCylinder(ctx, cx, cy, rPx, hPx, progress) {
+            const tilt = 0.4; // Perspective tilt
+            const rx = rPx;
+            const ry = rPx * tilt;
+
+            // Draw shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + hPx/2 + 10, rx*1.1, ry*1.1, 0, 0, PI2);
+            ctx.fill();
+
+            // Core Cylinder Base (Purple)
+            const coreColor = '#4a148c'; // Dark purple
+            const coreHighlight = '#8e44ff';
+            
+            // Bottom face
+            ctx.fillStyle = coreColor;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy + hPx/2, rx, ry, 0, 0, PI2);
+            ctx.fill();
+
+            // Core Body
+            const gradCore = ctx.createLinearGradient(cx - rx, 0, cx + rx, 0);
+            gradCore.addColorStop(0, '#311b92');
+            gradCore.addColorStop(0.5, '#651fff');
+            gradCore.addColorStop(1, '#311b92');
+            ctx.fillStyle = gradCore;
+            ctx.fillRect(cx - rx, cy - hPx/2, rx * 2, hPx);
+
+            // Top face
+            ctx.fillStyle = coreHighlight;
+            ctx.beginPath();
+            ctx.ellipse(cx, cy - hPx/2, rx, ry, 0, 0, PI2);
+            ctx.fill();
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.stroke();
+
+            // Draw the "Wrapper" (Curved Surface)
+            if(progress < 1) {
+                const startAngle = -Math.PI/2;
+                // As progress increases, the wrapped angle decreases.
+                // When progress = 0, angle is 2PI (full).
+                // When progress = 1, angle is 0.
+                const wrappedAngle = PI2 * (1 - progress);
+                const endAngle = startAngle + wrappedAngle;
+
+                // Wrapper gradient
+                const gradWrap = ctx.createLinearGradient(cx - rx, 0, cx + rx, 0);
+                gradWrap.addColorStop(0, 'rgba(0, 229, 255, 0.9)');
+                gradWrap.addColorStop(0.5, 'rgba(79, 195, 247, 0.9)');
+                gradWrap.addColorStop(1, 'rgba(0, 229, 255, 0.9)');
+                
+                ctx.fillStyle = gradWrap;
+
+                // Draw wrapped portion (complex shape)
+                ctx.beginPath();
+                // Top arc
+                ctx.ellipse(cx, cy - hPx/2, rx, ry, 0, startAngle, endAngle);
+                // Right line down
+                const rightX = cx + rx * Math.cos(endAngle);
+                const rightY = cy + hPx/2 + ry * Math.sin(endAngle);
+                ctx.lineTo(rightX, rightY);
+                // Bottom arc back
+                ctx.ellipse(cx, cy + hPx/2, rx, ry, 0, endAngle, startAngle, true);
+                // Left line up
+                ctx.closePath();
+                ctx.fill();
+
+                // Outline
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+
+            // Draw the unrolled flat rectangle
+            if(progress > 0) {
+                // Determine attachment point (right side of cylinder)
+                const attachX = cx + rx;
+                const attachYTop = cy - hPx/2;
+                
+                // Total width is circumference
+                const totalWidth = PI2 * rx;
+                const currentWidth = totalWidth * progress;
+
+                // Rectangle Gradient
+                const gradRect = ctx.createLinearGradient(attachX, 0, attachX + currentWidth, 0);
+                gradRect.addColorStop(0, 'rgba(0, 229, 255, 0.8)');
+                gradRect.addColorStop(1, 'rgba(79, 195, 247, 0.6)');
+
+                ctx.fillStyle = gradRect;
+                ctx.strokeStyle = 'rgba(0, 229, 255, 1)';
+                ctx.lineWidth = 2;
+                
+                // Add a glow
+                ctx.shadowColor = '#00E5FF';
+                ctx.shadowBlur = 15;
+
+                ctx.beginPath();
+                ctx.rect(attachX, attachYTop, currentWidth, hPx);
+                ctx.fill();
+                ctx.stroke();
+                
+                ctx.shadowBlur = 0; // reset
+
+                // Dimensions on rectangle if somewhat unrolled
+                if(progress > 0.2) {
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '14px monospace';
+                    ctx.textAlign = 'center';
+                    
+                    // Height label
+                    ctx.save();
+                    ctx.translate(attachX + currentWidth + 15, cy);
+                    ctx.rotate(-Math.PI/2);
+                    ctx.fillText(`h = ${formatNumber(state.h)}`, 0, 0);
+                    ctx.restore();
+
+                    // Width label
+                    if(progress > 0.5) {
+                        ctx.fillText(`2πr = ${formatNumber(2*Math.PI*state.r)}`, attachX + currentWidth/2, attachYTop - 15);
+                        
+                        // Arrow line
+                        ctx.beginPath();
+                        ctx.moveTo(attachX, attachYTop - 8);
+                        ctx.lineTo(attachX + currentWidth, attachYTop - 8);
+                        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                        
+                        // Arrow heads
+                        ctx.beginPath(); ctx.moveTo(attachX+5, attachYTop-12); ctx.lineTo(attachX, attachYTop-8); ctx.lineTo(attachX+5, attachYTop-4); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(attachX+currentWidth-5, attachYTop-12); ctx.lineTo(attachX+currentWidth, attachYTop-8); ctx.lineTo(attachX+currentWidth-5, attachYTop-4); ctx.stroke();
+                    }
+                }
+            }
+            
+            // Labels for Core (r, h)
+            if(progress < 0.5) {
+                // Radius line
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - hPx/2);
+                ctx.lineTo(cx + rx, cy - hPx/2);
+                ctx.strokeStyle = '#FFA726'; // Orange
+                ctx.setLineDash([4, 2]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                ctx.fillStyle = '#FFA726';
+                ctx.font = '14px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(`r = ${formatNumber(state.r)}`, cx + rx/2, cy - hPx/2 - 10);
+
+                // Height line on left
+                ctx.beginPath();
+                ctx.moveTo(cx - rx - 15, cy - hPx/2);
+                ctx.lineTo(cx - rx - 15, cy + hPx/2);
+                ctx.strokeStyle = '#E2E8F0';
+                ctx.stroke();
+                ctx.fillStyle = '#E2E8F0';
+                ctx.textAlign = 'right';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`h`, cx - rx - 25, cy);
+                ctx.textBaseline = 'alphabetic';
+            }
+        }
+
+        function drawSimulation() {
+            const w = els.simContainer.clientWidth;
+            const h = els.simContainer.clientHeight;
+            
+            // Solid dark background
+            ctxSim.fillStyle = '#0f172a';
+            ctxSim.fillRect(0, 0, w, h);
+            
+            // Draw grid
+            ctxSim.strokeStyle = 'rgba(255,255,255,0.03)';
+            ctxSim.lineWidth = 1;
+            ctxSim.beginPath();
+            for(let i=0; i<w; i+=40) { ctxSim.moveTo(i,0); ctxSim.lineTo(i,h); }
+            for(let i=0; i<h; i+=40) { ctxSim.moveTo(0,i); ctxSim.lineTo(w,i); }
+            ctxSim.stroke();
+
+            // Scaling factors
+            // Max r = 6, Max h = 10. Max Circumference = 2*PI*6 ~= 37.7
+            // Total needed width: 2*r (core) + circumference (unrolled) ~= 12 + 38 = 50 units.
+            const unitToPx = Math.min(w / 55, h / 15); 
+            
+            const rPx = state.r * unitToPx;
+            const hPx = state.h * unitToPx;
+
+            // Center position based on progress to keep it visible
+            // Start centered, move left as it unrolls
+            const totalWidth = PI2 * rPx;
+            const offsetX = lerp(w/2, w/2 - totalWidth/3, easeOutCubic(state.unrollProgress));
+            const cy = h/2 + 20; // slightly down to accommodate top labels
+
+            drawIsometricCylinder(ctxSim, offsetX, cy, rPx, hPx, easeOutCubic(state.unrollProgress));
+        }
+
+        /**
+         * Drawing functions for Graph Canvas
+         */
+        function drawGraph() {
+            const w = els.graphContainer.clientWidth;
+            const h = els.graphContainer.clientHeight;
+
+            ctxGraph.fillStyle = '#0f172a';
+            ctxGraph.fillRect(0, 0, w, h);
+
+            const padLeft = 50;
+            const padBottom = 40;
+            const padRight = 20;
+            const padTop = 20;
+
+            const graphW = w - padLeft - padRight;
+            const graphH = h - padTop - padBottom;
+
+            // Data ranges
+            const maxR = parseFloat(els.rSlider.max);
+            const maxCSA = 2 * Math.PI * maxR * parseFloat(els.hSlider.max); // Absolute max possible
+
+            // Draw Grid & Axes
+            ctxGraph.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctxGraph.lineWidth = 1;
+            
+            // Y Grid (Area)
+            ctxGraph.textAlign = 'right';
+            ctxGraph.textBaseline = 'middle';
+            ctxGraph.fillStyle = 'var(--text-muted)';
+            ctxGraph.font = '12px system-ui';
+            
+            const ySteps = 5;
+            for(let i=0; i<=ySteps; i++) {
+                const yVal = (maxCSA / ySteps) * i;
+                const yPos = padTop + graphH - (yVal/maxCSA) * graphH;
+                
+                ctxGraph.beginPath();
+                ctxGraph.moveTo(padLeft, yPos);
+                ctxGraph.lineTo(w - padRight, yPos);
+                ctxGraph.stroke();
+                
+                ctxGraph.fillText(Math.round(yVal), padLeft - 10, yPos);
+            }
+
+            // X Grid (Radius)
+            ctxGraph.textAlign = 'center';
+            ctxGraph.textBaseline = 'top';
+            const xSteps = 6;
+            for(let i=0; i<=xSteps; i++) {
+                const xVal = (maxR / xSteps) * i;
+                const xPos = padLeft + (xVal/maxR) * graphW;
+                
+                ctxGraph.beginPath();
+                ctxGraph.moveTo(xPos, padTop);
+                ctxGraph.lineTo(xPos, h - padBottom);
+                ctxGraph.stroke();
+                
+                ctxGraph.fillText(xVal, xPos, h - padBottom + 10);
+            }
+
+            // Labels
+            ctxGraph.fillStyle = '#fff';
+            ctxGraph.fillText("Radius (r)", padLeft + graphW/2, h - 15);
+            
+            ctxGraph.save();
+            ctxGraph.translate(15, padTop + graphH/2);
+            ctxGraph.rotate(-Math.PI/2);
+            ctxGraph.fillText("CSA", 0, 0);
+            ctxGraph.restore();
+
+            // Draw current curve (CSA vs r for fixed h)
+            // It's a linear relationship y = (2*PI*h) * x
+            ctxGraph.strokeStyle = '#8E44FF';
+            ctxGraph.lineWidth = 3;
+            ctxGraph.beginPath();
+            
+            for(let rx = 0; rx <= maxR; rx += 0.2) {
+                const area = 2 * Math.PI * rx * state.h;
+                const px = padLeft + (rx/maxR) * graphW;
+                const py = padTop + graphH - (area/maxCSA) * graphH;
+                
+                if(rx === 0) ctxGraph.moveTo(px, py);
+                else ctxGraph.lineTo(px, py);
+            }
+            ctxGraph.stroke();
+
+            // Draw area under curve
+            ctxGraph.lineTo(padLeft + graphW, padTop + graphH);
+            ctxGraph.lineTo(padLeft, padTop + graphH);
+            ctxGraph.fillStyle = 'rgba(142, 68, 255, 0.1)';
+            ctxGraph.fill();
+
+            // Draw current Point
+            const currentArea = 2 * Math.PI * state.r * state.h;
+            const ptX = padLeft + (state.r/maxR) * graphW;
+            const ptY = padTop + graphH - (currentArea/maxCSA) * graphH;
+
+            // Glowing dot
+            ctxGraph.shadowColor = '#00E5FF';
+            ctxGraph.shadowBlur = 10;
+            ctxGraph.fillStyle = '#00E5FF';
+            ctxGraph.beginPath();
+            ctxGraph.arc(ptX, ptY, 6, 0, PI2);
+            ctxGraph.fill();
+            
+            ctxGraph.shadowBlur = 0;
+            ctxGraph.strokeStyle = '#fff';
+            ctxGraph.lineWidth = 2;
+            ctxGraph.stroke();
+            
+            // Drop lines to axes
+            ctxGraph.strokeStyle = 'rgba(0, 229, 255, 0.5)';
+            ctxGraph.setLineDash([4, 4]);
+            ctxGraph.beginPath();
+            ctxGraph.moveTo(ptX, ptY);
+            ctxGraph.lineTo(ptX, padTop + graphH);
+            ctxGraph.moveTo(ptX, ptY);
+            ctxGraph.lineTo(padLeft, ptY);
+            ctxGraph.stroke();
+            ctxGraph.setLineDash([]);
+
+            // Tooltip Logic
+            if(state.simHover.active) {
+                // If hover is close to the line, show tooltip
+                // For simplicity, just snap tooltip to the current dot
+                els.graphTooltip.style.opacity = 1;
+                els.graphTooltip.style.left = ptX + 'px';
+                els.graphTooltip.style.top = ptY + 'px';
+                els.graphTooltip.innerHTML = `r: ${state.r.toFixed(1)}<br>CSA: ${currentArea.toFixed(1)}`;
+            } else {
+                els.graphTooltip.style.opacity = 0;
+            }
+        }
+
+        /**
+         * Main Animation Loop
+         */
+        function loop(timestamp) {
+            const dt = (timestamp - state.lastTime) / 1000;
+            state.lastTime = timestamp;
+
+            if(state.isUnrolling) {
+                state.unrollProgress += dt * 0.8; // speed
+                if(state.unrollProgress >= 1) {
+                    state.unrollProgress = 1;
+                    state.isUnrolling = false;
+                    els.playBtn.innerHTML = '⏪ Rewind';
+                    els.playBtn.classList.remove('primary');
+                    els.playBtn.classList.add('warning');
+                }
+            } else if (state.unrollProgress > 0 && els.playBtn.innerHTML === '⏪ Rewind' && state.isUnrolling) {
+                // Not reached because logic is in event listener
+            }
+
+            drawBackground();
+            drawSimulation();
+            drawGraph();
+
+            state.animFrame = requestAnimationFrame(loop);
+        }
+
+        function drawFrame() {
+            drawSimulation();
+            drawGraph();
+        }
+
+        /**
+         * Event Listeners
+         */
+        els.rSlider.addEventListener('input', () => updateValues('slider'));
+        els.hSlider.addEventListener('input', () => updateValues('slider'));
+
+        els.playBtn.addEventListener('click', () => {
+            if(state.unrollProgress === 1) {
+                // Rewind
+                state.unrollProgress = 0;
+                els.playBtn.innerHTML = '▶ Unroll';
+                els.playBtn.classList.remove('warning');
+                els.playBtn.classList.add('primary');
+            } else {
+                // Play
+                state.isUnrolling = true;
+            }
+        });
+
+        els.resetBtn.addEventListener('click', () => {
+            els.rSlider.value = 3;
+            els.hSlider.value = 5;
+            state.unrollProgress = 0;
+            state.isUnrolling = false;
+            els.playBtn.innerHTML = '▶ Unroll';
+            els.playBtn.classList.remove('warning');
+            els.playBtn.classList.add('primary');
+            updateValues('reset');
+        });
+
+        els.randomBtn.addEventListener('click', () => {
+            els.rSlider.value = (Math.random() * 5 + 1).toFixed(1);
+            els.hSlider.value = (Math.random() * 8 + 2).toFixed(1);
+            updateValues('random');
+        });
+
+        // Graph hover effect
+        els.graphCanvas.addEventListener('mousemove', (e) => {
+            const rect = els.graphCanvas.getBoundingClientRect();
+            state.simHover.x = e.clientX - rect.left;
+            state.simHover.y = e.clientY - rect.top;
+            state.simHover.active = true;
+        });
+        els.graphCanvas.addEventListener('mouseleave', () => {
+            state.simHover.active = false;
+        });
+
+        /**
+         * Initialization
+         */
+        function init() {
+            resizeCanvases();
+            updateValues('init');
+            state.lastTime = performance.now();
+            requestAnimationFrame(loop);
+        }
+
+        // Font load fix for canvas
+        document.fonts.ready.then(init);
+
+    </script>
+</body>
+</html>

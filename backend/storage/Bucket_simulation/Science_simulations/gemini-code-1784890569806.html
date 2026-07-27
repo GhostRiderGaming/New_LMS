@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Waste Segregation Simulator</title>
+    <style>
+        /* ==========================================================================
+           ROOT VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-base: #070B14;
+            --bg-surface: rgba(17, 25, 40, 0.65);
+            --bg-surface-light: rgba(30, 41, 59, 0.8);
+            
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            --text-main: #F8FAFC;
+            --text-muted: #94A3B8;
+            
+            /* The Bins */
+            --color-organic: #10B981; /* Green */
+            --color-organic-glow: rgba(16, 185, 129, 0.3);
+            
+            --color-dry: #3B82F6; /* Blue */
+            --color-dry-glow: rgba(59, 130, 246, 0.3);
+            
+            --color-hazard: #EF4444; /* Red */
+            --color-hazard-glow: rgba(239, 68, 68, 0.3);
+
+            --color-accent: #8B5CF6; /* Purple */
+
+            /* Typography */
+            --font-main: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            
+            /* Spacing & Sizes */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --space-section: clamp(3rem, 6vw, 6rem);
+            --content-max: 1200px;
+        }
+
+        /* ==========================================================================
+           RESET & GLOBAL STYLES
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(16, 185, 129, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        h1, h2, h3, h4 {
+            line-height: 1.2;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); background: linear-gradient(to right, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.8rem, 4vw, 2.5rem); margin-bottom: 1rem;}
+        h3 { font-size: clamp(1.2rem, 2.5vw, 1.5rem); }
+        p { font-size: clamp(1rem, 1.1vw, 1.125rem); color: var(--text-muted); }
+
+        .container {
+            max-width: var(--content-max);
+            margin: 0 auto;
+            padding: 0 clamp(1rem, 4vw, 2rem);
+        }
+
+        section {
+            padding: var(--space-section) 0;
+            position: relative;
+        }
+
+        /* UI Utilities */
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--color-organic), var(--color-dry));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-bg-anim {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .glow-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .orb-1 { width: 300px; height: 300px; background: var(--color-organic); top: 10%; left: 20%; }
+        .orb-2 { width: 400px; height: 400px; background: var(--color-dry); bottom: 10%; right: 10%; animation-delay: -5s; }
+        .orb-3 { width: 250px; height: 250px; background: var(--color-hazard); top: 50%; left: 50%; transform: translate(-50%, -50%); animation-delay: -10s; opacity: 0.2;}
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -50px) scale(1.1); }
+            66% { transform: translate(-20px, 20px) scale(0.9); }
+        }
+
+        .hero-content {
+            max-width: 800px;
+            z-index: 1;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1.2rem, 2vw, 1.5rem);
+            color: var(--text-muted);
+            margin-top: 1.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .btn-primary {
+            display: inline-block;
+            background: linear-gradient(135deg, var(--color-dry), #2563EB);
+            color: white;
+            padding: 1rem 2.5rem;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 0 20px var(--color-dry-glow);
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 30px var(--color-dry-glow);
+        }
+
+        /* ==========================================================================
+           COMPONENTS (THE BINS) - DIAGRAM LABELS RULE APPLIED
+           ========================================================================== */
+        .components-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 3rem;
+        }
+
+        .bin-card {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        .bin-card:hover { transform: translateY(-5px); }
+        
+        .bin-card.organic { box-shadow: inset 0 2px 20px var(--color-organic-glow), var(--glass-shadow); border-top: 1px solid var(--color-organic); }
+        .bin-card.dry { box-shadow: inset 0 2px 20px var(--color-dry-glow), var(--glass-shadow); border-top: 1px solid var(--color-dry); }
+        .bin-card.hazard { box-shadow: inset 0 2px 20px var(--color-hazard-glow), var(--glass-shadow); border-top: 1px solid var(--color-hazard); }
+
+        .illustration-container {
+            position: relative;
+            width: 200px;
+            height: 240px;
+            margin-bottom: 2rem;
+        }
+
+        .illustration-container svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5));
+        }
+
+        /* SVG Inner Animations */
+        .bin-lid { transform-origin: top right; transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .bin-card:hover .bin-lid { transform: rotate(-15deg) translateY(-5px); }
+        
+        .bin-glow-path { animation: pulseGlow 2s infinite alternate; }
+        @keyframes pulseGlow { from { opacity: 0.4; } to { opacity: 0.8; } }
+
+        /* Markers (Diagram Rule) */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid white;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            transition: all 0.2s ease;
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            transform: scale(1.2);
+            background: white;
+            color: black;
+            box-shadow: 0 0 15px rgba(255,255,255,0.8);
+        }
+
+        /* Positions for markers on the SVGs */
+        .m-lid { top: 10%; left: 50%; transform: translateX(-50%); }
+        .m-body { top: 50%; left: 50%; transform: translate(-50%, -50%); }
+        .m-symbol { top: 65%; left: 50%; transform: translate(-50%, -50%); }
+
+        /* Legend List (Diagram Rule) */
+        .legend-list {
+            list-style: none;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        .legend-item.active {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.2);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (STAGE-BY-STAGE)
+           ========================================================================== */
+        .working-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            background: #0B1121;
+            padding: clamp(1.5rem, 3vw, 3rem);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            margin-top: 3rem;
+        }
+
+        @media (min-width: 1024px) {
+            .working-container { grid-template-columns: 3fr 2fr; align-items: center; }
+        }
+
+        /* Visual Area */
+        .stage-visual-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: radial-gradient(circle at center, rgba(30,41,59,1) 0%, rgba(15,23,42,1) 100%);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stage-scene {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s ease, transform 0.8s ease;
+            transform: scale(0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stage-scene.active {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+
+        /* Scene Specific SVGs and Animations */
+        .working-svg { width: 80%; height: 80%; }
+        
+        /* Scene 1: Generation */
+        .s1-house { transform-origin: bottom; }
+        .s1-waste { opacity: 0; animation: dropIn 2s infinite ease-in; }
+        @keyframes dropIn { 0% { transform: translateY(-50px); opacity: 0;} 50% {opacity:1;} 100% { transform: translateY(50px); opacity: 0;} }
+
+        /* Scene 2: Segregation */
+        .s2-item { opacity: 0; }
+        .stage-scene.active .s2-item-org { animation: flowToGreen 2.5s infinite ease-in-out; }
+        .stage-scene.active .s2-item-dry { animation: flowToBlue 2.5s infinite ease-in-out 0.5s; }
+        .stage-scene.active .s2-item-haz { animation: flowToRed 2.5s infinite ease-in-out 1s; }
+        @keyframes flowToGreen { 0% { transform: translate(0, -50px); opacity:0;} 20%{opacity:1;} 100% { transform: translate(-100px, 80px); opacity:0; scale: 0.5; } }
+        @keyframes flowToBlue { 0% { transform: translate(0, -50px); opacity:0;} 20%{opacity:1;} 100% { transform: translate(0, 80px); opacity:0; scale: 0.5; } }
+        @keyframes flowToRed { 0% { transform: translate(0, -50px); opacity:0;} 20%{opacity:1;} 100% { transform: translate(100px, 80px); opacity:0; scale: 0.5; } }
+
+        /* Scene 3: Transport */
+        .s3-truck { transform: translateX(-150%); }
+        .stage-scene.active .s3-truck { animation: driveAcross 4s infinite linear; }
+        @keyframes driveAcross { 0% { transform: translateX(-150%); } 100% { transform: translateX(150%); } }
+
+        /* Scene 4: Processing */
+        .s4-gear { transform-origin: center; animation: spinGear 4s infinite linear; }
+        .s4-plant { transform-origin: bottom; animation: growPlant 3s infinite alternate ease-in-out; }
+        @keyframes spinGear { to { transform: rotate(360deg); } }
+        @keyframes growPlant { 0% { transform: scaleY(0.8); } 100% { transform: scaleY(1.1); } }
+
+        /* Controls Area */
+        .stage-controls-area {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .progress-bar {
+            display: flex;
+            gap: 4px;
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .progress-segment {
+            flex: 1;
+            background: transparent;
+            transition: background 0.3s;
+        }
+        .progress-segment.filled { background: var(--color-dry); }
+
+        .stage-info h3 { color: var(--color-dry); margin-bottom: 0.5rem; }
+        .stage-info p { min-height: 3rem; }
+
+        .controls-row {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-top: 1rem;
+        }
+
+        .btn-icon {
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--glass-border);
+            color: white;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-icon:hover { background: rgba(255,255,255,0.1); transform: scale(1.05); }
+        .btn-icon:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+        .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
+
+        .auto-play-btn {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid var(--color-dry);
+            color: var(--color-dry);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-left: auto;
+        }
+        .auto-play-btn.playing { background: var(--color-dry); color: white; }
+
+        /* ==========================================================================
+           SIMULATION / GAME
+           ========================================================================== */
+        .sim-wrapper {
+            background: var(--bg-surface);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 1rem;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+            position: relative;
+            margin-top: 2rem;
+            overflow: hidden;
+        }
+
+        .sim-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid var(--glass-border);
+            margin-bottom: 1rem;
+        }
+
+        .sim-stats { display: flex; gap: 2rem; }
+        .stat-box { text-align: center; }
+        .stat-value { font-size: 1.5rem; font-weight: bold; font-family: monospace; }
+        .stat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;}
+        
+        .score-val { color: var(--color-organic); }
+        .miss-val { color: var(--color-hazard); }
+
+        .game-area {
+            position: relative;
+            width: 100%;
+            height: 60vh;
+            min-height: 400px;
+            background: repeating-linear-gradient(0deg, transparent, transparent 49px, rgba(255,255,255,0.02) 50px);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            touch-action: none; /* Crucial for touch drag */
+        }
+
+        /* The Conveyor / Target Bins */
+        .game-bins-container {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            padding: 0 10%;
+            pointer-events: none; /* Let clicks pass to canvas if needed, but here bins are DOM */
+        }
+
+        .game-bin {
+            width: 80px;
+            height: 100px;
+            border-radius: 10px 10px 5px 5px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-top: 15px solid;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+        .game-bin::after { content: attr(data-label); position: absolute; bottom: -25px; font-size: 0.8rem; font-weight: bold; color: white; }
+
+        .gb-org { background: rgba(16, 185, 129, 0.2); border-top-color: var(--color-organic); border-left: 2px solid var(--color-organic); border-right: 2px solid var(--color-organic); }
+        .gb-dry { background: rgba(59, 130, 246, 0.2); border-top-color: var(--color-dry); border-left: 2px solid var(--color-dry); border-right: 2px solid var(--color-dry); }
+        .gb-haz { background: rgba(239, 68, 68, 0.2); border-top-color: var(--color-hazard); border-left: 2px solid var(--color-hazard); border-right: 2px solid var(--color-hazard); }
+
+        .game-bin.active-drop { transform: scale(1.1); box-shadow: 0 0 20px white; }
+
+        /* Falling Items */
+        .waste-item {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            filter: drop-shadow(0 5px 10px rgba(0,0,0,0.5));
+            transform-origin: center;
+            will-change: transform, top, left;
+            z-index: 20;
+        }
+        .waste-item:active { cursor: grabbing; transform: scale(1.1); }
+        
+        .waste-item svg { width: 100%; height: 100%; pointer-events: none; } /* prevent svg capturing drag */
+
+        /* Game Over / Start Overlay */
+        .game-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(5px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 30;
+            border-radius: var(--radius-md);
+        }
+        .game-overlay.hidden { display: none; }
+        
+        /* Particle effect class */
+        .particle {
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 25;
+            animation: popOut 0.6s ease-out forwards;
+        }
+        @keyframes popOut {
+            0% { transform: scale(0.5); opacity: 1; }
+            100% { transform: scale(2) translate(var(--tx), var(--ty)); opacity: 0; }
+        }
+
+        /* ==========================================================================
+           FACTS & APPLICATIONS
+           ========================================================================== */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .info-card {
+            padding: 1.5rem;
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+        
+        .info-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            color: var(--color-dry);
+        }
+        .info-icon svg { width: 24px; height: 24px; fill: currentColor; }
+
+        .info-content h4 { margin-bottom: 0.5rem; color: #fff; }
+        .info-content p { font-size: 0.95rem; }
+
+        /* ==========================================================================
+           RESPONSIVE ADJUSTMENTS
+           ========================================================================== */
+        @media (max-width: 768px) {
+            .sim-stats { gap: 1rem; }
+            .stat-value { font-size: 1.2rem; }
+            .game-bin { width: 60px; height: 80px; }
+            .waste-item { width: 50px; height: 50px; }
+            
+            /* Reduce blur on mobile for performance */
+            .glass-panel { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+            
+            /* Ensure layout stacks cleanly */
+            .working-container { padding: 1rem; gap: 1.5rem; }
+            .stage-visual-wrapper { aspect-ratio: 4/3; }
+        }
+        
+        @media (max-width: 480px) {
+            .game-bins-container { padding: 0 5%; }
+            .game-bin { width: 50px; height: 70px; border-top-width: 10px; }
+            .game-bin::after { font-size: 0.7rem; bottom: -20px; }
+            .waste-item { width: 40px; height: 40px; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- HERO SECTION -->
+    <section class="hero" id="intro">
+        <div class="hero-bg-anim">
+            <div class="glow-orb orb-1"></div>
+            <div class="glow-orb orb-2"></div>
+            <div class="glow-orb orb-3"></div>
+        </div>
+        <div class="container hero-content">
+            <h1>The Science of<br><span class="gradient-text">Waste Segregation</span></h1>
+            <p class="hero-subtitle">Visualizing how organizing resources at the source transforms global ecosystems and powers the circular economy.</p>
+            <a href="#components" class="btn-primary">Explore Mechanism</a>
+        </div>
+    </section>
+
+    <!-- COMPONENTS SECTION (THE BINS) -->
+    <section id="components">
+        <div class="container">
+            <h2>Source Components</h2>
+            <p>Effective segregation relies on three primary streams. Proper categorization is the first line of defense.</p>
+            
+            <div class="components-grid">
+                <!-- Green Bin -->
+                <div class="glass-panel bin-card organic">
+                    <div class="illustration-container">
+                        <!-- High Quality SVG Bin -->
+                        <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="greenBody" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stop-color="#047857"/>
+                                    <stop offset="50%" stop-color="#10B981"/>
+                                    <stop offset="100%" stop-color="#065F46"/>
+                                </linearGradient>
+                                <linearGradient id="greenLid" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#34D399"/>
+                                    <stop offset="100%" stop-color="#059669"/>
+                                </linearGradient>
+                            </defs>
+                            <!-- Body -->
+                            <path d="M15,20 L85,20 L75,110 C75,115 70,118 65,118 L35,118 C30,118 25,115 25,110 Z" fill="url(#greenBody)"/>
+                            <!-- Ribs -->
+                            <line x1="30" y1="30" x2="35" y2="105" stroke="#047857" stroke-width="2"/>
+                            <line x1="50" y1="30" x2="50" y2="105" stroke="#047857" stroke-width="2"/>
+                            <line x1="70" y1="30" x2="65" y2="105" stroke="#047857" stroke-width="2"/>
+                            <!-- Recycle Symbol Base -->
+                            <path class="bin-glow-path" d="M40,50 L60,50 L50,70 Z" fill="none" stroke="#fff" stroke-width="3" stroke-linejoin="round"/>
+                            <!-- Lid -->
+                            <g class="bin-lid">
+                                <rect x="10" y="10" width="80" height="10" rx="3" fill="url(#greenLid)"/>
+                                <rect x="35" y="5" width="30" height="5" rx="2" fill="#047857"/>
+                            </g>
+                        </svg>
+                        
+                        <!-- Markers -->
+                        <div class="marker m-lid" data-target="org-1">1</div>
+                        <div class="marker m-body" data-target="org-2">2</div>
+                        <div class="marker m-symbol" data-target="org-3">3</div>
+                    </div>
+                    
+                    <!-- Legend List -->
+                    <ul class="legend-list">
+                        <li class="legend-item" id="org-1">
+                            <span class="legend-badge">1</span>
+                            <div><strong>Sealed Lid</strong><br><span style="font-size:0.8rem;color:#94a3b8">Prevents odors and pests.</span></div>
+                        </li>
+                        <li class="legend-item" id="org-2">
+                            <span class="legend-badge">2</span>
+                            <div><strong>Organic Matter</strong><br><span style="font-size:0.8rem;color:#94a3b8">Food scraps, leaves, biodegradable.</span></div>
+                        </li>
+                        <li class="legend-item" id="org-3">
+                            <span class="legend-badge">3</span>
+                            <div><strong>Compost Destination</strong><br><span style="font-size:0.8rem;color:#94a3b8">Turns into nutrient-rich fertilizer.</span></div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Blue Bin -->
+                <div class="glass-panel bin-card dry">
+                    <div class="illustration-container">
+                        <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="blueBody" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stop-color="#1D4ED8"/>
+                                    <stop offset="50%" stop-color="#3B82F6"/>
+                                    <stop offset="100%" stop-color="#1E3A8A"/>
+                                </linearGradient>
+                                <linearGradient id="blueLid" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#60A5FA"/>
+                                    <stop offset="100%" stop-color="#2563EB"/>
+                                </linearGradient>
+                            </defs>
+                            <path d="M15,20 L85,20 L75,110 C75,115 70,118 65,118 L35,118 C30,118 25,115 25,110 Z" fill="url(#blueBody)"/>
+                            <line x1="30" y1="30" x2="35" y2="105" stroke="#1D4ED8" stroke-width="2"/>
+                            <line x1="50" y1="30" x2="50" y2="105" stroke="#1D4ED8" stroke-width="2"/>
+                            <line x1="70" y1="30" x2="65" y2="105" stroke="#1D4ED8" stroke-width="2"/>
+                            <circle class="bin-glow-path" cx="50" cy="60" r="15" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="8 4"/>
+                            <g class="bin-lid">
+                                <rect x="10" y="10" width="80" height="10" rx="3" fill="url(#blueLid)"/>
+                                <rect x="35" y="5" width="30" height="5" rx="2" fill="#1D4ED8"/>
+                                <!-- Slot for paper -->
+                                <rect x="25" y="12" width="50" height="2" fill="#000" opacity="0.3"/>
+                            </g>
+                        </svg>
+                        <div class="marker m-lid" data-target="dry-1">1</div>
+                        <div class="marker m-body" data-target="dry-2">2</div>
+                        <div class="marker m-symbol" data-target="dry-3">3</div>
+                    </div>
+                    
+                    <ul class="legend-list">
+                        <li class="legend-item" id="dry-1">
+                            <span class="legend-badge">1</span>
+                            <div><strong>Clean Entry</strong><br><span style="font-size:0.8rem;color:#94a3b8">Items must be rinsed and dry.</span></div>
+                        </li>
+                        <li class="legend-item" id="dry-2">
+                            <span class="legend-badge">2</span>
+                            <div><strong>Recyclables</strong><br><span style="font-size:0.8rem;color:#94a3b8">Paper, plastic, glass, metal.</span></div>
+                        </li>
+                        <li class="legend-item" id="dry-3">
+                            <span class="legend-badge">3</span>
+                            <div><strong>Material Loop</strong><br><span style="font-size:0.8rem;color:#94a3b8">Processed into raw materials.</span></div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Red Bin -->
+                <div class="glass-panel bin-card hazard">
+                    <div class="illustration-container">
+                        <svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="redBody" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stop-color="#991B1B"/>
+                                    <stop offset="50%" stop-color="#EF4444"/>
+                                    <stop offset="100%" stop-color="#7F1D1D"/>
+                                </linearGradient>
+                                <linearGradient id="redLid" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#F87171"/>
+                                    <stop offset="100%" stop-color="#DC2626"/>
+                                </linearGradient>
+                            </defs>
+                            <path d="M15,20 L85,20 L75,110 C75,115 70,118 65,118 L35,118 C30,118 25,115 25,110 Z" fill="url(#redBody)"/>
+                            <line x1="30" y1="30" x2="35" y2="105" stroke="#991B1B" stroke-width="2"/>
+                            <line x1="50" y1="30" x2="50" y2="105" stroke="#991B1B" stroke-width="2"/>
+                            <line x1="70" y1="30" x2="65" y2="105" stroke="#991B1B" stroke-width="2"/>
+                            <!-- Hazard Symbol -->
+                            <path class="bin-glow-path" d="M50,45 L65,70 L35,70 Z M50,55 L50,62 M50,66 L50,68" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                            <g class="bin-lid">
+                                <rect x="10" y="10" width="80" height="10" rx="3" fill="url(#redLid)"/>
+                                <rect x="35" y="5" width="30" height="5" rx="2" fill="#991B1B"/>
+                            </g>
+                        </svg>
+                        <div class="marker m-lid" data-target="haz-1">1</div>
+                        <div class="marker m-body" data-target="haz-2">2</div>
+                        <div class="marker m-symbol" data-target="haz-3">3</div>
+                    </div>
+                    
+                    <ul class="legend-list">
+                        <li class="legend-item" id="haz-1">
+                            <span class="legend-badge">1</span>
+                            <div><strong>Secure Containment</strong><br><span style="font-size:0.8rem;color:#94a3b8">Prevents toxic leaching.</span></div>
+                        </li>
+                        <li class="legend-item" id="haz-2">
+                            <span class="legend-badge">2</span>
+                            <div><strong>Hazardous/Reject</strong><br><span style="font-size:0.8rem;color:#94a3b8">Batteries, medical, e-waste, diapers.</span></div>
+                        </li>
+                        <li class="legend-item" id="haz-3">
+                            <span class="legend-badge">3</span>
+                            <div><strong>Safe Disposal</strong><br><span style="font-size:0.8rem;color:#94a3b8">Incineration or secure landfill.</span></div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING MECHANISM SECTION -->
+    <section id="working">
+        <div class="container">
+            <h2>The Processing Cycle</h2>
+            <p>A linear sequence demonstrating how segregated waste is transformed back into value, while mixed waste becomes an unrecoverable liability.</p>
+            
+            <div class="working-container">
+                <!-- Visual Left Side -->
+                <div class="stage-visual-wrapper">
+                    <!-- Stage 1: Generation -->
+                    <div class="stage-scene active" id="scene-1">
+                        <svg class="working-svg" viewBox="0 0 200 150">
+                            <!-- Simple isometric house/factory -->
+                            <path class="s1-house" d="M100,30 L150,60 L150,110 L50,110 L50,60 Z" fill="rgba(255,255,255,0.1)" stroke="var(--color-dry)" stroke-width="2"/>
+                            <path d="M50,60 L100,30 L150,60 L100,90 Z" fill="rgba(59,130,246,0.2)"/>
+                            <rect x="90" y="80" width="20" height="30" fill="var(--color-dry)"/>
+                            <!-- Waste dropping -->
+                            <circle class="s1-waste" cx="100" cy="110" r="5" fill="#fff" style="animation-delay: 0s"/>
+                            <circle class="s1-waste" cx="90" cy="110" r="4" fill="var(--color-organic)" style="animation-delay: 0.5s"/>
+                            <circle class="s1-waste" cx="110" cy="110" r="6" fill="var(--color-hazard)" style="animation-delay: 1s"/>
+                        </svg>
+                    </div>
+                    
+                    <!-- Stage 2: Segregation Flow -->
+                    <div class="stage-scene" id="scene-2">
+                        <svg class="working-svg" viewBox="0 0 200 150">
+                            <!-- Main pipe splitting into 3 -->
+                            <path d="M100,10 L100,50" stroke="#fff" stroke-width="10" stroke-linecap="round" opacity="0.2"/>
+                            <path d="M100,50 C100,80 50,80 50,110" stroke="var(--color-organic)" stroke-width="6" fill="none"/>
+                            <path d="M100,50 L100,110" stroke="var(--color-dry)" stroke-width="6" fill="none"/>
+                            <path d="M100,50 C100,80 150,80 150,110" stroke="var(--color-hazard)" stroke-width="6" fill="none"/>
+                            
+                            <!-- Bins at bottom -->
+                            <rect x="40" y="110" width="20" height="30" fill="var(--color-organic)" rx="2"/>
+                            <rect x="90" y="110" width="20" height="30" fill="var(--color-dry)" rx="2"/>
+                            <rect x="140" y="110" width="20" height="30" fill="var(--color-hazard)" rx="2"/>
+
+                            <!-- Particles flowing -->
+                            <circle class="s2-item s2-item-org" cx="100" cy="30" r="4" fill="var(--color-organic)"/>
+                            <circle class="s2-item s2-item-dry" cx="100" cy="30" r="4" fill="var(--color-dry)"/>
+                            <circle class="s2-item s2-item-haz" cx="100" cy="30" r="4" fill="var(--color-hazard)"/>
+                        </svg>
+                    </div>
+
+                    <!-- Stage 3: Collection -->
+                    <div class="stage-scene" id="scene-3">
+                        <svg class="working-svg" viewBox="0 0 200 150">
+                            <line x1="0" y1="120" x2="200" y2="120" stroke="#fff" stroke-width="2" opacity="0.2"/>
+                            <!-- Abstract Truck -->
+                            <g class="s3-truck">
+                                <rect x="50" y="80" width="60" height="30" fill="var(--color-organic)" rx="4"/>
+                                <rect x="115" y="90" width="25" height="20" fill="rgba(255,255,255,0.8)" rx="4"/>
+                                <circle cx="65" cy="115" r="8" fill="#333"/>
+                                <circle cx="125" cy="115" r="8" fill="#333"/>
+                            </g>
+                            <g class="s3-truck" style="animation-delay: 1.3s;">
+                                <rect x="50" y="80" width="60" height="30" fill="var(--color-dry)" rx="4"/>
+                                <rect x="115" y="90" width="25" height="20" fill="rgba(255,255,255,0.8)" rx="4"/>
+                                <circle cx="65" cy="115" r="8" fill="#333"/>
+                                <circle cx="125" cy="115" r="8" fill="#333"/>
+                            </g>
+                        </svg>
+                    </div>
+
+                    <!-- Stage 4: Processing -->
+                    <div class="stage-scene" id="scene-4">
+                        <svg class="working-svg" viewBox="0 0 200 150">
+                            <!-- Recycling side -->
+                            <circle cx="60" cy="80" r="20" fill="none" stroke="var(--color-dry)" stroke-width="4" stroke-dasharray="10 5" class="s4-gear"/>
+                            <rect x="40" y="110" width="40" height="10" fill="var(--color-dry)"/>
+                            <path d="M45,110 L45,120 M55,110 L55,120 M65,110 L65,120 M75,110 L75,120" stroke="#fff" stroke-width="2"/>
+                            
+                            <!-- Composting side -->
+                            <path d="M120,120 Q140,120 160,120" stroke="#8B4513" stroke-width="10" stroke-linecap="round"/>
+                            <path class="s4-plant" d="M140,115 Q130,90 140,70 Q150,90 140,115 Z" fill="var(--color-organic)"/>
+                            <path class="s4-plant" d="M140,100 Q120,100 120,80 Q130,95 140,100 Z" fill="var(--color-organic)"/>
+                            <path class="s4-plant" d="M140,95 Q160,90 160,70 Q150,85 140,95 Z" fill="var(--color-organic)"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Controls Right Side -->
+                <div class="stage-controls-area">
+                    <div class="progress-bar" id="stage-progress">
+                        <div class="progress-segment filled"></div>
+                        <div class="progress-segment"></div>
+                        <div class="progress-segment"></div>
+                        <div class="progress-segment"></div>
+                    </div>
+
+                    <div class="stage-info">
+                        <h3 id="stage-title">1. Generation</h3>
+                        <p id="stage-desc">Waste is generated at homes, offices, and industries. If mixed here, separation later becomes economically unviable and highly contaminated.</p>
+                    </div>
+
+                    <div class="controls-row">
+                        <button class="btn-icon" id="btn-prev" disabled>
+                            <svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+                        </button>
+                        <button class="btn-icon" id="btn-next">
+                            <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+                        </button>
+                        <button class="auto-play-btn" id="btn-autoplay">Auto-Play: OFF</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION (THE GAME) -->
+    <section id="simulation">
+        <div class="container">
+            <h2>Sort Simulator</h2>
+            <p>Drag or swipe falling items into the correct processing stream before time runs out. Accuracy prevents contamination.</p>
+            
+            <div class="sim-wrapper">
+                <div class="sim-header">
+                    <div class="sim-stats">
+                        <div class="stat-box">
+                            <div class="stat-label">Correct</div>
+                            <div class="stat-value score-val" id="score-display">0</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-label">Missed</div>
+                            <div class="stat-value miss-val" id="miss-display">0 / 5</div>
+                        </div>
+                    </div>
+                    <button class="btn-primary" style="padding: 0.5rem 1.5rem; font-size: 0.9rem;" id="btn-start-game">Start Shift</button>
+                </div>
+
+                <div class="game-area" id="game-area">
+                    <!-- Overlay -->
+                    <div class="game-overlay" id="game-overlay">
+                        <h3 style="font-size: 2rem; margin-bottom: 1rem;" id="overlay-msg">Facility Standby</h3>
+                        <p id="overlay-sub" style="margin-bottom: 2rem;">Press Start to begin processing.</p>
+                        <button class="btn-primary" id="btn-overlay-action">Start</button>
+                    </div>
+
+                    <!-- Target Bins -->
+                    <div class="game-bins-container">
+                        <div class="game-bin gb-org" data-type="organic" data-label="ORGANIC"></div>
+                        <div class="game-bin gb-dry" data-type="dry" data-label="RECYCLE"></div>
+                        <div class="game-bin gb-haz" data-type="hazard" data-label="HAZARD"></div>
+                    </div>
+                    
+                    <!-- Items will be injected here via JS -->
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FACTS & IMPACT -->
+    <section id="impact">
+        <div class="container">
+            <h2>Real-World Impact</h2>
+            <div class="grid-3">
+                <div class="glass-panel info-card">
+                    <div class="info-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm.31-8.86c-1.77-.45-2.34-.94-2.34-1.67 0-.84.79-1.43 2.1-1.43 1.38 0 1.9.66 1.94 1.64h1.71c-.05-1.34-.87-2.57-2.49-2.97V5H10.9v1.69c-1.51.32-2.72 1.3-2.72 2.81 0 1.79 1.49 2.69 3.66 3.21 1.95.46 2.34 1.15 2.34 1.87 0 .53-.39 1.64-2.25 1.64-1.74 0-2.26-.95-2.32-1.81h-1.7c.07 1.65 1.25 2.82 2.73 3.14V19h2.37v-1.66c1.55-.32 2.94-1.37 2.94-3.03 0-1.84-1.47-2.67-3.64-3.17z"/></svg>
+                    </div>
+                    <div class="info-content">
+                        <h4>Economic Value</h4>
+                        <p>A single aluminum can recycled saves 95% of the energy required to make a new one from bauxite ore. Segregation preserves this material value.</p>
+                    </div>
+                </div>
+                <div class="glass-panel info-card">
+                    <div class="info-icon">
+                        <svg viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.36 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM19 18H6c-2.21 0-4-1.79-4-4s1.79-4 4-4h.71C7.37 7.69 9.48 6 12 6c3.04 0 5.5 2.46 5.5 5.5v.5H19c1.66 0 3 1.34 3 3s-1.34 3-3 3z"/></svg>
+                    </div>
+                    <div class="info-content">
+                        <h4>Methane Reduction</h4>
+                        <p>When organic waste goes to landfill, it decomposes anaerobically, releasing methane—a greenhouse gas 25x more potent than CO2. Composting prevents this.</p>
+                    </div>
+                </div>
+                <div class="glass-panel info-card">
+                    <div class="info-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                    </div>
+                    <div class="info-content">
+                        <h4>The Contamination Risk</h4>
+                        <p>Just one leaky battery or food-soiled container can ruin an entire ton of recyclable paper or plastic, forcing it to be sent to a landfill.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SCRIPTS -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* ==========================================================================
+               1. DIAGRAM LABELS LOGIC (Components Section)
+               ========================================================================== */
+            const setupMarkers = () => {
+                const markers = document.querySelectorAll('.marker');
+                markers.forEach(marker => {
+                    const targetId = marker.getAttribute('data-target');
+                    const targetLegend = document.getElementById(targetId);
+                    
+                    if(targetLegend) {
+                        // Hover interactions
+                        marker.addEventListener('mouseenter', () => {
+                            marker.classList.add('active');
+                            targetLegend.classList.add('active');
+                        });
+                        marker.addEventListener('mouseleave', () => {
+                            marker.classList.remove('active');
+                            targetLegend.classList.remove('active');
+                        });
+                        
+                        // Reverse hover
+                        targetLegend.addEventListener('mouseenter', () => {
+                            marker.classList.add('active');
+                            targetLegend.classList.add('active');
+                        });
+                        targetLegend.addEventListener('mouseleave', () => {
+                            marker.classList.remove('active');
+                            targetLegend.classList.remove('active');
+                        });
+                    }
+                });
+            };
+            setupMarkers();
+
+            /* ==========================================================================
+               2. WORKING MECHANISM (Stage Slider Logic)
+               ========================================================================== */
+            const stagesData = [
+                {
+                    title: "1. Generation",
+                    desc: "Waste is generated at homes, offices, and industries. Segregating at this exact moment is crucial. Mixed waste becomes heavily contaminated and difficult to process."
+                },
+                {
+                    title: "2. Segregation Flow",
+                    desc: "Material is sorted into distinct streams: Organic (wet), Recyclable (dry), and Hazardous. This prevents wet waste from ruining dry paper or cardboard."
+                },
+                {
+                    title: "3. Collection & Transport",
+                    desc: "Specialized trucks or compartmentalized vehicles maintain the separation during transport. Mixing them in the truck defeats the purpose of source segregation."
+                },
+                {
+                    title: "4. Processing",
+                    desc: "Dry waste enters Material Recovery Facilities (MRFs) to be baled. Organic waste goes to composting/biogas plants. Hazardous waste is neutralized or incinerated safely."
+                }
+            ];
+
+            let currentStage = 0;
+            let autoPlayInterval = null;
+            const maxStages = stagesData.length;
+
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnAutoplay = document.getElementById('btn-autoplay');
+            const titleEl = document.getElementById('stage-title');
+            const descEl = document.getElementById('stage-desc');
+            const scenes = document.querySelectorAll('.stage-scene');
+            const progressSegments = document.querySelectorAll('.progress-segment');
+
+            const updateStage = (index) => {
+                // Bounds
+                if (index < 0) index = 0;
+                if (index >= maxStages) index = maxStages - 1;
+                currentStage = index;
+
+                // Update Text
+                titleEl.textContent = stagesData[currentStage].title;
+                descEl.textContent = stagesData[currentStage].desc;
+
+                // Update Visuals
+                scenes.forEach((scene, i) => {
+                    if (i === currentStage) {
+                        scene.classList.add('active');
+                    } else {
+                        scene.classList.remove('active');
+                    }
+                });
+
+                // Update Progress
+                progressSegments.forEach((seg, i) => {
+                    if (i <= currentStage) seg.classList.add('filled');
+                    else seg.classList.remove('filled');
+                });
+
+                // Update Buttons
+                btnPrev.disabled = currentStage === 0;
+                btnNext.disabled = currentStage === maxStages - 1;
+            };
+
+            btnNext.addEventListener('click', () => { stopAutoPlay(); updateStage(currentStage + 1); });
+            btnPrev.addEventListener('click', () => { stopAutoPlay(); updateStage(currentStage - 1); });
+
+            const toggleAutoPlay = () => {
+                if (autoPlayInterval) {
+                    stopAutoPlay();
+                } else {
+                    btnAutoplay.classList.add('playing');
+                    btnAutoplay.textContent = "Auto-Play: ON";
+                    autoPlayInterval = setInterval(() => {
+                        let next = currentStage + 1;
+                        if (next >= maxStages) next = 0; // Loop
+                        updateStage(next);
+                    }, 3000);
+                }
+            };
+
+            const stopAutoPlay = () => {
+                if (autoPlayInterval) {
+                    clearInterval(autoPlayInterval);
+                    autoPlayInterval = null;
+                    btnAutoplay.classList.remove('playing');
+                    btnAutoplay.textContent = "Auto-Play: OFF";
+                }
+            };
+
+            btnAutoplay.addEventListener('click', toggleAutoPlay);
+            
+            // Initialize
+            updateStage(0);
+
+            /* ==========================================================================
+               3. INTERACTIVE SIMULATION GAME (Canvas/DOM Hybrid)
+               ========================================================================== */
+            const gameArea = document.getElementById('game-area');
+            const scoreEl = document.getElementById('score-display');
+            const missEl = document.getElementById('miss-display');
+            const overlay = document.getElementById('game-overlay');
+            const overlayMsg = document.getElementById('overlay-msg');
+            const overlaySub = document.getElementById('overlay-sub');
+            const btnOverlayAction = document.getElementById('btn-overlay-action');
+            const btnStartTop = document.getElementById('btn-start-game');
+            const bins = document.querySelectorAll('.game-bin');
+
+            // SVG Assets for items
+            const svgs = {
+                apple: `<svg viewBox="0 0 100 100"><path d="M50,90 C30,90 20,70 20,50 C20,30 35,20 50,30 C65,20 80,30 80,50 C80,70 70,90 50,90 Z" fill="#EF4444"/><path d="M50,30 Q45,10 60,10" stroke="#4ADE80" stroke-width="4" fill="none"/><path d="M60,10 C70,10 70,25 60,25 C50,25 50,10 60,10 Z" fill="#4ADE80"/></svg>`,
+                banana: `<svg viewBox="0 0 100 100"><path d="M20,80 Q50,90 80,50 Q70,70 30,70 Z" fill="#FACC15"/><path d="M15,75 Q25,85 30,70 Z" fill="#A16207"/></svg>`,
+                bottle: `<svg viewBox="0 0 100 100"><rect x="35" y="30" width="30" height="60" rx="5" fill="rgba(96, 165, 250, 0.5)" stroke="#fff" stroke-width="2"/><rect x="42" y="10" width="16" height="20" fill="rgba(96, 165, 250, 0.8)"/><rect x="40" y="8" width="20" height="6" fill="#1D4ED8" rx="2"/></svg>`,
+                can: `<svg viewBox="0 0 100 100"><rect x="30" y="20" width="40" height="60" rx="5" fill="url(#canGrad)"/><defs><linearGradient id="canGrad" x1="0" x2="1"><stop offset="0%" stop-color="#94A3B8"/><stop offset="50%" stop-color="#E2E8F0"/><stop offset="100%" stop-color="#64748B"/></linearGradient></defs><rect x="30" y="40" width="40" height="20" fill="#EF4444"/></svg>`,
+                battery: `<svg viewBox="0 0 100 100"><rect x="35" y="20" width="30" height="60" rx="2" fill="#333"/><rect x="45" y="10" width="10" height="10" fill="#CBD5E1"/><rect x="35" y="60" width="30" height="20" fill="#10B981" rx="2"/><path d="M48,45 L52,35 L52,42 L58,42 L48,55 Z" fill="#FACC15"/></svg>`
+            };
+
+            const itemTypes = [
+                { type: 'organic', svg: svgs.apple },
+                { type: 'organic', svg: svgs.banana },
+                { type: 'dry', svg: svgs.bottle },
+                { type: 'dry', svg: svgs.can },
+                { type: 'hazard', svg: svgs.battery }
+            ];
+
+            let gameState = 'stopped'; // playing, stopped
+            let score = 0;
+            let misses = 0;
+            const maxMisses = 5;
+            let activeItems = [];
+            let spawnTimer = null;
+            let gameLoopId = null;
+            let baseSpeed = 1.5;
+            
+            // Drag State
+            let draggedItem = null;
+            let dragOffsetX = 0;
+            let dragOffsetY = 0;
+
+            const initGame = () => {
+                score = 0;
+                misses = 0;
+                baseSpeed = 1.5;
+                updateStats();
+                
+                // Clear existing items
+                activeItems.forEach(item => item.el.remove());
+                activeItems = [];
+                
+                overlay.classList.add('hidden');
+                gameState = 'playing';
+                
+                gameLoopId = requestAnimationFrame(gameLoop);
+                scheduleSpawn();
+            };
+
+            const stopGame = (win = false) => {
+                gameState = 'stopped';
+                cancelAnimationFrame(gameLoopId);
+                clearTimeout(spawnTimer);
+                
+                overlay.classList.remove('hidden');
+                if (win) {
+                    overlayMsg.textContent = "Shift Complete!";
+                    overlayMsg.style.color = "var(--color-organic)";
+                    overlaySub.textContent = `Excellent sorting. Final Score: ${score}`;
+                    btnOverlayAction.textContent = "Play Again";
+                } else {
+                    overlayMsg.textContent = "Facility Halted";
+                    overlayMsg.style.color = "var(--color-hazard)";
+                    overlaySub.textContent = "Too much contamination detected (5 Misses).";
+                    btnOverlayAction.textContent = "Restart Shift";
+                }
+            };
+
+            const updateStats = () => {
+                scoreEl.textContent = score;
+                missEl.textContent = `${misses} / ${maxMisses}`;
+            };
+
+            const scheduleSpawn = () => {
+                if(gameState !== 'playing') return;
+                
+                spawnItem();
+                // Speed increases slightly as score goes up
+                let delay = Math.max(800, 2500 - (score * 50));
+                spawnTimer = setTimeout(scheduleSpawn, delay + Math.random() * 500);
+            };
+
+            const spawnItem = () => {
+                const typeData = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+                
+                const el = document.createElement('div');
+                el.className = 'waste-item';
+                el.innerHTML = typeData.svg;
+                
+                // Random X position within safe bounds
+                const areaWidth = gameArea.clientWidth;
+                const startX = 20 + Math.random() * (areaWidth - 100);
+                
+                el.style.left = `${startX}px`;
+                el.style.top = `-60px`; // start above view
+                
+                // Rotation for natural feel
+                const rot = (Math.random() - 0.5) * 45;
+                el.style.transform = `rotate(${rot}deg)`;
+                
+                gameArea.appendChild(el);
+                
+                const itemObj = {
+                    el,
+                    type: typeData.type,
+                    x: startX,
+                    y: -60,
+                    speed: baseSpeed + (Math.random() * 0.5) + (score * 0.05),
+                    isDragging: false
+                };
+                
+                activeItems.push(itemObj);
+                
+                // Setup Drag Events for this item
+                setupDragEvents(itemObj);
+            };
+
+            // Touch & Mouse Drag Logic
+            const setupDragEvents = (item) => {
+                const el = item.el;
+                
+                const onStart = (e) => {
+                    if (gameState !== 'playing') return;
+                    
+                    const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                    
+                    const rect = el.getBoundingClientRect();
+                    dragOffsetX = clientX - rect.left;
+                    dragOffsetY = clientY - rect.top;
+                    
+                    item.isDragging = true;
+                    draggedItem = item;
+                    el.style.zIndex = 100;
+                    
+                    if(e.type.includes('touch')) e.preventDefault(); // Stop scroll
+                };
+
+                el.addEventListener('mousedown', onStart);
+                el.addEventListener('touchstart', onStart, {passive: false});
+            };
+
+            // Global move/end listeners on document to catch fast drags
+            const onMove = (e) => {
+                if (!draggedItem || gameState !== 'playing') return;
+                
+                const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+                
+                const areaRect = gameArea.getBoundingClientRect();
+                
+                // Calculate new position relative to gameArea
+                let newX = clientX - areaRect.left - dragOffsetX;
+                let newY = clientY - areaRect.top - dragOffsetY;
+                
+                // Constrain to area
+                newX = Math.max(0, Math.min(newX, areaRect.width - 60));
+                
+                draggedItem.x = newX;
+                draggedItem.y = newY;
+                
+                // Update DOM instantly for smooth drag
+                draggedItem.el.style.left = `${newX}px`;
+                draggedItem.el.style.top = `${newY}px`;
+                
+                // Highlight target bin if hovering
+                highlightBinTarget(clientX, clientY);
+
+                if(e.type.includes('touch')) e.preventDefault();
+            };
+
+            const onEnd = (e) => {
+                if (!draggedItem || gameState !== 'playing') return;
+                
+                const clientX = e.type.includes('touch') ? e.changedTouches[0].clientX : e.clientX;
+                const clientY = e.type.includes('touch') ? e.changedTouches[0].clientY : e.clientY;
+                
+                draggedItem.isDragging = false;
+                draggedItem.el.style.zIndex = 20;
+                
+                // Check Drop
+                checkDrop(draggedItem, clientX, clientY);
+                
+                draggedItem = null;
+                clearBinHighlights();
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('touchmove', onMove, {passive: false});
+            document.addEventListener('mouseup', onEnd);
+            document.addEventListener('touchend', onEnd);
+
+            // Interaction Helpers
+            const highlightBinTarget = (mouseX, mouseY) => {
+                bins.forEach(bin => {
+                    const rect = bin.getBoundingClientRect();
+                    // Inflate hit area slightly
+                    if (mouseX > rect.left - 20 && mouseX < rect.right + 20 &&
+                        mouseY > rect.top - 20 && mouseY < rect.bottom + 20) {
+                        bin.classList.add('active-drop');
+                    } else {
+                        bin.classList.remove('active-drop');
+                    }
+                });
+            };
+
+            const clearBinHighlights = () => {
+                bins.forEach(bin => bin.classList.remove('active-drop'));
+            };
+
+            const checkDrop = (item, mouseX, mouseY) => {
+                let droppedOnBin = false;
+                
+                bins.forEach(bin => {
+                    const rect = bin.getBoundingClientRect();
+                    if (mouseX > rect.left - 20 && mouseX < rect.right + 20 &&
+                        mouseY > rect.top - 20 && mouseY < rect.bottom + 20) {
+                        
+                        droppedOnBin = true;
+                        const binType = bin.getAttribute('data-type');
+                        
+                        if (binType === item.type) {
+                            // Correct!
+                            score++;
+                            createParticles(item.x + 30, item.y + 30, getComputedStyle(bin).borderTopColor);
+                            removeItem(item);
+                        } else {
+                            // Wrong!
+                            handleMiss();
+                            // Visual feedback - flash red and fall back
+                            item.el.style.filter = "drop-shadow(0 0 10px red) sepia(1) hue-rotate(-50deg) saturate(5)";
+                        }
+                    }
+                });
+                
+                // If dropped outside bins, it just keeps falling
+            };
+
+            const handleMiss = () => {
+                misses++;
+                updateStats();
+                gameArea.style.boxShadow = "inset 0 0 30px rgba(239, 68, 68, 0.5)";
+                setTimeout(() => { gameArea.style.boxShadow = "inset 0 0 50px rgba(0,0,0,0.5)"; }, 200);
+                
+                if (misses >= maxMisses) {
+                    stopGame(false);
+                }
+            };
+
+            const removeItem = (itemToRemove) => {
+                itemToRemove.el.remove();
+                activeItems = activeItems.filter(i => i !== itemToRemove);
+            };
+
+            // Particle System
+            const createParticles = (x, y, color) => {
+                for(let i=0; i<6; i++) {
+                    const p = document.createElement('div');
+                    p.className = 'particle';
+                    p.style.backgroundColor = color;
+                    p.style.width = Math.random() * 6 + 4 + 'px';
+                    p.style.height = p.style.width;
+                    p.style.left = x + 'px';
+                    p.style.top = y + 'px';
+                    
+                    // Random direction
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = 30 + Math.random() * 40;
+                    p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+                    p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+                    
+                    gameArea.appendChild(p);
+                    setTimeout(() => p.remove(), 600);
+                }
+            };
+
+            // Main Loop
+            const gameLoop = () => {
+                if (gameState !== 'playing') return;
+                
+                const areaHeight = gameArea.clientHeight;
+                
+                for (let i = activeItems.length - 1; i >= 0; i--) {
+                    const item = activeItems[i];
+                    
+                    if (!item.isDragging) {
+                        // Apply gravity
+                        item.y += item.speed;
+                        item.el.style.top = `${item.y}px`;
+                        
+                        // Check if fell off screen
+                        if (item.y > areaHeight) {
+                            handleMiss();
+                            removeItem(item);
+                        }
+                    }
+                }
+                
+                gameLoopId = requestAnimationFrame(gameLoop);
+            };
+
+            // Buttons
+            btnOverlayAction.addEventListener('click', initGame);
+            btnStartTop.addEventListener('click', () => {
+                document.getElementById('simulation').scrollIntoView({behavior: 'smooth'});
+                if(gameState !== 'playing') initGame();
+            });
+
+        });
+    </script>
+</body>
+</html>

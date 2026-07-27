@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Air Pressure Simulator — Interactive Science Exhibit</title>
+    <style>
+        :root {
+            --bg-primary: #050814;
+            --bg-secondary: #0b1021;
+            --panel-bg: rgba(15, 23, 42, 0.65);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --accent-cyan: #06b6d4;
+            --accent-blue: #3b82f6;
+            --accent-violet: #8b5cf6;
+            --accent-glow: rgba(6, 182, 212, 0.35);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --danger: #ef4444;
+            --success: #10b981;
+            --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-main);
+            font-family: var(--font-stack);
+            overflow-x: hidden;
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* Animated background mesh */
+        .bg-mesh {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 15% 20%, rgba(59, 130, 246, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 85% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 45%),
+                radial-gradient(circle at 50% 50%, rgba(6, 182, 212, 0.08) 0%, transparent 60%);
+            animation: meshPulse 12s ease-in-out infinite alternate;
+        }
+
+        @keyframes meshPulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.05); opacity: 1; }
+        }
+
+        /* Layout & Container */
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 3vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(24px, 4vw, 48px);
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            padding: clamp(20px, 4vw, 40px) 0;
+            position: relative;
+        }
+
+        .exhibit-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            border-radius: 50px;
+            font-size: clamp(0.75rem, 1.2vw, 0.875rem);
+            font-weight: 600;
+            color: var(--accent-cyan);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 16px;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+        }
+
+        .exhibit-badge span {
+            width: 8px;
+            height: 8px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--accent-cyan);
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 12px;
+        }
+
+        p.subtitle {
+            font-size: clamp(1rem, 1.8vw, 1.25rem);
+            color: var(--text-muted);
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        /* Glass Cards */
+        .glass-card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border);
+            border-radius: 24px;
+            padding: clamp(20px, 3vw, 36px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .glass-card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Section Headings */
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .section-number {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--accent-cyan);
+            background: rgba(6, 182, 212, 0.1);
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(6, 182, 212, 0.2);
+        }
+
+        .section-header h2 {
+            font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+
+        /* 1. Overview Grid */
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .overview-item {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            padding: 24px;
+            border-radius: 16px;
+            transition: background 0.3s ease, transform 0.3s ease;
+        }
+
+        .overview-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            transform: translateY(-4px);
+        }
+
+        .overview-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(59, 130, 246, 0.2));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 16px;
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+
+        .overview-item h3 {
+            font-size: 1.15rem;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .overview-item p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        /* 2. Components Section with Legend Pattern */
+        .components-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .components-layout {
+                grid-template-columns: 1.3fr 1fr;
+                align-items: center;
+            }
+        }
+
+        .diagram-viewport {
+            position: relative;
+            background: radial-gradient(circle at center, rgba(15, 23, 42, 0.8) 0%, rgba(5, 8, 20, 0.95) 100%);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            min-height: 320px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            padding: 20px;
+        }
+
+        .diagram-viewport svg {
+            width: 100%;
+            height: 100%;
+            max-height: 380px;
+            overflow: visible;
+        }
+
+        /* Glowing Markers on Diagram */
+        .diagram-marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            color: #000;
+            font-weight: 700;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--accent-cyan);
+            border: 2px solid #fff;
+            transform: translate(-50%, -50%);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.3s;
+            z-index: 10;
+        }
+
+        .diagram-marker:hover, .diagram-marker.active {
+            transform: translate(-50%, -50%) scale(1.25);
+            background: #fff;
+            box-shadow: 0 0 25px #fff;
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 14px 18px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-row:hover, .legend-row.active {
+            background: rgba(6, 182, 212, 0.08);
+            border-color: rgba(6, 182, 212, 0.3);
+            transform: translateX(4px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(6, 182, 212, 0.2);
+            color: var(--accent-cyan);
+            font-weight: 700;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            border: 1px solid rgba(6, 182, 212, 0.4);
+        }
+
+        .legend-row.active .legend-badge {
+            background: var(--accent-cyan);
+            color: #000;
+        }
+
+        .legend-info h4 {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .legend-info p {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        /* 3. Working Mechanism Section */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .mechanism-stage-display {
+            background: radial-gradient(circle at center, rgba(15, 23, 42, 0.9) 0%, rgba(5, 8, 20, 0.98) 100%);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            min-height: 280px;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stage-visual-content {
+            text-align: center;
+            max-width: 600px;
+            z-index: 2;
+        }
+
+        .stage-tag {
+            display: inline-block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--accent-violet);
+            background: rgba(139, 92, 246, 0.1);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            padding: 4px 12px;
+            border-radius: 20px;
+            margin-bottom: 12px;
+        }
+
+        .stage-title {
+            font-size: clamp(1.3rem, 2vw, 1.6rem);
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .stage-caption {
+            font-size: clamp(0.9rem, 1.2vw, 1.05rem);
+            color: var(--text-muted);
+        }
+
+        /* Stage Controls */
+        .mechanism-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 16px 24px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .stage-progress-dots {
+            display: flex;
+            gap: 10px;
+        }
+
+        .stage-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.15);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .stage-dot.active {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            transform: scale(1.2);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            border: none;
+            color: #000;
+            font-weight: 700;
+            box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3);
+        }
+
+        .btn-primary:hover {
+            opacity: 0.95;
+            box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
+        }
+
+        /* 4. Interactive Simulation Section */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .sim-layout {
+                grid-template-columns: 1fr 340px;
+            }
+        }
+
+        .sim-canvas-box {
+            position: relative;
+            background: #020408;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            height: 450px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .sim-hud {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            pointer-events: none;
+        }
+
+        .hud-badge {
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+
+        .hud-label {
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .hud-value {
+            font-weight: 700;
+            color: var(--accent-cyan);
+            font-size: 1.1rem;
+        }
+
+        .sim-controls-panel {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.04);
+            border-radius: 16px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .control-group label span {
+            color: var(--accent-cyan);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-cyan);
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .sim-reset-btn {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--danger);
+            padding: 10px;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .sim-reset-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        /* 5. Applications & Trivia Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .info-box {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 24px;
+        }
+
+        .info-box h3 {
+            font-size: 1.2rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-box ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .info-box li {
+            position: relative;
+            padding-left: 20px;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        .info-box li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: var(--accent-cyan);
+            font-weight: bold;
+        }
+
+        /* Quick Revision Banner */
+        .revision-card {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .revision-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 12px;
+        }
+
+        .revision-card p {
+            color: var(--text-muted);
+            max-width: 800px;
+            margin: 0 auto;
+            font-size: 1.05rem;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            margin-top: 20px;
+        }
+
+        /* Responsive Breakpoints & Sizing */
+        @media (max-width: 768px) {
+            .app-container {
+                padding: 12px;
+                gap: 20px;
+            }
+            .glass-card {
+                padding: 16px;
+                border-radius: 16px;
+            }
+            .mechanism-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .btn-group {
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="bg-mesh"></div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header>
+            <div class="exhibit-badge">
+                <span></span> Interactive Science Museum Exhibit
+            </div>
+            <h1>Air Pressure Simulator</h1>
+            <p class="subtitle">Explore the invisible kinetic force generated by trillions of colliding gas molecules and gravitational weight.</p>
+        </header>
+
+        <!-- 1. Topic Overview -->
+        <section class="glass-card">
+            <div class="section-header">
+                <div class="section-number">01</div>
+                <h2>Fundamental Concept</h2>
+            </div>
+            <div class="overview-grid">
+                <div class="overview-item">
+                    <div class="overview-icon">💨</div>
+                    <h3>Kinetic Collisions</h3>
+                    <p>Gas molecules are in constant random motion, colliding with every surface they touch and exerting outward force.</p>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-icon">🌍</div>
+                    <h3>Gravitational Weight</h3>
+                    <p>Earth's gravity pulls the atmospheric column downward, packing more molecules densely near the surface.</p>
+                </div>
+                <div class="overview-item">
+                    <div class="overview-icon">🌡️</div>
+                    <h3>Thermal Energy</h3>
+                    <p>Higher temperatures increase molecular velocity, resulting in harder, more frequent impacts and higher pressure.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. Main Components (With Legend Pattern) -->
+        <section class="glass-card">
+            <div class="section-header">
+                <div class="section-number">02</div>
+                <h2>System Architecture & Components</h2>
+            </div>
+            <div class="components-layout">
+                <!-- Illustration Viewport -->
+                <div class="diagram-viewport" id="component-viewport">
+                    <!-- SVG Vector Illustration -->
+                    <svg viewBox="0 0 500 350" preserveAspectRatio="xMidYMid meet">
+                        <!-- Atmospheric Gradient Background -->
+                        <defs>
+                            <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#050814" />
+                                <stop offset="50%" stop-color="#0b1d3a" />
+                                <stop offset="100%" stop-color="#0f3460" />
+                            </linearGradient>
+                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="6" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                        </defs>
+                        <rect width="500" height="350" rx="12" fill="url(#skyGrad)" />
+                        
+                        <!-- Atmosphere Column -->
+                        <path d="M 50 300 L 450 300 L 420 80 L 80 80 Z" fill="rgba(6, 182, 212, 0.05)" stroke="rgba(6, 182, 212, 0.2)" stroke-width="1.5" />
+                        
+                        <!-- Molecule Streams / Particles -->
+                        <g fill="#38bdf8" opacity="0.7">
+                            <circle cx="250" cy="120" r="4" filter="url(#glow)"/>
+                            <circle cx="280" cy="150" r="3" />
+                            <circle cx="210" cy="140" r="3.5" />
+                            <circle cx="235" cy="180" r="4" />
+                            <circle cx="270" cy="210" r="4.5" />
+                            <circle cx="220" cy="240" r="5" fill="#06b6d4" filter="url(#glow)"/>
+                            <circle cx="290" cy="270" r="5.5" fill="#06b6d4" />
+                            <circle cx="200" cy="280" r="6" fill="#06b6d4" filter="url(#glow)"/>
+                        </g>
+
+                        <!-- Ground Surface -->
+                        <rect x="30" y="300" width="440" height="20" rx="4" fill="#1e293b" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+                        
+                        <!-- Barometer / Pressure Sensor Graphic -->
+                        <path d="M 250 300 L 250 220" stroke="#94a3b8" stroke-width="4" />
+                        <circle cx="250" cy="215" r="22" fill="#0f172a" stroke="#06b6d4" stroke-width="2" filter="url(#glow)" />
+                        <text x="250" y="219" fill="#f8fafc" font-size="10" font-weight="bold" text-anchor="middle">BAR</text>
+                    </svg>
+
+                    <!-- Numbered Glowing Markers -->
+                    <div class="diagram-marker" style="top: 25%; left: 50%;" data-index="0" title="Air Molecules">1</div>
+                    <div class="diagram-marker" style="top: 50%; left: 35%;" data-index="1" title="Gravitational Column">2</div>
+                    <div class="diagram-marker" style="top: 75%; left: 60%;" data-index="2" title="Surface Collisions">3</div>
+                    <div class="diagram-marker" style="top: 86%; left: 50%;" data-index="3" title="Pressure Gauge">4</div>
+                </div>
+
+                <!-- Legend List -->
+                <div class="legend-list" id="component-legend">
+                    <div class="legend-row active" data-index="0">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-info">
+                            <h4>Gas Molecules (N₂ & O₂)</h4>
+                            <p>Trillions of microscopic particles moving at supersonic speeds, colliding continuously.</p>
+                        </div>
+                    </div>
+                    <div class="legend-row" data-index="1">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-info">
+                            <h4>Gravitational Column</h4>
+                            <p>Earth's gravity holds gases close, creating maximum density at sea level.</p>
+                        </div>
+                    </div>
+                    <div class="legend-row" data-index="2">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-info">
+                            <h4>Kinetic Collisions</h4>
+                            <p>Momentum transfer against physical objects translates directly to measurable pressure.</p>
+                        </div>
+                    </div>
+                    <div class="legend-row" data-index="3">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-info">
+                            <h4>Pressure Sensor / Barometer</h4>
+                            <p>Instruments designed to quantify force per unit area in Pascals (Pa) or atmospheres (atm).</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Working Mechanism Section -->
+        <section class="glass-card">
+            <div class="section-header">
+                <div class="section-number">03</div>
+                <h2>Atmospheric Mechanism & Flow</h2>
+            </div>
+            <div class="mechanism-container">
+                <div class="mechanism-stage-display" id="stage-display">
+                    <div class="stage-visual-content">
+                        <span class="stage-tag" id="stage-tag">Stage 1 of 4</span>
+                        <h3 class="stage-title" id="stage-title">Solar Heating & Expansion</h3>
+                        <p class="stage-caption" id="stage-caption">Solar radiation heats the Earth's surface, warming adjacent air pockets and causing them to expand and become buoyant.</p>
+                    </div>
+                </div>
+                <div class="mechanism-controls">
+                    <div class="stage-progress-dots" id="stage-dots">
+                        <div class="stage-dot active" data-stage="0"></div>
+                        <div class="stage-dot" data-stage="1"></div>
+                        <div class="stage-dot" data-stage="2"></div>
+                        <div class="stage-dot" data-stage="3"></div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn" id="prev-stage-btn">← Prev</button>
+                        <button class="btn btn-primary" id="autoplay-btn">⏸ Pause Auto-Play</button>
+                        <button class="btn" id="next-stage-btn">Next →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Interactive Simulation Section -->
+        <section class="glass-card">
+            <div class="section-header">
+                <div class="section-number">04</div>
+                <h2>Interactive Air Pressure Lab</h2>
+            </div>
+            <div class="sim-layout">
+                <div class="sim-canvas-box">
+                    <!-- HUD Overlays -->
+                    <div class="sim-hud">
+                        <div class="hud-badge">
+                            <span class="hud-label">Calculated Pressure</span>
+                            <span class="hud-value" id="hud-pressure">101.3 kPa</span>
+                        </div>
+                        <div class="hud-badge">
+                            <span class="hud-label">Collision Frequency</span>
+                            <span class="hud-value" id="hud-collisions">High</span>
+                        </div>
+                    </div>
+                    <canvas id="simulationCanvas"></canvas>
+                </div>
+                <div class="sim-controls-panel">
+                    <div class="control-group">
+                        <label for="tempSlider">Temperature <span id="tempVal">293 K</span></label>
+                        <input type="range" id="tempSlider" min="200" max="500" value="293">
+                    </div>
+                    <div class="control-group">
+                        <label for="altSlider">Altitude <span id="altVal">0 km (Sea Level)</span></label>
+                        <input type="range" id="altSlider" min="0" max="15" value="0">
+                    </div>
+                    <div class="control-group">
+                        <label for="volSlider">Container Volume <span id="volVal">100%</span></label>
+                        <input type="range" id="volSlider" min="50" max="150" value="100">
+                    </div>
+                    <button class="sim-reset-btn" id="resetSimBtn">Reset Parameters</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. Applications, Trivia & Mistakes -->
+        <div class="info-grid">
+            <div class="info-box">
+                <h3>🚀 Real-World Applications</h3>
+                <ul>
+                    <li><strong>Barometric Weather Forecasting:</strong> Sudden drops in air pressure indicate approaching storms and low-pressure cyclones.</li>
+                    <li><strong>Aerodynamic Lift:</strong> Air pressure differentials above and below airplane wings enable heavy aircraft flight.</li>
+                    <li><strong>Hydraulics & Pneumatics:</strong> Industrial machinery utilizes compressed air for immense mechanical force transmission.</li>
+                </ul>
+            </div>
+            <div class="info-box">
+                <h3>💡 Fascinating Scientific Fact</h3>
+                <ul>
+                    <li>At sea level, standard air pressure exerts roughly <strong>1 kilogram of force per square centimeter</strong> (14.7 lbs per square inch) on your body!</li>
+                    <li>You don't feel crushed because the fluids inside your body push outward with equal pressure, perfectly balancing the atmosphere.</li>
+                </ul>
+            </div>
+            <div class="info-box">
+                <h3>⚠️ Common Misconceptions</h3>
+                <ul>
+                    <li><strong>Myth:</strong> Air pressure only pushes downward.<br><strong>Fact:</strong> Air pressure pushes equally in <strong>all directions</strong>—up, down, and sideways.</li>
+                    <li><strong>Myth:</strong> Cold air sinks because it is heavy.<br><strong>Fact:</strong> Cold air molecules pack more tightly, increasing density and causing gravitational descent.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Quick Revision -->
+        <div class="revision-card">
+            <h3>Quick Revision Summary</h3>
+            <p>Air pressure is determined by molecular kinetic velocity (temperature) and gravitational molecular packing (altitude/volume). Increasing temperature or particle density raises pressure through rapid wall collisions.</p>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>Air Pressure Simulator • Premium Educational Science Exhibit • Designed for High-Precision Learning</p>
+        </footer>
+    </div>
+
+    <script>
+        /* --- 1. Component Legend Interaction --- */
+        const markers = document.querySelectorAll('.diagram-marker');
+        const rows = document.querySelectorAll('.legend-row');
+
+        function setActiveComponent(index) {
+            markers.forEach((m, i) => {
+                if(i === index) m.classList.add('active');
+                else m.classList.remove('active');
+            });
+            rows.forEach((r, i) => {
+                if(i === index) r.classList.add('active');
+                else r.classList.remove('active');
+            });
+        }
+
+        markers.forEach((marker, index) => {
+            marker.addEventListener('click', () => setActiveComponent(index));
+            marker.addEventListener('mouseenter', () => setActiveComponent(index));
+        });
+
+        rows.forEach((row, index) => {
+            row.addEventListener('click', () => setActiveComponent(index));
+            row.addEventListener('mouseenter', () => setActiveComponent(index));
+        });
+
+        /* --- 2. Working Mechanism Stages --- */
+        const stagesData = [
+            {
+                tag: "Stage 1 of 4",
+                title: "Solar Heating & Expansion",
+                caption: "Solar radiation warms the terrestrial ground, heating adjacent air masses and increasing molecular kinetic energy."
+            },
+            {
+                tag: "Stage 2 of 4",
+                title: "Thermal Buoyancy & Ascent",
+                caption: "As warm air expands, its density decreases relative to surrounding cooler air, causing it to ascend into higher altitudes."
+            },
+            {
+                tag: "Stage 3 of 4",
+                title: "Pressure Gradient Formation",
+                caption: "Rising warm air creates a low-pressure zone at the surface, while cooler, dense air rushes horizontally to fill the gap."
+            },
+            {
+                tag: "Stage 4 of 4",
+                title: "Kinetic Wall Collisions",
+                caption: "Molecules constantly bounce against boundaries and barometers, transmitting steady macroscopic atmospheric pressure."
+            }
+        ];
+
+        let currentStage = 0;
+        let isAutoPlaying = true;
+        let stageTimer;
+
+        const stageTag = document.getElementById('stage-tag');
+        const stageTitle = document.getElementById('stage-title');
+        const stageCaption = document.getElementById('stage-caption');
+        const stageDots = document.querySelectorAll('.stage-dot');
+        const autoplayBtn = document.getElementById('autoplay-btn');
+
+        function updateStage(index) {
+            currentStage = index;
+            stageTag.textContent = stagesData[index].tag;
+            stageTitle.textContent = stagesData[index].title;
+            stageCaption.textContent = stagesData[index].caption;
+
+            stageDots.forEach((dot, i) => {
+                if(i === index) dot.classList.add('active');
+                else dot.classList.remove('active');
+            });
+        }
+
+        function nextStage() {
+            currentStage = (currentStage + 1) % stagesData.length;
+            updateStage(currentStage);
+        }
+
+        function prevStage() {
+            currentStage = (currentStage - 1 + stagesData.length) % stagesData.length;
+            updateStage(currentStage);
+        }
+
+        stageDots.forEach((dot, i) => {
+            dot.addEventListener('click', () => {
+                updateStage(i);
+                resetAutoPlay();
+            });
+        });
+
+        document.getElementById('next-stage-btn').addEventListener('click', () => {
+            nextStage();
+            resetAutoPlay();
+        });
+
+        document.getElementById('prev-stage-btn').addEventListener('click', () => {
+            prevStage();
+            resetAutoPlay();
+        });
+
+        autoplayBtn.addEventListener('click', () => {
+            isAutoPlaying = !isAutoPlaying;
+            if(isAutoPlaying) {
+                autoplayBtn.textContent = "⏸ Pause Auto-Play";
+                startAutoPlay();
+            } else {
+                autoplayBtn.textContent = "▶ Resume Auto-Play";
+                clearInterval(stageTimer);
+            }
+        });
+
+        function startAutoPlay() {
+            clearInterval(stageTimer);
+            stageTimer = setInterval(() => {
+                if(isAutoPlaying) nextStage();
+            }, 4500);
+        }
+
+        function resetAutoPlay() {
+            if(isAutoPlaying) {
+                clearInterval(stageTimer);
+                startAutoPlay();
+            }
+        }
+
+        startAutoPlay();
+
+        /* --- 3. Interactive Physics Particle Simulation --- */
+        const canvas = document.getElementById('simulationCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const tempSlider = document.getElementById('tempSlider');
+        const altSlider = document.getElementById('altSlider');
+        const volSlider = document.getElementById('volSlider');
+
+        const tempVal = document.getElementById('tempVal');
+        const altVal = document.getElementById('altVal');
+        const volVal = document.getElementById('volVal');
+        const hudPressure = document.getElementById('hud-pressure');
+        const hudCollisions = document.getElementById('hud-collisions');
+
+        let particles = [];
+        const maxParticlesCount = 120;
+
+        class Particle {
+            constructor(x, y, vx, vy, radius, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.radius = radius;
+                this.color = color;
+            }
+
+            update(speedMultiplier) {
+                this.x += this.vx * speedMultiplier;
+                this.y += this.vy * speedMultiplier;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 8;
+                ctx.shadowColor = this.color;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            const count = Math.floor(maxParticlesCount * (1 - altSlider.value / 18));
+            for(let i = 0; i < count; i++) {
+                const radius = 3;
+                const x = Math.random() * (canvas.width - 40) + 20;
+                const y = Math.random() * (canvas.height - 40) + 20;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = (Math.random() * 2 + 1);
+                particles.push(new Particle(x, y, Math.cos(angle)*speed, Math.sin(angle)*speed, radius, '#06b6d4'));
+            }
+        }
+
+        function resizeCanvas() {
+            const box = canvas.parentElement;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = box.clientWidth * dpr;
+            canvas.height = box.clientHeight * dpr;
+            ctx.scale(dpr, dpr);
+            initParticles();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        document.getElementById('resetSimBtn').addEventListener('click', () => {
+            tempSlider.value = 293;
+            altSlider.value = 0;
+            volSlider.value = 100;
+            updateSimulationParameters();
+        });
+
+        function updateSimulationParameters() {
+            tempVal.textContent = tempSlider.value + " K";
+            altVal.textContent = altSlider.value + " km" + (altSlider.value == 0 ? " (Sea Level)" : "");
+            volVal.textContent = volSlider.value + "%";
+
+            // Recalculate particle count if altitude changes
+            if(particles.length !== Math.floor(maxParticlesCount * (1 - altSlider.value / 18))) {
+                initParticles();
+            }
+        }
+
+        [tempSlider, altSlider, volSlider].forEach(slider => {
+            slider.addEventListener('input', updateSimulationParameters);
+        });
+
+        function animateSimulation() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const temp = parseFloat(tempSlider.value);
+            const alt = parseFloat(altSlider.value);
+            const vol = parseFloat(volSlider.value) / 100;
+
+            const speedMultiplier = Math.sqrt(temp / 293);
+            
+            // Container boundaries based on volume scale
+            const boxW = (canvas.parentElement.clientWidth - 60) * vol;
+            const boxH = (canvas.parentElement.clientHeight - 60) * vol;
+            const originX = (canvas.parentElement.clientWidth - boxW) / 2;
+            const originY = (canvas.parentElement.clientHeight - boxH) / 2;
+
+            // Draw container border
+            ctx.strokeStyle = 'rgba(6, 182, 212, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(originX, originY, boxW, boxH);
+
+            let wallCollisionsCount = 0;
+
+            particles.forEach(p => {
+                p.update(speedMultiplier);
+
+                // Boundary collision with container walls
+                if(p.x - p.radius < originX) {
+                    p.x = originX + p.radius;
+                    p.vx *= -1;
+                    wallCollisionsCount++;
+                }
+                if(p.x + p.radius > originX + boxW) {
+                    p.x = originX + boxW - p.radius;
+                    p.vx *= -1;
+                    wallCollisionsCount++;
+                }
+                if(p.y - p.radius < originY) {
+                    p.y = originY + p.radius;
+                    p.vy *= -1;
+                    wallCollisionsCount++;
+                }
+                if(p.y + p.radius > originY + boxH) {
+                    p.y = originY + boxH - p.radius;
+                    p.vy *= -1;
+                    wallCollisionsCount++;
+                }
+
+                p.draw();
+            });
+
+            // Calculate Pressure (proportional to temp * density / volume)
+            const densityFactor = (maxParticlesCount - alt * 6) / vol;
+            const calculatedPressure = Math.max(10, Math.round((temp / 293) * densityFactor * 0.95 * 10) / 10);
+            
+            hudPressure.textContent = calculatedPressure + " kPa";
+            if(calculatedPressure > 150) hudCollisions.textContent = "Extremely High";
+            else if(calculatedPressure > 90) hudCollisions.textContent = "Moderate";
+            else hudCollisions.textContent = "Low (Thinned)";
+
+            requestAnimationFrame(animateSimulation);
+        }
+
+        animateSimulation();
+    </script>
+</body>
+</html>

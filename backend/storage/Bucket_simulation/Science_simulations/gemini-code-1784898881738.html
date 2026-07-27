@@ -1,0 +1,1302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Homologous Series Explorer</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-color: #0b0f19;
+            --surface-color: rgba(30, 41, 59, 0.6);
+            --surface-border: rgba(255, 255, 255, 0.1);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-cyan: #06b6d4;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-pink: #ec4899;
+            
+            --carbon-color: #27272a;
+            --carbon-light: #52525b;
+            --hydrogen-color: #e4e4e7;
+            --hydrogen-light: #ffffff;
+            --oxygen-color: #ef4444;
+            --oxygen-light: #fca5a5;
+
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            
+            --spacing-sm: clamp(0.5rem, 1vw, 1rem);
+            --spacing-md: clamp(1rem, 2vw, 2rem);
+            --spacing-lg: clamp(2rem, 4vw, 4rem);
+            
+            --border-radius: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            font-size: clamp(14px, 1vw + 10px, 18px);
+        }
+
+        /* Ambient Background Canvas */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            opacity: 0.4;
+        }
+
+        /* ==========================================================================
+           TYPOGRAPHY & GLASSMORPHISM
+           ========================================================================== */
+        h1 {
+            font-size: clamp(2.5rem, 5vw, 4.5rem);
+            line-height: 1.1;
+            font-weight: 800;
+            background: linear-gradient(to right, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: var(--spacing-md);
+        }
+
+        h2 {
+            font-size: clamp(1.8rem, 3vw, 2.5rem);
+            font-weight: 700;
+            margin-bottom: var(--spacing-md);
+            display: inline-block;
+            position: relative;
+        }
+
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); margin-bottom: var(--spacing-sm); }
+
+        p { margin-bottom: var(--spacing-md); color: var(--text-secondary); }
+
+        .glass-panel {
+            background: var(--surface-color);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-md);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-md);
+        }
+
+        section { padding: var(--spacing-lg) 0; }
+
+        /* ==========================================================================
+           LAYOUT & GRIDS
+           ========================================================================== */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+            gap: var(--spacing-lg);
+            align-items: center;
+        }
+
+        .flex-col { display: flex; flex-direction: column; gap: var(--spacing-md); }
+        .flex-row { display: flex; gap: var(--spacing-md); align-items: center; flex-wrap: wrap; }
+
+        /* ==========================================================================
+           LABELED DIAGRAM SYSTEM (Mandatory Rule Compliance)
+           ========================================================================== */
+        .labeled-diagram {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        @media (min-width: 1024px) {
+            .labeled-diagram {
+                flex-direction: row;
+                align-items: center;
+            }
+            .diagram-visual { flex: 2; }
+            .diagram-legend { flex: 1; }
+        }
+
+        .diagram-visual {
+            position: relative;
+            width: 100%;
+            min-height: 250px;
+            background: radial-gradient(circle at center, rgba(56, 189, 248, 0.1) 0%, transparent 70%);
+            border-radius: var(--border-radius);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--surface-color);
+            border: 2px solid var(--accent-cyan);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.5);
+            transition: all 0.3s ease;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--accent-cyan);
+            box-shadow: 0 0 25px rgba(6, 182, 212, 0.8);
+        }
+
+        .legend-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(6, 182, 212, 0.1);
+            border-color: rgba(6, 182, 212, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            background: var(--accent-cyan);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (Mandatory Rules)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .working-visual {
+            width: 100%;
+            height: clamp(300px, 40vh, 500px);
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: var(--border-radius);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .working-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .progress-bar {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .progress-dot {
+            flex: 1;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--surface-border);
+            transition: all 0.3s ease;
+        }
+
+        .progress-dot.active { background: var(--accent-blue); box-shadow: 0 0 10px var(--accent-blue); }
+
+        .btn-group { display: flex; gap: 12px; }
+
+        button {
+            background: var(--surface-color);
+            color: white;
+            border: 1px solid var(--surface-border);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover { background: rgba(255, 255, 255, 0.1); border-color: var(--accent-cyan); }
+        button.primary { background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple)); border: none; }
+        button.primary:hover { opacity: 0.9; transform: scale(1.05); }
+
+        .stage-info {
+            text-align: center;
+            min-height: 80px;
+        }
+        
+        .stage-title { color: var(--accent-cyan); font-weight: bold; font-size: 1.2rem; margin-bottom: 4px; }
+
+        /* SVG Animation Classes for Working Mechanism */
+        .svg-mol { transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+        .fade-in { opacity: 1; transform: scale(1); }
+        .fade-out { opacity: 0; transform: scale(0.5); pointer-events: none; }
+        .highlight-bond { stroke: var(--accent-pink); stroke-width: 6; filter: drop-shadow(0 0 5px var(--accent-pink)); }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (The Builder)
+           ========================================================================== */
+        .simulation-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+        }
+
+        @media (min-width: 1024px) {
+            .simulation-layout { grid-template-columns: 300px 1fr 250px; }
+        }
+
+        .sim-controls, .sim-data {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .sim-stage {
+            width: 100%;
+            height: clamp(350px, 50vh, 600px);
+            background: radial-gradient(circle at center, rgba(30, 41, 59, 0.8), #0b0f19);
+            border-radius: var(--border-radius);
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid var(--surface-border);
+            overflow: hidden;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+
+        .series-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .radio-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--surface-border);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .radio-btn:hover { background: rgba(255,255,255,0.1); }
+        .radio-btn input { display: none; }
+        .radio-btn input:checked + span { color: var(--accent-cyan); font-weight: bold; }
+        .radio-btn.selected { border-color: var(--accent-cyan); background: rgba(6, 182, 212, 0.1); }
+
+        .data-card {
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 15px;
+            border-left: 3px solid var(--accent-blue);
+        }
+
+        .data-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: white;
+            font-family: monospace;
+        }
+
+        /* SVG Molecule Styling */
+        .atom {
+            transition: cx 0.5s, cy 0.5s, r 0.3s;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));
+        }
+        .bond {
+            stroke: #71717a;
+            stroke-width: 4;
+            stroke-linecap: round;
+            transition: x1 0.5s, y1 0.5s, x2 0.5s, y2 0.5s;
+        }
+        
+        .formula-display {
+            font-size: 2rem;
+            font-weight: bold;
+            text-align: center;
+            letter-spacing: 2px;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        sub { font-size: 0.6em; vertical-align: sub; }
+
+        /* ==========================================================================
+           MISC SECTIONS (Cards, Grids)
+           ========================================================================== */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .info-card {
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius);
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
+            border: 1px solid var(--surface-border);
+            transition: transform 0.3s;
+        }
+        .info-card:hover { transform: translateY(-5px); border-color: var(--accent-cyan); }
+        .info-card h4 { color: var(--accent-cyan); margin-bottom: 10px; font-size: 1.2rem;}
+
+        /* Hero Animation */
+        @keyframes float {
+            0% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(5deg); }
+            100% { transform: translateY(0px) rotate(0deg); }
+        }
+        .hero-visual { animation: float 10s ease-in-out infinite; width: 100%; height: 400px;}
+
+        /* Utilities */
+        .text-cyan { color: var(--accent-cyan); }
+        .text-pink { color: var(--accent-pink); }
+        .text-purple { color: var(--accent-purple); }
+        .bold { font-weight: bold; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        <!-- ==========================================================================
+             1. INTRODUCTION
+             ========================================================================== -->
+        <header id="intro" class="grid-2" style="min-height: 80vh; padding-top: 10vh;">
+            <div class="flex-col">
+                <h1>Homologous<br>Series Explorer</h1>
+                <p style="font-size: 1.2rem; max-width: 500px;">
+                    Discover the 'DNA' of organic chemistry. See how simple building blocks repeat to create families of molecules with predictable patterns and gradually changing properties.
+                </p>
+                <div style="display: flex; gap: 15px; margin-top: 20px;">
+                    <button class="primary" onclick="document.getElementById('simulation').scrollIntoView({behavior: 'smooth'})">
+                        Start Simulation
+                    </button>
+                    <button onclick="document.getElementById('components').scrollIntoView({behavior: 'smooth'})">
+                        Learn Basics
+                    </button>
+                </div>
+            </div>
+            <div class="hero-visual" id="hero-svg-container">
+                <!-- Hero SVG injected via JS -->
+            </div>
+        </header>
+
+        <!-- ==========================================================================
+             2. TOPIC OVERVIEW
+             ========================================================================== -->
+        <section id="overview">
+            <div class="glass-panel text-center" style="max-width: 800px; margin: 0 auto;">
+                <h2>What is a Homologous Series?</h2>
+                <p style="font-size: 1.1rem; text-align: left;">
+                    Imagine building a chain with Lego bricks. You start with a specific head and tail, and to make it longer, you keep adding the <strong>exact same middle block</strong>.<br><br>
+                    In chemistry, a Homologous Series is a family of organic compounds that follow a specific pattern:
+                </p>
+                <ul style="text-align: left; margin-left: 20px; color: var(--text-secondary); line-height: 1.8;">
+                    <li>They share the same <span class="text-cyan bold">General Formula</span>.</li>
+                    <li>They have the same <span class="text-pink bold">Functional Group</span> (determining chemical properties).</li>
+                    <li>Successive members differ by a <span class="text-purple bold">-CH₂- unit</span> (mass of 14u).</li>
+                    <li>Their physical properties (like boiling point) change gradually as the chain grows.</li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             3. MAIN COMPONENTS (Labeled Diagram)
+             ========================================================================== -->
+        <section id="components">
+            <h2>Anatomy of a Molecule</h2>
+            <p>Let's break down <strong>Propanol</strong> (an alcohol) to see the parts that define its series.</p>
+            
+            <div class="glass-panel labeled-diagram">
+                <!-- Visual Area -->
+                <div class="diagram-visual" id="anatomy-visual">
+                    <svg viewBox="0 0 500 300" width="100%" height="100%" id="anatomy-svg">
+                        <defs>
+                            <radialGradient id="gradC" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#52525b" />
+                                <stop offset="100%" stop-color="#27272a" />
+                            </radialGradient>
+                            <radialGradient id="gradH" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#ffffff" />
+                                <stop offset="100%" stop-color="#d4d4d8" />
+                            </radialGradient>
+                            <radialGradient id="gradO" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#fca5a5" />
+                                <stop offset="100%" stop-color="#dc2626" />
+                            </radialGradient>
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="2" dy="5" stdDeviation="3" flood-opacity="0.5"/>
+                            </filter>
+                        </defs>
+                        <!-- Bonds -->
+                        <g stroke="#71717a" stroke-width="6" stroke-linecap="round">
+                            <line x1="150" y1="150" x2="250" y2="150" />
+                            <line x1="250" y1="150" x2="350" y2="150" />
+                            <!-- Functional group bond -->
+                            <line x1="350" y1="150" x2="420" y2="150" stroke="#fca5a5"/>
+                            <line x1="420" y1="150" x2="450" y2="110" stroke="#fca5a5"/>
+                            
+                            <!-- H bonds C1 -->
+                            <line x1="150" y1="150" x2="150" y2="90" />
+                            <line x1="150" y1="150" x2="150" y2="210" />
+                            <line x1="150" y1="150" x2="90" y2="150" />
+                            <!-- H bonds C2 -->
+                            <line x1="250" y1="150" x2="250" y2="90" />
+                            <line x1="250" y1="150" x2="250" y2="210" />
+                            <!-- H bonds C3 -->
+                            <line x1="350" y1="150" x2="350" y2="90" />
+                            <line x1="350" y1="150" x2="350" y2="210" />
+                        </g>
+                        <!-- Atoms (drawn last so they are on top) -->
+                        <g filter="url(#shadow)">
+                            <!-- H C1 -->
+                            <circle cx="150" cy="90" r="15" fill="url(#gradH)" />
+                            <circle cx="150" cy="210" r="15" fill="url(#gradH)" />
+                            <circle cx="90" cy="150" r="15" fill="url(#gradH)" />
+                            <!-- H C2 -->
+                            <circle cx="250" cy="90" r="15" fill="url(#gradH)" />
+                            <circle cx="250" cy="210" r="15" fill="url(#gradH)" />
+                            <!-- H C3 -->
+                            <circle cx="350" cy="90" r="15" fill="url(#gradH)" />
+                            <circle cx="350" cy="210" r="15" fill="url(#gradH)" />
+                            
+                            <!-- Carbons -->
+                            <circle cx="150" cy="150" r="25" fill="url(#gradC)" />
+                            <circle cx="250" cy="150" r="25" fill="url(#gradC)" />
+                            <circle cx="350" cy="150" r="25" fill="url(#gradC)" />
+
+                            <!-- Functional Group (OH) -->
+                            <circle cx="420" cy="150" r="22" fill="url(#gradO)" />
+                            <circle cx="450" cy="110" r="15" fill="url(#gradH)" />
+                        </g>
+
+                        <!-- Highlight Zones (Hidden by default, shown via JS) -->
+                        <rect id="hl-backbone" x="120" y="60" width="260" height="180" fill="none" stroke="var(--accent-cyan)" stroke-width="3" stroke-dasharray="5,5" rx="10" opacity="0" transition="opacity 0.3s"/>
+                        <circle id="hl-func" cx="425" cy="135" r="45" fill="none" stroke="var(--accent-pink)" stroke-width="3" stroke-dasharray="5,5" opacity="0" transition="opacity 0.3s"/>
+                        <rect id="hl-unit" x="220" y="60" width="60" height="180" fill="none" stroke="var(--accent-purple)" stroke-width="3" stroke-dasharray="5,5" rx="10" opacity="0" transition="opacity 0.3s"/>
+
+                    </svg>
+
+                    <!-- Absolute Markers overlaying SVG -->
+                    <div class="marker" style="left: 20%; top: 50%;" data-target="1" onmouseover="highlightAnatomy(1)" onmouseout="resetAnatomy()">1</div>
+                    <div class="marker" style="left: 85%; top: 50%; border-color: var(--accent-pink);" data-target="2" onmouseover="highlightAnatomy(2)" onmouseout="resetAnatomy()">2</div>
+                    <div class="marker" style="left: 50%; top: 20%; border-color: var(--accent-purple);" data-target="3" onmouseover="highlightAnatomy(3)" onmouseout="resetAnatomy()">3</div>
+                </div>
+
+                <!-- Legend Area -->
+                <div class="diagram-legend">
+                    <ul class="legend-list">
+                        <li class="legend-item" data-target="1" onmouseover="highlightAnatomy(1)" onmouseout="resetAnatomy()">
+                            <div class="legend-badge">1</div>
+                            <div>
+                                <strong class="text-cyan">Carbon Backbone</strong>
+                                <p style="font-size: 0.9rem; margin:0;">The hydrocarbon chain. Length dictates physical properties.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-target="2" onmouseover="highlightAnatomy(2)" onmouseout="resetAnatomy()">
+                            <div class="legend-badge" style="background: var(--accent-pink);">2</div>
+                            <div>
+                                <strong class="text-pink">Functional Group (-OH)</strong>
+                                <p style="font-size: 0.9rem; margin:0;">The reactive part. Dictates chemical behavior (Alcohol).</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-target="3" onmouseover="highlightAnatomy(3)" onmouseout="resetAnatomy()">
+                            <div class="legend-badge" style="background: var(--accent-purple);">3</div>
+                            <div>
+                                <strong class="text-purple">The -CH₂- Unit</strong>
+                                <p style="font-size: 0.9rem; margin:0;">The repeating block. Successive members differ by this unit.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             4. WORKING PROCESS (Chain Elongation) - MANDATORY RULES APPLIED
+             ========================================================================== -->
+        <section id="working">
+            <h2>Mechanism: Chain Elongation</h2>
+            <p>How do we move from one member to the next in the Alkane series? It's a linear sequence of adding a specific structural unit.</p>
+            
+            <div class="glass-panel working-container">
+                <!-- Visual Stage -->
+                <div class="working-visual" id="mechanism-visual">
+                    <!-- Dynamic SVG injected here -->
+                    <svg viewBox="0 0 600 300" width="100%" height="100%" id="mech-svg">
+                        <!-- Definitions -->
+                        <defs>
+                            <radialGradient id="gradCm" cx="30%" cy="30%" r="70%"><stop offset="0%" stop-color="#52525b" /><stop offset="100%" stop-color="#27272a" /></radialGradient>
+                            <radialGradient id="gradHm" cx="30%" cy="30%" r="70%"><stop offset="0%" stop-color="#ffffff" /><stop offset="100%" stop-color="#d4d4d8" /></radialGradient>
+                            <filter id="glowPink" x="-50%" y="-50%" width="200%" height="200%">
+                                <feGaussianBlur stdDeviation="5" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                        </defs>
+                        
+                        <!-- Groups for animation -->
+                        <g id="mech-bonds" stroke="#71717a" stroke-width="5" stroke-linecap="round"></g>
+                        <g id="mech-atoms" filter="url(#shadow)"></g>
+                        
+                        <!-- Inserted CH2 group (hidden initially) -->
+                        <g id="mech-ch2-insert" class="fade-out" transform="translate(0, -100)">
+                            <line x1="300" y1="150" x2="300" y2="90" stroke="#71717a" stroke-width="5"/>
+                            <line x1="300" y1="150" x2="300" y2="210" stroke="#71717a" stroke-width="5"/>
+                            <circle cx="300" cy="150" r="25" fill="url(#gradCm)"/>
+                            <circle cx="300" cy="90" r="15" fill="url(#gradHm)"/>
+                            <circle cx="300" cy="210" r="15" fill="url(#gradHm)"/>
+                            <text x="300" y="70" fill="var(--accent-purple)" font-weight="bold" text-anchor="middle" font-size="16">+ CH₂ Group</text>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Controls -->
+                <div class="working-controls">
+                    <div class="stage-info">
+                        <div id="mech-title" class="stage-title">Stage 1: Base Molecule</div>
+                        <div id="mech-desc">Starting with Methane (CH₄), the simplest alkane.</div>
+                    </div>
+                    
+                    <div class="progress-bar" id="mech-progress">
+                        <div class="progress-dot active"></div>
+                        <div class="progress-dot"></div>
+                        <div class="progress-dot"></div>
+                        <div class="progress-dot"></div>
+                    </div>
+
+                    <div class="btn-group">
+                        <button id="btn-prev" onclick="mechState.prev()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                        </button>
+                        <button id="btn-play" class="primary" onclick="mechState.togglePlay()">
+                            Play Auto
+                        </button>
+                        <button id="btn-next" onclick="mechState.next()">
+                            Next <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             5. INTERACTIVE SIMULATION (The Builder)
+             ========================================================================== -->
+        <section id="simulation">
+            <h2>Molecule Builder</h2>
+            <p>Select a homologous series and change the number of carbon atoms (<span class="text-cyan">n</span>) to see how the molecule structure and properties change dynamically.</p>
+
+            <div class="glass-panel simulation-layout">
+                
+                <!-- Controls -->
+                <div class="sim-controls">
+                    <h3>1. Select Series</h3>
+                    <div class="series-selector">
+                        <label class="radio-btn selected" id="lbl-alkane">
+                            <input type="radio" name="series" value="alkane" checked onchange="sim.changeSeries('alkane')">
+                            <span>Alkanes (C<sub>n</sub>H<sub>2n+2</sub>)</span>
+                        </label>
+                        <label class="radio-btn" id="lbl-alcohol">
+                            <input type="radio" name="series" value="alcohol" onchange="sim.changeSeries('alcohol')">
+                            <span>Alcohols (C<sub>n</sub>H<sub>2n+1</sub>OH)</span>
+                        </label>
+                        <label class="radio-btn" id="lbl-acid">
+                            <input type="radio" name="series" value="acid" onchange="sim.changeSeries('acid')">
+                            <span>Carboxylic Acids (C<sub>n</sub>H<sub>2n+1</sub>COOH)</span>
+                        </label>
+                    </div>
+
+                    <h3 style="margin-top: 20px;">2. Chain Length (n)</h3>
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span>n = 1</span>
+                        <span id="slider-val" style="font-size: 1.5rem; font-weight: bold; color: var(--accent-cyan);">1</span>
+                        <span>n = 10</span>
+                    </div>
+                    <input type="range" id="n-slider" min="1" max="10" value="1" oninput="sim.updateN(this.value)">
+                </div>
+
+                <!-- Stage -->
+                <div class="sim-stage" id="sim-stage">
+                    <svg viewBox="0 0 1000 400" width="100%" height="100%" id="sim-svg" style="z-index: 2;">
+                        <g id="sim-bonds"></g>
+                        <g id="sim-atoms" filter="url(#shadow)"></g>
+                    </svg>
+                    <!-- Physical state particle overlay -->
+                    <canvas id="state-canvas" style="position: absolute; top:0; left:0; width:100%; height:100%; z-index: 1; opacity: 0.6;"></canvas>
+                </div>
+
+                <!-- Data Panel -->
+                <div class="sim-data">
+                    <div class="formula-display" id="sim-formula">CH₄</div>
+                    
+                    <div class="data-card">
+                        <div style="font-size: 0.9rem; color: var(--text-secondary);">IUPAC Name</div>
+                        <div class="data-value" id="sim-name" style="color: var(--accent-cyan);">Methane</div>
+                    </div>
+                    
+                    <div class="data-card">
+                        <div style="font-size: 0.9rem; color: var(--text-secondary);">Molar Mass</div>
+                        <div class="data-value" id="sim-mass">16.0 g/mol</div>
+                    </div>
+
+                    <div class="data-card">
+                        <div style="font-size: 0.9rem; color: var(--text-secondary);">Boiling Point</div>
+                        <div class="data-value" id="sim-bp">-161.5 °C</div>
+                        <div style="margin-top: 5px; font-size: 0.85rem;" id="sim-state-text">State at Room Temp: <span class="bold text-pink">Gas</span></div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             6. FACTS & APPLICATIONS
+             ========================================================================== -->
+        <section id="facts" class="card-grid">
+            <div class="info-card">
+                <h4>🔥 Gradation in Physical Properties</h4>
+                <p>As the chain gets longer, the molecule gets heavier and surface area increases. This increases <strong>Van der Waals forces</strong> between molecules, requiring more energy to pull them apart.</p>
+                <p class="text-cyan" style="font-size: 0.9rem;">Result: Melting and Boiling points rise predictably.</p>
+            </div>
+            <div class="info-card">
+                <h4>🧪 Similar Chemical Properties</h4>
+                <p>Because every member of a series has the same functional group (e.g., all alcohols have -OH), they undergo the <strong>exact same chemical reactions</strong>.</p>
+                <p class="text-pink" style="font-size: 0.9rem;">Example: All alcohols combust to form CO₂ and H₂O.</p>
+            </div>
+            <div class="info-card">
+                <h4>⛽ Real World Applications</h4>
+                <p>The Alkane series fuels our world, separated by boiling point in refineries:</p>
+                <ul style="font-size: 0.9rem; color: #cbd5e1; list-style-type: none;">
+                    <li><strong>n=1-4:</strong> Gases (Heating, Stoves)</li>
+                    <li><strong>n=5-8:</strong> Liquids (Gasoline/Petrol)</li>
+                    <li><strong>n=9-16:</strong> Heavy Liquids (Diesel, Kerosene)</li>
+                    <li><strong>n>20:</strong> Solids (Paraffin Wax, Asphalt)</li>
+                </ul>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        // --- 1. UTILITIES ---
+        const $ = id => document.getElementById(id);
+        
+        // --- 2. AMBIENT BACKGROUND CANVAS ---
+        const bgCanvas = $('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let bgParticles = [];
+
+        function resizeCanvas() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+            initBgParticles();
+        }
+
+        function initBgParticles() {
+            bgParticles = [];
+            const count = window.innerWidth < 768 ? 30 : 70; // Performance tuning
+            for(let i=0; i<count; i++) {
+                bgParticles.push({
+                    x: Math.random() * bgCanvas.width,
+                    y: Math.random() * bgCanvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    size: Math.random() * 2 + 1,
+                    alpha: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        function animateBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.fillStyle = 'white';
+            
+            bgParticles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if(p.x < 0 || p.x > bgCanvas.width) p.vx *= -1;
+                if(p.y < 0 || p.y > bgCanvas.height) p.vy *= -1;
+                
+                bgCtx.globalAlpha = p.alpha;
+                bgCtx.beginPath();
+                bgCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                bgCtx.fill();
+            });
+            requestAnimationFrame(animateBg);
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        animateBg();
+
+        // --- 3. LABELED DIAGRAM LOGIC ---
+        function highlightAnatomy(targetId) {
+            // Reset all
+            document.querySelectorAll('.marker, .legend-item').forEach(el => el.classList.remove('active'));
+            $('hl-backbone').style.opacity = 0;
+            $('hl-func').style.opacity = 0;
+            $('hl-unit').style.opacity = 0;
+
+            // Activate specific
+            document.querySelectorAll(`[data-target="${targetId}"]`).forEach(el => el.classList.add('active'));
+            
+            if(targetId === 1) $('hl-backbone').style.opacity = 1;
+            if(targetId === 2) $('hl-func').style.opacity = 1;
+            if(targetId === 3) $('hl-unit').style.opacity = 1;
+        }
+
+        function resetAnatomy() {
+            document.querySelectorAll('.marker, .legend-item').forEach(el => el.classList.remove('active'));
+            $('hl-backbone').style.opacity = 0;
+            $('hl-func').style.opacity = 0;
+            $('hl-unit').style.opacity = 0;
+        }
+
+
+        // --- 4. WORKING MECHANISM (Chain Elongation Sequence) ---
+        const mechState = {
+            stage: 0,
+            playing: false,
+            interval: null,
+            titles: ["Stage 1: Base Molecule", "Stage 2: Bond Cleavage", "Stage 3: Unit Insertion", "Stage 4: Chain Formation"],
+            descs: [
+                "Starting with Methane (CH₄), the simplest alkane.",
+                "Energy breaks a C-H bond, preparing a site for addition.",
+                "A -CH₂- (methylene) repeating unit approaches the active site.",
+                "Bonds reform. We have created Ethane (C₂H₆), the next homologue."
+            ],
+            
+            updateUI() {
+                $('mech-title').innerText = this.titles[this.stage];
+                $('mech-desc').innerText = this.descs[this.stage];
+                
+                const dots = document.querySelectorAll('#mech-progress .progress-dot');
+                dots.forEach((dot, i) => {
+                    dot.className = `progress-dot ${i <= this.stage ? 'active' : ''}`;
+                });
+
+                this.renderStage();
+            },
+
+            next() {
+                this.stage = (this.stage + 1) % 4;
+                this.updateUI();
+            },
+            prev() {
+                this.stage = (this.stage - 1 + 4) % 4;
+                this.updateUI();
+            },
+            togglePlay() {
+                this.playing = !this.playing;
+                const btn = $('btn-play');
+                if (this.playing) {
+                    btn.innerHTML = 'Pause';
+                    btn.classList.add('active');
+                    this.next(); // trigger immediately
+                    this.interval = setInterval(() => this.next(), 2500);
+                } else {
+                    btn.innerHTML = 'Play Auto';
+                    btn.classList.remove('active');
+                    clearInterval(this.interval);
+                }
+            },
+
+            renderStage() {
+                const b = $('mech-bonds');
+                const a = $('mech-atoms');
+                const insert = $('mech-ch2-insert');
+
+                // Base coordinates for Methane center
+                const cx = 200, cy = 150;
+
+                let bondsHTML = '';
+                let atomsHTML = '';
+
+                // Helper to draw atom
+                const drawA = (id, x, y, r, grad) => `<circle id="${id}" cx="${x}" cy="${y}" r="${r}" fill="url(#${grad})" class="atom" style="transition: all 0.6s ease-in-out;" />`;
+                const drawB = (id, x1, y1, x2, y2, cls='') => `<line id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" class="bond ${cls}" style="transition: all 0.6s ease-in-out;" />`;
+
+                if (this.stage === 0) {
+                    // Methane
+                    bondsHTML = 
+                        drawB('b1', cx, cy, cx, cy-60) + drawB('b2', cx, cy, cx, cy+60) + 
+                        drawB('b3', cx, cy, cx-60, cy) + drawB('b4', cx, cy, cx+60, cy);
+                    atomsHTML = 
+                        drawA('ac', cx, cy, 25, 'gradCm') +
+                        drawA('ah1', cx, cy-60, 15, 'gradHm') + drawA('ah2', cx, cy+60, 15, 'gradHm') +
+                        drawA('ah3', cx-60, cy, 15, 'gradHm') + drawA('ah4', cx+60, cy, 15, 'gradHm');
+                    insert.className = 'fade-out';
+                    insert.setAttribute('transform', 'translate(0, -100)');
+                } 
+                else if (this.stage === 1) {
+                    // Cleavage (Right H moves away)
+                    bondsHTML = 
+                        drawB('b1', cx, cy, cx, cy-60) + drawB('b2', cx, cy, cx, cy+60) + 
+                        drawB('b3', cx, cy, cx-60, cy) + drawB('b4', cx, cy, cx+30, cy, 'fade-out'); // broken bond
+                    atomsHTML = 
+                        drawA('ac', cx, cy, 25, 'gradCm') +
+                        drawA('ah1', cx, cy-60, 15, 'gradHm') + drawA('ah2', cx, cy+60, 15, 'gradHm') +
+                        drawA('ah3', cx-60, cy, 15, 'gradHm') + drawA('ah4', cx+150, cy, 15, 'gradHm'); // H moves far right
+                    insert.className = 'fade-out';
+                }
+                else if (this.stage === 2) {
+                    // Insertion (CH2 drops in)
+                    bondsHTML = 
+                        drawB('b1', cx, cy, cx, cy-60) + drawB('b2', cx, cy, cx, cy+60) + 
+                        drawB('b3', cx, cy, cx-60, cy);
+                    atomsHTML = 
+                        drawA('ac', cx, cy, 25, 'gradCm') +
+                        drawA('ah1', cx, cy-60, 15, 'gradHm') + drawA('ah2', cx, cy+60, 15, 'gradHm') +
+                        drawA('ah3', cx-60, cy, 15, 'gradHm') + drawA('ah4', cx+200, cy, 15, 'gradHm');
+                    
+                    insert.className = 'fade-in';
+                    insert.setAttribute('transform', 'translate(0, 0)'); // CH2 is centered at x=300
+                }
+                else if (this.stage === 3) {
+                    // Formation (Shift left group left, CH2 becomes C2, lone H attaches)
+                    // New layout centered roughly around 250
+                    const c1x = 180;
+                    const c2x = 300;
+                    
+                    bondsHTML = 
+                        // C1 bonds
+                        drawB('b1', c1x, cy, c1x, cy-60) + drawB('b2', c1x, cy, c1x, cy+60) + drawB('b3', c1x, cy, c1x-60, cy) +
+                        // C-C bond
+                        drawB('b_cc', c1x, cy, c2x, cy, 'highlight-bond') +
+                        // C2 bonds (handled natively in insert, we hide insert and draw here for smooth finish if we wanted, 
+                        // but let's just morph the existing atoms to make it look magic)
+                        drawB('b5', c2x, cy, c2x, cy-60) + drawB('b6', c2x, cy, c2x, cy+60) + drawB('b7', c2x, cy, c2x+60, cy);
+
+                    atomsHTML = 
+                        // C1 + H's
+                        drawA('ac', c1x, cy, 25, 'gradCm') +
+                        drawA('ah1', c1x, cy-60, 15, 'gradHm') + drawA('ah2', c1x, cy+60, 15, 'gradHm') + drawA('ah3', c1x-60, cy, 15, 'gradHm') +
+                        // The old lone H becomes the rightmost H
+                        drawA('ah4', c2x+60, cy, 15, 'gradHm') +
+                        // The new CH2 group (extracted from insert group for single SVG level)
+                        drawA('ac2', c2x, cy, 25, 'gradCm') + drawA('ah5', c2x, cy-60, 15, 'gradHm') + drawA('ah6', c2x, cy+60, 15, 'gradHm');
+                    
+                    insert.className = 'fade-out';
+                }
+
+                b.innerHTML = bondsHTML;
+                a.innerHTML = atomsHTML;
+            }
+        };
+
+        // Init Mechanism
+        mechState.renderStage();
+
+
+        // --- 5. CORE SIMULATION (The Builder) ---
+        
+        const seriesData = {
+            alkane: { prefix: ['Meth','Eth','Prop','But','Pent','Hex','Hept','Oct','Non','Dec'], suffix: 'ane', f_prefix: 'C', f_mid: 'H', mass_base: 14, mass_add: 2, bp_base: -161, bp_inc: 30 },
+            alcohol: { prefix: ['Meth','Eth','Prop','But','Pent','Hex','Hept','Oct','Non','Dec'], suffix: 'anol', f_prefix: 'C', f_mid: 'H', f_end: 'OH', mass_base: 14, mass_add: 18, bp_base: 64, bp_inc: 20 },
+            acid: { prefix: ['Meth','Eth','Prop','But','Pent','Hex','Hept','Oct','Non','Dec'], suffix: 'anoic Acid', f_prefix: 'C', f_mid: 'H', f_end: 'COOH', mass_base: 14, mass_add: 32, bp_base: 100, bp_inc: 18 }
+        };
+
+        const simCanvas = $('state-canvas');
+        const simCtx = simCanvas.getContext('2d');
+        let simParticles = [];
+        let currentState = 'gas'; // gas, liquid, solid
+
+        const sim = {
+            currentSeries: 'alkane',
+            n: 1,
+            
+            changeSeries(series) {
+                this.currentSeries = series;
+                document.querySelectorAll('.radio-btn').forEach(el => el.classList.remove('selected'));
+                $(`lbl-${series}`).classList.add('selected');
+                
+                // Adjust slider limits for acid (usually starts at 1, but formula is slightly different, let's keep n=1 as Methanoic)
+                this.updateRender();
+            },
+
+            updateN(val) {
+                this.n = parseInt(val);
+                $('slider-val').innerText = this.n;
+                this.updateRender();
+            },
+
+            updateRender() {
+                const data = seriesData[this.currentSeries];
+                const n = this.n;
+                
+                // 1. Math Data Update
+                const name = data.prefix[n-1] + data.suffix;
+                $('sim-name').innerText = name;
+                
+                let h_count = 0;
+                let formulaHTML = '';
+                if(this.currentSeries === 'alkane') {
+                    h_count = 2*n + 2;
+                    formulaHTML = `C${n>1?`<sub>${n}</sub>`:''}H<sub>${h_count}</sub>`;
+                } else if (this.currentSeries === 'alcohol') {
+                    h_count = 2*n + 1;
+                    formulaHTML = `C${n>1?`<sub>${n}</sub>`:''}H<sub>${h_count}</sub>OH`;
+                } else if (this.currentSeries === 'acid') {
+                    h_count = 2*(n-1) + 1; // Methanoic is HCOOH (n=1, C=1 total). So alkyl group is C(n-1)H(2n-1)
+                    if(n===1) {
+                        formulaHTML = `HCOOH`;
+                    } else {
+                        formulaHTML = `C<sub>${n-1}</sub>H<sub>${h_count}</sub>COOH`;
+                    }
+                }
+                $('sim-formula').innerHTML = formulaHTML;
+
+                // Rough estimation for mass and BP
+                const mass = (n * 12.011) + (this.currentSeries==='alkane'? (2*n+2)*1.008 : (this.currentSeries==='alcohol'? (2*n+2)*1.008 + 15.999 : (2*n)*1.008 + 31.998));
+                $('sim-mass').innerText = mass.toFixed(1) + ' g/mol';
+
+                // Rough BP estimation based on series and n
+                let bp = data.bp_base + (n-1) * data.bp_inc;
+                // Add non-linear curve for reality
+                bp = bp - (n*n*0.5); 
+                $('sim-bp').innerText = bp.toFixed(1) + ' °C';
+
+                // Determine State at Room Temp (25C)
+                let stateText = '';
+                let stateColor = '';
+                if(bp < 25) {
+                    currentState = 'gas';
+                    stateText = 'Gas'; stateColor = 'var(--accent-pink)';
+                } else if (bp < 250) { // Rough cutoff for solid (wax)
+                    currentState = 'liquid';
+                    stateText = 'Liquid'; stateColor = 'var(--accent-cyan)';
+                } else {
+                    currentState = 'solid';
+                    stateText = 'Solid'; stateColor = '#cbd5e1';
+                }
+                $('sim-state-text').innerHTML = `State at Room Temp: <span class="bold" style="color:${stateColor}">${stateText}</span>`;
+
+                this.renderMoleculeSVG(n, this.currentSeries);
+                this.initStateParticles();
+            },
+
+            renderMoleculeSVG(n, series) {
+                const b = $('sim-bonds');
+                const a = $('sim-atoms');
+                let bonds = '';
+                let atoms = '';
+
+                // Layout settings
+                const startX = 150; // offset to center mostly
+                const cy = 200;
+                const stepX = 60;
+                const stepY = 30; // Zigzag magnitude
+                const bondLen = 60;
+
+                // Helper drawing functions
+                const drawC = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="22" fill="url(#gradC)" class="atom" />`;
+                const drawH = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="12" fill="url(#gradH)" class="atom" />`;
+                const drawO = (cx, cy) => `<circle cx="${cx}" cy="${cy}" r="20" fill="url(#gradO)" class="atom" />`;
+                const drawB = (x1, y1, x2, y2, color='#71717a', w=4) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${w}" stroke-linecap="round" class="bond" />`;
+
+                let lastCx = 0;
+                let lastCy = 0;
+
+                // Calculate total width to center it in viewBox (1000px wide)
+                let totalNodes = n + (series !== 'alkane' ? 1 : 0);
+                let totalWidth = (totalNodes - 1) * stepX + 120; // 120 for padding (H atoms)
+                let currentX = (1000 - totalWidth) / 2 + 60; // Start position to center
+
+                for(let i=0; i<n; i++) {
+                    let yOffset = (i % 2 === 0) ? -stepY : stepY;
+                    let c_y = cy + yOffset;
+                    
+                    // Main Carbon
+                    atoms += drawC(currentX, c_y);
+
+                    // Bond to previous carbon
+                    if (i > 0) {
+                        bonds += drawB(lastCx, lastCy, currentX, c_y);
+                    }
+
+                    // Hydrogens for this carbon
+                    // Top/Bottom H
+                    let h_dir = (i % 2 === 0) ? -1 : 1;
+                    atoms += drawH(currentX, c_y + (bondLen * h_dir));
+                    bonds += drawB(currentX, c_y, currentX, c_y + (bondLen * h_dir));
+
+                    // Leftmost H (if first Carbon, unless it's Methanoic acid where C1 has double bond O and OH)
+                    if (i === 0) {
+                        if (series === 'acid' && n === 1) {
+                            // Methanoic acid left H
+                            atoms += drawH(currentX - bondLen, c_y);
+                            bonds += drawB(currentX, c_y, currentX - bondLen, c_y);
+                        } else {
+                            atoms += drawH(currentX - bondLen, c_y);
+                            bonds += drawB(currentX, c_y, currentX - bondLen, c_y);
+                        }
+                    }
+
+                    // Rightmost attachment (if last Carbon in Alkane, or intermediate in others)
+                    if (i === n - 1) {
+                        if (series === 'alkane') {
+                            atoms += drawH(currentX + bondLen, c_y);
+                            bonds += drawB(currentX, c_y, currentX + bondLen, c_y);
+                        } else if (series === 'alcohol') {
+                            // Attach -OH
+                            let ox = currentX + bondLen;
+                            let oy = c_y - yOffset; // counter zig-zag
+                            bonds += drawB(currentX, c_y, ox, oy, '#fca5a5');
+                            atoms += drawO(ox, oy);
+                            // H on O
+                            atoms += drawH(ox + 35, oy);
+                            bonds += drawB(ox, oy, ox + 35, oy, '#fca5a5');
+                        } else if (series === 'acid') {
+                            // Attach =O and -OH
+                            // If n=1, this is the first and last C.
+                            let ox1 = currentX + (bondLen * 0.7);
+                            let oy1 = c_y - (bondLen * 0.7); // Double bond O pointing up/right
+                            let ox2 = currentX + bondLen;
+                            let oy2 = c_y + (bondLen * 0.3); // OH pointing down/right
+                            
+                            // Double bond
+                            bonds += drawB(currentX, c_y-5, ox1, oy1-5, '#fca5a5', 5);
+                            bonds += drawB(currentX, c_y+5, ox1, oy1+5, '#fca5a5', 5);
+                            atoms += drawO(ox1, oy1);
+
+                            // Single bond to OH
+                            bonds += drawB(currentX, c_y, ox2, oy2, '#fca5a5');
+                            atoms += drawO(ox2, oy2);
+                            atoms += drawH(ox2 + 35, oy2);
+                            bonds += drawB(ox2, oy2, ox2 + 35, oy2, '#fca5a5');
+                        }
+                    } else {
+                        // Inner carbons need a second H opposite to the zigzag peak, 
+                        // simplified 2D representation puts them top/bottom.
+                        // Actually, in zigzag 2D, C has one H 'up' or 'down', and one 'towards camera' (omitted usually or drawn wedge).
+                        // To keep it simple and readable without crossing lines:
+                        // Draw a second H vertically
+                        atoms += drawH(currentX, c_y - (bondLen * h_dir));
+                        bonds += drawB(currentX, c_y, currentX, c_y - (bondLen * h_dir));
+                    }
+
+                    lastCx = currentX;
+                    lastCy = c_y;
+                    currentX += stepX;
+                }
+
+                b.innerHTML = bonds;
+                a.innerHTML = atoms;
+            },
+
+            // Canvas Background Effect representing Physical State
+            initStateParticles() {
+                // Resize internal canvas to match CSS
+                const rect = simCanvas.parentElement.getBoundingClientRect();
+                simCanvas.width = rect.width * (window.devicePixelRatio || 1);
+                simCanvas.height = rect.height * (window.devicePixelRatio || 1);
+                simCtx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+                const w = rect.width;
+                const h = rect.height;
+
+                simParticles = [];
+                let count = currentState === 'gas' ? 20 : (currentState === 'liquid' ? 50 : 100);
+                
+                for(let i=0; i<count; i++) {
+                    simParticles.push({
+                        x: Math.random() * w,
+                        y: currentState === 'liquid' ? h - Math.random()*(h/3) : Math.random() * h,
+                        vx: currentState === 'gas' ? (Math.random()-0.5)*4 : (currentState==='liquid' ? (Math.random()-0.5)*1 : 0),
+                        vy: currentState === 'gas' ? (Math.random()-0.5)*4 : 0,
+                        size: currentState === 'solid' ? 4 : (currentState==='liquid'? 6 : 3),
+                        baseY: h - 20 - Math.floor(i/20)*10, // for solid lattice
+                        baseX: 20 + (i%20)*15 // for solid lattice
+                    });
+                }
+            },
+            
+            animateState() {
+                if(!simCanvas.width) return;
+                const w = simCanvas.width / (window.devicePixelRatio || 1);
+                const h = simCanvas.height / (window.devicePixelRatio || 1);
+                
+                simCtx.clearRect(0, 0, w, h);
+                
+                if(currentState === 'solid') {
+                    simCtx.fillStyle = 'rgba(255,255,255,0.1)';
+                } else if(currentState === 'liquid') {
+                    simCtx.fillStyle = 'rgba(6, 182, 212, 0.2)';
+                } else {
+                    simCtx.fillStyle = 'rgba(236, 72, 153, 0.3)';
+                }
+
+                let time = Date.now() / 1000;
+
+                simParticles.forEach(p => {
+                    if(currentState === 'gas') {
+                        p.x += p.vx; p.y += p.vy;
+                        if(p.x<0 || p.x>w) p.vx*=-1;
+                        if(p.y<0 || p.y>h) p.vy*=-1;
+                    } else if (currentState === 'liquid') {
+                        p.x += p.vx + Math.sin(time + p.y)*0.5; // wave motion
+                        if(p.x<0) p.x = w;
+                        if(p.x>w) p.x = 0;
+                    } else if (currentState === 'solid') {
+                        // slight vibration
+                        p.x = p.baseX + Math.sin(time*10 + p.baseY)*1;
+                        p.y = p.baseY + Math.cos(time*10 + p.baseX)*1;
+                    }
+
+                    simCtx.beginPath();
+                    simCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                    simCtx.fill();
+                });
+                
+                requestAnimationFrame(() => sim.animateState());
+            }
+        };
+
+        // Initialize Simulation
+        window.addEventListener('resize', () => {
+             // Debounce canvas resize for simulation
+             clearTimeout(window.simResizeTimer);
+             window.simResizeTimer = setTimeout(() => sim.initStateParticles(), 200);
+        });
+        sim.updateRender();
+        sim.animateState();
+
+        // --- 6. HERO SVG INJECTION (Visual Polish) ---
+        const heroContainer = $('hero-svg-container');
+        heroContainer.innerHTML = `
+            <svg viewBox="0 0 400 400" width="100%" height="100%" style="filter: drop-shadow(0 10px 20px rgba(6,182,212,0.3));">
+                <defs>
+                    <radialGradient id="hGradC" cx="30%" cy="30%" r="70%"><stop offset="0%" stop-color="#38bdf8" /><stop offset="100%" stop-color="#0284c7" /></radialGradient>
+                    <radialGradient id="hGradH" cx="30%" cy="30%" r="70%"><stop offset="0%" stop-color="#ffffff" /><stop offset="100%" stop-color="#94a3b8" /></radialGradient>
+                </defs>
+                <g stroke="rgba(255,255,255,0.2)" stroke-width="8" stroke-linecap="round">
+                    <line x1="100" y1="250" x2="200" y2="150" />
+                    <line x1="200" y1="150" x2="300" y2="250" />
+                    <!-- H bonds -->
+                    <line x1="100" y1="250" x2="60" y2="190" />
+                    <line x1="100" y1="250" x2="60" y2="310" />
+                    <line x1="100" y1="250" x2="140" y2="310" />
+                    
+                    <line x1="200" y1="150" x2="200" y2="70" />
+                    <line x1="200" y1="150" x2="260" y2="100" />
+                    
+                    <line x1="300" y1="250" x2="260" y2="310" />
+                    <line x1="300" y1="250" x2="340" y2="310" />
+                    <line x1="300" y1="250" x2="360" y2="200" />
+                </g>
+                <g>
+                    <!-- Carbons -->
+                    <circle cx="100" cy="250" r="40" fill="url(#hGradC)" />
+                    <circle cx="200" cy="150" r="40" fill="url(#hGradC)" />
+                    <circle cx="300" cy="250" r="40" fill="url(#hGradC)" />
+                    <!-- Hydrogens -->
+                    <circle cx="60" cy="190" r="20" fill="url(#hGradH)" />
+                    <circle cx="60" cy="310" r="20" fill="url(#hGradH)" />
+                    <circle cx="140" cy="310" r="20" fill="url(#hGradH)" />
+                    
+                    <circle cx="200" cy="70" r="20" fill="url(#hGradH)" />
+                    <circle cx="260" cy="100" r="20" fill="url(#hGradH)" />
+                    
+                    <circle cx="260" cy="310" r="20" fill="url(#hGradH)" />
+                    <circle cx="340" cy="310" r="20" fill="url(#hGradH)" />
+                    <circle cx="360" cy="200" r="20" fill="url(#hGradH)" />
+                </g>
+            </svg>
+        `;
+
+    </script>
+</body>
+</html>

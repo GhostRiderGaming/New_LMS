@@ -21,14 +21,25 @@ from groq import AsyncGroq
 
 _GROQ_CHAT_MODEL = "llama-3.3-70b-versatile"
 _GROQ_WHISPER_MODEL = "whisper-large-v3"
-_EDGE_TTS_VOICE = "en-US-AriaNeural"  # friendly female voice, free via edge-tts
+_EDGE_TTS_VOICE = "hi-IN-SwaraNeural"  # Hindi female voice, handles Hinglish
 
-_SYSTEM_PROMPT = (
-    "You are Bella, a friendly and knowledgeable educational assistant. "
-    "You help students understand complex topics in a clear, engaging, and "
-    "encouraging way. Keep your answers concise and age-appropriate. "
-    "Use simple language and relatable examples where possible."
-)
+def _get_system_prompt(language: str | None) -> str:
+    if language == "hindi":
+        return (
+            "You are Bella, a friendly and enthusiastic educational assistant. "
+            "You speak in Hinglish — a natural mix of Hindi and English, the way Indian students talk. "
+            "Use Hindi for conversational parts and English for technical/scientific terms. "
+            "For example: 'Yeh bahut interesting topic hai! Photosynthesis mein plants sunlight use karte hain "
+            "to make glucose. Isko simple mein samjho toh...' "
+            "Keep answers concise, encouraging, and age-appropriate for school students."
+        )
+    else:
+        return (
+            "You are Bella, a friendly and enthusiastic educational assistant. "
+            "You speak clearly in English. "
+            "Keep answers concise, encouraging, and age-appropriate for school students. "
+            "Use simple language and relatable examples."
+        )
 
 
 class ChatResult:
@@ -59,7 +70,7 @@ class BellaService:
     # Requirements: 10.3, 10.4, 10.5, 10.11, 10.12
     # ------------------------------------------------------------------
 
-    async def chat(self, message: str, session_id: str) -> ChatResult:
+    async def chat(self, message: str, session_id: str, language: str | None = None) -> ChatResult:
         """Send *message* to Groq LLaMA 3.3 70B, attempt TTS, return ChatResult.
 
         TTS failure is non-fatal: returns tts_available=False with text reply intact.
@@ -76,7 +87,7 @@ class BellaService:
             # Build conversation context from history
             prior = self._history.get(session_id, [])
             groq_messages: list[dict[str, str]] = [
-                {"role": "system", "content": _SYSTEM_PROMPT}
+                {"role": "system", "content": _get_system_prompt(language)}
             ]
             for entry in prior:
                 groq_role = "user" if entry["role"] == "user" else "assistant"
@@ -101,7 +112,7 @@ class BellaService:
 
         # Attempt TTS — graceful fallback on failure (Requirement 10.12)
         try:
-            audio_bytes, phonemes = await self._synthesize_speech_with_phonemes(reply)
+            audio_bytes, phonemes = await self._synthesize_speech_with_phonemes(reply, language)
             audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
             tts_available = True
         except Exception:
@@ -138,16 +149,17 @@ class BellaService:
     # Topic Explanation — used after image generation in Scene Forge
     # ------------------------------------------------------------------
 
-    async def explain_topic(self, topic: str, image_context: dict | None = None) -> ChatResult:
+    async def explain_topic(self, topic: str, section: str | None = None, image_context: dict | None = None, language: str | None = None) -> ChatResult:
         """Generate a spoken educational explanation of a topic.
 
-        Called automatically after Scene Forge image generation.
+        Called automatically after Scene Forge image generation or other sections.
         Uses a dedicated prompt (not chat history) to produce a concise,
         engaging explanation with TTS audio for Bella's voice narration.
 
         image_context: optional dict with {source, category, caption, prompt}
         describing the actual generated image, so the explanation references
         what the student is looking at.
+        section: the section that triggered the explanation (e.g. simulation, model3d, story, anime)
         """
         from app.services.prompt_builder import prompt_builder
 
@@ -155,13 +167,13 @@ class BellaService:
 
         if not api_key:
             explanation = (
-                f"You just generated an awesome image about {topic}! "
+                f"You just opened an awesome topic about {topic}! "
                 f"I'd love to explain it in detail, but I need my AI brain connected. "
                 f"Add a GROQ_API_KEY to the backend .env file to unlock my full explanation powers!"
             )
         else:
             try:
-                explanation = await prompt_builder.build_explanation_prompt(topic, image_context=image_context)
+                explanation = await prompt_builder.build_explanation_prompt(topic, section=section, image_context=image_context, language=language)
             except Exception:
                 explanation = (
                     f"Great image of {topic}! This is a really interesting topic. "
@@ -171,7 +183,7 @@ class BellaService:
 
         # Synthesize TTS audio
         try:
-            audio_bytes, phonemes = await self._synthesize_speech_with_phonemes(explanation)
+            audio_bytes, phonemes = await self._synthesize_speech_with_phonemes(explanation, language)
             audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
             tts_available = True
         except Exception:
@@ -197,7 +209,7 @@ class BellaService:
         return audio_bytes
 
     async def _synthesize_speech_with_phonemes(
-        self, text: str
+        self, text: str, language: str | None = None
     ) -> tuple[bytes, list[dict[str, Any]]]:
         """
         Use edge-tts to synthesize speech.
@@ -205,7 +217,15 @@ class BellaService:
         Uses streaming approach which is more reliable cross-platform.
         """
         import io as _io
-        communicate = edge_tts.Communicate(text, _EDGE_TTS_VOICE)
+        voice = _EDGE_TTS_VOICE
+        if language == "english":
+            voice = "en-US-AriaNeural"
+        elif language == "indian-english":
+            voice = "en-IN-NeerjaExpressiveNeural"
+        elif language == "hindi":
+            voice = "hi-IN-SwaraNeural"
+
+        communicate = edge_tts.Communicate(text, voice)
         buf = _io.BytesIO()
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":

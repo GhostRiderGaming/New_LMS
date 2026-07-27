@@ -1,0 +1,1507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mendel's Genetics: Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-base: #060a08;
+            --bg-glass: rgba(18, 28, 22, 0.6);
+            --bg-glass-hover: rgba(28, 43, 34, 0.8);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(57, 255, 20, 0.4);
+            
+            --accent-primary: #39FF14; /* Neon Green */
+            --accent-secondary: #00FFCC; /* Cyan */
+            --accent-purple: #B200FF; /* Flower */
+            --accent-yellow: #FFD700; /* Seed */
+            
+            --text-main: #FFFFFF;
+            --text-muted: #8E9E95;
+            
+            /* Typography */
+            --font-main: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --h1-size: clamp(2.5rem, 6vw, 5rem);
+            --h2-size: clamp(2rem, 4vw, 3.5rem);
+            --h3-size: clamp(1.2rem, 2.5vw, 1.8rem);
+            --body-size: clamp(1rem, 1.2vw, 1.15rem);
+            
+            /* Spacing */
+            --spacing-sm: clamp(8px, 1vw, 12px);
+            --spacing-md: clamp(16px, 2vw, 24px);
+            --spacing-lg: clamp(32px, 4vw, 48px);
+            --spacing-xl: clamp(64px, 8vw, 96px);
+            
+            /* Effects */
+            --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --glow-primary: 0 0 20px rgba(57, 255, 20, 0.3);
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+            font-size: var(--body-size);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--accent-primary); }
+
+        /* ==========================================================================
+           BACKGROUND CANVAS
+           ========================================================================== */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        /* ==========================================================================
+           UTILITIES & LAYOUT
+           ========================================================================== */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-lg);
+        }
+
+        section {
+            padding: var(--spacing-xl) 0;
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-glass);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Performance optimization for mobile glassmorphism */
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(4px);
+                -webkit-backdrop-filter: blur(4px);
+            }
+        }
+
+        .text-gradient {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+        }
+
+        h1 { font-size: var(--h1-size); font-weight: 800; line-height: 1.1; margin-bottom: var(--spacing-md); letter-spacing: -0.02em; }
+        h2 { font-size: var(--h2-size); font-weight: 700; margin-bottom: var(--spacing-lg); }
+        h3 { font-size: var(--h3-size); font-weight: 600; margin-bottom: var(--spacing-sm); color: var(--accent-primary); }
+        p { color: var(--text-muted); margin-bottom: var(--spacing-md); }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 28px;
+            background: rgba(57, 255, 20, 0.1);
+            color: var(--accent-primary);
+            border: 1px solid var(--accent-primary);
+            border-radius: 50px;
+            font-size: clamp(1rem, 1.1vw, 1.2rem);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            text-decoration: none;
+            box-shadow: var(--glow-primary);
+        }
+
+        .btn:hover {
+            background: var(--accent-primary);
+            color: var(--bg-base);
+            box-shadow: 0 0 30px rgba(57, 255, 20, 0.6);
+            transform: translateY(-2px);
+        }
+
+        .btn-icon {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-glass);
+            color: var(--text-main);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            padding: 0;
+        }
+        .btn-icon:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--text-main);
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero-content {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            max-width: 800px;
+            z-index: 2;
+        }
+        
+        .hero-badge {
+            background: rgba(57, 255, 20, 0.1);
+            border: 1px solid var(--border-highlight);
+            color: var(--accent-primary);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: var(--spacing-md);
+        }
+
+        /* ==========================================================================
+           DIAGRAM LABELS PATTERN (STRICT REQUIREMENTS)
+           ========================================================================== */
+        .diagram-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+            align-items: center;
+        }
+
+        @media (min-width: 1024px) {
+            .diagram-layout {
+                grid-template-columns: 3fr 2fr;
+            }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 280px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            padding: var(--spacing-md);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .illustration-container svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+        }
+
+        /* Markers overlaying the SVG container */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--bg-base);
+            border: 2px solid var(--accent-primary);
+            color: var(--accent-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            box-shadow: 0 0 10px rgba(0,0,0,0.8);
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            background: var(--accent-primary);
+            color: var(--bg-base);
+            box-shadow: var(--glow-primary);
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        /* Legend List */
+        .legend-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-glass);
+            border-radius: 12px;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(57, 255, 20, 0.05);
+            border-color: var(--accent-primary);
+            transform: translateX(8px);
+        }
+
+        .legend-number {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover .legend-number, .legend-item.active .legend-number {
+            background: var(--accent-primary);
+            color: var(--bg-base);
+        }
+
+        .legend-content h4 { margin-bottom: 4px; font-size: 1.1rem; color: var(--text-main); }
+        .legend-content p { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
+
+        /* ==========================================================================
+           TRAITS GRID
+           ========================================================================== */
+        .traits-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .trait-card {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: var(--spacing-md);
+            text-align: center;
+            transition: var(--transition-smooth);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .trait-card:hover {
+            border-color: var(--accent-secondary);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 255, 204, 0.1);
+        }
+
+        .trait-visual {
+            height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            margin-bottom: var(--spacing-md);
+            position: relative;
+        }
+
+        .trait-visual svg {
+            width: 80px;
+            height: 80px;
+            transition: transform 0.3s;
+        }
+        
+        .trait-card:hover .trait-visual svg {
+            transform: scale(1.1);
+        }
+
+        .trait-vs {
+            color: var(--text-muted);
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .trait-labels {
+            display: flex;
+            justify-content: space-around;
+            font-size: 0.9rem;
+        }
+
+        .label-dom { color: var(--accent-primary); font-weight: 600; }
+        .label-rec { color: var(--text-muted); }
+
+        /* ==========================================================================
+           WORKING PROCESS (MANDATORY STRUCTURE)
+           ========================================================================== */
+        .process-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .process-visual {
+            width: 100%;
+            height: 450px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 20px;
+            border: 1px solid var(--border-glass);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* SVG Stage Animations */
+        .stage-svg-group {
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .stage-svg-group.active {
+            opacity: 1;
+            z-index: 2;
+        }
+
+        .process-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255,255,255,0.02);
+            padding: 16px 24px;
+            border-radius: 100px;
+            border: 1px solid var(--border-glass);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .progress-indicator {
+            display: flex;
+            gap: 8px;
+        }
+        .progress-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-smooth);
+        }
+        .progress-dot.active {
+            background: var(--accent-primary);
+            box-shadow: 0 0 10px var(--accent-primary);
+            transform: scale(1.2);
+        }
+
+        .stage-info {
+            text-align: center;
+            min-height: 80px;
+        }
+        .stage-title {
+            font-size: 1.5rem;
+            color: var(--accent-secondary);
+            margin-bottom: 8px;
+        }
+        .stage-caption {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        /* Animations within Stages */
+        @keyframes pollenMove {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            50% { transform: translate(100px, -50px) scale(1.5); opacity: 1; }
+            100% { transform: translate(200px, 0) scale(1); opacity: 0; }
+        }
+        
+        .anim-pollen.active circle {
+            animation: pollenMove 2s infinite ease-in-out;
+        }
+
+        @keyframes growPlant {
+            0% { transform: scaleY(0.1); transform-origin: bottom; opacity: 0; }
+            100% { transform: scaleY(1); transform-origin: bottom; opacity: 1; }
+        }
+        .anim-grow.active path {
+            animation: growPlant 1.5s forwards ease-out;
+        }
+
+        /* ==========================================================================
+           PUNNETT SQUARE LAB
+           ========================================================================== */
+        .lab-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+        }
+
+        @media (min-width: 1024px) {
+            .lab-container { grid-template-columns: 350px 1fr; }
+        }
+
+        .controls-panel {
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px;
+            padding: var(--spacing-md);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .control-block label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-glass);
+            color: white;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            outline: none;
+            cursor: pointer;
+            font-family: var(--font-main);
+        }
+        select option { background: var(--bg-base); }
+
+        .square-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--spacing-md);
+            position: relative;
+        }
+
+        .punnett-grid {
+            display: grid;
+            grid-template-columns: 60px 1fr 1fr;
+            grid-template-rows: 60px 1fr 1fr;
+            gap: 8px;
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 1;
+        }
+
+        .grid-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--accent-secondary);
+        }
+
+        .grid-cell {
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            font-weight: 800;
+            position: relative;
+            overflow: hidden;
+            transition: var(--transition-smooth);
+        }
+
+        .grid-cell.active-fill {
+            background: rgba(57, 255, 20, 0.1);
+            border-color: var(--accent-primary);
+            box-shadow: inset 0 0 20px rgba(57, 255, 20, 0.2);
+        }
+
+        .cell-pheno {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-top: 8px;
+        }
+
+        /* SVG Seed for visual representation in cells */
+        .cell-seed {
+            width: 40px;
+            height: 40px;
+            margin-top: 10px;
+            border-radius: 50%;
+            box-shadow: inset -5px -5px 10px rgba(0,0,0,0.5);
+            transition: background 0.3s;
+        }
+        .seed-yellow { background: radial-gradient(circle at 30% 30%, #FFF5CC, #FFD700); }
+        .seed-green { background: radial-gradient(circle at 30% 30%, #E6FFE6, #32CD32); }
+
+        .results-panel {
+            margin-top: var(--spacing-md);
+            display: flex;
+            gap: var(--spacing-md);
+            justify-content: space-around;
+            background: rgba(0,0,0,0.2);
+            padding: 16px;
+            border-radius: 12px;
+        }
+        .ratio-box { text-align: center; }
+        .ratio-val { font-size: 1.5rem; font-weight: bold; color: var(--accent-primary); }
+        .ratio-label { font-size: 0.8rem; color: var(--text-muted); }
+
+        /* ==========================================================================
+           FACTS & MISTAKES
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .mistake-card {
+            background: linear-gradient(145deg, rgba(255, 50, 50, 0.05), rgba(0,0,0,0.2));
+            border-left: 4px solid #FF4444;
+            padding: 24px;
+            border-radius: 0 16px 16px 0;
+        }
+        .fact-card {
+            background: linear-gradient(145deg, rgba(0, 255, 204, 0.05), rgba(0,0,0,0.2));
+            border-left: 4px solid var(--accent-secondary);
+            padding: 24px;
+            border-radius: 0 16px 16px 0;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+        .badge-myth { background: rgba(255, 68, 68, 0.2); color: #FF4444; }
+        .badge-fact { background: rgba(57, 255, 20, 0.2); color: var(--accent-primary); }
+
+        /* ==========================================================================
+           REVISION TIMELINE
+           ========================================================================== */
+        .timeline {
+            position: relative;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            width: 2px;
+            background: var(--border-glass);
+            top: 0; bottom: 0; left: 20px;
+        }
+        .timeline-item {
+            position: relative;
+            padding-left: 60px;
+            margin-bottom: var(--spacing-md);
+        }
+        .timeline-dot {
+            position: absolute;
+            left: 11px;
+            top: 5px;
+            width: 20px;
+            height: 20px;
+            background: var(--bg-base);
+            border: 4px solid var(--accent-primary);
+            border-radius: 50%;
+            box-shadow: var(--glow-primary);
+        }
+        
+        /* Mobile specific adjustments */
+        @media (max-width: 768px) {
+            .grid-header { font-size: 1.2rem; }
+            .grid-cell { font-size: 1.5rem; }
+            .cell-seed { width: 30px; height: 30px; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        
+        <!-- SECTION 1: HERO -->
+        <section id="intro">
+            <div class="hero-content">
+                <div class="hero-badge">Genetic Foundations</div>
+                <h1>Mendel's<br><span class="text-gradient">Pea Experiment</span></h1>
+                <p style="font-size: clamp(1.2rem, 1.5vw, 1.4rem); max-width: 600px;">
+                    Discover how a 19th-century monk in a monastery garden unlocked the laws of inheritance, laying the foundation for modern genetics.
+                </p>
+                <a href="#overview" class="btn" style="margin-top: 24px;">Begin Investigation →</a>
+            </div>
+        </section>
+
+        <!-- SECTION 2: OVERVIEW (ANATOMY) -->
+        <section id="overview">
+            <div class="glass-panel">
+                <h2>The Subject: <span class="text-gradient">Pisum Sativum</span></h2>
+                <p>Why did Mendel choose the pea plant? It grows fast, produces many offspring, and has strictly controlled reproduction.</p>
+                
+                <div class="diagram-layout">
+                    <!-- Illustration with strict Marker placement -->
+                    <div class="illustration-container" id="plant-container">
+                        <!-- Precise SVG Illustration of Pea Plant Anatomy -->
+                        <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <linearGradient id="stemGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stop-color="#2d5a27"/>
+                                    <stop offset="50%" stop-color="#4caf50"/>
+                                    <stop offset="100%" stop-color="#2d5a27"/>
+                                </linearGradient>
+                                <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#81c784"/>
+                                    <stop offset="100%" stop-color="#388e3c"/>
+                                </linearGradient>
+                                <linearGradient id="flowerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#e1bee7"/>
+                                    <stop offset="50%" stop-color="#9c27b0"/>
+                                    <stop offset="100%" stop-color="#6a1b9a"/>
+                                </linearGradient>
+                                <radialGradient id="peaGrad" cx="30%" cy="30%" r="70%">
+                                    <stop offset="0%" stop-color="#c8e6c9"/>
+                                    <stop offset="100%" stop-color="#2e7d32"/>
+                                </radialGradient>
+                                <filter id="shadow">
+                                    <feDropShadow dx="2" dy="5" stdDeviation="3" flood-opacity="0.5"/>
+                                </filter>
+                            </defs>
+                            
+                            <!-- Stem -->
+                            <path d="M 200 500 Q 180 300 220 100 Q 230 50 210 20" fill="none" stroke="url(#stemGrad)" stroke-width="8" stroke-linecap="round" filter="url(#shadow)"/>
+                            
+                            <!-- Roots -->
+                            <path d="M 200 480 Q 150 500 120 490 M 200 480 Q 250 510 280 490 M 180 490 Q 160 520 170 530" fill="none" stroke="#8d6e63" stroke-width="4" stroke-linecap="round"/>
+                            
+                            <!-- Leaves -->
+                            <!-- Leaf 1 Right -->
+                            <path d="M 205 350 C 260 330 300 350 320 380 C 280 390 230 370 205 350" fill="url(#leafGrad)" filter="url(#shadow)"/>
+                            <path d="M 205 350 C 250 355 280 370 320 380" fill="none" stroke="#1b5e20" stroke-width="1.5"/>
+                            
+                            <!-- Leaf 2 Left -->
+                            <path d="M 190 250 C 130 230 90 260 70 300 C 110 310 160 280 190 250" fill="url(#leafGrad)" filter="url(#shadow)"/>
+                            <path d="M 190 250 C 140 260 110 280 70 300" fill="none" stroke="#1b5e20" stroke-width="1.5"/>
+
+                            <!-- Flower (Keel petal enclosed) - Part 1 -->
+                            <g id="svg-part-flower" transform="translate(130, 100)">
+                                <path d="M 50 50 C 20 20 80 0 100 40 C 120 0 180 20 150 50 C 180 80 140 120 100 100 C 60 120 20 80 50 50" fill="url(#flowerGrad)" filter="url(#shadow)"/>
+                                <path d="M 80 60 C 90 40 110 40 120 60 C 130 90 70 90 80 60" fill="#ce93d8"/>
+                            </g>
+                            <path d="M 215 150 Q 190 140 180 145" fill="none" stroke="url(#stemGrad)" stroke-width="4"/>
+
+                            <!-- Pod with Peas - Part 2 -->
+                            <g id="svg-part-pod" transform="translate(240, 200) rotate(20)">
+                                <!-- Back of pod -->
+                                <path d="M 0 0 Q 30 -30 80 0 Q 120 30 150 80 Q 120 100 80 70 Q 20 30 0 0" fill="#388e3c" filter="url(#shadow)"/>
+                                <!-- Peas inside -->
+                                <circle cx="40" cy="15" r="12" fill="url(#peaGrad)"/>
+                                <circle cx="75" cy="35" r="12" fill="url(#peaGrad)"/>
+                                <circle cx="110" cy="58" r="12" fill="url(#peaGrad)"/>
+                                <!-- Front flap of pod -->
+                                <path d="M 0 0 Q 40 10 80 35 Q 120 60 150 80 Q 110 60 80 35 Q 30 5 0 0" fill="#4caf50" opacity="0.8"/>
+                            </g>
+                            <path d="M 210 220 Q 230 210 240 200" fill="none" stroke="url(#stemGrad)" stroke-width="4"/>
+
+                        </svg>
+
+                        <!-- DOM Markers positioned over SVG container (Top/Left percentages adjusted visually) -->
+                        <div class="marker" data-target="leg-flower" style="top: 25%; left: 35%;">1</div>
+                        <div class="marker" data-target="leg-pod" style="top: 45%; left: 65%;">2</div>
+                        <div class="marker" data-target="leg-stem" style="top: 75%; left: 52%;">3</div>
+                    </div>
+
+                    <!-- Legend List (No overlap, normal document flow) -->
+                    <ul class="legend-list">
+                        <li class="legend-item" id="leg-flower" data-marker="1">
+                            <div class="legend-number">1</div>
+                            <div class="legend-content">
+                                <h4>Closed Flower Structure</h4>
+                                <p>Petals tightly enclose male/female parts, ensuring natural self-pollination unless manually interrupted.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" id="leg-pod" data-marker="2">
+                            <div class="legend-number">2</div>
+                            <div class="legend-content">
+                                <h4>Seed Pod (Fruit)</h4>
+                                <p>Contains multiple distinct offspring (seeds) per mating, providing large sample sizes for statistical analysis.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" id="leg-stem" data-marker="3">
+                            <div class="legend-number">3</div>
+                            <div class="legend-content">
+                                <h4>Distinct Phenotypes</h4>
+                                <p>Traits like stem length (Tall vs Dwarf) are binary and easily observable, with no intermediate blending.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: COMPONENTS (TRAITS) -->
+        <section id="traits">
+            <h2>The 7 Contrasting <span class="text-gradient">Traits</span></h2>
+            <p>Mendel focused on seven specific traits. Each trait had exactly two distinct forms (alleles). Here are three primary examples.</p>
+            
+            <div class="traits-grid">
+                <!-- Seed Color -->
+                <div class="trait-card">
+                    <h3>Seed Color</h3>
+                    <div class="trait-visual">
+                        <!-- Yellow Seed (Dom) -->
+                        <svg viewBox="0 0 100 100">
+                            <defs>
+                                <radialGradient id="yseed" cx="30%" cy="30%" r="70%">
+                                    <stop offset="0%" stop-color="#FFF5CC"/><stop offset="100%" stop-color="#FFD700"/>
+                                </radialGradient>
+                                <filter id="seedShad"><feDropShadow dx="0" dy="5" stdDeviation="4" flood-opacity="0.4"/></filter>
+                            </defs>
+                            <circle cx="50" cy="50" r="35" fill="url(#yseed)" filter="url(#seedShad)"/>
+                            <path d="M 40 40 Q 50 30 60 40" fill="none" stroke="#cca100" stroke-width="2" opacity="0.5"/>
+                        </svg>
+                        <div class="trait-vs">VS</div>
+                        <!-- Green Seed (Rec) -->
+                        <svg viewBox="0 0 100 100">
+                            <defs>
+                                <radialGradient id="gseed" cx="30%" cy="30%" r="70%">
+                                    <stop offset="0%" stop-color="#E6FFE6"/><stop offset="100%" stop-color="#32CD32"/>
+                                </radialGradient>
+                            </defs>
+                            <circle cx="50" cy="50" r="35" fill="url(#gseed)" filter="url(#seedShad)"/>
+                             <path d="M 40 40 Q 50 30 60 40" fill="none" stroke="#228b22" stroke-width="2" opacity="0.5"/>
+                        </svg>
+                    </div>
+                    <div class="trait-labels">
+                        <span class="label-dom">Yellow (Dominant)</span>
+                        <span class="label-rec">Green (Recessive)</span>
+                    </div>
+                </div>
+
+                <!-- Seed Shape -->
+                <div class="trait-card">
+                    <h3>Seed Shape</h3>
+                    <div class="trait-visual">
+                        <!-- Round (Dom) -->
+                        <svg viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="35" fill="url(#yseed)" filter="url(#seedShad)"/>
+                        </svg>
+                        <div class="trait-vs">VS</div>
+                        <!-- Wrinkled (Rec) -->
+                        <svg viewBox="0 0 100 100">
+                            <path d="M 50 15 C 70 15 85 30 85 50 C 85 70 70 85 50 85 C 30 85 15 70 15 50 C 15 30 30 15 50 15 Z" fill="url(#gseed)" filter="url(#seedShad)"/>
+                            <!-- Wrinkle lines -->
+                            <path d="M 30 30 Q 40 50 30 70 M 50 20 Q 60 50 50 80 M 70 30 Q 60 50 70 70" fill="none" stroke="#1b5e20" stroke-width="2" opacity="0.4"/>
+                        </svg>
+                    </div>
+                    <div class="trait-labels">
+                        <span class="label-dom">Round (Dominant)</span>
+                        <span class="label-rec">Wrinkled (Recessive)</span>
+                    </div>
+                </div>
+
+                <!-- Flower Color -->
+                <div class="trait-card">
+                    <h3>Flower Color</h3>
+                    <div class="trait-visual">
+                        <!-- Purple (Dom) -->
+                        <svg viewBox="0 0 100 100">
+                            <defs>
+                                <radialGradient id="purp" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="#e1bee7"/><stop offset="100%" stop-color="#9c27b0"/>
+                                </radialGradient>
+                            </defs>
+                            <path d="M 50 50 C 20 20 80 10 90 40 C 100 10 110 50 50 50" fill="url(#purp)" transform="translate(-10, -5)" filter="url(#seedShad)"/>
+                            <path d="M 50 50 C 20 80 80 90 90 60 C 100 90 110 50 50 50" fill="#7b1fa2" transform="translate(-10, 5)"/>
+                        </svg>
+                        <div class="trait-vs">VS</div>
+                        <!-- White (Rec) -->
+                        <svg viewBox="0 0 100 100">
+                            <defs>
+                                <radialGradient id="wht" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="#ffffff"/><stop offset="100%" stop-color="#e0e0e0"/>
+                                </radialGradient>
+                            </defs>
+                            <path d="M 50 50 C 20 20 80 10 90 40 C 100 10 110 50 50 50" fill="url(#wht)" transform="translate(-10, -5)" filter="url(#seedShad)"/>
+                            <path d="M 50 50 C 20 80 80 90 90 60 C 100 90 110 50 50 50" fill="#bdbdbd" transform="translate(-10, 5)"/>
+                        </svg>
+                    </div>
+                    <div class="trait-labels">
+                        <span class="label-dom">Purple (Dominant)</span>
+                        <span class="label-rec">White (Recessive)</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: WORKING PROCESS (MANDATORY STRUCTURE) -->
+        <section id="working">
+            <div class="glass-panel">
+                <h2>The <span class="text-gradient">Mechanism</span> of Discovery</h2>
+                <p>How did Mendel actually perform the experiment? Let's walk through the exact linear sequence of a Monohybrid Cross.</p>
+
+                <div class="process-container">
+                    <!-- Visual Area -->
+                    <div class="process-visual">
+                        
+                        <!-- Stage 1: Emasculation -->
+                        <div class="stage-svg-group active" id="stage-1">
+                            <svg viewBox="0 0 500 300" width="100%" height="100%">
+                                <!-- Purple Flower -->
+                                <g transform="translate(150, 150)">
+                                    <path d="M0,0 C-40,-50 -20,-80 0,-90 C20,-80 40,-50 0,0" fill="url(#purp)"/>
+                                    <!-- Anthers (Male) -->
+                                    <g id="s1-anthers">
+                                        <line x1="0" y1="0" x2="-20" y2="-40" stroke="#FFF" stroke-width="2"/>
+                                        <circle cx="-20" cy="-40" r="5" fill="#FFD700"/>
+                                        <line x1="0" y1="0" x2="20" y2="-40" stroke="#FFF" stroke-width="2"/>
+                                        <circle cx="20" cy="-40" r="5" fill="#FFD700"/>
+                                    </g>
+                                    <!-- Stigma (Female) -->
+                                    <path d="M0,0 Q0,-60 5,-70" fill="none" stroke="#81c784" stroke-width="4"/>
+                                    <circle cx="5" cy="-70" r="6" fill="#4caf50"/>
+                                </g>
+                                <!-- Scissors (Animated in JS) -->
+                                <g id="s1-scissors" transform="translate(300, 50)" style="transition: all 1s;">
+                                    <path d="M0,0 L-40,40 M0,10 L-40,-30" stroke="#CCC" stroke-width="4" fill="none"/>
+                                    <circle cx="0" cy="5" r="3" fill="#333"/>
+                                </g>
+                            </svg>
+                        </div>
+
+                        <!-- Stage 2: Pollination -->
+                        <div class="stage-svg-group" id="stage-2">
+                             <svg viewBox="0 0 500 300" width="100%" height="100%">
+                                <!-- Purple Flower (Emasculated) -->
+                                <g transform="translate(100, 150)">
+                                    <path d="M0,0 C-40,-50 -20,-80 0,-90 C20,-80 40,-50 0,0" fill="url(#purp)"/>
+                                    <path d="M0,0 Q0,-60 5,-70" fill="none" stroke="#81c784" stroke-width="4"/>
+                                    <circle cx="5" cy="-70" r="6" fill="#4caf50" id="s2-stigma"/>
+                                </g>
+                                <!-- White Flower (Pollen source) -->
+                                 <g transform="translate(400, 150)">
+                                    <path d="M0,0 C-40,-50 -20,-80 0,-90 C20,-80 40,-50 0,0" fill="url(#wht)"/>
+                                    <line x1="0" y1="0" x2="-20" y2="-40" stroke="#CCC" stroke-width="2"/>
+                                    <circle cx="-20" cy="-40" r="5" fill="#FFD700" id="s2-anther"/>
+                                </g>
+                                <!-- Paintbrush -->
+                                <g id="s2-brush" transform="translate(400, 80)" style="transition: all 1.5s ease-in-out;">
+                                    <rect x="-2" y="-40" width="4" height="40" fill="#8d6e63"/>
+                                    <path d="M-5,0 Q0,20 5,0 Z" fill="#eee"/>
+                                    <!-- Pollen particles attached -->
+                                    <circle cx="0" cy="15" r="2" fill="#FFD700" opacity="0" id="s2-pollen"/>
+                                </g>
+                            </svg>
+                        </div>
+
+                        <!-- Stage 3: F1 Generation -->
+                        <div class="stage-svg-group" id="stage-3">
+                             <svg viewBox="0 0 500 300" width="100%" height="100%">
+                                <!-- Seeds planted -->
+                                <path d="M 0 250 L 500 250" stroke="#5d4037" stroke-width="20"/>
+                                <circle cx="250" cy="245" r="8" fill="url(#peaGrad)"/>
+                                
+                                <!-- Growing Plant -->
+                                <g transform="translate(250, 240)" id="s3-plant" style="transform: scaleY(0); transform-origin: bottom; transition: transform 2s ease-out;">
+                                    <path d="M0,0 Q-10,-50 0,-100 Q10,-150 0,-180" fill="none" stroke="url(#stemGrad)" stroke-width="6"/>
+                                    <path d="M0,-100 C-30,-110 -40,-80 -10,-80 Z" fill="url(#leafGrad)"/>
+                                    <path d="M0,-150 C30,-160 40,-130 10,-130 Z" fill="url(#leafGrad)"/>
+                                    <!-- F1 Flowers (All Purple) -->
+                                    <g transform="translate(-20, -120) scale(0.6)">
+                                        <path d="M0,0 C-40,-50 -20,-80 0,-90 C20,-80 40,-50 0,0" fill="url(#purp)"/>
+                                    </g>
+                                    <g transform="translate(15, -170) scale(0.6)">
+                                        <path d="M0,0 C-40,-50 -20,-80 0,-90 C20,-80 40,-50 0,0" fill="url(#purp)"/>
+                                    </g>
+                                </g>
+                            </svg>
+                        </div>
+
+                        <!-- Stage 4: F2 Generation -->
+                        <div class="stage-svg-group" id="stage-4">
+                            <svg viewBox="0 0 500 300" width="100%" height="100%">
+                                <text x="250" y="40" fill="var(--text-muted)" text-anchor="middle" font-size="16">F1 Self-Pollinates to produce F2</text>
+                                
+                                <!-- 4 Plants showing 3:1 ratio -->
+                                <g id="s4-plants" style="opacity:0; transition: opacity 1s;">
+                                    <!-- Plant 1 (Purple) -->
+                                    <g transform="translate(100, 200)">
+                                        <path d="M0,0 L0,-50" stroke="#4caf50" stroke-width="4"/>
+                                        <path d="M0,-50 C-20,-80 20,-80 0,-50" fill="url(#purp)"/>
+                                    </g>
+                                    <!-- Plant 2 (Purple) -->
+                                    <g transform="translate(200, 200)">
+                                        <path d="M0,0 L0,-50" stroke="#4caf50" stroke-width="4"/>
+                                        <path d="M0,-50 C-20,-80 20,-80 0,-50" fill="url(#purp)"/>
+                                    </g>
+                                    <!-- Plant 3 (Purple) -->
+                                    <g transform="translate(300, 200)">
+                                        <path d="M0,0 L0,-50" stroke="#4caf50" stroke-width="4"/>
+                                        <path d="M0,-50 C-20,-80 20,-80 0,-50" fill="url(#purp)"/>
+                                    </g>
+                                    <!-- Plant 4 (White - Recessive reappears) -->
+                                    <g transform="translate(400, 200)">
+                                        <path d="M0,0 L0,-50" stroke="#4caf50" stroke-width="4"/>
+                                        <path d="M0,-50 C-20,-80 20,-80 0,-50" fill="url(#wht)"/>
+                                        <!-- Highlight -->
+                                        <circle cx="0" cy="-65" r="25" fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-dasharray="5,5" style="animation: spin 4s linear infinite;"/>
+                                    </g>
+                                </g>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Text/Caption Area -->
+                    <div class="stage-info">
+                        <h3 class="stage-title" id="process-title">1. Emasculation</h3>
+                        <p class="stage-caption" id="process-desc">Removing male parts (anthers) from the purple flower to prevent self-pollination.</p>
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="process-controls">
+                        <div class="control-group">
+                            <button class="btn-icon" id="btn-prev">←</button>
+                            <button class="btn-icon" id="btn-next">→</button>
+                        </div>
+                        <div class="progress-indicator" id="process-progress">
+                            <div class="progress-dot active"></div>
+                            <div class="progress-dot"></div>
+                            <div class="progress-dot"></div>
+                            <div class="progress-dot"></div>
+                        </div>
+                        <button class="btn" id="btn-play" style="padding: 8px 16px; font-size: 1rem;">Auto-Play</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5: INTERACTIVE SIMULATION -->
+        <section id="simulation">
+            <h2><span class="text-gradient">Punnett Square</span> Laboratory</h2>
+            <p>Predict the probability of offspring traits. Select the genetic makeup (genotype) of the parent plants.</p>
+            
+            <div class="lab-container">
+                <!-- Controls -->
+                <div class="controls-panel">
+                    <div class="control-block">
+                        <label>Trait</label>
+                        <select id="trait-select" disabled>
+                            <option value="color">Seed Color (Yellow Dominant, Green Recessive)</option>
+                        </select>
+                    </div>
+                    <div class="control-block">
+                        <label>Parent 1 (Top)</label>
+                        <select id="p1-select">
+                            <option value="YY">Homozygous Dominant (YY)</option>
+                            <option value="Yy" selected>Heterozygous (Yy)</option>
+                            <option value="yy">Homozygous Recessive (yy)</option>
+                        </select>
+                    </div>
+                    <div class="control-block">
+                        <label>Parent 2 (Left)</label>
+                        <select id="p2-select">
+                            <option value="YY">Homozygous Dominant (YY)</option>
+                            <option value="Yy" selected>Heterozygous (Yy)</option>
+                            <option value="yy">Homozygous Recessive (yy)</option>
+                        </select>
+                    </div>
+                    <button class="btn" id="btn-cross" style="margin-top: auto;">Perform Cross</button>
+                </div>
+
+                <!-- Interactive Grid -->
+                <div class="glass-panel square-wrapper">
+                    <div class="punnett-grid">
+                        <!-- Top Left Empty -->
+                        <div></div>
+                        <!-- Top Parent Alleles -->
+                        <div class="grid-header" id="p1-a1">Y</div>
+                        <div class="grid-header" id="p1-a2">y</div>
+                        
+                        <!-- Left Parent Allele 1 -->
+                        <div class="grid-header" id="p2-a1">Y</div>
+                        <div class="grid-cell" id="cell-11">
+                            <span class="cell-geno"></span>
+                            <div class="cell-seed"></div>
+                            <span class="cell-pheno"></span>
+                        </div>
+                        <div class="grid-cell" id="cell-12">
+                            <span class="cell-geno"></span>
+                            <div class="cell-seed"></div>
+                            <span class="cell-pheno"></span>
+                        </div>
+                        
+                        <!-- Left Parent Allele 2 -->
+                        <div class="grid-header" id="p2-a2">y</div>
+                        <div class="grid-cell" id="cell-21">
+                            <span class="cell-geno"></span>
+                            <div class="cell-seed"></div>
+                            <span class="cell-pheno"></span>
+                        </div>
+                        <div class="grid-cell" id="cell-22">
+                            <span class="cell-geno"></span>
+                            <div class="cell-seed"></div>
+                            <span class="cell-pheno"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-time Results -->
+            <div class="results-panel">
+                <div class="ratio-box">
+                    <div class="ratio-val" id="res-pheno">3 : 1</div>
+                    <div class="ratio-label">Phenotypic Ratio (Yellow : Green)</div>
+                </div>
+                <div class="ratio-box">
+                    <div class="ratio-val" id="res-geno">1 : 2 : 1</div>
+                    <div class="ratio-label">Genotypic Ratio (YY : Yy : yy)</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 6: FACTS & MISTAKES -->
+        <section id="facts">
+            <h2>Truths & <span class="text-gradient">Misconceptions</span></h2>
+            <div class="info-grid">
+                <div class="mistake-card">
+                    <span class="badge badge-myth">Common Myth</span>
+                    <h3>Traits are just a blend of parents</h3>
+                    <p>Before Mendel, people believed inheritance was like mixing paint (red + white = pink). Mendel proved traits are inherited as discrete, non-blending particles (genes).</p>
+                </div>
+                <div class="fact-card">
+                    <span class="badge badge-fact">Fascinating Fact</span>
+                    <h3>He tested over 28,000 plants</h3>
+                    <p>Mendel's laws aren't just guesses; they are rooted in intense statistics. Over 7 years, he meticulously cultivated and cataloged 28,000+ pea plants by hand.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 7: REVISION -->
+        <section id="revision">
+            <h2>Quick <span class="text-gradient">Revision</span></h2>
+            <div class="timeline">
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <h3>Law of Dominance</h3>
+                    <p>In a heterozygote, one trait will conceal the presence of another trait for the same characteristic.</p>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <h3>Law of Segregation</h3>
+                    <p>During gamete formation, the alleles for each gene segregate from each other so that each gamete carries only one allele for each gene.</p>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <h3>Law of Independent Assortment</h3>
+                    <p>Genes for different traits can segregate independently during the formation of gametes.</p>
+                </div>
+            </div>
+        </section>
+        
+        <br><br><br>
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        // ---------------------------------------------------------
+        // 1. Ambient Background Canvas Animation
+        // ---------------------------------------------------------
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        
+        function resizeCanvas() {
+            const rect = document.body.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * (canvas.width / window.devicePixelRatio);
+                this.y = Math.random() * (canvas.height / window.devicePixelRatio);
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.size = Math.random() * 2 + 1;
+                this.baseAlpha = Math.random() * 0.5 + 0.1;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Wrap around
+                const w = canvas.width / window.devicePixelRatio;
+                const h = canvas.height / window.devicePixelRatio;
+                if (this.x < 0) this.x = w;
+                if (this.x > w) this.x = 0;
+                if (this.y < 0) this.y = h;
+                if (this.y > h) this.y = 0;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(57, 255, 20, ${this.baseAlpha})`;
+                ctx.fill();
+            }
+        }
+
+        for (let i = 0; i < 50; i++) {
+            particles.push(new Particle());
+        }
+
+        function animateBg() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Connect nearby particles lightly
+            for (let i = 0; i < particles.length; i++) {
+                particles[i].update();
+                particles[i].draw();
+                
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[i].x - particles[j].x;
+                    const dy = particles[i].y - particles[j].y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (dist < 100) {
+                        ctx.beginPath();
+                        ctx.strokeStyle = `rgba(57, 255, 20, ${0.1 * (1 - dist/100)})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.moveTo(particles[i].x, particles[i].y);
+                        ctx.lineTo(particles[j].x, particles[j].y);
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animateBg);
+        }
+        animateBg();
+
+        // ---------------------------------------------------------
+        // 2. Diagram Marker Logic (STRICT REQUIREMENTS)
+        // ---------------------------------------------------------
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function highlightDiagram(targetId) {
+            // Reset all
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            // Activate matches
+            const marker = Array.from(markers).find(m => m.dataset.target === targetId);
+            const legend = document.getElementById(targetId);
+            
+            if (marker) marker.classList.add('active');
+            if (legend) legend.classList.add('active');
+        }
+
+        markers.forEach(marker => {
+            const handleInteract = (e) => { e.preventDefault(); highlightDiagram(marker.dataset.target); };
+            marker.addEventListener('mouseenter', handleInteract);
+            marker.addEventListener('touchstart', handleInteract, {passive: false});
+        });
+
+        legendItems.forEach(item => {
+            const handleInteract = (e) => { e.preventDefault(); highlightDiagram(item.id); };
+            item.addEventListener('mouseenter', handleInteract);
+            item.addEventListener('touchstart', handleInteract, {passive: false});
+        });
+
+        // ---------------------------------------------------------
+        // 3. Working Process State Machine
+        // ---------------------------------------------------------
+        const stages = [
+            {
+                title: "1. Emasculation",
+                desc: "Removing male parts (anthers) from the purple flower to prevent natural self-pollination.",
+                animFn: () => {
+                    const scissors = document.getElementById('s1-scissors');
+                    const anthers = document.getElementById('s1-anthers');
+                    // Reset
+                    scissors.style.transform = "translate(300px, 50px)";
+                    anthers.style.opacity = 1;
+                    
+                    // Animate
+                    setTimeout(() => {
+                        scissors.style.transform = "translate(150px, 90px)"; // Move to flower
+                        setTimeout(() => { anthers.style.opacity = 0; }, 500); // Cut
+                        setTimeout(() => { scissors.style.transform = "translate(300px, 50px)"; }, 1000); // Move back
+                    }, 100);
+                }
+            },
+            {
+                title: "2. Cross-Pollination",
+                desc: "Manually transferring pollen from a white flower to the emasculated purple flower.",
+                animFn: () => {
+                    const brush = document.getElementById('s2-brush');
+                    const pollen = document.getElementById('s2-pollen');
+                    const stigma = document.getElementById('s2-stigma');
+                    
+                    // Reset
+                    brush.style.transform = "translate(400px, 80px)";
+                    pollen.style.opacity = 0;
+                    stigma.setAttribute('fill', '#4caf50');
+
+                    setTimeout(() => {
+                        brush.style.transform = "translate(380px, 110px)"; // Dip in white flower
+                        setTimeout(() => { 
+                            pollen.style.opacity = 1; 
+                            brush.style.transform = "translate(100px, 70px)"; // Move to purple flower
+                            setTimeout(() => {
+                                pollen.style.opacity = 0;
+                                stigma.setAttribute('fill', '#FFD700'); // Pollen deposited
+                                brush.style.transform = "translate(250px, 50px)"; // Move away
+                            }, 1500);
+                        }, 500);
+                    }, 100);
+                }
+            },
+            {
+                title: "3. F1 Generation",
+                desc: "The seeds grow. Result: 100% of offspring have Purple flowers. The white trait seemingly vanishes (Dominance).",
+                animFn: () => {
+                    const plant = document.getElementById('s3-plant');
+                    plant.style.transform = "scaleY(0)";
+                    
+                    setTimeout(() => {
+                        plant.style.transform = "scaleY(1)";
+                    }, 100);
+                }
+            },
+            {
+                title: "4. F2 Generation",
+                desc: "F1 plants self-pollinate. Result: 75% Purple, 25% White. The recessive trait reappears! (3:1 Ratio)",
+                animFn: () => {
+                    const plants = document.getElementById('s4-plants');
+                    plants.style.opacity = 0;
+                    setTimeout(() => {
+                        plants.style.opacity = 1;
+                    }, 300);
+                }
+            }
+        ];
+
+        let currentStage = 0;
+        let isPlaying = false;
+        let playInterval;
+
+        const domVisuals = document.querySelectorAll('.stage-svg-group');
+        const domTitle = document.getElementById('process-title');
+        const domDesc = document.getElementById('process-desc');
+        const domDots = document.querySelectorAll('.progress-dot');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnPlay = document.getElementById('btn-play');
+
+        function updateStage(index) {
+            // Bounds
+            if (index < 0) index = stages.length - 1;
+            if (index >= stages.length) index = 0;
+            currentStage = index;
+
+            // UI Update
+            domVisuals.forEach((v, i) => {
+                if(i === currentStage) {
+                    v.classList.add('active');
+                } else {
+                    v.classList.remove('active');
+                }
+            });
+            
+            domDots.forEach((d, i) => d.classList.toggle('active', i === currentStage));
+            
+            domTitle.textContent = stages[currentStage].title;
+            domDesc.textContent = stages[currentStage].desc;
+
+            // Trigger specific animation
+            stages[currentStage].animFn();
+        }
+
+        btnPrev.addEventListener('click', () => { stopAutoPlay(); updateStage(currentStage - 1); });
+        btnNext.addEventListener('click', () => { stopAutoPlay(); updateStage(currentStage + 1); });
+        
+        function stopAutoPlay() {
+            isPlaying = false;
+            clearInterval(playInterval);
+            btnPlay.textContent = "Auto-Play";
+            btnPlay.style.background = "";
+            btnPlay.style.color = "";
+        }
+
+        btnPlay.addEventListener('click', () => {
+            if (isPlaying) {
+                stopAutoPlay();
+            } else {
+                isPlaying = true;
+                btnPlay.textContent = "Stop";
+                btnPlay.style.background = "var(--accent-primary)";
+                btnPlay.style.color = "var(--bg-base)";
+                // Run current, then interval
+                updateStage(currentStage);
+                playInterval = setInterval(() => {
+                    updateStage(currentStage + 1);
+                }, 4000); // 4 seconds per stage
+            }
+        });
+
+        // Initialize first stage
+        setTimeout(() => updateStage(0), 500);
+
+        // ---------------------------------------------------------
+        // 4. Punnett Square Logic
+        // ---------------------------------------------------------
+        const p1Select = document.getElementById('p1-select');
+        const p2Select = document.getElementById('p2-select');
+        const btnCross = document.getElementById('btn-cross');
+
+        // DOM elements for grid
+        const hP1A1 = document.getElementById('p1-a1');
+        const hP1A2 = document.getElementById('p1-a2');
+        const hP2A1 = document.getElementById('p2-a1');
+        const hP2A2 = document.getElementById('p2-a2');
+
+        const cells = [
+            { dom: document.getElementById('cell-11'), p1Idx: 0, p2Idx: 0 },
+            { dom: document.getElementById('cell-12'), p1Idx: 1, p2Idx: 0 },
+            { dom: document.getElementById('cell-21'), p1Idx: 0, p2Idx: 1 },
+            { dom: document.getElementById('cell-22'), p1Idx: 1, p2Idx: 1 },
+        ];
+
+        function performCross() {
+            const p1 = p1Select.value; // e.g. "Yy"
+            const p2 = p2Select.value;
+            
+            // Update Headers
+            hP1A1.textContent = p1[0];
+            hP1A2.textContent = p1[1];
+            hP2A1.textContent = p2[0];
+            hP2A2.textContent = p2[1];
+
+            let counts = { YY:0, Yy:0, yy:0 };
+            let phenoCounts = { yellow: 0, green: 0 };
+
+            // Clear cells first for animation effect
+            cells.forEach(c => {
+                c.dom.classList.remove('active-fill');
+                c.dom.querySelector('.cell-geno').textContent = "";
+                c.dom.querySelector('.cell-pheno').textContent = "";
+                c.dom.querySelector('.cell-seed').className = "cell-seed";
+            });
+
+            // Animate filling
+            cells.forEach((c, index) => {
+                setTimeout(() => {
+                    // Sort alleles so capital is first (Yy not yY)
+                    let alleles = [p1[c.p1Idx], p2[c.p2Idx]].sort().reverse().join('');
+                    if(alleles === "yY") alleles = "Yy"; // manual catch just in case
+                    
+                    c.dom.querySelector('.cell-geno').textContent = alleles;
+                    
+                    // Determine phenotype
+                    let isYellow = alleles.includes('Y');
+                    let seedDiv = c.dom.querySelector('.cell-seed');
+                    let phenoText = c.dom.querySelector('.cell-pheno');
+
+                    if (isYellow) {
+                        seedDiv.classList.add('seed-yellow');
+                        phenoText.textContent = "Yellow";
+                        phenoCounts.yellow++;
+                    } else {
+                        seedDiv.classList.add('seed-green');
+                        phenoText.textContent = "Green";
+                        phenoCounts.green++;
+                    }
+                    
+                    counts[alleles]++;
+                    
+                    c.dom.classList.add('active-fill');
+                    
+                    // Update ratios on last cell
+                    if (index === 3) {
+                        document.getElementById('res-pheno').textContent = `${phenoCounts.yellow} : ${phenoCounts.green}`;
+                        document.getElementById('res-geno').textContent = `${counts.YY} : ${counts.Yy} : ${counts.yy}`;
+                        
+                        // Add a slight pop effect
+                        document.getElementById('res-pheno').style.transform = "scale(1.2)";
+                        setTimeout(() => document.getElementById('res-pheno').style.transform = "scale(1)", 200);
+                    }
+                }, index * 200); // Staggered animation
+            });
+        }
+
+        btnCross.addEventListener('click', performCross);
+        btnCross.addEventListener('touchstart', (e) => { e.preventDefault(); performCross(); }, {passive: false});
+
+        // Initial cross run
+        setTimeout(performCross, 1000);
+
+    </script>
+</body>
+</html>

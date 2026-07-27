@@ -98,7 +98,7 @@ function AnimePageInner() {
           caption: meta.caption as string | undefined,
           prompt: meta.prompt as string | undefined,
         } : undefined
-        api.bellaExplain(topic, imageContext)
+        api.bellaExplain(topic, { image_context: imageContext, section: 'anime', language: useBellaStore.getState().language })
           .then((data) => {
             triggerExplanation({
               topic,

@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Data Representations Laboratory</title>
+    <style>
+        /* ══════════════════════════════════════
+           DESIGN SYSTEM & CSS VARIABLES
+        ══════════════════════════════════════ */
+        :root {
+            /* Accent Colors */
+            --cyan: #00E5FF;
+            --blue: #4FC3F7;
+            --purple: #8E44FF;
+            --orange: #FFA726;
+            --green: #00E676;
+            
+            /* Backgrounds */
+            --bg-base: #03050B;
+            --bg-glass: rgba(15, 25, 42, 0.5);
+            --bg-glass-hover: rgba(20, 35, 60, 0.7);
+            
+            /* Borders & Shadows */
+            --border-glass: rgba(0, 229, 255, 0.15);
+            --glow-cyan: 0 0 15px rgba(0, 229, 255, 0.4);
+            --glow-purple: 0 0 15px rgba(142, 68, 255, 0.4);
+            --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.5);
+            
+            /* Typography */
+            --font-main: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            --font-math: 'Cambria Math', 'Times New Roman', serif;
+            --text-main: #F8FAFC;
+            --text-muted: #94A3B8;
+        }
+
+        /* ══════════════════════════════════════
+           GLOBAL RESET & TYPOGRAPHY
+        ══════════════════════════════════════ */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Background Canvas */
+        #particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            background: radial-gradient(circle at center, #0B1021 0%, #03050B 100%);
+        }
+
+        /* ══════════════════════════════════════
+           LAYOUT CONTAINERS
+        ══════════════════════════════════════ */
+        .app-container {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Glassmorphism Cards */
+        .glass-card {
+            background: var(--bg-glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow-glass);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .glass-card:hover {
+            box-shadow: 0 12px 40px rgba(0, 229, 255, 0.1);
+        }
+
+        /* ══════════════════════════════════════
+           TOP SECTION: TITLE & THEORY
+        ══════════════════════════════════════ */
+        header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            background: linear-gradient(90deg, var(--cyan), var(--purple), var(--blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(0, 229, 255, 0.2);
+            margin-bottom: 0.5rem;
+            letter-spacing: -1px;
+        }
+
+        .definition {
+            font-size: 1.2rem;
+            color: var(--cyan);
+            font-weight: 500;
+        }
+
+        .theory-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .theory-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Formulas Styling (Textbook Notation) */
+        .math-formula {
+            font-family: var(--font-math);
+            font-size: 1.4rem;
+            display: inline-flex;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border-left: 3px solid var(--cyan);
+            margin: 0.5rem 0;
+            color: #E2E8F0;
+        }
+
+        .fraction {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0 0.5rem;
+            vertical-align: middle;
+        }
+
+        .fraction > span:first-child {
+            border-bottom: 1px solid currentColor;
+            padding: 0 0.2rem;
+            width: 100%;
+            text-align: center;
+        }
+
+        .fraction > span:last-child {
+            padding: 0 0.2rem;
+        }
+
+        .sub { vertical-align: sub; font-size: 0.8rem; }
+        .sup { vertical-align: super; font-size: 0.8rem; }
+
+        .fact-box {
+            border-left: 4px solid var(--orange);
+            position: relative;
+        }
+        
+        .fact-box::before {
+            content: "💡 Fact";
+            position: absolute;
+            top: -12px;
+            left: 10px;
+            background: var(--bg-base);
+            padding: 0 8px;
+            color: var(--orange);
+            font-weight: bold;
+            font-size: 0.85rem;
+            border-radius: 4px;
+        }
+
+        /* ══════════════════════════════════════
+           MAIN LABORATORY AREA
+        ══════════════════════════════════════ */
+        .lab-grid {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .lab-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Controls Area */
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-group label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tooltip {
+            cursor: help;
+            border-bottom: 1px dotted var(--cyan);
+        }
+
+        /* Sliders */
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--cyan);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--cyan);
+            transition: transform 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.3);
+        }
+        
+        /* Specific slider colors */
+        #slider-0::-webkit-slider-thumb { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+        #slider-1::-webkit-slider-thumb { background: var(--blue); box-shadow: 0 0 10px var(--blue); }
+        #slider-2::-webkit-slider-thumb { background: var(--purple); box-shadow: 0 0 10px var(--purple); }
+        #slider-3::-webkit-slider-thumb { background: var(--orange); box-shadow: 0 0 10px var(--orange); }
+        #slider-4::-webkit-slider-thumb { background: var(--green); box-shadow: 0 0 10px var(--green); }
+
+        select {
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--border-glass);
+            color: white;
+            padding: 0.5rem;
+            border-radius: 8px;
+            font-family: inherit;
+            outline: none;
+            cursor: pointer;
+        }
+        
+        select:focus { border-color: var(--cyan); box-shadow: var(--glow-cyan); }
+
+        /* Buttons */
+        .btn-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-glass);
+            color: var(--text-main);
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            background: rgba(0, 229, 255, 0.1);
+            border-color: var(--cyan);
+            box-shadow: var(--glow-cyan);
+            transform: translateY(-2px);
+        }
+
+        button:active { transform: translateY(0); }
+
+        .btn-play { border-color: var(--green); color: var(--green); }
+        .btn-play:hover { background: rgba(0, 230, 118, 0.1); box-shadow: 0 0 15px rgba(0, 230, 118, 0.4); border-color: var(--green); }
+        
+        .btn-pause { border-color: var(--orange); color: var(--orange); }
+        .btn-pause:hover { background: rgba(255, 167, 38, 0.1); box-shadow: 0 0 15px rgba(255, 167, 38, 0.4); border-color: var(--orange); }
+
+        /* Simulation Canvas Area */
+        .simulation-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            width: 100%;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #chart-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Warning Overlay */
+        .warning-msg {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 60, 60, 0.2);
+            border: 1px solid #FF3C3C;
+            color: #FF3C3C;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        /* ══════════════════════════════════════
+           LIVE CALCULATIONS
+        ══════════════════════════════════════ */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+
+        .stat-card {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--border-glass);
+            padding: 1rem;
+            border-radius: 12px;
+            text-align: center;
+            transition: background 0.3s, transform 0.1s;
+        }
+
+        .stat-card.highlight {
+            background: rgba(0, 229, 255, 0.2);
+            transform: scale(1.05);
+            border-color: var(--cyan);
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Specific stat colors */
+        #val-mean { color: var(--cyan); }
+        #val-sum { color: var(--purple); }
+        #val-max { color: var(--green); }
+        #val-min { color: var(--orange); }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            box-shadow: 0 0 8px currentColor;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Background Particle System -->
+    <canvas id="particle-canvas"></canvas>
+
+    <div class="app-container">
+        
+        <!-- HEADER -->
+        <header>
+            <h1>Charts & Their Representations</h1>
+            <p class="definition">Visualizing numerical data through geometric mapping.</p>
+        </header>
+
+        <!-- THEORY SECTION -->
+        <section class="theory-grid">
+            <div class="glass-card">
+                <h3>Visual Analytics</h3>
+                <p style="margin-bottom: 1rem; color: var(--text-muted);">
+                    A chart represents tabular data visually, allowing the human brain to detect patterns, trends, and outliers instantly.
+                </p>
+                <div style="font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--blue);">Important Formulas:</div>
+                
+                <!-- Formulas formatted as textbook notation -->
+                <div class="math-formula">
+                    Mean: &nbsp; <span style="font-style: italic;">x̄</span> &nbsp; = &nbsp; 
+                    <span class="fraction">
+                        <span>&Sigma;<span style="font-style: italic;">x<span class="sub">i</span></span></span>
+                        <span><span style="font-style: italic;">n</span></span>
+                    </span>
+                </div>
+                <br>
+                <div class="math-formula">
+                    Pie Sector: &nbsp; &theta;<span class="sub">i</span> &nbsp; = &nbsp; 
+                    <span class="fraction">
+                        <span><span style="font-style: italic;">x<span class="sub">i</span></span></span>
+                        <span>&Sigma;<span style="font-style: italic;">x</span></span>
+                    </span>
+                    &nbsp; &times; 360&deg;
+                </div>
+            </div>
+
+            <div class="glass-card fact-box">
+                <h3>Types of Representation</h3>
+                <ul style="margin-left: 1.5rem; margin-bottom: 1rem; color: var(--text-muted);">
+                    <li><strong style="color:var(--cyan)">Bar Chart:</strong> Compares discrete categories.</li>
+                    <li><strong style="color:var(--blue)">Line Chart:</strong> Shows continuous trends over a sequence.</li>
+                    <li><strong style="color:var(--purple)">Pie Chart:</strong> Displays part-to-whole proportional relationships.</li>
+                    <li><strong style="color:var(--orange)">Scatter Plot:</strong> Reveals correlation between coordinates.</li>
+                </ul>
+                <p style="font-size: 0.9rem; color: #E2E8F0;">
+                    Data visualization leverages human visual processing (pre-attentive attributes) to parse large datasets in milliseconds.
+                </p>
+            </div>
+        </section>
+
+        <!-- LABORATORY SECTION -->
+        <section class="lab-grid">
+            
+            <!-- Controls Panel -->
+            <div class="glass-card controls-panel">
+                <h3 style="margin-bottom: 0.5rem; border-bottom: 1px solid var(--border-glass); padding-bottom: 0.5rem;">Parameters</h3>
+                
+                <div class="control-group">
+                    <label>Chart Type <span class="tooltip" title="Changes the geometric representation method">?</span></label>
+                    <select id="chart-type-selector">
+                        <option value="bar">Bar Chart</option>
+                        <option value="line">Line / Trajectory</option>
+                        <option value="pie">Pie Chart</option>
+                        <option value="scatter">Scatter Plot</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>Alpha Data <span id="val-0">50</span></label>
+                    <input type="range" id="slider-0" min="5" max="100" value="50">
+                </div>
+                <div class="control-group">
+                    <label>Beta Data <span id="val-1">75</span></label>
+                    <input type="range" id="slider-1" min="5" max="100" value="75">
+                </div>
+                <div class="control-group">
+                    <label>Gamma Data <span id="val-2">40</span></label>
+                    <input type="range" id="slider-2" min="5" max="100" value="40">
+                </div>
+                <div class="control-group">
+                    <label>Delta Data <span id="val-3">90</span></label>
+                    <input type="range" id="slider-3" min="5" max="100" value="90">
+                </div>
+                <div class="control-group">
+                    <label>Epsilon Data <span id="val-4">60</span></label>
+                    <input type="range" id="slider-4" min="5" max="100" value="60">
+                </div>
+
+                <div class="btn-group" style="margin-top: 1rem;">
+                    <button class="btn-play" id="btn-play">▶ Play</button>
+                    <button class="btn-pause" id="btn-pause">⏸ Pause</button>
+                    <button id="btn-random">🎲 Randomize</button>
+                    <button id="btn-reset">⏹ Reset</button>
+                </div>
+            </div>
+
+            <!-- Simulation Engine -->
+            <div class="simulation-container">
+                <div class="glass-card" style="padding: 0;">
+                    <div class="canvas-wrapper">
+                        <canvas id="chart-canvas"></canvas>
+                        <div id="warning-limit" class="warning-msg">⚠️ Low variance detected</div>
+                    </div>
+                </div>
+
+                <!-- Live Data Calculations -->
+                <div class="stats-grid">
+                    <div class="glass-card stat-card" id="card-mean">
+                        <div class="stat-label">Mean (x̄)</div>
+                        <div class="stat-value" id="val-mean">0.0</div>
+                    </div>
+                    <div class="glass-card stat-card" id="card-sum">
+                        <div class="stat-label">Total Sum (Σ)</div>
+                        <div class="stat-value" id="val-sum">0</div>
+                    </div>
+                    <div class="glass-card stat-card" id="card-max">
+                        <div class="stat-label">Maximum</div>
+                        <div class="stat-value" id="val-max">0</div>
+                    </div>
+                    <div class="glass-card stat-card" id="card-min">
+                        <div class="stat-label">Minimum</div>
+                        <div class="stat-value" id="val-min">0</div>
+                    </div>
+                </div>
+
+                <!-- Interactive Legend -->
+                <div class="legend">
+                    <div class="legend-item"><div class="legend-color" style="background: var(--cyan); color: var(--cyan);"></div> Alpha</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--blue); color: var(--blue);"></div> Beta</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--purple); color: var(--purple);"></div> Gamma</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--orange); color: var(--orange);"></div> Delta</div>
+                    <div class="legend-item"><div class="legend-color" style="background: var(--green); color: var(--green);"></div> Epsilon</div>
+                </div>
+
+            </div>
+        </section>
+    </div>
+
+    <script>
+        /** 
+         * ══════════════════════════════════════
+         * ENGINE CONFIGURATION & STATE
+         * ══════════════════════════════════════ 
+         */
+        const colors = ['#00E5FF', '#4FC3F7', '#8E44FF', '#FFA726', '#00E676'];
+        const labels = ['Alpha', 'Beta', 'Gamma', 'Delta', 'Epsilon'];
+        
+        let targetData = [50, 75, 40, 90, 60];
+        let currentData = [...targetData];
+        let chartType = 'bar'; // bar, line, pie, scatter
+        
+        let isPlaying = false;
+        let timeOffset = 0;
+        
+        // Caching DOM elements
+        const sliders = [
+            document.getElementById('slider-0'),
+            document.getElementById('slider-1'),
+            document.getElementById('slider-2'),
+            document.getElementById('slider-3'),
+            document.getElementById('slider-4')
+        ];
+        const valDisplays = [
+            document.getElementById('val-0'),
+            document.getElementById('val-1'),
+            document.getElementById('val-2'),
+            document.getElementById('val-3'),
+            document.getElementById('val-4')
+        ];
+        
+        const statMean = document.getElementById('val-mean');
+        const statSum = document.getElementById('val-sum');
+        const statMax = document.getElementById('val-max');
+        const statMin = document.getElementById('val-min');
+        const cardMean = document.getElementById('card-mean');
+        const cardSum = document.getElementById('card-sum');
+        const cardMax = document.getElementById('card-max');
+        const cardMin = document.getElementById('card-min');
+        const warningBox = document.getElementById('warning-limit');
+
+        /** 
+         * ══════════════════════════════════════
+         * CANVAS SETUP & RESPONSIVENESS
+         * ══════════════════════════════════════ 
+         */
+        const canvas = document.getElementById('chart-canvas');
+        const ctx = canvas.getContext('2d');
+        const wrapper = document.querySelector('.canvas-wrapper');
+
+        function resizeCanvas() {
+            // Handle high DPI displays for crisp rendering
+            const dpr = window.devicePixelRatio || 1;
+            const rect = wrapper.getBoundingClientRect();
+            
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        /** 
+         * ══════════════════════════════════════
+         * BACKGROUND PARTICLE SYSTEM
+         * ══════════════════════════════════════ 
+         */
+        const bgCanvas = document.getElementById('particle-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let particles = [];
+
+        function initParticles() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+            particles = [];
+            for (let i = 0; i < 50; i++) {
+                particles.push({
+                    x: Math.random() * bgCanvas.width,
+                    y: Math.random() * bgCanvas.height,
+                    radius: Math.random() * 2 + 0.5,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    alpha: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+        window.addEventListener('resize', initParticles);
+        initParticles();
+
+        function drawParticles() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.x < 0 || p.x > bgCanvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > bgCanvas.height) p.vy *= -1;
+                
+                bgCtx.beginPath();
+                bgCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                bgCtx.fillStyle = `rgba(0, 229, 255, ${p.alpha})`;
+                bgCtx.fill();
+            });
+        }
+
+        /** 
+         * ══════════════════════════════════════
+         * DATA CALCULATION & UI BINDINGS
+         * ══════════════════════════════════════ 
+         */
+        let lastStats = { mean: 0, sum: 0, max: 0, min: 0 };
+
+        function updateStats(dataArray) {
+            const sum = dataArray.reduce((a, b) => a + b, 0);
+            const mean = sum / dataArray.length;
+            const max = Math.max(...dataArray);
+            const min = Math.min(...dataArray);
+            
+            // Highlight animation function
+            const updateAndHighlight = (el, cardEl, val, lastVal, isFloat = false) => {
+                const formatted = isFloat ? val.toFixed(1) : Math.round(val);
+                if (Math.abs(val - lastVal) > 0.5) {
+                    el.innerText = formatted;
+                    cardEl.classList.add('highlight');
+                    setTimeout(() => cardEl.classList.remove('highlight'), 300);
+                } else if (el.innerText !== formatted.toString()) {
+                    el.innerText = formatted;
+                }
+            };
+
+            updateAndHighlight(statMean, cardMean, mean, lastStats.mean, true);
+            updateAndHighlight(statSum, cardSum, sum, lastStats.sum);
+            updateAndHighlight(statMax, cardMax, max, lastStats.max);
+            updateAndHighlight(statMin, cardMin, min, lastStats.min);
+            
+            lastStats = { mean, sum, max, min };
+
+            // Warning Logic (if data is too uniform)
+            if (max - min < 10) {
+                warningBox.style.opacity = '1';
+            } else {
+                warningBox.style.opacity = '0';
+            }
+        }
+
+        // Attach slider events
+        sliders.forEach((slider, index) => {
+            slider.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value);
+                targetData[index] = val;
+                valDisplays[index].innerText = val;
+                
+                // Stop playing if user interacts
+                if (isPlaying) {
+                    isPlaying = false;
+                }
+            });
+        });
+
+        document.getElementById('chart-type-selector').addEventListener('change', (e) => {
+            chartType = e.target.value;
+        });
+
+        document.getElementById('btn-random').addEventListener('click', () => {
+            sliders.forEach((slider, i) => {
+                const val = Math.floor(Math.random() * 95) + 5;
+                slider.value = val;
+                targetData[i] = val;
+                valDisplays[i].innerText = val;
+            });
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            const def = [50, 75, 40, 90, 60];
+            sliders.forEach((slider, i) => {
+                slider.value = def[i];
+                targetData[i] = def[i];
+                valDisplays[i].innerText = def[i];
+            });
+            isPlaying = false;
+        });
+
+        document.getElementById('btn-play').addEventListener('click', () => isPlaying = true);
+        document.getElementById('btn-pause').addEventListener('click', () => isPlaying = false);
+
+        /** 
+         * ══════════════════════════════════════
+         * RENDER GRAPHICS ENGINE (NO LIBRARIES)
+         * ══════════════════════════════════════ 
+         */
+        
+        function drawAxesAndGrid(w, h, padding, plotW, plotH) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.fillStyle = '#94A3B8';
+            ctx.font = '12px Inter, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            
+            // Y-Axis Grid Lines & Labels
+            const steps = 5;
+            for (let i = 0; i <= steps; i++) {
+                const y = h - padding - (i / steps) * plotH;
+                const val = (100 / steps) * i;
+                
+                // Grid line
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(w - padding, y);
+                ctx.stroke();
+                
+                // Label
+                ctx.fillText(val, padding - 10, y);
+            }
+            
+            // X-Axis labels
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            for (let i = 0; i < labels.length; i++) {
+                const x = padding + (i + 0.5) * (plotW / labels.length);
+                ctx.fillText(labels[i], x, h - padding + 15);
+            }
+
+            // Draw Main Axes (Thicker)
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            // Y Axis
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, h - padding);
+            // X Axis
+            ctx.lineTo(w - padding, h - padding);
+            ctx.stroke();
+        }
+
+        function renderChart() {
+            // Logical Width/Height based on CSS size (not raw canvas pixels due to DPR scaling)
+            const rect = wrapper.getBoundingClientRect();
+            const w = rect.width;
+            const h = rect.height;
+            const padding = 60;
+            const plotW = w - padding * 2;
+            const plotH = h - padding * 2;
+            
+            ctx.clearRect(0, 0, w, h);
+            
+            // Only draw Axes for cartesian charts
+            if (chartType !== 'pie') {
+                drawAxesAndGrid(w, h, padding, plotW, plotH);
+            }
+
+            const maxDataVal = 100; // Fixed scale 0-100 based on sliders
+
+            if (chartType === 'bar') {
+                const barTotalW = plotW / currentData.length;
+                const barW = barTotalW * 0.6; // 60% width, 40% spacing
+                
+                currentData.forEach((val, i) => {
+                    const barH = (val / maxDataVal) * plotH;
+                    const x = padding + i * barTotalW + (barTotalW - barW) / 2;
+                    const y = h - padding - barH;
+                    
+                    // Gradient Fill
+                    const grad = ctx.createLinearGradient(x, y, x, y + barH);
+                    grad.addColorStop(0, colors[i]);
+                    grad.addColorStop(1, 'rgba(0,0,0,0)');
+                    
+                    ctx.fillStyle = grad;
+                    
+                    // Glow effect
+                    ctx.shadowColor = colors[i];
+                    ctx.shadowBlur = 15;
+                    
+                    // Draw Bar
+                    // Add border radius hack by drawing rect path
+                    ctx.beginPath();
+                    ctx.roundRect(x, y, barW, barH, [6, 6, 0, 0]);
+                    ctx.fill();
+                    
+                    // Reset shadow for stroke
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = colors[i];
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+            } 
+            else if (chartType === 'line') {
+                ctx.beginPath();
+                currentData.forEach((val, i) => {
+                    const spacing = plotW / (currentData.length - 1);
+                    const x = padding + i * spacing;
+                    const y = h - padding - (val / maxDataVal) * plotH;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                
+                // Line styling
+                ctx.strokeStyle = varCyan = '#00E5FF';
+                ctx.lineWidth = 4;
+                ctx.lineJoin = 'round';
+                ctx.shadowColor = varCyan;
+                ctx.shadowBlur = 15;
+                ctx.stroke();
+                
+                // Area fill under line
+                ctx.lineTo(w - padding, h - padding);
+                ctx.lineTo(padding, h - padding);
+                ctx.closePath();
+                const grad = ctx.createLinearGradient(0, padding, 0, h - padding);
+                grad.addColorStop(0, 'rgba(0, 229, 255, 0.3)');
+                grad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+                ctx.fillStyle = grad;
+                ctx.shadowBlur = 0; // turn off shadow for fill
+                ctx.fill();
+
+                // Draw Nodes
+                currentData.forEach((val, i) => {
+                    const spacing = plotW / (currentData.length - 1);
+                    const x = padding + i * spacing;
+                    const y = h - padding - (val / maxDataVal) * plotH;
+                    
+                    ctx.beginPath();
+                    ctx.arc(x, y, 6, 0, Math.PI * 2);
+                    ctx.fillStyle = '#03050B';
+                    ctx.fill();
+                    ctx.strokeStyle = colors[i];
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = colors[i];
+                    ctx.shadowBlur = 10;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                });
+            }
+            else if (chartType === 'pie') {
+                const cx = w / 2;
+                const cy = h / 2;
+                const radius = Math.min(plotW, plotH) / 2 * 0.9;
+                
+                const total = currentData.reduce((a, b) => a + b, 0);
+                let startAngle = -Math.PI / 2; // Start at top
+                
+                currentData.forEach((val, i) => {
+                    const sliceAngle = (val / total) * 2 * Math.PI;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(cx, cy);
+                    ctx.arc(cx, cy, radius, startAngle, startAngle + sliceAngle);
+                    ctx.closePath();
+                    
+                    // Gradient Fill
+                    const midAngle = startAngle + sliceAngle / 2;
+                    const grad = ctx.createRadialGradient(cx, cy, radius * 0.2, cx, cy, radius);
+                    grad.addColorStop(0, '#111');
+                    grad.addColorStop(1, colors[i]);
+                    
+                    ctx.fillStyle = grad;
+                    
+                    // Glow
+                    ctx.shadowColor = colors[i];
+                    ctx.shadowBlur = 15;
+                    ctx.fill();
+                    
+                    // Stroke separator
+                    ctx.shadowBlur = 0;
+                    ctx.strokeStyle = '#03050B';
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                    
+                    startAngle += sliceAngle;
+                });
+                
+                // Inner circle for donut effect
+                ctx.beginPath();
+                ctx.arc(cx, cy, radius * 0.4, 0, Math.PI * 2);
+                ctx.fillStyle = '#03050B';
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.stroke();
+                
+                // Donut Center Text
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 24px Inter';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(Math.round(total), cx, cy - 10);
+                ctx.font = '12px Inter';
+                ctx.fillStyle = '#94A3B8';
+                ctx.fillText('TOTAL', cx, cy + 15);
+            }
+            else if (chartType === 'scatter') {
+                // Scatter Plot Simulation (using index as X, value as Y)
+                // Add slight random offset based on index so it looks scattered
+                currentData.forEach((val, i) => {
+                    const spacing = plotW / (currentData.length);
+                    // Base position
+                    let x = padding + (i + 0.5) * spacing;
+                    let y = h - padding - (val / maxDataVal) * plotH;
+                    
+                    // Draw outer aura
+                    ctx.beginPath();
+                    ctx.arc(x, y, 20, 0, Math.PI * 2);
+                    ctx.fillStyle = colors[i] + '33'; // 20% opacity
+                    ctx.fill();
+                    
+                    // Draw core point
+                    ctx.beginPath();
+                    ctx.arc(x, y, 8, 0, Math.PI * 2);
+                    ctx.fillStyle = colors[i];
+                    ctx.shadowColor = colors[i];
+                    ctx.shadowBlur = 20;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+
+                    // Draw coordinates text
+                    ctx.fillStyle = '#FFF';
+                    ctx.font = '10px Inter';
+                    ctx.fillText(`(${i+1}, ${Math.round(val)})`, x + 15, y - 15);
+                });
+            }
+        }
+
+        /** 
+         * ══════════════════════════════════════
+         * MAIN ANIMATION LOOP
+         * ══════════════════════════════════════ 
+         */
+        function animate() {
+            // Background Animation
+            drawParticles();
+
+            // Smooth Interpolation Engine (easing target data into current data)
+            let diff = 0;
+            for (let i = 0; i < currentData.length; i++) {
+                // If Play Mode is on, gently oscillate data using Sine waves
+                if (isPlaying) {
+                    timeOffset += 0.002;
+                    // Oscillate around a base of 50, amplitude 40, varied phases
+                    const oscillation = 50 + Math.sin(timeOffset + i * 1.5) * 40;
+                    targetData[i] = Math.max(5, Math.min(100, oscillation));
+                    
+                    // Sync UI sliders
+                    sliders[i].value = targetData[i];
+                    valDisplays[i].innerText = Math.round(targetData[i]);
+                }
+                
+                // Interpolation formula: current = current + (target - current) * friction
+                currentData[i] += (targetData[i] - currentData[i]) * 0.1;
+                diff += Math.abs(targetData[i] - currentData[i]);
+            }
+
+            // Render Chart
+            renderChart();
+
+            // Update live numbers (only if values are shifting)
+            if (diff > 0.1) {
+                updateStats(currentData);
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        // Start Engine
+        animate();
+
+    </script>
+</body>
+</html>

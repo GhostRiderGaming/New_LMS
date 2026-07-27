@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Angle Lab | Interactive Geometry</title>
+    <style>
+        :root {
+            --bg-color: #0b0e14;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --cyan: #00E5FF;
+            --blue: #4FC3F7;
+            --purple: #8E44FF;
+            --orange: #FFA726;
+            --green: #00E676;
+            --text: #e0e0e0;
+            --glass-border: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Inter, Poppins, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 20% 20%, rgba(0, 229, 255, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(142, 68, 173, 0.05) 0%, transparent 40%);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Glassmorphism Classes */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 20px;
+            width: 100%;
+            max-width: 900px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2rem, 5vw, 3.5rem); margin-bottom: 1rem; background: linear-gradient(to right, var(--cyan), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { color: var(--cyan); margin-bottom: 1rem; }
+        
+        .formula-box {
+            font-family: 'Courier New', monospace;
+            font-size: 1.5rem;
+            background: rgba(0,0,0,0.3);
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid var(--purple);
+            margin: 1rem 0;
+        }
+
+        /* Simulation Section */
+        #sim-container {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 20px;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            background: var(--glass-border);
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        button:hover { background: var(--cyan); color: #000; box-shadow: 0 0 15px var(--cyan); }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            padding: 15px;
+            border-radius: 12px;
+            text-align: center;
+            border: 1px solid var(--glass-border);
+        }
+
+        .value { font-size: 1.5rem; font-weight: bold; color: var(--cyan); }
+
+        /* Responsive Tweaks */
+        @media (max-width: 600px) {
+            body { padding: 10px; }
+            .glass-card { padding: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header class="glass-card">
+        <h1>Angle Lab</h1>
+        <p>Explore the fundamental geometry of space and rotation through interactive visualization.</p>
+    </header>
+
+    <div class="glass-card">
+        <h2>What is an Angle?</h2>
+        <p>An angle is formed when two rays share a common endpoint, known as the <strong>vertex</strong>. It measures the amount of rotation required to bring one ray into coincidence with the other.</p>
+        
+        <h2>Mathematical Notation</h2>
+        <div class="formula-box">
+            θ = arccos( (a² + b² − c²) / 2ab )
+            <br><br>
+            Rad = Deg × (π / 180)
+        </div>
+
+        <p><em>Fact:</em> The term "angle" is derived from the Latin <em>angulus</em>, meaning "corner."</p>
+    </div>
+
+    <div class="glass-card">
+        <h2>Interactive Simulation</h2>
+        <div id="sim-container">
+            <canvas id="canvas"></canvas>
+        </div>
+        
+        <div class="controls">
+            <button onclick="toggleAnimation()">▶ Play / ⏸ Pause</button>
+            <button onclick="resetAngle()">⏹ Reset</button>
+            <button onclick="randomize()">🎲 Randomize</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div>Degrees</div>
+                <div class="value" id="val-deg">0°</div>
+            </div>
+            <div class="stat-card">
+                <div>Radians</div>
+                <div class="value" id="val-rad">0.00</div>
+            </div>
+            <div class="stat-card">
+                <div>Classification</div>
+                <div class="value" id="val-type" style="color: var(--green);">Zero</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const degDisplay = document.getElementById('val-deg');
+        const radDisplay = document.getElementById('val-rad');
+        const typeDisplay = document.getElementById('val-type');
+
+        let width, height;
+        let angle = 45 * Math.PI / 180;
+        let isDragging = false;
+        let isAnimating = false;
+        let animationFrame;
+
+        // Resize Canvas
+        function resize() {
+            width = canvas.parentElement.clientWidth;
+            height = canvas.parentElement.clientHeight;
+            canvas.width = width;
+            canvas.height = height;
+        }
+
+        window.addEventListener('resize', resize);
+        resize();
+
+        // Mouse Interactions
+        canvas.addEventListener('mousedown', (e) => { isDragging = true; updateAngle(e); });
+        window.addEventListener('mousemove', (e) => { if (isDragging) updateAngle(e); });
+        window.addEventListener('mouseup', () => { isDragging = false; });
+        canvas.addEventListener('touchstart', (e) => { isDragging = true; updateAngle(e.touches[0]); });
+        canvas.addEventListener('touchmove', (e) => { if (isDragging) updateAngle(e.touches[0]); });
+
+        function updateAngle(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left - (width / 2);
+            const y = e.clientY - rect.top - (height / 2);
+            let newAngle = Math.atan2(y, x);
+            if (newAngle < 0) newAngle += 2 * Math.PI;
+            angle = newAngle;
+            render();
+        }
+
+        function toggleAnimation() { isAnimating = !isAnimating; if(isAnimating) animate(); }
+        function resetAngle() { angle = 0; render(); isAnimating = false; }
+        function randomize() { angle = Math.random() * 2 * Math.PI; render(); }
+
+        function animate() {
+            if (!isAnimating) return;
+            angle += 0.02;
+            if (angle > 2 * Math.PI) angle -= 2 * Math.PI;
+            render();
+            requestAnimationFrame(animate);
+        }
+
+        function getClassification(deg) {
+            if (deg === 0) return "Zero";
+            if (deg < 90) return "Acute";
+            if (deg === 90) return "Right";
+            if (deg < 180) return "Obtuse";
+            if (deg === 180) return "Straight";
+            if (deg < 360) return "Reflex";
+            return "Full";
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, width, height);
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const radius = Math.min(width, height) * 0.3;
+
+            // Grid
+            ctx.strokeStyle = "rgba(255,255,255,0.05)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(centerX, 0); ctx.lineTo(centerX, height);
+            ctx.moveTo(0, centerY); ctx.lineTo(width, centerY);
+            ctx.stroke();
+
+            // Angles Calculation
+            const deg = (angle * 180 / Math.PI).toFixed(1);
+            const rad = angle.toFixed(2);
+            
+            // UI Update
+            degDisplay.innerText = `${deg}°`;
+            radDisplay.innerText = rad;
+            typeDisplay.innerText = getClassification(parseFloat(deg));
+
+            // Draw Lines
+            ctx.lineWidth = 4;
+            ctx.lineCap = "round";
+
+            // Static Base
+            ctx.strokeStyle = "#4FC3F7";
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(centerX + radius, centerY);
+            ctx.stroke();
+
+            // Rotating Arm
+            ctx.strokeStyle = "#8E44FF";
+            ctx.beginPath();
+            ctx.moveTo(centerX, centerY);
+            ctx.lineTo(centerX + radius * Math.cos(angle), centerY + radius * Math.sin(angle));
+            ctx.stroke();
+
+            // Draw Arc
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = "#00E5FF";
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, radius / 2, 0, angle, false);
+            ctx.stroke();
+
+            // Draw Handle
+            ctx.fillStyle = "#FF5722";
+            ctx.beginPath();
+            ctx.arc(centerX + radius * Math.cos(angle), centerY + radius * Math.sin(angle), 8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Initial render
+        render();
+    </script>
+</body>
+</html>

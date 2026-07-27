@@ -1,0 +1,1224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photosynthesis Simulator | Premium Interactive Exhibit</title>
+    <style>
+        /* ==========================================================================
+           GLOBAL VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Core Colors */
+            --bg-dark: #060b09;
+            --bg-panel: rgba(15, 28, 22, 0.5);
+            --bg-panel-light: rgba(25, 45, 35, 0.6);
+            
+            /* Accents */
+            --c-chlorophyll: #00ff88;
+            --c-chlorophyll-glow: rgba(0, 255, 136, 0.4);
+            --c-sunlight: #ffdd44;
+            --c-water: #00bbff;
+            --c-oxygen: #ffddaa;
+            --c-carbon: #bbaaff;
+            --c-glucose: #ff55aa;
+            
+            /* Typography */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            
+            /* Spacing & Sizes */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+            
+            /* Transitions */
+            --t-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: #ffffff;
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            font-size: clamp(14px, 1.2vw, 16px);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+
+        /* Typography */
+        h1 { font-size: clamp(2.5rem, 6vw, 5rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 700; margin-bottom: 1rem; }
+        h3 { font-size: clamp(1.2rem, 2.5vw, 1.8rem); font-weight: 600; margin-bottom: 0.5rem; }
+        p { color: #a0b3a9; font-weight: 400; margin-bottom: 1rem; }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #ffffff 0%, var(--c-chlorophyll) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+        }
+
+        /* ==========================================================================
+           LAYOUT & GLASSMORPHISM
+           ========================================================================== */
+        #bg-canvas {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(20px, 4vw, 40px);
+        }
+
+        section {
+            margin-bottom: clamp(60px, 10vw, 120px);
+            position: relative;
+        }
+
+        .glass {
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        /* Optimize for low-end mobile */
+        @media (max-width: 768px) {
+            .glass {
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                border-radius: var(--radius-md);
+            }
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+            gap: clamp(20px, 4vw, 40px);
+        }
+
+        /* ==========================================================================
+           COMPONENTS: MARKERS & LEGEND (MANDATORY RULES APPLIED)
+           ========================================================================== */
+        .diagram-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        
+        @media (min-width: 1024px) {
+            .diagram-container {
+                flex-direction: row;
+                align-items: center;
+            }
+            .diagram-visual { flex: 1.5; }
+            .diagram-legend { flex: 1; }
+        }
+
+        .diagram-visual {
+            position: relative;
+            width: 100%;
+            min-height: 280px;
+            background: var(--bg-panel-light);
+            border-radius: var(--radius-md);
+            border: var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        .diagram-visual svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+            filter: drop-shadow(0 20px 30px rgba(0,255,136,0.15));
+        }
+
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            background: var(--bg-dark);
+            border: 2px solid var(--c-chlorophyll);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px var(--c-chlorophyll-glow);
+            transition: var(--t-smooth);
+            z-index: 10;
+        }
+
+        .marker.active, .marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--c-chlorophyll);
+            color: var(--bg-dark);
+            box-shadow: 0 0 25px var(--c-chlorophyll);
+        }
+
+        .diagram-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius-sm);
+            transition: var(--t-smooth);
+            cursor: pointer;
+        }
+
+        .legend-row.active, .legend-row:hover {
+            background: rgba(0, 255, 136, 0.1);
+            border-color: rgba(0, 255, 136, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-row .badge {
+            width: 28px; height: 28px;
+            background: var(--bg-dark);
+            border: 2px solid var(--c-chlorophyll);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 12px;
+            transition: var(--t-smooth);
+            flex-shrink: 0;
+        }
+
+        .legend-row.active .badge {
+            background: var(--c-chlorophyll);
+            color: var(--bg-dark);
+        }
+
+        .legend-text strong {
+            display: block;
+            color: #fff;
+            font-size: clamp(14px, 1.5vw, 16px);
+        }
+
+        .legend-text span {
+            display: block;
+            color: #a0b3a9;
+            font-size: clamp(12px, 1.2vw, 14px);
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (MANDATORY DEDICATED SECTION)
+           ========================================================================== */
+        .mechanism-container {
+            position: relative;
+            background: var(--bg-panel);
+            border: var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: clamp(20px, 4vw, 40px);
+            overflow: hidden;
+        }
+
+        .mech-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 30px;
+        }
+
+        @media (min-width: 1024px) {
+            .mech-layout {
+                grid-template-columns: 2fr 1fr;
+                align-items: center;
+            }
+        }
+
+        .mech-visual {
+            position: relative;
+            width: 100%;
+            min-height: 350px;
+            background: radial-gradient(circle at center, rgba(0,255,136,0.05) 0%, transparent 70%);
+            border-radius: var(--radius-md);
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .mech-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+        }
+
+        .stage-title {
+            color: var(--c-chlorophyll);
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .stage-desc {
+            font-size: clamp(18px, 2vw, 24px);
+            font-weight: 300;
+            color: #fff;
+            min-height: 80px;
+        }
+
+        /* Mechanism Controls */
+        .mech-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 20px;
+            background: rgba(0,0,0,0.3);
+            padding: 10px 20px;
+            border-radius: 30px;
+            width: fit-content;
+        }
+
+        .btn-icon {
+            background: none; border: none;
+            color: #fff; cursor: pointer;
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%;
+            transition: var(--t-smooth);
+            background: rgba(255,255,255,0.05);
+        }
+
+        .btn-icon:hover {
+            background: var(--c-chlorophyll);
+            color: var(--bg-dark);
+            transform: scale(1.1);
+        }
+        
+        .progress-dots {
+            display: flex; gap: 8px;
+        }
+        .dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--t-smooth);
+        }
+        .dot.active {
+            background: var(--c-chlorophyll);
+            box-shadow: 0 0 10px var(--c-chlorophyll);
+            transform: scale(1.2);
+        }
+
+        /* Chloroplast SVG Styling inside Mechanism */
+        .chloro-svg { width: 100%; height: 100%; max-height: 400px; }
+        .thylakoid { transition: var(--t-smooth); transform-origin: center; }
+        .stroma-cycle { transition: var(--t-smooth); stroke-dasharray: 10; animation: rotateCycle 20s linear infinite; transform-origin: center;}
+        
+        @keyframes rotateCycle { 100% { transform: rotate(360deg); } }
+        
+        /* Particle Effects in Mechanism */
+        .mech-particle {
+            position: absolute;
+            opacity: 0;
+            transition: all 1s ease-in-out;
+            pointer-events: none;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex; align-items: center; gap: 4px;
+        }
+        
+        .mech-particle::before {
+            content: '';
+            display: block; width: 8px; height: 8px; border-radius: 50%;
+        }
+
+        .particle-sunlight { color: var(--c-sunlight); }
+        .particle-sunlight::before { background: var(--c-sunlight); box-shadow: 0 0 10px var(--c-sunlight); }
+        
+        .particle-water { color: var(--c-water); }
+        .particle-water::before { background: var(--c-water); box-shadow: 0 0 10px var(--c-water); }
+        
+        .particle-o2 { color: var(--c-oxygen); }
+        .particle-o2::before { background: var(--c-oxygen); box-shadow: 0 0 10px var(--c-oxygen); }
+        
+        .particle-co2 { color: var(--c-carbon); }
+        .particle-co2::before { background: var(--c-carbon); box-shadow: 0 0 10px var(--c-carbon); }
+        
+        .particle-glucose { color: var(--c-glucose); }
+        .particle-glucose::before { background: var(--c-glucose); box-shadow: 0 0 10px var(--c-glucose); }
+        
+        .particle-energy { color: #fff; }
+        .particle-energy::before { background: #fff; box-shadow: 0 0 10px #fff; }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .sim-layout { grid-template-columns: 3fr 1fr; }
+        }
+
+        .sim-canvas-container {
+            position: relative;
+            width: 100%;
+            height: clamp(300px, 50vh, 500px);
+            background: linear-gradient(to bottom, #0a1510, #030806);
+            border-radius: var(--radius-md);
+            border: var(--glass-border);
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        canvas#sim-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 24px;
+            background: var(--bg-panel-light);
+            border-radius: var(--radius-md);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #e0e0e0;
+        }
+
+        .control-header span:last-child {
+            color: var(--c-chlorophyll);
+            font-family: monospace;
+            font-size: 16px;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range].slider-light::-webkit-slider-thumb { border: 2px solid var(--c-sunlight); }
+        input[type=range].slider-co2::-webkit-slider-thumb { border: 2px solid var(--c-carbon); }
+        input[type=range].slider-temp::-webkit-slider-thumb { border: 2px solid #ff4444; }
+
+        .rate-meter {
+            margin-top: auto;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .rate-bar-bg {
+            width: 100%; height: 8px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 4px; overflow: hidden;
+            margin-top: 8px;
+        }
+        .rate-bar-fill {
+            height: 100%; width: 50%;
+            background: linear-gradient(90deg, var(--c-chlorophyll), #00ffcc);
+            box-shadow: 0 0 10px var(--c-chlorophyll);
+            transition: width 0.3s ease;
+        }
+
+        /* ==========================================================================
+           EXTRAS (CARDS)
+           ========================================================================== */
+        .card {
+            padding: 24px;
+            background: var(--bg-panel);
+            border: var(--glass-border);
+            border-radius: var(--radius-md);
+            transition: var(--t-smooth);
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            background: var(--bg-panel-light);
+            border-color: rgba(0,255,136,0.3);
+        }
+        .card-icon {
+            font-size: 32px;
+            margin-bottom: 16px;
+            display: inline-block;
+        }
+
+        /* ==========================================================================
+           BUTTONS & UTILS
+           ========================================================================== */
+        .badge-tag {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(0,255,136,0.1);
+            color: var(--c-chlorophyll);
+            border: 1px solid rgba(0,255,136,0.2);
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+        }
+
+        /* Intro Section */
+        .intro-header {
+            text-align: center;
+            min-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding-top: 80px;
+        }
+        .intro-header p {
+            font-size: clamp(16px, 2vw, 22px);
+            max-width: 600px;
+            margin: 20px auto;
+        }
+
+        /* Floating Animation */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        .floating { animation: float 6s ease-in-out infinite; }
+    </style>
+</head>
+<body>
+
+    <!-- Global Background Canvas for Ambient Particles -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        
+        <!-- ======================================================================
+             SECTION 1: INTRODUCTION
+             ====================================================================== -->
+        <section id="intro" class="intro-header floating">
+            <div class="badge-tag">Interactive Exhibit</div>
+            <h1><span class="gradient-text">Photosynthesis</span></h1>
+            <p>Experience the elegant biological engine that powers life on Earth. Watch how plants transform light, water, and air into energy and breathable oxygen.</p>
+        </section>
+
+        <!-- ======================================================================
+             SECTION 2: MAIN COMPONENTS (STRICT MARKER DIAGRAM)
+             ====================================================================== -->
+        <section id="components">
+            <h2>The Biological Engine</h2>
+            <p>Explore the specialized structures within a leaf designed for maximum efficiency.</p>
+            
+            <div class="glass diagram-container" style="padding: 24px;">
+                <!-- Visual Left -->
+                <div class="diagram-visual" id="comp-visual">
+                    <!-- Beautiful Vector Leaf -->
+                    <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#00ffa3" />
+                                <stop offset="50%" stop-color="#05b066" />
+                                <stop offset="100%" stop-color="#024d2b" />
+                            </linearGradient>
+                            <linearGradient id="veinGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#aaffcc" />
+                                <stop offset="100%" stop-color="#00ff88" />
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <!-- Main Leaf Body -->
+                        <path d="M200,380 C200,380 50,250 80,100 C100,20 200,20 200,20 C200,20 300,20 320,100 C350,250 200,380 200,380 Z" fill="url(#leafGrad)" filter="url(#glow)"/>
+                        <!-- Central Vein (Xylem/Phloem) -->
+                        <path d="M200,360 L200,40" stroke="url(#veinGrad)" stroke-width="6" fill="none" stroke-linecap="round"/>
+                        <!-- Side Veins -->
+                        <path d="M200,300 Q150,260 120,200" stroke="url(#veinGrad)" stroke-width="3" fill="none" opacity="0.6"/>
+                        <path d="M200,300 Q250,260 280,200" stroke="url(#veinGrad)" stroke-width="3" fill="none" opacity="0.6"/>
+                        <path d="M200,220 Q130,170 100,100" stroke="url(#veinGrad)" stroke-width="3" fill="none" opacity="0.6"/>
+                        <path d="M200,220 Q270,170 300,100" stroke="url(#veinGrad)" stroke-width="3" fill="none" opacity="0.6"/>
+                        <!-- Stomata representation (bottom edge) -->
+                        <circle cx="160" cy="330" r="4" fill="#003311" opacity="0.8"/>
+                        <circle cx="240" cy="330" r="4" fill="#003311" opacity="0.8"/>
+                    </svg>
+                    
+                    <!-- Absolute HTML Markers overlaid on SVG container -->
+                    <div class="marker" data-id="1" style="top: 25%; left: 35%;">1</div>
+                    <div class="marker" data-id="2" style="top: 50%; left: 65%;">2</div>
+                    <div class="marker" data-id="3" style="top: 65%; left: 50%;">3</div>
+                    <div class="marker" data-id="4" style="top: 85%; left: 40%;">4</div>
+                </div>
+
+                <!-- Legend Right/Below -->
+                <div class="diagram-legend" id="comp-legend">
+                    <div class="legend-row" data-id="1">
+                        <div class="badge">1</div>
+                        <div class="legend-text">
+                            <strong>Upper Epidermis</strong>
+                            <span>Transparent outer layer allowing maximum light penetration.</span>
+                        </div>
+                    </div>
+                    <div class="legend-row" data-id="2">
+                        <div class="badge">2</div>
+                        <div class="legend-text">
+                            <strong>Mesophyll Cells</strong>
+                            <span>Packed with chloroplasts; the primary site of photosynthesis.</span>
+                        </div>
+                    </div>
+                    <div class="legend-row" data-id="3">
+                        <div class="badge">3</div>
+                        <div class="legend-text">
+                            <strong>Vascular Bundle (Vein)</strong>
+                            <span>Xylem brings water in; Phloem transports glucose out.</span>
+                        </div>
+                    </div>
+                    <div class="legend-row" data-id="4">
+                        <div class="badge">4</div>
+                        <div class="legend-text">
+                            <strong>Stomata</strong>
+                            <span>Microscopic pores that inhale CO₂ and exhale O₂.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================================
+             SECTION 3: WORKING PROCESS (MANDATORY DEDICATED SECTION)
+             ====================================================================== -->
+        <section id="working">
+            <h2>The Mechanism</h2>
+            <p>Photosynthesis is a continuous dual-cycle process occurring inside the Chloroplast.</p>
+            
+            <div class="mechanism-container">
+                <div class="mech-layout">
+                    <!-- Visual Area -->
+                    <div class="mech-visual">
+                        <!-- Chloroplast SVG base -->
+                        <svg class="chloro-svg" viewBox="0 0 500 300">
+                            <defs>
+                                <radialGradient id="stroma" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="#113322" />
+                                    <stop offset="100%" stop-color="#051a11" />
+                                </radialGradient>
+                                <linearGradient id="grana" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#00ffa3" />
+                                    <stop offset="100%" stop-color="#006633" />
+                                </linearGradient>
+                            </defs>
+                            <!-- Outer membrane -->
+                            <rect x="10" y="10" width="480" height="280" rx="140" fill="url(#stroma)" stroke="#00ff88" stroke-width="2" stroke-opacity="0.5"/>
+                            
+                            <!-- Left Side: Thylakoid Stacks (Light Dependent) -->
+                            <g id="thylakoid-group" class="thylakoid">
+                                <!-- Stack 1 -->
+                                <rect x="100" y="80" width="40" height="15" rx="5" fill="url(#grana)"/>
+                                <rect x="100" y="100" width="40" height="15" rx="5" fill="url(#grana)"/>
+                                <rect x="100" y="120" width="40" height="15" rx="5" fill="url(#grana)"/>
+                                <!-- Stack 2 -->
+                                <rect x="160" y="120" width="40" height="15" rx="5" fill="url(#grana)"/>
+                                <rect x="160" y="140" width="40" height="15" rx="5" fill="url(#grana)"/>
+                                <rect x="160" y="160" width="40" height="15" rx="5" fill="url(#grana)"/>
+                                <rect x="160" y="180" width="40" height="15" rx="5" fill="url(#grana)"/>
+                                <!-- Connections -->
+                                <line x1="140" y1="127" x2="160" y2="127" stroke="#00ff88" stroke-width="3"/>
+                            </g>
+
+                            <!-- Right Side: Calvin Cycle (Light Independent) -->
+                            <g id="stroma-group">
+                                <circle cx="350" cy="150" r="60" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="12"/>
+                                <circle cx="350" cy="150" r="60" fill="none" stroke="var(--c-carbon)" stroke-width="4" stroke-dasharray="10 20" class="stroma-cycle" id="calvin-wheel"/>
+                            </g>
+                            
+                            <!-- Internal Flow paths -->
+                            <path d="M220,130 Q280,100 320,130" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2" stroke-dasharray="5"/>
+                            <path d="M320,170 Q280,200 220,170" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2" stroke-dasharray="5"/>
+                        </svg>
+
+                        <!-- Dynamic HTML Particles for animation -->
+                        <div id="p-sun" class="mech-particle particle-sunlight" style="top: -20px; left: 120px;">Photon</div>
+                        <div id="p-water" class="mech-particle particle-water" style="top: 320px; left: 80px;">H₂O</div>
+                        <div id="p-o2" class="mech-particle particle-o2" style="top: -20px; left: 180px;">O₂</div>
+                        
+                        <div id="p-atp" class="mech-particle particle-energy" style="top: 110px; left: 220px;">ATP/NADPH</div>
+                        <div id="p-adp" class="mech-particle particle-energy" style="top: 180px; left: 320px; opacity:0;">ADP/NADP+</div>
+
+                        <div id="p-co2" class="mech-particle particle-co2" style="top: 320px; left: 400px;">CO₂</div>
+                        <div id="p-glucose" class="mech-particle particle-glucose" style="top: -20px; left: 350px;">Glucose</div>
+                    </div>
+
+                    <!-- Information & Controls -->
+                    <div class="mech-info">
+                        <div class="badge-tag">Stage <span id="stage-num">1</span> of 5</div>
+                        <div class="stage-title" id="stage-title">Photon Capture</div>
+                        <div class="stage-desc" id="stage-desc">Light energy strikes the chlorophyll in the thylakoid membranes, exciting electrons.</div>
+                        
+                        <div class="mech-controls">
+                            <button class="btn-icon" id="btn-prev" aria-label="Previous Stage">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                            </button>
+                            <button class="btn-icon" id="btn-play" aria-label="Auto Play">
+                                <svg id="icon-play" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9v-18z"/></svg>
+                                <svg id="icon-pause" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>
+                            </button>
+                            <button class="btn-icon" id="btn-next" aria-label="Next Stage">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                            </button>
+                            
+                            <div class="progress-dots" id="stage-dots">
+                                <div class="dot active"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================================
+             SECTION 4: INTERACTIVE SIMULATION
+             ====================================================================== -->
+        <section id="simulation">
+            <h2>Live Variables Simulator</h2>
+            <p>Adjust environmental factors to see their real-time impact on the rate of photosynthesis.</p>
+            
+            <div class="glass sim-layout">
+                <!-- Visual Canvas Area -->
+                <div class="sim-canvas-container">
+                    <canvas id="sim-canvas"></canvas>
+                </div>
+                
+                <!-- Controls Area -->
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Light Intensity</span>
+                            <span id="val-light">50%</span>
+                        </div>
+                        <input type="range" id="sim-light" class="slider-light" min="0" max="100" value="50">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>CO₂ Concentration</span>
+                            <span id="val-co2">50%</span>
+                        </div>
+                        <input type="range" id="sim-co2" class="slider-co2" min="0" max="100" value="50">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Temperature</span>
+                            <span id="val-temp">25°C</span>
+                        </div>
+                        <input type="range" id="sim-temp" class="slider-temp" min="0" max="50" value="25">
+                    </div>
+
+                    <div class="rate-meter">
+                        <div class="control-header" style="margin-bottom: 8px;">
+                            <span>O₂ Production Rate</span>
+                            <span id="val-rate">Optimal</span>
+                        </div>
+                        <div class="rate-bar-bg">
+                            <div class="rate-bar-fill" id="bar-rate"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================================================================
+             SECTION 5: EXTRAS (FACTS & MISTAKES)
+             ====================================================================== -->
+        <section id="extras">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-icon">🧠</div>
+                    <h3>Common Misconception</h3>
+                    <p><strong>"Plants get their mass from soil."</strong></p>
+                    <p>False! The vast majority of a tree's solid mass comes from the air. Carbon dioxide is converted into solid carbon-based sugars (glucose, cellulose) during the Calvin cycle.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">💡</div>
+                    <h3>Interesting Fact</h3>
+                    <p><strong>Quantum Biology</strong></p>
+                    <p>Recent studies suggest plants use quantum coherence to transfer captured photon energy to the reaction center with near 100% efficiency, essentially testing multiple paths simultaneously.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT APPLICATION LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- 1. AMBIENT BACKGROUND CANVAS ---
+            const bgCanvas = document.getElementById('bg-canvas');
+            const bgCtx = bgCanvas.getContext('2d');
+            let bgParticles = [];
+
+            function resizeBg() {
+                bgCanvas.width = window.innerWidth;
+                bgCanvas.height = window.innerHeight;
+            }
+            window.addEventListener('resize', resizeBg);
+            resizeBg();
+
+            class BgParticle {
+                constructor() {
+                    this.x = Math.random() * bgCanvas.width;
+                    this.y = Math.random() * bgCanvas.height;
+                    this.size = Math.random() * 2;
+                    this.speedY = -(Math.random() * 0.5 + 0.1);
+                    this.opacity = Math.random() * 0.5;
+                }
+                update() {
+                    this.y += this.speedY;
+                    if (this.y < 0) {
+                        this.y = bgCanvas.height;
+                        this.x = Math.random() * bgCanvas.width;
+                    }
+                }
+                draw() {
+                    bgCtx.fillStyle = `rgba(0, 255, 136, ${this.opacity})`;
+                    bgCtx.beginPath();
+                    bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    bgCtx.fill();
+                }
+            }
+
+            for(let i=0; i<100; i++) bgParticles.push(new BgParticle());
+
+            function animateBg() {
+                bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+                bgParticles.forEach(p => { p.update(); p.draw(); });
+                requestAnimationFrame(animateBg);
+            }
+            animateBg();
+
+
+            // --- 2. COMPONENTS LOGIC (MARKER <-> LEGEND) ---
+            const markers = document.querySelectorAll('.marker');
+            const legendRows = document.querySelectorAll('.legend-row');
+
+            function setActiveComponent(id) {
+                markers.forEach(m => m.classList.remove('active'));
+                legendRows.forEach(l => l.classList.remove('active'));
+                
+                if (id) {
+                    document.querySelector(`.marker[data-id="${id}"]`).classList.add('active');
+                    document.querySelector(`.legend-row[data-id="${id}"]`).classList.add('active');
+                }
+            }
+
+            markers.forEach(m => {
+                const id = m.getAttribute('data-id');
+                // Support both hover and touch
+                m.addEventListener('mouseenter', () => setActiveComponent(id));
+                m.addEventListener('touchstart', (e) => { e.preventDefault(); setActiveComponent(id); }, {passive: false});
+            });
+
+            legendRows.forEach(l => {
+                const id = l.getAttribute('data-id');
+                l.addEventListener('mouseenter', () => setActiveComponent(id));
+                l.addEventListener('touchstart', (e) => { e.preventDefault(); setActiveComponent(id); }, {passive: false});
+            });
+
+            document.getElementById('comp-visual').addEventListener('mouseleave', () => setActiveComponent(null));
+            document.getElementById('comp-legend').addEventListener('mouseleave', () => setActiveComponent(null));
+
+
+            // --- 3. WORKING MECHANISM LOGIC ---
+            const stages = [
+                {
+                    title: "Photon Capture",
+                    desc: "Sunlight hits chlorophyll in the thylakoid, instantly exciting electrons.",
+                    animate: () => {
+                        resetMechParticles();
+                        document.querySelector('.thylakoid').style.transform = 'scale(1.05)';
+                        document.querySelector('.thylakoid').style.filter = 'drop-shadow(0 0 15px var(--c-sunlight))';
+                        // Sun particle moves in
+                        let p = document.getElementById('p-sun');
+                        p.style.opacity = '1';
+                        p.style.transform = 'translateY(100px)';
+                    }
+                },
+                {
+                    title: "Photolysis (Water Splitting)",
+                    desc: "Water is pulled in and split to replace lost electrons, releasing Oxygen as waste.",
+                    animate: () => {
+                        resetMechParticles();
+                        document.querySelector('.thylakoid').style.transform = 'scale(1.02)';
+                        
+                        let w = document.getElementById('p-water');
+                        w.style.opacity = '1';
+                        w.style.transform = 'translateY(-170px)';
+                        
+                        setTimeout(() => {
+                            let o = document.getElementById('p-o2');
+                            o.style.opacity = '1';
+                            o.style.transform = 'translateY(-100px)';
+                        }, 500);
+                    }
+                },
+                {
+                    title: "Energy Transfer",
+                    desc: "Excited electrons generate ATP and NADPH, carrying energy to the Stroma.",
+                    animate: () => {
+                        resetMechParticles();
+                        let atp = document.getElementById('p-atp');
+                        atp.style.opacity = '1';
+                        atp.style.transform = 'translateX(100px)'; // Move to stroma
+                        
+                        let adp = document.getElementById('p-adp');
+                        adp.style.opacity = '0.5';
+                        adp.style.transform = 'translateX(-100px)'; // Return to thylakoid
+                    }
+                },
+                {
+                    title: "Carbon Fixation",
+                    desc: "CO₂ enters the Calvin Cycle in the stroma and is attached to organic molecules.",
+                    animate: () => {
+                        resetMechParticles();
+                        document.getElementById('calvin-wheel').style.stroke = 'var(--c-carbon)';
+                        
+                        let co2 = document.getElementById('p-co2');
+                        co2.style.opacity = '1';
+                        co2.style.transform = 'translate(-50px, -150px)';
+                    }
+                },
+                {
+                    title: "Glucose Synthesis",
+                    desc: "Energy from ATP is used to assemble the carbon into Sugar (Glucose).",
+                    animate: () => {
+                        resetMechParticles();
+                        document.getElementById('calvin-wheel').style.stroke = 'var(--c-glucose)';
+                        
+                        let gluc = document.getElementById('p-glucose');
+                        gluc.style.opacity = '1';
+                        gluc.style.transform = 'translateY(-120px) scale(1.2)';
+                    }
+                }
+            ];
+
+            let currentStage = 0;
+            let mechInterval = null;
+            let isPlaying = false;
+
+            const elStageNum = document.getElementById('stage-num');
+            const elStageTitle = document.getElementById('stage-title');
+            const elStageDesc = document.getElementById('stage-desc');
+            const dots = document.querySelectorAll('#stage-dots .dot');
+            const iconPlay = document.getElementById('icon-play');
+            const iconPause = document.getElementById('icon-pause');
+
+            function resetMechParticles() {
+                const parts = document.querySelectorAll('.mech-particle');
+                parts.forEach(p => {
+                    p.style.transition = 'none';
+                    p.style.opacity = '0';
+                    p.style.transform = 'translate(0, 0) scale(1)';
+                    // force reflow
+                    void p.offsetWidth;
+                    p.style.transition = 'all 1s ease-in-out';
+                });
+                document.querySelector('.thylakoid').style.transform = 'scale(1)';
+                document.querySelector('.thylakoid').style.filter = 'none';
+                document.getElementById('calvin-wheel').style.stroke = 'var(--c-carbon)';
+            }
+
+            function updateStage(index) {
+                currentStage = index;
+                elStageNum.textContent = currentStage + 1;
+                elStageTitle.textContent = stages[currentStage].title;
+                elStageDesc.textContent = stages[currentStage].desc;
+                
+                dots.forEach((d, i) => d.classList.toggle('active', i === currentStage));
+                
+                stages[currentStage].animate();
+            }
+
+            function nextStage() {
+                updateStage((currentStage + 1) % stages.length);
+            }
+
+            function prevStage() {
+                updateStage((currentStage - 1 + stages.length) % stages.length);
+            }
+
+            function togglePlay() {
+                isPlaying = !isPlaying;
+                if (isPlaying) {
+                    iconPlay.style.display = 'none';
+                    iconPause.style.display = 'block';
+                    mechInterval = setInterval(nextStage, 3500);
+                    nextStage();
+                } else {
+                    iconPlay.style.display = 'block';
+                    iconPause.style.display = 'none';
+                    clearInterval(mechInterval);
+                }
+            }
+
+            document.getElementById('btn-next').addEventListener('click', () => { if(isPlaying) togglePlay(); nextStage(); });
+            document.getElementById('btn-prev').addEventListener('click', () => { if(isPlaying) togglePlay(); prevStage(); });
+            document.getElementById('btn-play').addEventListener('click', togglePlay);
+
+            // Initialize first stage
+            updateStage(0);
+
+
+            // --- 4. INTERACTIVE SIMULATION LOGIC ---
+            const simCanvas = document.getElementById('sim-canvas');
+            const simCtx = simCanvas.getContext('2d');
+            let dpr = window.devicePixelRatio || 1;
+            let cw, ch;
+
+            function resizeSimCanvas() {
+                const rect = simCanvas.parentElement.getBoundingClientRect();
+                cw = rect.width;
+                ch = rect.height;
+                simCanvas.width = cw * dpr;
+                simCanvas.height = ch * dpr;
+                simCtx.scale(dpr, dpr);
+            }
+            window.addEventListener('resize', resizeSimCanvas);
+            window.addEventListener('orientationchange', resizeSimCanvas);
+            resizeSimCanvas();
+
+            // Controls
+            const inLight = document.getElementById('sim-light');
+            const inCo2 = document.getElementById('sim-co2');
+            const inTemp = document.getElementById('sim-temp');
+            const vLight = document.getElementById('val-light');
+            const vCo2 = document.getElementById('val-co2');
+            const vTemp = document.getElementById('val-temp');
+            const vRate = document.getElementById('val-rate');
+            const bRate = document.getElementById('bar-rate');
+
+            // Entities
+            let bubbles = [];
+            let photons = [];
+
+            class Bubble {
+                constructor(x, y) {
+                    this.x = x + (Math.random() * 40 - 20);
+                    this.y = y;
+                    this.size = Math.random() * 3 + 2;
+                    this.speed = Math.random() * 2 + 1;
+                    this.wobble = Math.random() * Math.PI * 2;
+                }
+                update() {
+                    this.y -= this.speed;
+                    this.wobble += 0.1;
+                    this.x += Math.sin(this.wobble) * 0.5;
+                }
+                draw() {
+                    simCtx.fillStyle = 'rgba(255, 221, 170, 0.7)'; // O2 Color
+                    simCtx.beginPath();
+                    simCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    simCtx.fill();
+                }
+            }
+
+            class Photon {
+                constructor() {
+                    this.x = Math.random() * cw;
+                    this.y = 0;
+                    this.speed = Math.random() * 5 + 5;
+                    this.length = Math.random() * 20 + 10;
+                }
+                update() {
+                    this.x -= this.speed * 0.5; // Angled down
+                    this.y += this.speed;
+                }
+                draw(intensity) {
+                    simCtx.strokeStyle = `rgba(255, 221, 68, ${intensity})`;
+                    simCtx.lineWidth = 2;
+                    simCtx.beginPath();
+                    simCtx.moveTo(this.x, this.y);
+                    simCtx.lineTo(this.x - this.length*0.5, this.y + this.length);
+                    simCtx.stroke();
+                }
+            }
+
+            function getRate() {
+                const light = parseInt(inLight.value) / 100;
+                const co2 = parseInt(inCo2.value) / 100;
+                const temp = parseInt(inTemp.value);
+
+                // Temperature curve (peaks at ~30C, denatures above 45C)
+                let tempFactor = 0;
+                if (temp > 0 && temp < 45) {
+                    tempFactor = -0.0016 * Math.pow(temp - 30, 2) + 1;
+                    if(tempFactor < 0) tempFactor = 0;
+                }
+
+                // Limiting factor principle
+                let rate = Math.min(light, co2) * tempFactor;
+                
+                // Update UI
+                vLight.textContent = inLight.value + '%';
+                vCo2.textContent = inCo2.value + '%';
+                vTemp.textContent = temp + '°C';
+                
+                bRate.style.width = (rate * 100) + '%';
+                
+                if (rate > 0.8) { vRate.textContent = "Optimal"; vRate.style.color = "#00ff88"; }
+                else if (rate > 0.4) { vRate.textContent = "Moderate"; vRate.style.color = "#ffdd44"; }
+                else if (rate > 0) { vRate.textContent = "Low"; vRate.style.color = "#ff8844"; }
+                else { vRate.textContent = "Halted"; vRate.style.color = "#ff4444"; }
+
+                return { rate, light, tempFactor };
+            }
+
+            function drawPlant(rate, tempFactor) {
+                const cx = cw / 2;
+                const cy = ch - 20;
+
+                // Plant color based on health (temp factor)
+                let leafColor = '#00ff88';
+                if (tempFactor < 0.2) leafColor = '#cc9900'; // Dying/Denatured
+
+                simCtx.save();
+                
+                // Glow based on active rate
+                simCtx.shadowBlur = rate * 30;
+                simCtx.shadowColor = leafColor;
+
+                // Stem
+                simCtx.strokeStyle = '#006633';
+                simCtx.lineWidth = 6;
+                simCtx.beginPath();
+                simCtx.moveTo(cx, cy);
+                simCtx.quadraticCurveTo(cx - 20, cy - 100, cx, cy - 200);
+                simCtx.stroke();
+
+                // Leaf 1
+                simCtx.fillStyle = leafColor;
+                simCtx.beginPath();
+                simCtx.moveTo(cx - 10, cy - 50);
+                simCtx.quadraticCurveTo(cx - 80, cy - 80, cx - 100, cy - 120);
+                simCtx.quadraticCurveTo(cx - 30, cy - 130, cx - 15, cy - 90);
+                simCtx.fill();
+
+                // Leaf 2
+                simCtx.beginPath();
+                simCtx.moveTo(cx + 5, cy - 120);
+                simCtx.quadraticCurveTo(cx + 80, cy - 140, cx + 110, cy - 190);
+                simCtx.quadraticCurveTo(cx + 40, cy - 200, cx + 10, cy - 160);
+                simCtx.fill();
+
+                simCtx.restore();
+            }
+
+            function animateSim() {
+                simCtx.clearRect(0, 0, cw, ch);
+                
+                const { rate, light, tempFactor } = getRate();
+
+                // Generate Photons based on light
+                if (Math.random() < light) {
+                    photons.push(new Photon());
+                }
+                
+                // Draw and update photons
+                for (let i = photons.length - 1; i >= 0; i--) {
+                    photons[i].update();
+                    photons[i].draw(light * 0.5);
+                    if (photons[i].y > ch) photons.splice(i, 1);
+                }
+
+                // Draw Plant
+                drawPlant(rate, tempFactor);
+
+                // Generate Bubbles based on rate
+                if (rate > 0 && Math.random() < (rate * 0.5)) {
+                    // Spawn from leaves
+                    let bx = Math.random() > 0.5 ? (cw/2 - 50) : (cw/2 + 50);
+                    let by = ch - (Math.random() * 100 + 100);
+                    bubbles.push(new Bubble(bx, by));
+                }
+
+                // Draw and update bubbles
+                for (let i = bubbles.length - 1; i >= 0; i--) {
+                    bubbles[i].update();
+                    bubbles[i].draw();
+                    if (bubbles[i].y < -20) bubbles.splice(i, 1);
+                }
+
+                requestAnimationFrame(animateSim);
+            }
+            animateSim();
+
+            // Bind input events for touch/mouse
+            [inLight, inCo2, inTemp].forEach(el => {
+                el.addEventListener('input', getRate);
+            });
+        });
+    </script>
+</body>
+</html>

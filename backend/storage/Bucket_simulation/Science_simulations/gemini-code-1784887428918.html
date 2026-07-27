@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Light Interaction: Transparent, Translucent, Opaque</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-color: #030712;
+            --bg-gradient: radial-gradient(circle at 50% 0%, #111827 0%, #030712 70%);
+            
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            
+            --accent-cyan: #06b6d4;
+            --accent-cyan-glow: rgba(6, 182, 212, 0.5);
+            --accent-amber: #f59e0b;
+            --accent-amber-glow: rgba(245, 158, 11, 0.5);
+            --accent-red: #ef4444;
+            
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            
+            --spacing-xs: clamp(4px, 1vw, 8px);
+            --spacing-sm: clamp(8px, 2vw, 16px);
+            --spacing-md: clamp(16px, 4vw, 32px);
+            --spacing-lg: clamp(32px, 6vw, 64px);
+            --spacing-xl: clamp(64px, 10vw, 120px);
+            
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-full: 9999px;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: var(--bg-color);
+            background-image: var(--bg-gradient);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Animated Background Canvas */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2rem, 5vw, 4rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.5rem, 3.5vw, 2.5rem); font-weight: 700; margin-bottom: var(--spacing-sm); }
+        h3 { font-size: clamp(1.1rem, 2vw, 1.5rem); font-weight: 600; color: var(--text-main); }
+        p { font-size: clamp(0.9rem, 1.5vw, 1.1rem); color: var(--text-muted); }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #fff, #9ca3af);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .highlight-cyan { color: var(--accent-cyan); text-shadow: 0 0 10px var(--accent-cyan-glow); }
+        .highlight-amber { color: var(--accent-amber); text-shadow: 0 0 10px var(--accent-amber-glow); }
+
+        /* Layout Utility */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-md);
+        }
+
+        section {
+            padding: var(--spacing-xl) 0;
+            position: relative;
+        }
+
+        /* Glassmorphism Cards */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+            padding: var(--spacing-md);
+            transition: var(--transition-smooth);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding-top: 10vh;
+        }
+        
+        .hero-content {
+            max-width: 800px;
+            z-index: 2;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1rem, 2vw, 1.25rem);
+            color: var(--accent-cyan);
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: var(--spacing-sm);
+            display: block;
+        }
+
+        /* Hero Visual */
+        .hero-visual {
+            margin-top: var(--spacing-lg);
+            display: flex;
+            justify-content: center;
+            gap: var(--spacing-sm);
+            perspective: 1000px;
+        }
+
+        .hero-pane {
+            width: clamp(80px, 15vw, 150px);
+            height: clamp(120px, 25vw, 220px);
+            border-radius: var(--radius-md);
+            position: relative;
+            transform-style: preserve-3d;
+            animation: float 6s ease-in-out infinite;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: clamp(0.7rem, 1.2vw, 1rem);
+            letter-spacing: 1px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .hero-pane:nth-child(1) { 
+            background: rgba(6, 182, 212, 0.1); 
+            backdrop-filter: blur(0px); 
+            box-shadow: 0 0 30px rgba(6, 182, 212, 0.2);
+            animation-delay: 0s;
+        }
+        .hero-pane:nth-child(2) { 
+            background: rgba(245, 158, 11, 0.15); 
+            backdrop-filter: blur(8px); 
+            -webkit-backdrop-filter: blur(8px);
+            box-shadow: 0 0 30px rgba(245, 158, 11, 0.2);
+            animation-delay: 0.5s;
+        }
+        .hero-pane:nth-child(3) { 
+            background: linear-gradient(135deg, #374151, #111827); 
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8), 0 0 30px rgba(0,0,0,0.5);
+            animation-delay: 1s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotateX(10deg); }
+            50% { transform: translateY(-15px) rotateX(15deg); }
+        }
+
+        /* ==========================================================================
+           DIAGRAM COMPONENT SYSTEM (STRICT RULES)
+           ========================================================================== */
+        .diagram-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+            margin-top: var(--spacing-lg);
+        }
+        
+        @media (min-width: 1024px) {
+            .diagram-grid { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        .diagram-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        /* SVG Visual Area */
+        .diagram-visual {
+            position: relative;
+            width: 100%;
+            min-height: 260px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .diagram-visual svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Interactive Markers */
+        .marker {
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            transform-origin: center;
+        }
+        
+        .marker circle {
+            fill: rgba(0, 0, 0, 0.7);
+            stroke: var(--accent-cyan);
+            stroke-width: 2;
+            transition: var(--transition-smooth);
+        }
+
+        .marker text {
+            fill: #fff;
+            font-family: var(--font-main);
+            font-size: 14px;
+            font-weight: bold;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+
+        .marker:hover circle, .marker.active circle {
+            fill: var(--accent-cyan);
+            stroke: #fff;
+            filter: drop-shadow(0 0 8px var(--accent-cyan-glow));
+        }
+
+        /* Legend Area */
+        .diagram-legend {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            background: rgba(255,255,255,0.02);
+            border-radius: var(--radius-md);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--glass-border);
+            transform: translateX(4px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--accent-cyan);
+            flex-shrink: 0;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover .legend-badge, .legend-item.active .legend-badge {
+            background: var(--accent-cyan);
+            color: #fff;
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+        }
+
+        .legend-content h4 {
+            font-size: 1rem;
+            color: var(--text-main);
+            margin: 0 0 2px 0;
+        }
+
+        .legend-content p {
+            font-size: 0.85rem;
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (MANDATORY STRUCTURE)
+           ========================================================================== */
+        .mechanism-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+            margin-top: var(--spacing-lg);
+        }
+
+        @media (min-width: 1024px) {
+            .mechanism-layout {
+                grid-template-columns: 2fr 1fr;
+            }
+        }
+
+        .mechanism-visual {
+            position: relative;
+            width: 100%;
+            height: clamp(300px, 40vw, 500px);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: #000;
+            border: 1px solid var(--glass-border);
+            box-shadow: inset 0 0 50px rgba(0,0,0,1);
+        }
+
+        #working-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .mechanism-controls {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: var(--spacing-md);
+        }
+
+        .stage-indicator {
+            display: flex;
+            gap: 8px;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .stage-dot {
+            height: 4px;
+            flex: 1;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+            transition: var(--transition-smooth);
+        }
+        .stage-dot.active { background: var(--accent-cyan); box-shadow: 0 0 10px var(--accent-cyan-glow); }
+        .stage-dot.passed { background: rgba(6, 182, 212, 0.4); }
+
+        .stage-info {
+            min-height: 120px;
+        }
+
+        .stage-title {
+            font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+            color: var(--accent-cyan);
+            margin-bottom: 8px;
+        }
+
+        .io-badges {
+            display: flex;
+            gap: 12px;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: var(--radius-full);
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .badge.input::before { content: 'IN:'; opacity: 0.5; }
+        .badge.output::before { content: 'OUT:'; opacity: 0.5; }
+
+        .controls-row {
+            display: flex;
+            gap: 12px;
+            margin-top: auto;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: var(--radius-md);
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .btn:hover { background: rgba(255,255,255,0.2); }
+        .btn.primary { background: var(--accent-cyan); border-color: var(--accent-cyan); color: #000; }
+        .btn.primary:hover { background: #0891b2; box-shadow: 0 0 15px var(--accent-cyan-glow); }
+        .btn:active { transform: scale(0.98); }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (LAB)
+           ========================================================================== */
+        .lab-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+        }
+
+        @media (min-width: 1024px) {
+            .lab-container { grid-template-columns: 250px 1fr; }
+        }
+
+        /* Material Tray */
+        .material-tray {
+            display: flex;
+            flex-direction: row;
+            overflow-x: auto;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-xs);
+            scrollbar-width: thin;
+        }
+        
+        @media (min-width: 1024px) {
+            .material-tray { flex-direction: column; overflow-y: auto; overflow-x: hidden; max-height: 500px; }
+        }
+
+        .material-item {
+            width: clamp(80px, 20vw, 120px);
+            height: clamp(80px, 20vw, 100px);
+            flex-shrink: 0;
+            border-radius: var(--radius-md);
+            border: 2px solid var(--glass-border);
+            cursor: grab;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 8px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s;
+            user-select: none;
+            touch-action: none;
+        }
+
+        @media (min-width: 1024px) {
+            .material-item { width: 100%; height: 100px; }
+        }
+
+        .material-item:active { cursor: grabbing; transform: scale(0.95); }
+        .material-item span {
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(0,0,0,0.6);
+            padding: 2px 8px;
+            border-radius: 12px;
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        /* Specific Material Styling */
+        .mat-clear { background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0)); backdrop-filter: blur(2px); }
+        .mat-frosted { background: rgba(255,255,255,0.3); backdrop-filter: blur(10px); }
+        .mat-tinted { background: rgba(245, 158, 11, 0.2); backdrop-filter: blur(2px); }
+        .mat-wood { background: #5c4033; background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.1) 10px, rgba(0,0,0,0.1) 20px); }
+        .mat-brick { background: #8b0000; }
+        .mat-mirror { background: linear-gradient(135deg, #ddd, #fff, #ddd); }
+
+        /* Simulation Canvas Area */
+        .simulation-area {
+            position: relative;
+            width: 100%;
+            height: clamp(350px, 50vw, 500px);
+            background: #000;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* SVG Environment for Simulation */
+        .sim-env {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Light Source (Left) */
+        .sim-source {
+            position: absolute;
+            left: 5%;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 100px;
+            z-index: 4;
+        }
+
+        /* Target Object (Right) */
+        .sim-target-container {
+            position: absolute;
+            right: 15%;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 120px;
+            height: 120px;
+            z-index: 2; /* Below the testing slot/glass */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .sim-target-svg {
+            width: 100%; height: 100%;
+            transition: var(--transition-smooth);
+        }
+
+        /* Testing Slot (Middle) */
+        .sim-slot {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 250px;
+            border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 8px;
+            z-index: 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition-smooth);
+        }
+        .sim-slot.drag-over {
+            background: rgba(255,255,255,0.05);
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px var(--accent-cyan-glow);
+        }
+
+        /* The inserted material visually */
+        .sim-inserted-material {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 6px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+        /* Light Beam Canvas */
+        #sim-beam-canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 4; /* Above target, interacts with slot */
+            pointer-events: none;
+        }
+        
+        .instruction-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.6);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            backdrop-filter: blur(4px);
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        /* ==========================================================================
+           INFO CARDS (Facts, Mistakes, etc)
+           ========================================================================== */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+        }
+        @media (min-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr 1fr; }
+        }
+
+        .icon-box {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            font-size: 1.5rem;
+        }
+        
+        .icon-box.amber { color: var(--accent-amber); box-shadow: inset 0 0 10px var(--accent-amber-glow); }
+        .icon-box.red { color: var(--accent-red); box-shadow: inset 0 0 10px rgba(239, 68, 68, 0.3); }
+
+        ul.styled-list {
+            list-style: none;
+            margin-top: 16px;
+        }
+        ul.styled-list li {
+            position: relative;
+            padding-left: 24px;
+            margin-bottom: 12px;
+            color: var(--text-muted);
+        }
+        ul.styled-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--accent-cyan);
+        }
+
+        /* Draggable Element for logic */
+        .dragging {
+            opacity: 0.5;
+            position: fixed;
+            pointer-events: none;
+            z-index: 1000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transform: scale(1.05);
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Navigation -->
+    <nav style="position:fixed; top:0; width:100%; padding:16px 0; z-index:100; background:rgba(3,7,18,0.7); backdrop-filter:blur(10px); border-bottom:1px solid var(--glass-border);">
+        <div class="container" style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-weight:700; font-size:1.2rem; letter-spacing:1px;">OPTICS<span style="color:var(--accent-cyan);">LAB</span></div>
+            <div style="font-size:0.9rem; color:var(--text-muted);">Interaction of Light & Matter</div>
+        </div>
+    </nav>
+
+    <main>
+        <!-- HERO SECTION -->
+        <section class="hero container">
+            <div class="hero-content">
+                <span class="hero-subtitle">Visual Physics Simulation</span>
+                <h1>How Matter Controls <span class="gradient-text">Light</span></h1>
+                <p style="margin-top: 16px; font-size: 1.2rem; max-width: 600px; margin-inline: auto;">
+                    Every object around us interacts with light waves in one of three fundamental ways. Let's visualize the atomic-level behavior that creates the world we see.
+                </p>
+                
+                <div class="hero-visual">
+                    <div class="hero-pane">TRANSPARENT</div>
+                    <div class="hero-pane">TRANSLUCENT</div>
+                    <div class="hero-pane">OPAQUE</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- COMPONENTS / OVERVIEW SECTION -->
+        <section id="components" class="container">
+            <div style="text-align: center; margin-bottom: var(--spacing-xl);">
+                <h2>The Three States of Optical Transmission</h2>
+                <p>Observe how structures dictate clarity.</p>
+            </div>
+
+            <div class="diagram-grid">
+                
+                <!-- Transparent Card -->
+                <div class="glass-panel diagram-container">
+                    <h3>Transparent</h3>
+                    <p style="font-size:0.9rem; margin-bottom:16px;">Light passes through in straight lines. Objects behind are clearly visible.</p>
+                    
+                    <div class="diagram-visual">
+                        <svg viewBox="0 0 300 260" preserveAspectRatio="xMidYMid meet">
+                            <!-- Background Object (Tree) -->
+                            <g opacity="0.9">
+                                <rect x="140" y="150" width="20" height="60" fill="#8B4513" rx="2"/>
+                                <circle cx="150" cy="110" r="50" fill="#2E8B57"/>
+                                <circle cx="120" cy="130" r="35" fill="#228B22"/>
+                                <circle cx="180" cy="130" r="35" fill="#3CB371"/>
+                            </g>
+                            
+                            <!-- Glass Pane -->
+                            <rect x="50" y="30" width="200" height="200" rx="8" fill="rgba(200, 240, 255, 0.15)" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+                            <!-- Specular Highlight -->
+                            <path d="M 50 30 L 250 230" stroke="rgba(255,255,255,0.3)" stroke-width="20" opacity="0.5"/>
+                            <path d="M 100 30 L 250 180" stroke="rgba(255,255,255,0.1)" stroke-width="10" opacity="0.5"/>
+                            
+                            <!-- Markers -->
+                            <g class="marker" id="m-trans-1" transform="translate(60, 50)">
+                                <circle cx="0" cy="0" r="12"/>
+                                <text x="0" y="1">1</text>
+                            </g>
+                            <g class="marker" id="m-trans-2" transform="translate(150, 110)">
+                                <circle cx="0" cy="0" r="12"/>
+                                <text x="0" y="1">2</text>
+                            </g>
+                        </svg>
+                    </div>
+                    
+                    <div class="diagram-legend">
+                        <div class="legend-item" data-target="m-trans-1">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-content">
+                                <h4>Uniform Lattice</h4>
+                                <p>Allows photons to pass without altering direction.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-target="m-trans-2">
+                            <div class="legend-content" style="padding-left:36px;">
+                                <h4>Sharp Image</h4>
+                                <p>Coherent light rays preserve perfect visual information.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Translucent Card -->
+                <div class="glass-panel diagram-container">
+                    <h3>Translucent</h3>
+                    <p style="font-size:0.9rem; margin-bottom:16px;">Light passes through but scatters. Objects behind appear blurred.</p>
+                    
+                    <div class="diagram-visual">
+                        <svg viewBox="0 0 300 260" preserveAspectRatio="xMidYMid meet">
+                            <!-- Filters for blur and noise -->
+                            <defs>
+                                <filter id="frosted-blur" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feGaussianBlur stdDeviation="8" result="blur"/>
+                                </filter>
+                                <filter id="glass-noise">
+                                    <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="3" result="noise"/>
+                                    <feColorMatrix type="matrix" values="1 0 0 0 0, 0 1 0 0 0, 0 0 1 0 0, 0 0 0 0.15 0" in="noise" result="coloredNoise"/>
+                                    <feComposite operator="in" in="coloredNoise" in2="SourceGraphic" result="composite"/>
+                                    <feBlend mode="screen" in="composite" in2="SourceGraphic"/>
+                                </filter>
+                            </defs>
+                            
+                            <!-- Background Object (Tree) - Blurred -->
+                            <g filter="url(#frosted-blur)">
+                                <rect x="140" y="150" width="20" height="60" fill="#8B4513" rx="2"/>
+                                <circle cx="150" cy="110" r="50" fill="#2E8B57"/>
+                                <circle cx="120" cy="130" r="35" fill="#228B22"/>
+                                <circle cx="180" cy="130" r="35" fill="#3CB371"/>
+                            </g>
+                            
+                            <!-- Frosted Pane -->
+                            <rect x="50" y="30" width="200" height="200" rx="8" fill="rgba(255, 255, 255, 0.2)" stroke="rgba(255,255,255,0.4)" stroke-width="2" filter="url(#glass-noise)"/>
+                            
+                            <!-- Markers -->
+                            <g class="marker" id="m-transl-1" transform="translate(150, 150)">
+                                <circle cx="0" cy="0" r="12"/>
+                                <text x="0" y="1">1</text>
+                            </g>
+                        </svg>
+                    </div>
+                    
+                    <div class="diagram-legend">
+                        <div class="legend-item" data-target="m-transl-1">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-content">
+                                <h4>Scattering Surface</h4>
+                                <p>Irregularities diffuse photons in random directions, destroying image clarity.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Opaque Card -->
+                <div class="glass-panel diagram-container">
+                    <h3>Opaque</h3>
+                    <p style="font-size:0.9rem; margin-bottom:16px;">No light passes. It is absorbed or reflected, creating shadows.</p>
+                    
+                    <div class="diagram-visual">
+                        <svg viewBox="0 0 300 260" preserveAspectRatio="xMidYMid meet">
+                            <!-- Background Object (Tree) - Hidden entirely by pane -->
+                            <!-- (Intentionally omitted to show opacity) -->
+                            
+                            <!-- Brick Pattern Def -->
+                            <defs>
+                                <pattern id="brick" width="40" height="20" patternUnits="userSpaceOnUse">
+                                    <rect width="40" height="20" fill="#B22222"/>
+                                    <path d="M 0 0 L 40 0 M 0 10 L 40 10 M 20 0 L 20 10 M 0 10 L 0 20 M 40 10 L 40 20" stroke="#800000" stroke-width="2" fill="none"/>
+                                </pattern>
+                            </defs>
+
+                            <!-- Shadow cast (simulated perspective) -->
+                            <polygon points="50,230 250,230 280,250 20,250" fill="rgba(0,0,0,0.6)"/>
+
+                            <!-- Opaque Pane (Brick) -->
+                            <rect x="50" y="30" width="200" height="200" rx="2" fill="url(#brick)" stroke="#800000" stroke-width="2"/>
+                            
+                            <!-- Markers -->
+                            <g class="marker" id="m-opaq-1" transform="translate(100, 100)">
+                                <circle cx="0" cy="0" r="12"/>
+                                <text x="0" y="1">1</text>
+                            </g>
+                            <g class="marker" id="m-opaq-2" transform="translate(150, 240)">
+                                <circle cx="0" cy="0" r="12"/>
+                                <text x="0" y="1">2</text>
+                            </g>
+                        </svg>
+                    </div>
+                    
+                    <div class="diagram-legend">
+                        <div class="legend-item" data-target="m-opaq-1">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-content">
+                                <h4>Dense Matter</h4>
+                                <p>Photons are absorbed and converted to heat energy.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-target="m-opaq-2">
+                            <div class="legend-content" style="padding-left:36px;">
+                                <h4>Cast Shadow</h4>
+                                <p>The absolute absence of light reaching the surface behind.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- WORKING MECHANISM SECTION (MANDATORY) -->
+        <section id="working" class="container">
+            <div style="margin-bottom: var(--spacing-lg);">
+                <h2 style="color:var(--accent-cyan);">Photon Mechanics</h2>
+                <p>Observe the continuous flow of light particles (photons) as they encounter different atomic lattices.</p>
+            </div>
+
+            <div class="glass-panel mechanism-layout">
+                
+                <div class="mechanism-visual">
+                    <canvas id="working-canvas"></canvas>
+                </div>
+
+                <div class="mechanism-controls">
+                    <div class="stage-indicator" id="stage-indicator">
+                        <div class="stage-dot active"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                    </div>
+                    
+                    <div class="stage-info">
+                        <div class="io-badges" id="mech-badges">
+                            <span class="badge input">Light Source</span>
+                            <span class="badge output">Photons</span>
+                        </div>
+                        <h3 class="stage-title" id="mech-title">1. Emission</h3>
+                        <p id="mech-desc">Light source emits a continuous stream of photons traveling in parallel straight lines through a vacuum or air.</p>
+                    </div>
+
+                    <div class="controls-row">
+                        <button class="btn" id="btn-prev">← Prev</button>
+                        <button class="btn primary" id="btn-play">Auto-Play Cycle</button>
+                        <button class="btn" id="btn-next">Next →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION -->
+        <section id="simulation" class="container">
+            <div style="text-align: center; margin-bottom: var(--spacing-lg);">
+                <h2>Testing Laboratory</h2>
+                <p>Drag materials into the test slot to observe how they affect the visibility of the target object.</p>
+            </div>
+
+            <div class="glass-panel lab-container">
+                
+                <!-- Materials Palette -->
+                <div class="material-tray" id="material-tray">
+                    <div class="material-item mat-clear" data-type="transparent" draggable="true">
+                        <span>Clear Glass</span>
+                    </div>
+                    <div class="material-item mat-frosted" data-type="translucent" draggable="true">
+                        <span>Frosted Glass</span>
+                    </div>
+                    <div class="material-item mat-tinted" data-type="transparent-colored" draggable="true">
+                        <span>Amber Resin</span>
+                    </div>
+                    <div class="material-item mat-wood" data-type="opaque" draggable="true">
+                        <span>Wood Board</span>
+                    </div>
+                    <div class="material-item mat-brick" data-type="opaque" draggable="true">
+                        <span>Brick Wall</span>
+                    </div>
+                    <div class="material-item mat-mirror" data-type="reflective" draggable="true">
+                        <span>Mirror</span>
+                    </div>
+                </div>
+
+                <!-- Simulation Viewport -->
+                <div class="simulation-area">
+                    
+                    <!-- Base SVG Environment -->
+                    <svg class="sim-env" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice">
+                        <!-- Floor grid perspective -->
+                        <path d="M -200 500 L 400 350 L 1000 500 Z" fill="rgba(255,255,255,0.02)"/>
+                        <line x1="0" y1="400" x2="800" y2="400" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+                    </svg>
+
+                    <!-- Flashlight (Source) -->
+                    <div class="sim-source">
+                        <svg viewBox="0 0 60 100" width="100%" height="100%">
+                            <!-- Body -->
+                            <rect x="5" y="20" width="30" height="60" rx="5" fill="#333" stroke="#555" stroke-width="2"/>
+                            <!-- Head -->
+                            <path d="M 35 30 L 55 10 L 55 90 L 35 70 Z" fill="#444" stroke="#666" stroke-width="2"/>
+                            <!-- Bulb Area -->
+                            <ellipse cx="55" cy="50" rx="5" ry="38" fill="#e0f2fe"/>
+                            <ellipse cx="55" cy="50" rx="3" ry="30" fill="#fff" filter="drop-shadow(0 0 5px #fff)"/>
+                        </svg>
+                    </div>
+
+                    <!-- Test Slot -->
+                    <div class="sim-slot" id="sim-slot">
+                        <div class="sim-inserted-material" id="sim-material-visual"></div>
+                        <span style="opacity: 0.3; font-size: 0.8rem; pointer-events:none;">DROP HERE</span>
+                    </div>
+
+                    <!-- Target Object (Apple) -->
+                    <div class="sim-target-container" id="sim-target">
+                        <svg class="sim-target-svg" viewBox="0 0 100 100">
+                            <!-- Apple Body -->
+                            <path d="M 50 20 C 30 15 10 30 15 60 C 20 85 40 95 50 90 C 60 95 80 85 85 60 C 90 30 70 15 50 20 Z" fill="url(#apple-grad)"/>
+                            <!-- Stem -->
+                            <path d="M 50 25 C 45 15 48 5 55 2" stroke="#5c4033" stroke-width="4" fill="none" stroke-linecap="round"/>
+                            <!-- Leaf -->
+                            <path d="M 53 15 C 65 5 80 15 75 25 C 65 35 50 25 53 15 Z" fill="#228B22"/>
+                            <!-- Highlight -->
+                            <path d="M 30 35 C 25 45 28 55 35 60" stroke="rgba(255,255,255,0.4)" stroke-width="4" fill="none" stroke-linecap="round" filter="blur(1px)"/>
+                            
+                            <defs>
+                                <radialGradient id="apple-grad" cx="30%" cy="30%" r="70%">
+                                    <stop offset="0%" stop-color="#ff6b6b"/>
+                                    <stop offset="70%" stop-color="#cc0000"/>
+                                    <stop offset="100%" stop-color="#660000"/>
+                                </radialGradient>
+                            </defs>
+                        </svg>
+                    </div>
+
+                    <!-- Light Beam Layer (Overlays slot and target) -->
+                    <canvas id="sim-beam-canvas"></canvas>
+                    
+                    <div class="instruction-overlay">Drag a material into the dotted slot</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FACTS & MISTAKES -->
+        <section class="container">
+            <div class="grid-2">
+                <div class="glass-panel">
+                    <div class="icon-box amber">💡</div>
+                    <h3 style="color:var(--accent-amber);">Interesting Physics Facts</h3>
+                    <ul class="styled-list">
+                        <li><strong>Glass is a liquid?</strong> False. It's an amorphous solid. Its molecules are locked in place, but randomly arranged, allowing light to slip through the gaps.</li>
+                        <li><strong>Deep water is opaque.</strong> Even though water is transparent, it absorbs a tiny bit of light. Below 1,000 meters in the ocean, it's completely dark.</li>
+                        <li><strong>Metals reflect, not just absorb.</strong> Metals are opaque because their free-flowing electrons immediately interact with light waves, bouncing them back (reflection).</li>
+                    </ul>
+                </div>
+                
+                <div class="glass-panel">
+                    <div class="icon-box red">⚠️</div>
+                    <h3 style="color:var(--accent-red);">Common Misconceptions</h3>
+                    <ul class="styled-list">
+                        <li><strong>Mistake:</strong> Thinking translucent objects block half the light.
+                            <br><em>Truth:</em> They often transmit most of the light, but they <strong>scatter</strong> the direction of the photons, destroying the image.</li>
+                        <li><strong>Mistake:</strong> Believing shadows are physical things.
+                            <br><em>Truth:</em> A shadow is merely the <em>absence</em> of light where an opaque object has absorbed or reflected the photons.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer style="padding: 40px 0; text-align: center; border-top: 1px solid var(--glass-border); margin-top: 60px; color: var(--text-muted);">
+        <p>OpticsLab Educational Visualization Platform</p>
+    </footer>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        // Utilities
+        const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+
+        /* --------------------------------------------------------------------------
+           1. UI Interactions (Diagram Legends)
+           -------------------------------------------------------------------------- */
+        function initDiagramInteractions() {
+            const containers = document.querySelectorAll('.diagram-container');
+            
+            containers.forEach(container => {
+                const markers = container.querySelectorAll('.marker');
+                const legendItems = container.querySelectorAll('.legend-item');
+
+                const handleHover = (targetId, isHovering) => {
+                    markers.forEach(m => m.classList.remove('active'));
+                    legendItems.forEach(l => l.classList.remove('active'));
+
+                    if (isHovering) {
+                        const marker = container.querySelector(`#${targetId}`);
+                        const legend = container.querySelector(`[data-target="${targetId}"]`);
+                        if (marker) marker.classList.add('active');
+                        if (legend) legend.classList.add('active');
+                    }
+                };
+
+                markers.forEach(marker => {
+                    marker.addEventListener('mouseenter', () => handleHover(marker.id, true));
+                    marker.addEventListener('mouseleave', () => handleHover(marker.id, false));
+                    // Touch support
+                    marker.addEventListener('touchstart', (e) => { e.preventDefault(); handleHover(marker.id, true); });
+                });
+
+                legendItems.forEach(item => {
+                    item.addEventListener('mouseenter', () => handleHover(item.dataset.target, true));
+                    item.addEventListener('mouseleave', () => handleHover(item.dataset.target, false));
+                });
+            });
+        }
+
+        /* --------------------------------------------------------------------------
+           2. Ambient Background Canvas
+           -------------------------------------------------------------------------- */
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let bgParticles = [];
+
+        function initBgCanvas() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+            bgParticles = [];
+            for(let i=0; i<50; i++) {
+                bgParticles.push({
+                    x: Math.random() * bgCanvas.width,
+                    y: Math.random() * bgCanvas.height,
+                    r: Math.random() * 3 + 1,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    alpha: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        function drawBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.fillStyle = 'rgba(6, 182, 212, 0.1)';
+            bgParticles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if(p.x < 0 || p.x > bgCanvas.width) p.vx *= -1;
+                if(p.y < 0 || p.y > bgCanvas.height) p.vy *= -1;
+                
+                bgCtx.beginPath();
+                bgCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                bgCtx.fillStyle = `rgba(6, 182, 212, ${p.alpha})`;
+                bgCtx.fill();
+            });
+            requestAnimationFrame(drawBg);
+        }
+
+        /* --------------------------------------------------------------------------
+           3. Working Mechanism Logic (Photon Simulation)
+           -------------------------------------------------------------------------- */
+        const mechCanvas = document.getElementById('working-canvas');
+        const mCtx = mechCanvas.getContext('2d');
+        let mWidth, mHeight;
+        
+        // State
+        const STAGES = [
+            { 
+                id: 'emission', 
+                title: '1. Emission', 
+                in: 'Energy', out: 'Photons',
+                desc: 'A light source continuously emits photons. In a vacuum, they travel in perfect parallel straight lines.'
+            },
+            { 
+                id: 'transparent', 
+                title: '2. Transmission (Transparent)', 
+                in: 'Photons', out: 'Coherent Light',
+                desc: 'Photons enter a uniform atomic lattice (like glass). They pass through without scattering, maintaining the image.'
+            },
+            { 
+                id: 'translucent', 
+                title: '3. Scattering (Translucent)', 
+                in: 'Photons', out: 'Diffused Light',
+                desc: 'Photons hit irregular particles. They pass through, but bounce in random directions, destroying image clarity.'
+            },
+            { 
+                id: 'opaque', 
+                title: '4. Absorption (Opaque)', 
+                in: 'Photons', out: 'Heat / Shadow',
+                desc: 'The dense molecular structure blocks photons entirely. Energy is absorbed as heat, leaving a shadow behind.'
+            }
+        ];
+        
+        let currentStageIdx = 0;
+        let isAutoPlaying = false;
+        let autoPlayTimer = null;
+        let mechanismParticles = [];
+
+        // UI Elements
+        const uiTitle = document.getElementById('mech-title');
+        const uiDesc = document.getElementById('mech-desc');
+        const uiBadges = document.getElementById('mech-badges');
+        const uiDots = document.querySelectorAll('.stage-dot');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnPlay = document.getElementById('btn-play');
+
+        class MechPhoton {
+            constructor(y) {
+                this.reset(y);
+            }
+            reset(y) {
+                this.x = 0;
+                this.y = y || (Math.random() * (mHeight - 100) + 50);
+                this.baseY = this.y;
+                this.vx = 4 + Math.random() * 2;
+                this.vy = 0;
+                this.color = '#00F0FF';
+                this.active = true;
+                this.scattered = false;
+                this.absorbed = false;
+            }
+            update(stageId, barrierX, barrierW) {
+                if(!this.active) return;
+                
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Interaction Zone
+                if (this.x > barrierX && this.x < barrierX + barrierW) {
+                    if (stageId === 'emission') {
+                        // Just pass
+                    } 
+                    else if (stageId === 'transparent') {
+                        // Pass straight, maybe slight slow down
+                    }
+                    else if (stageId === 'translucent') {
+                        if (!this.scattered) {
+                            this.scattered = true;
+                            // Random deflection
+                            this.vy = (Math.random() - 0.5) * 3;
+                            this.vx = 2 + Math.random();
+                            this.color = '#F59E0B'; // Turn amber to show scatter
+                        }
+                    }
+                    else if (stageId === 'opaque') {
+                        if (!this.absorbed) {
+                            this.absorbed = true;
+                            this.vx = 0;
+                            this.vy = 0;
+                            // Morph into heat particle
+                            this.color = '#EF4444';
+                            
+                            // Let it slowly fade/die
+                            setTimeout(() => { this.active = false; }, 500);
+                        }
+                    }
+                }
+
+                // Reset if off screen
+                if (this.x > mWidth || this.y < 0 || this.y > mHeight) {
+                    this.reset();
+                }
+            }
+            draw(ctx) {
+                if(!this.active) return;
+                
+                // Trail
+                ctx.beginPath();
+                ctx.moveTo(this.x - this.vx * 3, this.y - this.vy * 3);
+                ctx.lineTo(this.x, this.y);
+                ctx.strokeStyle = this.color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Head
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 3, 0, Math.PI*2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+                
+                // Glow
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function resizeMechCanvas() {
+            const rect = mechCanvas.parentElement.getBoundingClientRect();
+            // Handle high DPI
+            const dpr = window.devicePixelRatio || 1;
+            mWidth = rect.width;
+            mHeight = rect.height;
+            mechCanvas.width = mWidth * dpr;
+            mechCanvas.height = mHeight * dpr;
+            mCtx.scale(dpr, dpr);
+            
+            // Re-init particles on resize
+            mechanismParticles = Array.from({length: 40}, () => new MechPhoton());
+        }
+
+        function drawMechanism() {
+            // Dark trail effect
+            mCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            mCtx.fillRect(0, 0, mWidth, mHeight);
+
+            const currentStage = STAGES[currentStageIdx].id;
+            const barrierX = mWidth * 0.4;
+            const barrierW = 80;
+
+            // Draw Barrier based on stage
+            if (currentStage !== 'emission') {
+                mCtx.save();
+                if (currentStage === 'transparent') {
+                    mCtx.fillStyle = 'rgba(6, 182, 212, 0.1)';
+                    mCtx.strokeStyle = 'rgba(6, 182, 212, 0.5)';
+                    mCtx.lineWidth = 2;
+                    mCtx.fillRect(barrierX, 50, barrierW, mHeight - 100);
+                    mCtx.strokeRect(barrierX, 50, barrierW, mHeight - 100);
+                    
+                    // Draw grid lattice
+                    mCtx.beginPath();
+                    for(let i=10; i<barrierW; i+=20) {
+                        mCtx.moveTo(barrierX + i, 50); mCtx.lineTo(barrierX + i, mHeight-50);
+                    }
+                    for(let i=70; i<mHeight-50; i+=20) {
+                        mCtx.moveTo(barrierX, i); mCtx.lineTo(barrierX + barrierW, i);
+                    }
+                    mCtx.strokeStyle = 'rgba(255,255,255,0.1)';
+                    mCtx.stroke();
+                } 
+                else if (currentStage === 'translucent') {
+                    mCtx.fillStyle = 'rgba(245, 158, 11, 0.2)';
+                    mCtx.fillRect(barrierX, 50, barrierW, mHeight - 100);
+                    // Draw random particles
+                    mCtx.fillStyle = 'rgba(255,255,255,0.4)';
+                    for(let i=0; i<50; i++) {
+                        mCtx.beginPath();
+                        mCtx.arc(barrierX + Math.random()*barrierW, 50 + Math.random()*(mHeight-100), 2, 0, Math.PI*2);
+                        mCtx.fill();
+                    }
+                }
+                else if (currentStage === 'opaque') {
+                    mCtx.fillStyle = '#374151';
+                    mCtx.fillRect(barrierX, 50, barrierW, mHeight - 100);
+                    // Draw dense structure
+                    mCtx.fillStyle = '#111827';
+                    for(let i=0; i<mHeight-100; i+=10) {
+                        mCtx.fillRect(barrierX+5, 50+i, barrierW-10, 8);
+                    }
+                    
+                    // Draw shadow zone
+                    const gradient = mCtx.createLinearGradient(barrierX + barrierW, 0, mWidth, 0);
+                    gradient.addColorStop(0, 'rgba(0,0,0,0.9)');
+                    gradient.addColorStop(1, 'rgba(0,0,0,0.7)');
+                    mCtx.fillStyle = gradient;
+                    mCtx.fillRect(barrierX + barrierW, 50, mWidth, mHeight - 100);
+                }
+                mCtx.restore();
+            }
+
+            // Draw Source Generator
+            mCtx.fillStyle = '#222';
+            mCtx.fillRect(0, 40, 40, mHeight-80);
+            const emitGrad = mCtx.createLinearGradient(40, 0, 100, 0);
+            emitGrad.addColorStop(0, 'rgba(0, 240, 255, 0.5)');
+            emitGrad.addColorStop(1, 'rgba(0, 240, 255, 0)');
+            mCtx.fillStyle = emitGrad;
+            mCtx.fillRect(40, 40, 60, mHeight-80);
+
+            // Update and draw particles
+            mechanismParticles.forEach(p => {
+                p.update(currentStage, barrierX, barrierW);
+                p.draw(mCtx);
+            });
+
+            requestAnimationFrame(drawMechanism);
+        }
+
+        function updateMechanismUI() {
+            const stage = STAGES[currentStageIdx];
+            
+            // Text updates
+            uiTitle.textContent = stage.title;
+            uiDesc.textContent = stage.desc;
+            uiBadges.innerHTML = `
+                <span class="badge input">${stage.in}</span>
+                <span class="badge output">${stage.out}</span>
+            `;
+
+            // Dot updates
+            uiDots.forEach((dot, idx) => {
+                dot.className = 'stage-dot';
+                if (idx === currentStageIdx) dot.classList.add('active');
+                if (idx < currentStageIdx) dot.classList.add('passed');
+            });
+
+            // Reset particles for clean state transition
+            mechanismParticles.forEach(p => p.reset());
+        }
+
+        function nextStage() {
+            currentStageIdx = (currentStageIdx + 1) % STAGES.length;
+            updateMechanismUI();
+        }
+
+        function prevStage() {
+            currentStageIdx = (currentStageIdx - 1 + STAGES.length) % STAGES.length;
+            updateMechanismUI();
+        }
+
+        function toggleAutoPlay() {
+            isAutoPlaying = !isAutoPlaying;
+            if (isAutoPlaying) {
+                btnPlay.textContent = 'Stop Auto-Play';
+                btnPlay.classList.add('primary');
+                autoPlayTimer = setInterval(nextStage, 4000);
+            } else {
+                btnPlay.textContent = 'Auto-Play Cycle';
+                btnPlay.classList.remove('primary');
+                clearInterval(autoPlayTimer);
+            }
+        }
+
+        btnNext.addEventListener('click', () => { if(isAutoPlaying) toggleAutoPlay(); nextStage(); });
+        btnPrev.addEventListener('click', () => { if(isAutoPlaying) toggleAutoPlay(); prevStage(); });
+        btnPlay.addEventListener('click', toggleAutoPlay);
+
+
+        /* --------------------------------------------------------------------------
+           4. Interactive Simulation (Lab)
+           -------------------------------------------------------------------------- */
+        const tray = document.getElementById('material-tray');
+        const items = document.querySelectorAll('.material-item');
+        const slot = document.getElementById('sim-slot');
+        const materialVisual = document.getElementById('sim-material-visual');
+        const targetSvg = document.querySelector('.sim-target-svg');
+        const simCanvas = document.getElementById('sim-beam-canvas');
+        const sCtx = simCanvas.getContext('2d');
+        
+        let sWidth, sHeight;
+        let currentMaterial = null; // { type: 'transparent', color: ... }
+
+        // Setup Drag and Drop logic (Mouse + Touch support via Custom Logic for reliability)
+        let draggedElement = null;
+        let ghostEl = null;
+
+        function updateSimulationRender() {
+            // Handle Target Object CSS logic based on material
+            if (!currentMaterial) {
+                // Clear state
+                materialVisual.style.opacity = '0';
+                targetSvg.style.filter = 'none';
+                targetSvg.style.opacity = '1';
+            } else {
+                materialVisual.style.opacity = '1';
+                // Copy styles from the dragged item
+                const compStyle = window.getComputedStyle(currentMaterial.el);
+                materialVisual.style.background = compStyle.background;
+                materialVisual.style.backdropFilter = compStyle.backdropFilter;
+                materialVisual.style.webkitBackdropFilter = compStyle.webkitBackdropFilter;
+
+                const type = currentMaterial.type;
+                
+                // Animate target changes
+                if (type === 'transparent') {
+                    targetSvg.style.filter = 'none';
+                    targetSvg.style.opacity = '0.9';
+                } else if (type === 'transparent-colored') {
+                    targetSvg.style.filter = 'sepia(1) hue-rotate(-30deg) saturate(2)';
+                    targetSvg.style.opacity = '0.8';
+                } else if (type === 'translucent') {
+                    targetSvg.style.filter = 'blur(10px) brightness(0.8)';
+                    targetSvg.style.opacity = '0.5';
+                } else if (type === 'opaque' || type === 'reflective') {
+                    // Object is completely hidden in shadow
+                    targetSvg.style.filter = 'brightness(0)';
+                    targetSvg.style.opacity = '0';
+                }
+            }
+        }
+
+        // Draw Light Beam on Canvas
+        function resizeSimCanvas() {
+            const rect = simCanvas.parentElement.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            sWidth = rect.width;
+            sHeight = rect.height;
+            simCanvas.width = sWidth * dpr;
+            simCanvas.height = sHeight * dpr;
+            sCtx.scale(dpr, dpr);
+        }
+
+        function drawSimulationFrame() {
+            sCtx.clearRect(0, 0, sWidth, sHeight);
+            
+            // Light source coordinates
+            const startX = sWidth * 0.05 + 60; // right edge of flashlight
+            const startY = sHeight / 2;
+            
+            const slotX = sWidth / 2 - 60;
+            const slotW = 120;
+            const endX = sWidth;
+
+            const beamHeight = 40;
+
+            sCtx.globalCompositeOperation = 'screen';
+
+            // 1. Draw initial beam to the slot
+            const grad1 = sCtx.createLinearGradient(startX, 0, slotX, 0);
+            grad1.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+            grad1.addColorStop(1, 'rgba(0, 240, 255, 0.5)');
+            
+            sCtx.beginPath();
+            sCtx.moveTo(startX, startY - beamHeight/2);
+            sCtx.lineTo(slotX, startY - beamHeight);
+            sCtx.lineTo(slotX, startY + beamHeight);
+            sCtx.lineTo(startX, startY + beamHeight/2);
+            sCtx.fillStyle = grad1;
+            sCtx.fill();
+
+            // 2. Draw interaction based on material
+            if (currentMaterial) {
+                const type = currentMaterial.type;
+                
+                if (type === 'transparent' || type === 'transparent-colored') {
+                    // Beam continues straight
+                    let color = type === 'transparent-colored' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(0, 240, 255, 0.3)';
+                    const grad2 = sCtx.createLinearGradient(slotX + slotW, 0, endX, 0);
+                    grad2.addColorStop(0, color);
+                    grad2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    
+                    sCtx.beginPath();
+                    sCtx.moveTo(slotX + slotW, startY - beamHeight);
+                    sCtx.lineTo(endX, startY - beamHeight * 1.5);
+                    sCtx.lineTo(endX, startY + beamHeight * 1.5);
+                    sCtx.lineTo(slotX + slotW, startY + beamHeight);
+                    sCtx.fillStyle = grad2;
+                    sCtx.fill();
+                } 
+                else if (type === 'translucent') {
+                    // Scattered wide beam
+                    const grad3 = sCtx.createRadialGradient(slotX + slotW, startY, 0, slotX + slotW + 100, startY, 150);
+                    grad3.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+                    grad3.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    
+                    sCtx.beginPath();
+                    sCtx.moveTo(slotX + slotW, startY - beamHeight);
+                    sCtx.lineTo(endX, 0);
+                    sCtx.lineTo(endX, sHeight);
+                    sCtx.lineTo(slotX + slotW, startY + beamHeight);
+                    sCtx.fillStyle = grad3;
+                    sCtx.fill();
+                }
+                else if (type === 'reflective') {
+                    // Bounce back
+                    const grad4 = sCtx.createLinearGradient(slotX, startY, 0, 0);
+                    grad4.addColorStop(0, 'rgba(255, 255, 255, 0.6)');
+                    grad4.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                    
+                    sCtx.beginPath();
+                    sCtx.moveTo(slotX, startY - beamHeight);
+                    sCtx.lineTo(0, 0);
+                    sCtx.lineTo(0, 50);
+                    sCtx.lineTo(slotX, startY);
+                    sCtx.fillStyle = grad4;
+                    sCtx.fill();
+                }
+                // opaque: nothing happens past the slot
+            } else {
+                // Empty slot, beam goes all the way
+                const grad5 = sCtx.createLinearGradient(slotX + slotW, 0, endX, 0);
+                grad5.addColorStop(0, 'rgba(0, 240, 255, 0.4)');
+                grad5.addColorStop(1, 'rgba(0, 240, 255, 0)');
+                
+                sCtx.beginPath();
+                sCtx.moveTo(slotX + slotW, startY - beamHeight);
+                sCtx.lineTo(endX, startY - beamHeight * 1.5);
+                sCtx.lineTo(endX, startY + beamHeight * 1.5);
+                sCtx.lineTo(slotX + slotW, startY + beamHeight);
+                sCtx.fillStyle = grad5;
+                sCtx.fill();
+            }
+
+            sCtx.globalCompositeOperation = 'source-over';
+            requestAnimationFrame(drawSimulationFrame);
+        }
+
+        // Custom Drag & Drop for Touch/Mouse consistency
+        items.forEach(item => {
+            const handleStart = (e) => {
+                const touch = e.touches ? e.touches[0] : e;
+                draggedElement = item;
+                
+                // Create ghost
+                ghostEl = item.cloneNode(true);
+                ghostEl.classList.add('dragging');
+                document.body.appendChild(ghostEl);
+                
+                moveGhost(touch.clientX, touch.clientY);
+            };
+            
+            item.addEventListener('mousedown', handleStart);
+            item.addEventListener('touchstart', (e) => { e.preventDefault(); handleStart(e); }, {passive: false});
+        });
+
+        const moveGhost = (x, y) => {
+            if (!ghostEl) return;
+            ghostEl.style.left = `${x - ghostEl.offsetWidth / 2}px`;
+            ghostEl.style.top = `${y - ghostEl.offsetHeight / 2}px`;
+            
+            // Check intersection with slot
+            const slotRect = slot.getBoundingClientRect();
+            if (x > slotRect.left && x < slotRect.right && y > slotRect.top && y < slotRect.bottom) {
+                slot.classList.add('drag-over');
+            } else {
+                slot.classList.remove('drag-over');
+            }
+        };
+
+        const handleMove = (e) => {
+            if (!draggedElement) return;
+            const touch = e.touches ? e.touches[0] : e;
+            moveGhost(touch.clientX, touch.clientY);
+        };
+
+        const handleEnd = (e) => {
+            if (!draggedElement) return;
+            const touch = e.changedTouches ? e.changedTouches[0] : e;
+            
+            const slotRect = slot.getBoundingClientRect();
+            const x = touch.clientX;
+            const y = touch.clientY;
+
+            if (x > slotRect.left && x < slotRect.right && y > slotRect.top && y < slotRect.bottom) {
+                // Success drop
+                currentMaterial = {
+                    type: draggedElement.dataset.type,
+                    el: draggedElement
+                };
+                updateSimulationRender();
+            }
+            
+            // Cleanup
+            slot.classList.remove('drag-over');
+            if (ghostEl) ghostEl.remove();
+            draggedElement = null;
+            ghostEl = null;
+        };
+
+        document.addEventListener('mousemove', handleMove);
+        document.addEventListener('touchmove', handleMove, {passive: false});
+        document.addEventListener('mouseup', handleEnd);
+        document.addEventListener('touchend', handleEnd);
+        
+        // Allow clicking slot to clear it
+        slot.addEventListener('click', () => {
+            if (currentMaterial) {
+                currentMaterial = null;
+                updateSimulationRender();
+            }
+        });
+
+
+        /* --------------------------------------------------------------------------
+           Init & Window Resize Handling
+           -------------------------------------------------------------------------- */
+        function onResize() {
+            initBgCanvas();
+            resizeMechCanvas();
+            resizeSimCanvas();
+        }
+
+        window.addEventListener('resize', onResize);
+        window.addEventListener('orientationchange', () => setTimeout(onResize, 100));
+
+        // Boot
+        initDiagramInteractions();
+        onResize();
+        drawBg();
+        drawMechanism();
+        updateMechanismUI(); // Initial state
+        drawSimulationFrame();
+
+    </script>
+</body>
+</html>

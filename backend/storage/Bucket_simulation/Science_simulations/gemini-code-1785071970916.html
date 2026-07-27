@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crop Management Visualization</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & GLOBAL RESET
+           ========================================================================== */
+        :root {
+            /* Premium Dark Theme Palette */
+            --bg-color: #050b06;
+            --surface-color: rgba(16, 28, 20, 0.6);
+            --surface-highlight: rgba(30, 50, 36, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f0f4f1;
+            --text-muted: #a4b3a9;
+            
+            /* Thematic Accents */
+            --accent-green: #2ecc71;
+            --accent-green-glow: rgba(46, 204, 113, 0.4);
+            --accent-gold: #f1c40f;
+            --accent-blue: #3498db;
+            --accent-orange: #e67e22;
+            
+            /* Typography (Fluid) */
+            --font-title: 'Segoe UI', -apple-system, Roboto, Helvetica, sans-serif;
+            --text-xs: clamp(0.75rem, 1vw, 0.875rem);
+            --text-sm: clamp(0.875rem, 1.2vw, 1rem);
+            --text-base: clamp(1rem, 1.5vw, 1.125rem);
+            --text-lg: clamp(1.25rem, 2vw, 1.5rem);
+            --text-xl: clamp(1.5rem, 3vw, 2.5rem);
+            --text-2xl: clamp(2rem, 4vw, 3.5rem);
+
+            /* Spacing */
+            --gap-sm: clamp(8px, 1.5vw, 16px);
+            --gap-md: clamp(16px, 3vw, 32px);
+            --gap-lg: clamp(32px, 5vw, 64px);
+            --radius-md: 16px;
+            --radius-lg: 24px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: var(--font-title);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Animated Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            background: radial-gradient(circle at 50% 0%, #0d2615 0%, var(--bg-color) 70%);
+            overflow: hidden;
+        }
+        .ambient-glow {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.4;
+            animation: float 20s infinite ease-in-out alternate;
+        }
+        .glow-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: rgba(46, 204, 113, 0.15); }
+        .glow-2 { bottom: -20%; right: -10%; width: 60vw; height: 60vw; background: rgba(241, 196, 15, 0.1); animation-delay: -10s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(5%, 5%) scale(1.1); }
+        }
+
+        /* Container & Grid Layouts */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--gap-md);
+            display: flex;
+            flex-direction: column;
+            gap: var(--gap-lg);
+        }
+
+        header {
+            text-align: center;
+            padding: var(--gap-lg) 0;
+            margin-top: 5vh;
+        }
+
+        .title {
+            font-size: var(--text-2xl);
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+            margin-bottom: var(--gap-sm);
+        }
+
+        .subtitle {
+            font-size: var(--text-lg);
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Glassmorphism Cards */
+        .glass-card {
+            background: var(--surface-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--gap-md);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .section-title {
+            font-size: var(--text-xl);
+            margin-bottom: var(--gap-md);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .section-title::before {
+            content: '';
+            display: block;
+            width: 4px;
+            height: 24px;
+            background: var(--accent-green);
+            border-radius: 4px;
+            box-shadow: 0 0 10px var(--accent-green-glow);
+        }
+
+        /* ==========================================================================
+           COMPONENTS SECTION (STRICT MARKER SYSTEM)
+           ========================================================================== */
+        .anatomy-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--gap-md);
+        }
+        @media (min-width: 1024px) {
+            .anatomy-grid { grid-template-columns: 3fr 2fr; }
+        }
+
+        .visual-container {
+            position: relative;
+            width: 100%;
+            min-height: 350px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--gap-md);
+        }
+
+        .visual-svg-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            height: auto;
+            aspect-ratio: 4/5;
+        }
+
+        /* Interactive Markers */
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            background: var(--surface-highlight);
+            border: 2px solid var(--accent-green);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: var(--text-sm);
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--accent-green-glow);
+            transform: translate(-50%, -50%);
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+        .marker:hover, .marker.active {
+            background: var(--accent-green);
+            transform: translate(-50%, -50%) scale(1.2);
+            box-shadow: 0 0 25px var(--accent-green);
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            justify-content: center;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: var(--gap-sm);
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(46, 204, 113, 0.1);
+            border-color: rgba(46, 204, 113, 0.3);
+            transform: translateX(5px);
+        }
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            background: var(--surface-highlight);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: var(--text-xs);
+            color: var(--accent-green);
+        }
+        .legend-item.active .legend-badge {
+            background: var(--accent-green);
+            color: var(--bg-color);
+        }
+        .legend-text { display: flex; flex-direction: column; }
+        .legend-title { font-weight: bold; font-size: var(--text-base); color: var(--text-main); }
+        .legend-desc { font-size: var(--text-sm); color: var(--text-muted); }
+
+        /* ==========================================================================
+           WORKING PROCESS (THE CYCLE)
+           ========================================================================== */
+        .cycle-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--gap-md);
+        }
+
+        .cycle-visual {
+            width: 100%;
+            height: clamp(300px, 40vh, 500px);
+            background: #0a110d;
+            border-radius: var(--radius-md);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        /* SVG Stages layered */
+        .stage-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            justify-content: center;
+            align-items: flex-end; /* Ground aligned */
+        }
+        .stage-layer.active { opacity: 1; z-index: 2; }
+
+        /* Controls & Metadata */
+        .cycle-ui {
+            display: flex;
+            flex-direction: column;
+            gap: var(--gap-sm);
+        }
+        @media (min-width: 768px) {
+            .cycle-ui { flex-direction: row; align-items: center; justify-content: space-between; }
+        }
+
+        .stage-info { flex: 1; }
+        .stage-number { color: var(--accent-gold); font-weight: bold; font-size: var(--text-sm); letter-spacing: 2px; text-transform: uppercase; }
+        .stage-title { font-size: var(--text-lg); font-weight: bold; margin: 4px 0; color: #fff; }
+        .stage-caption { color: var(--text-muted); font-size: var(--text-base); max-width: 500px;}
+        
+        .stage-io {
+            display: flex;
+            gap: 16px;
+            margin-top: 8px;
+            font-size: var(--text-xs);
+            color: #ccc;
+        }
+        .io-badge { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.05); padding: 4px 10px; border-radius: 20px;}
+        .io-in::before { content: '↓'; color: var(--accent-blue); }
+        .io-out::before { content: '↑'; color: var(--accent-orange); }
+
+        .cycle-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0,0,0,0.3);
+            padding: 8px;
+            border-radius: 30px;
+        }
+        .btn-icon {
+            background: var(--surface-highlight);
+            border: 1px solid var(--glass-border);
+            color: white;
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-icon:hover { background: var(--accent-green); color: var(--bg-color); }
+        
+        .progress-bar {
+            display: flex; gap: 4px; padding: 0 10px;
+        }
+        .progress-dot {
+            width: clamp(24px, 4vw, 40px);
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            transition: 0.3s;
+        }
+        .progress-dot.active { background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); }
+
+        /* ==========================================================================
+           SIMULATION (CANVAS INTERACTIVE)
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--gap-md);
+        }
+        @media (min-width: 1024px) {
+            .sim-grid { grid-template-columns: 350px 1fr; }
+        }
+
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: var(--gap-md);
+            background: rgba(0,0,0,0.2);
+            padding: var(--gap-md);
+            border-radius: var(--radius-md);
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-header { display: flex; justify-content: space-between; font-size: var(--text-sm); }
+        .control-val { font-weight: bold; color: var(--accent-green); font-variant-numeric: tabular-nums; }
+        
+        /* Custom Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%; height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px; outline: none;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            background: var(--text-main);
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: 0.2s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); background: var(--accent-green); }
+
+        .metrics-card {
+            margin-top: auto;
+            background: rgba(255,255,255,0.03);
+            padding: 16px; border-radius: 12px;
+            border-left: 4px solid var(--accent-green);
+        }
+        .metric-title { font-size: var(--text-xs); color: var(--text-muted); text-transform: uppercase;}
+        .metric-value { font-size: var(--text-xl); font-weight: bold; }
+
+        .canvas-container {
+            width: 100%; min-height: 400px;
+            background: radial-gradient(circle at center, #132418, #050b06);
+            border-radius: var(--radius-md);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            touch-action: none; /* Prevent scroll on canvas interact */
+        }
+
+        /* ==========================================================================
+           KNOWLEDGE GRID (Facts, Mistakes, Apps)
+           ========================================================================== */
+        .knowledge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--gap-md);
+        }
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            padding: var(--gap-md);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            display: flex; flex-direction: column; gap: 12px;
+        }
+        .info-card h3 { font-size: var(--text-lg); display: flex; align-items: center; gap: 8px; }
+        .info-card p { font-size: var(--text-sm); color: var(--text-muted); }
+        .icon-fact { color: var(--accent-gold); }
+        .icon-mistake { color: #e74c3c; }
+        .icon-app { color: var(--accent-blue); }
+
+        /* SVG Definitions hide */
+        svg.defs-only { display: none; }
+
+        /* Responsive specific tuning */
+        @media (max-width: 768px) {
+            .glass-card { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); } /* Perf fix */
+            .cycle-ui { text-align: center; }
+            .stage-io { justify-content: center; flex-wrap: wrap; }
+            .cycle-controls { justify-content: center; margin-top: 16px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Animated Background -->
+    <div class="ambient-bg">
+        <div class="ambient-glow glow-1"></div>
+        <div class="ambient-glow glow-2"></div>
+    </div>
+
+    <!-- SVG Definitions for reuse (Gradients, Textures) -->
+    <svg class="defs-only" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="soil-top" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#3d2b1f"/>
+                <stop offset="100%" stop-color="#2a1b10"/>
+            </linearGradient>
+            <linearGradient id="soil-sub" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#2a1b10"/>
+                <stop offset="100%" stop-color="#1c1109"/>
+            </linearGradient>
+            <linearGradient id="leaf-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#55cc55"/>
+                <stop offset="100%" stop-color="#228b22"/>
+            </linearGradient>
+            <linearGradient id="water-grad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="rgba(52, 152, 219, 0.8)"/>
+                <stop offset="100%" stop-color="rgba(41, 128, 185, 0)"/>
+            </linearGradient>
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+        </defs>
+    </svg>
+
+    <div class="container">
+        
+        <!-- HEADER -->
+        <header>
+            <h1 class="title">Agricultural Science</h1>
+            <p class="subtitle">An interactive visualization of crop management, physiological processes, and modern agricultural practices.</p>
+        </header>
+
+        <!-- SECTION 1: ANATOMY (COMPONENTS) -->
+        <section class="glass-card">
+            <h2 class="section-title">Anatomy of an Agricultural System</h2>
+            <div class="anatomy-grid">
+                
+                <!-- Visual Area -->
+                <div class="visual-container">
+                    <div class="visual-svg-wrapper">
+                        <svg viewBox="0 0 100 120" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+                            <!-- Soil Layers -->
+                            <path d="M10,80 Q50,75 90,80 L90,100 L10,100 Z" fill="url(#soil-top)"/>
+                            <path d="M10,100 L90,100 L90,120 L10,120 Z" fill="url(#soil-sub)"/>
+                            
+                            <!-- Rocks in subsoil -->
+                            <circle cx="30" cy="110" r="3" fill="#443" opacity="0.6"/>
+                            <circle cx="70" cy="105" r="4" fill="#332" opacity="0.6"/>
+                            <circle cx="50" cy="115" r="2" fill="#554" opacity="0.6"/>
+
+                            <!-- Root System -->
+                            <path d="M50,80 Q45,90 35,95 M50,80 Q55,95 65,100 M50,80 Q50,100 52,110 M45,90 Q40,95 42,100" stroke="#c2a77a" stroke-width="0.8" fill="none"/>
+                            
+                            <!-- Stem -->
+                            <path d="M49,80 Q50,50 50,20 M51,80 Q50,50 50,20" stroke="#4CAF50" stroke-width="2" fill="none"/>
+                            
+                            <!-- Leaves -->
+                            <path d="M50,60 Q30,50 25,65 Q40,70 50,60" fill="url(#leaf-grad)"/>
+                            <path d="M50,45 Q70,35 75,50 Q60,55 50,45" fill="url(#leaf-grad)"/>
+                            <path d="M50,30 Q35,20 30,35 Q45,40 50,30" fill="url(#leaf-grad)"/>
+
+                            <!-- Grain/Ear (Yield) -->
+                            <g transform="translate(50, 15)">
+                                <ellipse cx="0" cy="0" rx="3" ry="8" fill="#f1c40f"/>
+                                <circle cx="-2" cy="-4" r="1" fill="#d4ac0d"/>
+                                <circle cx="2" cy="-2" r="1" fill="#d4ac0d"/>
+                                <circle cx="-1" cy="2" r="1" fill="#d4ac0d"/>
+                                <circle cx="1" cy="5" r="1" fill="#d4ac0d"/>
+                                <!-- Awns -->
+                                <line x1="0" y1="-8" x2="-5" y2="-15" stroke="#f1c40f" stroke-width="0.5"/>
+                                <line x1="0" y1="-8" x2="5" y2="-12" stroke="#f1c40f" stroke-width="0.5"/>
+                            </g>
+                        </svg>
+
+                        <!-- Absolute Markers (Coordinates relative to wrapper) -->
+                        <div class="marker" data-target="item-ear" style="top: 15%; left: 55%;">1</div>
+                        <div class="marker" data-target="item-leaf" style="top: 45%; left: 70%;">2</div>
+                        <div class="marker" data-target="item-stem" style="top: 65%; left: 45%;">3</div>
+                        <div class="marker" data-target="item-roots" style="top: 85%; left: 35%;">4</div>
+                        <div class="marker" data-target="item-soil" style="top: 95%; left: 75%;">5</div>
+                    </div>
+                </div>
+
+                <!-- Legend / Labels -->
+                <div class="legend-list">
+                    <div class="legend-item" id="item-ear">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Grain Ear (Yield)</span>
+                            <span class="legend-desc">The reproductive part containing seeds; the primary economic output.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-leaf">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Leaves</span>
+                            <span class="legend-desc">Sites of photosynthesis, converting solar energy into chemical energy.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-stem">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Stem (Xylem/Phloem)</span>
+                            <span class="legend-desc">Transports water upwards and synthesized food downwards.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-roots">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Root System</span>
+                            <span class="legend-desc">Anchors plant, absorbs water and dissolved minerals from soil.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-soil">
+                        <div class="legend-badge">5</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Soil Profile</span>
+                            <span class="legend-desc">Topsoil contains organic matter (humus); subsoil stores deep minerals.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: WORKING PROCESS (THE AGRICULTURAL CYCLE) -->
+        <section class="glass-card">
+            <h2 class="section-title">The Agricultural Cycle (Mechanism)</h2>
+            <div class="cycle-container">
+                
+                <!-- Visual Area: Overlapping absolute SVGs -->
+                <div class="cycle-visual" id="cycle-visual-container">
+                    
+                    <!-- Ground base persistent across stages -->
+                    <svg style="position: absolute; bottom: 0; width: 100%; height: 30%; z-index: 1;" preserveAspectRatio="none" viewBox="0 0 100 100">
+                        <path d="M0,50 Q50,40 100,50 L100,100 L0,100 Z" fill="#2a1b10"/>
+                    </svg>
+
+                    <!-- Stage 1: Preparation -->
+                    <div class="stage-layer active" id="stage-1">
+                        <svg viewBox="0 0 200 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+                            <!-- Plow blade -->
+                            <path d="M40,110 Q60,130 90,110 L100,90 Q70,100 40,110" fill="#7f8c8d"/>
+                            <rect x="80" y="50" width="5" height="45" fill="#95a5a6" transform="rotate(-20 80 50)"/>
+                            <!-- Broken soil clumps forming -->
+                            <path d="M90,115 Q100,105 110,115 Q100,125 90,115" fill="#4e342e" opacity="0.8"/>
+                            <path d="M120,110 Q130,100 140,112 Q130,120 120,110" fill="#3e2723" opacity="0.9"/>
+                            <!-- Motion lines -->
+                            <line x1="20" y1="110" x2="50" y2="110" stroke="white" stroke-width="1" stroke-dasharray="2,2" opacity="0.5"/>
+                        </svg>
+                    </div>
+
+                    <!-- Stage 2: Sowing -->
+                    <div class="stage-layer" id="stage-2">
+                        <svg viewBox="0 0 200 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+                            <!-- Prepared soil furrows -->
+                            <path d="M0,120 Q20,110 40,120 Q60,110 80,120 Q100,110 120,120 Q140,110 160,120 Q180,110 200,120" fill="none" stroke="#1c1109" stroke-width="4"/>
+                            <!-- Falling Seeds (Animated via CSS later) -->
+                            <circle cx="40" cy="80" r="2" fill="#f39c12" class="seed-drop"/>
+                            <circle cx="80" cy="60" r="2" fill="#f39c12" class="seed-drop" style="animation-delay: 0.2s;"/>
+                            <circle cx="120" cy="90" r="2" fill="#f39c12" class="seed-drop" style="animation-delay: 0.4s;"/>
+                            <circle cx="160" cy="70" r="2" fill="#f39c12" class="seed-drop" style="animation-delay: 0.1s;"/>
+                        </svg>
+                        <style>
+                            @keyframes dropSeed { 0% { transform: translateY(-50px); opacity: 0; } 50% { opacity: 1; } 100% { transform: translateY(40px); opacity: 0; } }
+                            .stage-layer.active .seed-drop { animation: dropSeed 1.5s infinite linear; }
+                        </style>
+                    </div>
+
+                    <!-- Stage 3: Fertilizer -->
+                    <div class="stage-layer" id="stage-3">
+                         <svg viewBox="0 0 200 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+                            <!-- Small sprouts -->
+                            <path d="M40,120 Q40,105 35,100 M40,120 Q40,105 45,100" stroke="#2ecc71" stroke-width="1.5" fill="none"/>
+                            <path d="M100,120 Q100,105 95,100 M100,120 Q100,105 105,100" stroke="#2ecc71" stroke-width="1.5" fill="none"/>
+                            <path d="M160,120 Q160,105 155,100 M160,120 Q160,105 165,100" stroke="#2ecc71" stroke-width="1.5" fill="none"/>
+                            <!-- Nutrients spreading (Radial gradients) -->
+                            <circle cx="40" cy="125" r="15" fill="url(#fert-glow)" opacity="0"/>
+                            <circle cx="100" cy="125" r="15" fill="url(#fert-glow)" opacity="0"/>
+                            <circle cx="160" cy="125" r="15" fill="url(#fert-glow)" opacity="0"/>
+                            <defs>
+                                <radialGradient id="fert-glow">
+                                    <stop offset="0%" stop-color="#9b59b6" stop-opacity="0.8"/>
+                                    <stop offset="100%" stop-color="#9b59b6" stop-opacity="0"/>
+                                </radialGradient>
+                            </defs>
+                        </svg>
+                        <style>
+                            @keyframes pulseFert { 0% { opacity: 0.2; transform: scale(0.8); } 50% { opacity: 0.8; transform: scale(1.2); } 100% { opacity: 0.2; transform: scale(0.8); } }
+                            .stage-layer.active circle[fill="url(#fert-glow)"] { animation: pulseFert 2s infinite ease-in-out; }
+                        </style>
+                    </div>
+
+                    <!-- Stage 4: Irrigation -->
+                    <div class="stage-layer" id="stage-4">
+                        <svg viewBox="0 0 200 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+                            <!-- Growing plants -->
+                            <path d="M60,120 Q60,80 50,70 Q60,90 70,70" stroke="#2ecc71" stroke-width="2" fill="none"/>
+                            <path d="M140,120 Q140,80 130,70 Q140,90 150,70" stroke="#2ecc71" stroke-width="2" fill="none"/>
+                            <!-- Sprinkler Pipe -->
+                            <rect x="95" y="100" width="10" height="20" fill="#7f8c8d"/>
+                            <ellipse cx="100" cy="100" rx="15" ry="3" fill="#bdc3c7"/>
+                            <!-- Water arc -->
+                            <path d="M100,100 Q60,40 20,110" stroke="url(#water-grad)" stroke-width="2" fill="none" stroke-dasharray="4,4" class="water-spray"/>
+                            <path d="M100,100 Q140,40 180,110" stroke="url(#water-grad)" stroke-width="2" fill="none" stroke-dasharray="4,4" class="water-spray"/>
+                        </svg>
+                        <style>
+                            @keyframes sprayFlow { 0% { stroke-dashoffset: 20; } 100% { stroke-dashoffset: 0; } }
+                            .stage-layer.active .water-spray { animation: sprayFlow 0.5s infinite linear; }
+                        </style>
+                    </div>
+
+                    <!-- Stage 5: Protection (Weeding) -->
+                    <div class="stage-layer" id="stage-5">
+                         <svg viewBox="0 0 200 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+                            <!-- Healthy plants -->
+                            <path d="M100,120 Q100,60 90,40 Q100,80 110,40" stroke="#2ecc71" stroke-width="3" fill="none"/>
+                            <!-- Weeds (Reddish/Brown) -->
+                            <path d="M120,120 Q125,100 130,110" stroke="#d35400" stroke-width="1.5" fill="none" class="weed"/>
+                            <path d="M70,120 Q65,100 60,110" stroke="#d35400" stroke-width="1.5" fill="none" class="weed"/>
+                            <!-- Spray cloud -->
+                            <circle cx="125" cy="105" r="10" fill="#f1c40f" opacity="0" class="spray-cloud"/>
+                            <circle cx="65" cy="105" r="10" fill="#f1c40f" opacity="0" class="spray-cloud" style="animation-delay: 1s;"/>
+                        </svg>
+                        <style>
+                            @keyframes weedDie { 0% { stroke: #d35400; transform: scaleY(1); } 100% { stroke: #7f8c8d; transform: scaleY(0.3); } }
+                            @keyframes sprayAnim { 0% { opacity: 0; transform: scale(0.5); } 30% { opacity: 0.5; transform: scale(1.5); } 100% { opacity: 0; transform: scale(2); } }
+                            .stage-layer.active .spray-cloud { animation: sprayAnim 3s infinite; }
+                            .stage-layer.active .weed { animation: weedDie 3s infinite forwards; transform-origin: bottom; }
+                        </style>
+                    </div>
+
+                    <!-- Stage 6: Harvesting -->
+                    <div class="stage-layer" id="stage-6">
+                        <svg viewBox="0 0 200 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+                            <!-- Mature plants (Golden) -->
+                            <path d="M60,120 Q60,60 50,40 Q60,80 70,40" stroke="#f1c40f" stroke-width="3" fill="none" class="cut-plant"/>
+                            <path d="M140,120 Q140,60 130,40 Q140,80 150,40" stroke="#f1c40f" stroke-width="3" fill="none" class="cut-plant"/>
+                            <!-- Scythe / Cutter moving -->
+                            <path d="M20,115 L180,115" stroke="#ecf0f1" stroke-width="2" class="cutter-blade"/>
+                        </svg>
+                        <style>
+                            @keyframes cutMotion { 0% { transform: translateX(-20px); } 50% { transform: translateX(20px); } 100% { transform: translateX(-20px); } }
+                            @keyframes plantFall { 0% { transform: rotate(0deg); } 100% { transform: rotate(80deg) translate(20px, 30px); } }
+                            .stage-layer.active .cutter-blade { animation: cutMotion 1s infinite linear; }
+                            .stage-layer.active .cut-plant { animation: plantFall 2s infinite ease-in; transform-origin: 50% 120px; }
+                        </style>
+                    </div>
+
+                    <!-- Stage 7: Storage -->
+                    <div class="stage-layer" id="stage-7">
+                        <svg viewBox="0 0 200 150" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+                            <!-- Silo -->
+                            <rect x="70" y="40" width="60" height="70" fill="#95a5a6"/>
+                            <path d="M65,40 L100,10 L135,40 Z" fill="#7f8c8d"/>
+                            <!-- Grain filling -->
+                            <rect x="75" y="110" width="50" height="0" fill="#f1c40f" class="grain-fill"/>
+                            <path d="M100,10 L100,50" stroke="#f1c40f" stroke-width="2" stroke-dasharray="2,2" class="grain-pour"/>
+                        </svg>
+                        <style>
+                            @keyframes fillSilo { 0% { height: 0; y: 110; } 100% { height: 60px; y: 50px; } }
+                            @keyframes pourMotion { 0% { stroke-dashoffset: 10; } 100% { stroke-dashoffset: 0; } }
+                            .stage-layer.active .grain-fill { animation: fillSilo 3s infinite alternate ease-in-out; }
+                            .stage-layer.active .grain-pour { animation: pourMotion 0.2s infinite linear; }
+                        </style>
+                    </div>
+                </div>
+
+                <!-- Cycle UI & Controls -->
+                <div class="cycle-ui">
+                    <div class="stage-info">
+                        <div class="stage-number" id="cycle-num">Stage 1 of 7</div>
+                        <h3 class="stage-title" id="cycle-title">Preparation of Soil</h3>
+                        <p class="stage-caption" id="cycle-desc">Turning and loosening the soil to allow roots to penetrate deep and breathe easily.</p>
+                        <div class="stage-io" id="cycle-io">
+                            <span class="io-badge io-in">Hard Soil</span>
+                            <span class="io-badge io-out">Loose Aerated Soil</span>
+                        </div>
+                    </div>
+                    
+                    <div class="cycle-controls">
+                        <button class="btn-icon" id="btn-prev" aria-label="Previous">◀</button>
+                        <button class="btn-icon" id="btn-play" aria-label="Play/Pause">⏸</button>
+                        <button class="btn-icon" id="btn-next" aria-label="Next">▶</button>
+                    </div>
+                </div>
+
+                <!-- Progress Indicator -->
+                <div class="progress-bar" id="cycle-progress">
+                    <div class="progress-dot active"></div>
+                    <div class="progress-dot"></div>
+                    <div class="progress-dot"></div>
+                    <div class="progress-dot"></div>
+                    <div class="progress-dot"></div>
+                    <div class="progress-dot"></div>
+                    <div class="progress-dot"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: INTERACTIVE SIMULATION -->
+        <section class="glass-card">
+            <h2 class="section-title">Crop Growth Simulator</h2>
+            <p class="subtitle" style="text-align:left; margin: 0 0 var(--gap-md) 0; font-size: var(--text-sm);">Observe how abiotic factors directly affect plant physiology and final yield. Adjust inputs to find the optimum balance.</p>
+            
+            <div class="sim-grid">
+                <!-- Controls -->
+                <div class="controls-panel">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Soil Moisture (Water)</span>
+                            <span class="control-val" id="val-water">50%</span>
+                        </div>
+                        <input type="range" id="slider-water" min="0" max="100" value="50">
+                    </div>
+                    
+                    <div class="control-group" style="margin-top: 16px;">
+                        <div class="control-header">
+                            <span>Nitrogen (Fertilizer)</span>
+                            <span class="control-val" id="val-nit">50%</span>
+                        </div>
+                        <input type="range" id="slider-nit" min="0" max="100" value="50">
+                    </div>
+
+                    <div class="metrics-card">
+                        <div class="metric-title">Predicted Yield Status</div>
+                        <div class="metric-value" id="sim-status" style="color: var(--accent-green);">Optimal</div>
+                        <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;" id="sim-desc">
+                            Perfect balance. Strong roots and maximum grain production.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Interactive Visual Canvas -->
+                <div class="canvas-container" id="sim-canvas-container">
+                    <canvas id="simCanvas"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: KNOWLEDGE BASE -->
+        <section class="glass-card" style="background: transparent; border: none; box-shadow: none; padding: 0;">
+            <div class="knowledge-grid">
+                
+                <div class="info-card glass-card">
+                    <h3><span class="icon-fact">★</span> Fascinating Fact</h3>
+                    <p><strong>Legumes & Nitrogen:</strong> Plants like peas and beans form a symbiotic relationship with Rhizobium bacteria in their root nodules. The bacteria pull nitrogen directly from the air and convert it into a form the plant can use, acting as natural, built-in fertilizer.</p>
+                </div>
+
+                <div class="info-card glass-card">
+                    <h3><span class="icon-app">⚙</span> Modern Application</h3>
+                    <p><strong>Precision Agriculture:</strong> Today, drones and satellites use multispectral imaging to measure the exact chlorophyll levels in individual fields. Tractors equipped with GPS then apply fertilizer *only* to specific square meters that need it, saving resources.</p>
+                </div>
+
+                <div class="info-card glass-card">
+                    <h3><span class="icon-mistake">⚠</span> Common Mistake</h3>
+                    <p><strong>Over-irrigation:</strong> More water isn't always better. Flooding soil removes oxygen spaces between soil particles. Without oxygen, roots cannot undergo cellular respiration, effectively causing the plant to "drown" and roots to rot.</p>
+                </div>
+
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT APPLICATION LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* ----------------------------------------------------------------------
+               1. ANATOMY MARKER SYSTEM LOGIC
+               ---------------------------------------------------------------------- */
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function clearActiveAnatomy() {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+            }
+
+            function setActiveAnatomy(id) {
+                clearActiveAnatomy();
+                const marker = document.querySelector(`.marker[data-target="${id}"]`);
+                const legend = document.getElementById(id);
+                if (marker && legend) {
+                    marker.classList.add('active');
+                    legend.classList.add('active');
+                }
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => setActiveAnatomy(marker.dataset.target));
+                marker.addEventListener('click', () => setActiveAnatomy(marker.dataset.target));
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => setActiveAnatomy(item.id));
+                item.addEventListener('click', () => setActiveAnatomy(item.id));
+            });
+
+            /* ----------------------------------------------------------------------
+               2. WORKING PROCESS (AGRICULTURAL CYCLE) LOGIC
+               ---------------------------------------------------------------------- */
+            const cycleData = [
+                { title: "Preparation of Soil", desc: "Turning and loosening the soil to allow roots to penetrate deep and breathe easily.", in: "Hard Soil", out: "Loose Aerated Soil" },
+                { title: "Sowing", desc: "Planting high-quality seeds at the correct depth and distance.", in: "Seeds", out: "Planted Field" },
+                { title: "Adding Manure/Fertilizer", desc: "Replenishing essential nutrients (NPK) in the soil for healthy growth.", in: "Nutrients", out: "Enriched Soil" },
+                { title: "Irrigation", desc: "Supplying water at regular intervals to maintain soil moisture for seed germination and growth.", in: "Water", out: "Hydrated Crop" },
+                { title: "Protection from Weeds", desc: "Removing unwanted plants that compete for water, nutrients, space and light.", in: "Mixed Field", out: "Pure Crop Base" },
+                { title: "Harvesting", desc: "Cutting and gathering the mature crop, then separating grain from chaff (threshing).", in: "Mature Plant", out: "Raw Grain" },
+                { title: "Storage", desc: "Drying grains and storing them in silos to protect from moisture, insects, and rats.", in: "Raw Grain", out: "Secured Food" }
+            ];
+
+            let currentStage = 0;
+            let isPlaying = true;
+            let cycleInterval;
+
+            const DOM = {
+                layers: document.querySelectorAll('.stage-layer'),
+                dots: document.querySelectorAll('.progress-dot'),
+                num: document.getElementById('cycle-num'),
+                title: document.getElementById('cycle-title'),
+                desc: document.getElementById('cycle-desc'),
+                io: document.getElementById('cycle-io'),
+                btnPrev: document.getElementById('btn-prev'),
+                btnNext: document.getElementById('btn-next'),
+                btnPlay: document.getElementById('btn-play')
+            };
+
+            function updateCycleUI(index) {
+                // Visuals
+                DOM.layers.forEach((layer, i) => {
+                    layer.classList.toggle('active', i === index);
+                    DOM.dots[i].classList.toggle('active', i === index);
+                });
+                
+                // Text
+                const data = cycleData[index];
+                DOM.num.textContent = `Stage ${index + 1} of 7`;
+                DOM.title.textContent = data.title;
+                DOM.desc.textContent = data.desc;
+                DOM.io.innerHTML = `<span class="io-badge io-in">${data.in}</span> <span class="io-badge io-out">${data.out}</span>`;
+            }
+
+            function nextStage() {
+                currentStage = (currentStage + 1) % 7;
+                updateCycleUI(currentStage);
+            }
+
+            function prevStage() {
+                currentStage = (currentStage - 1 + 7) % 7;
+                updateCycleUI(currentStage);
+            }
+
+            function togglePlay() {
+                isPlaying = !isPlaying;
+                DOM.btnPlay.textContent = isPlaying ? "⏸" : "▶";
+                if (isPlaying) {
+                    cycleInterval = setInterval(nextStage, 4000);
+                } else {
+                    clearInterval(cycleInterval);
+                }
+            }
+
+            // Event Listeners
+            DOM.btnNext.addEventListener('click', () => { clearInterval(cycleInterval); isPlaying = false; DOM.btnPlay.textContent="▶"; nextStage(); });
+            DOM.btnPrev.addEventListener('click', () => { clearInterval(cycleInterval); isPlaying = false; DOM.btnPlay.textContent="▶"; prevStage(); });
+            DOM.btnPlay.addEventListener('click', togglePlay);
+            
+            // Allow clicking dots
+            DOM.dots.forEach((dot, idx) => {
+                dot.addEventListener('click', () => {
+                    clearInterval(cycleInterval); isPlaying = false; DOM.btnPlay.textContent="▶";
+                    currentStage = idx;
+                    updateCycleUI(currentStage);
+                });
+            });
+
+            // Start Cycle
+            cycleInterval = setInterval(nextStage, 4000);
+
+
+            /* ----------------------------------------------------------------------
+               3. INTERACTIVE SIMULATION (CANVAS)
+               ---------------------------------------------------------------------- */
+            const canvas = document.getElementById('simCanvas');
+            const ctx = canvas.getContext('2d');
+            const container = document.getElementById('sim-canvas-container');
+            
+            // Sliders
+            const sWater = document.getElementById('slider-water');
+            const sNit = document.getElementById('slider-nit');
+            const vWater = document.getElementById('val-water');
+            const vNit = document.getElementById('val-nit');
+            const statusTxt = document.getElementById('sim-status');
+            const statusDesc = document.getElementById('sim-desc');
+
+            let width, height;
+
+            // Handle Resize & High DPI
+            function resizeCanvas() {
+                const rect = container.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                width = rect.width;
+                height = rect.height;
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                ctx.scale(dpr, dpr);
+                drawPlant(); // Redraw on resize
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+            window.addEventListener('orientationchange', resizeCanvas);
+
+            // Simulation Math
+            function calculateHealth(water, nit) {
+                // Optimal is 50 for both.
+                const wError = Math.abs(water - 50);
+                const nError = Math.abs(nit - 50);
+                
+                let wHealth = 1 - (wError / 50); // 0 to 1
+                let nHealth = 1 - (nError / 50); // 0 to 1
+                
+                let health = (wHealth * 0.6) + (nHealth * 0.4); // Water slightly more important visually
+                
+                // Determine states
+                let state = "Optimal";
+                let color = "#2ecc71";
+                let desc = "Perfect balance. Strong roots and maximum grain production.";
+
+                if (water < 20) { state = "Wilting (Drought)"; color = "#e67e22"; desc = "Severe water lack. Loss of turgor pressure; plant cannot transport nutrients."; health *= 0.5;}
+                else if (water > 85) { state = "Root Rot (Waterlogged)"; color = "#8e44ad"; desc = "Roots drowning. Lack of oxygen prevents cellular respiration."; health *= 0.6; }
+                else if (nit < 20) { state = "Chlorosis (N-Deficiency)"; color = "#f1c40f"; desc = "Lack of nitrogen limits chlorophyll production. Leaves turn yellow."; }
+                else if (nit > 85) { state = "Toxicity (Over-fertilized)"; color = "#d35400"; desc = "High salts burn roots. Vegetative growth overpowers grain yield."; }
+
+                if (health > 0.8) { state = "Optimal"; color = "#2ecc71"; desc = "Perfect balance. Maximum physiological efficiency."; }
+
+                return { health, state, color, desc, wHealth, nHealth };
+            }
+
+            // Drawing logic
+            function drawPlant() {
+                ctx.clearRect(0, 0, width, height);
+                
+                const wVal = parseInt(sWater.value);
+                const nVal = parseInt(sNit.value);
+                
+                const sim = calculateHealth(wVal, nVal);
+
+                // Update UI Texts
+                statusTxt.textContent = sim.state;
+                statusTxt.style.color = sim.color;
+                statusDesc.textContent = sim.desc;
+
+                // Base coordinates
+                const cx = width / 2;
+                const groundY = height * 0.75;
+                
+                // Draw Ground
+                ctx.fillStyle = wVal > 80 ? "#1a1310" : (wVal < 20 ? "#4a3b32" : "#2a1b10");
+                ctx.fillRect(0, groundY, width, height - groundY);
+
+                // Calculations based on health
+                const plantHeight = 100 + (sim.health * 150);
+                const stemTopY = groundY - plantHeight;
+                
+                // Draw Roots
+                const rootDepth = 40 + (sim.health * 80);
+                const rootSpread = 30 + (sim.health * 50);
+                ctx.beginPath();
+                ctx.moveTo(cx, groundY);
+                ctx.quadraticCurveTo(cx - rootSpread/2, groundY + rootDepth/2, cx - rootSpread, groundY + rootDepth);
+                ctx.moveTo(cx, groundY);
+                ctx.quadraticCurveTo(cx + rootSpread/2, groundY + rootDepth/2, cx + rootSpread, groundY + rootDepth);
+                ctx.moveTo(cx, groundY);
+                ctx.lineTo(cx, groundY + rootDepth * 1.2);
+                ctx.strokeStyle = wVal > 85 ? "#4a235a" : "#c2a77a"; // Purple roots if rot
+                ctx.lineWidth = 2 + sim.health * 2;
+                ctx.stroke();
+
+                // Draw Stem
+                ctx.beginPath();
+                ctx.moveTo(cx, groundY);
+                // Slight bend if wilting
+                const bend = wVal < 30 ? 20 : 0;
+                ctx.quadraticCurveTo(cx + bend, (groundY + stemTopY)/2, cx + bend, stemTopY);
+                
+                // Stem color calculation
+                let leafColor = "#2ecc71";
+                if (nVal < 30) leafColor = "#f1c40f"; // Yellowing
+                if (wVal < 20) leafColor = "#e67e22"; // Browning
+                if (wVal > 85) leafColor = "#1e8449"; // Dark unhealthy green
+                
+                ctx.strokeStyle = leafColor;
+                ctx.lineWidth = 4 + (sim.health * 6);
+                ctx.lineCap = "round";
+                ctx.stroke();
+
+                // Draw Leaves
+                const drawLeaf = (y, side, droop) => {
+                    ctx.beginPath();
+                    ctx.moveTo(cx + (wVal<30?bend:0)*0.5, y);
+                    const length = 30 + (sim.health * 50);
+                    const controlY = y - 20 + droop;
+                    const endY = y + droop;
+                    const endX = cx + (side * length);
+                    ctx.quadraticCurveTo(cx + (side * length/2), controlY, endX, endY);
+                    ctx.lineWidth = 3 + (sim.health * 4);
+                    ctx.stroke();
+                };
+
+                // Droop angle increases if low water
+                const droopAmount = wVal < 40 ? (40 - wVal) * 1.5 : (wVal > 80 ? 20 : 0);
+
+                drawLeaf(groundY - plantHeight*0.3, -1, droopAmount);
+                drawLeaf(groundY - plantHeight*0.5, 1, droopAmount);
+                drawLeaf(groundY - plantHeight*0.7, -1, droopAmount);
+
+                // Draw Grain Yield (Top)
+                if (sim.health > 0.2 && nVal < 90) { // No grain if totally dead or vegetative overgrown
+                    const grainSize = 5 + (sim.health * 15);
+                    ctx.fillStyle = sim.health > 0.7 ? "#f1c40f" : "#d4ac0d";
+                    ctx.beginPath();
+                    ctx.ellipse(cx + (wVal<30?bend:0), stemTopY - grainSize, grainSize*0.6, grainSize, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Grain details
+                    if (sim.health > 0.5) {
+                        ctx.fillStyle = "rgba(0,0,0,0.2)";
+                        for(let i=0; i<3; i++) {
+                            ctx.beginPath();
+                            ctx.arc(cx + (wVal<30?bend:0) - grainSize*0.2 + (i*2), stemTopY - grainSize + (i*3), 1.5, 0, Math.PI*2);
+                            ctx.fill();
+                        }
+                    }
+                }
+
+                // Add particles for extremes
+                if (wVal > 90) {
+                    // Waterlogged bubbles
+                    ctx.fillStyle = "rgba(52, 152, 219, 0.5)";
+                    ctx.beginPath(); ctx.arc(cx - 20, groundY + 10, 3, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(cx + 15, groundY + 25, 2, 0, Math.PI*2); ctx.fill();
+                }
+            }
+
+            // Input Listeners
+            function updateSim() {
+                vWater.textContent = sWater.value + "%";
+                vNit.textContent = sNit.value + "%";
+                // Use requestAnimationFrame for smooth drawing even though sliders are fast
+                requestAnimationFrame(drawPlant);
+            }
+
+            sWater.addEventListener('input', updateSim);
+            sNit.addEventListener('input', updateSim);
+
+            // Initialize Canvas setup
+            setTimeout(() => {
+                resizeCanvas();
+            }, 100); // Small delay to ensure CSS has applied layout
+
+        });
+    </script>
+</body>
+</html>

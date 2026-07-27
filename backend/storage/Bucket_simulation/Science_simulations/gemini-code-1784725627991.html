@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Soil Layers Explorer</title>
+    <style>
+        /* ==========================================================================
+           ROOT & TYPOGRAPHY
+           ========================================================================== */
+        :root {
+            /* Premium Dark Theme Palette */
+            --bg-base: #07090F;
+            --bg-panel: rgba(18, 22, 31, 0.65);
+            --bg-panel-hover: rgba(25, 32, 45, 0.85);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --text-main: #E2E8F0;
+            --text-muted: #94A3B8;
+            
+            /* Layer Specific Colors */
+            --color-o: #2C1E16; /* Organic */
+            --color-a: #3A2618; /* Topsoil */
+            --color-e: #9A8C78; /* Eluviated */
+            --color-b: #8A4A28; /* Subsoil */
+            --color-c: #6B6158; /* Parent Material */
+            --color-r: #40464B; /* Bedrock */
+            
+            /* Accents */
+            --accent-cyan: #00F0FF;
+            --accent-green: #00FF88;
+            --accent-glow: rgba(0, 240, 255, 0.4);
+
+            /* Typography (Fluid) */
+            --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --step--1: clamp(0.80rem, 0.77rem + 0.14vw, 0.88rem);
+            --step-0: clamp(1.00rem, 0.96rem + 0.22vw, 1.13rem);
+            --step-1: clamp(1.25rem, 1.19rem + 0.33vw, 1.44rem);
+            --step-2: clamp(1.56rem, 1.47rem + 0.49vw, 1.84rem);
+            --step-3: clamp(1.95rem, 1.80rem + 0.72vw, 2.37rem);
+            --step-4: clamp(2.44rem, 2.22rem + 1.05vw, 3.05rem);
+
+            /* Spacing */
+            --space-xs: clamp(0.5rem, 0.46rem + 0.19vw, 0.63rem);
+            --space-sm: clamp(0.75rem, 0.71rem + 0.19vw, 0.88rem);
+            --space-md: clamp(1.13rem, 1.07rem + 0.29vw, 1.31rem);
+            --space-lg: clamp(1.50rem, 1.42rem + 0.39vw, 1.75rem);
+            --space-xl: clamp(2.25rem, 2.13rem + 0.58vw, 2.63rem);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+            /* Subtle animated background gradient */
+            background: radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.05), transparent 40%),
+                        radial-gradient(circle at 85% 30%, rgba(0, 255, 136, 0.05), transparent 40%),
+                        var(--bg-base);
+        }
+
+        /* Typography Styles */
+        h1, h2, h3 { font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
+        h1 { font-size: var(--step-4); color: #FFF; margin-bottom: var(--space-xs); }
+        h2 { font-size: var(--step-2); color: #FFF; margin-bottom: var(--space-md); display: flex; align-items: center; gap: 0.5rem;}
+        h3 { font-size: var(--step-1); color: var(--text-main); }
+        p { font-size: var(--step-0); color: var(--text-muted); margin-bottom: var(--space-md); }
+        .subtitle { font-size: var(--step-1); color: var(--accent-cyan); font-weight: 400; }
+        
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: 24px;
+            padding: var(--space-lg);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* ==========================================================================
+           LAYOUT SYSTEM (CSS Grid)
+           ========================================================================== */
+        .app-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: var(--space-md);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: auto 1fr;
+            gap: var(--space-md);
+            min-height: 100vh;
+        }
+
+        .header-section {
+            grid-column: 1 / -1;
+            text-align: left;
+            padding: var(--space-sm) 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 1px solid var(--border-glass);
+            padding-bottom: var(--space-lg);
+        }
+
+        .visual-section {
+            position: relative;
+            grid-column: 1 / 2;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+            height: calc(100vh - 150px);
+            min-height: 700px;
+        }
+
+        .interaction-section {
+            grid-column: 2 / 3;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+            overflow-y: auto;
+            height: calc(100vh - 150px);
+            padding-right: 10px; /* Custom scrollbar padding */
+        }
+
+        /* Custom Scrollbar for interaction panel */
+        .interaction-section::-webkit-scrollbar { width: 6px; }
+        .interaction-section::-webkit-scrollbar-track { background: transparent; }
+        .interaction-section::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+        .interaction-section::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+        /* ==========================================================================
+           VISUALIZATION AREA (SVG + Canvas)
+           ========================================================================== */
+        .soil-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            border-radius: 24px;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #1A2639 0%, #0D131C 15%); /* Sky above ground */
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: flex-end; /* Align soil to bottom */
+        }
+
+        .svg-layer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 90%; /* Leave top 10% for sky/surface */
+            z-index: 1;
+        }
+
+        .canvas-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none; /* Let clicks pass through to SVG/Markers */
+        }
+
+        /* ==========================================================================
+           MANDATORY MARKER SYSTEM (No floating text labels)
+           ========================================================================== */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(18, 22, 31, 0.9);
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            z-index: 10;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--accent-glow);
+            transform: translate(-50%, -50%);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .marker::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px solid var(--accent-cyan);
+            animation: pulse 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .marker.active, .marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--accent-cyan);
+            color: var(--bg-base);
+            box-shadow: 0 0 25px var(--accent-cyan);
+        }
+
+        /* Marker Positions relative to soil-container */
+        #marker-1 { top: 18%; left: 50%; } /* O */
+        #marker-2 { top: 35%; left: 30%; } /* A */
+        #marker-3 { top: 52%; left: 70%; } /* E */
+        #marker-4 { top: 70%; left: 40%; } /* B */
+        #marker-5 { top: 85%; left: 60%; } /* C */
+        #marker-6 { top: 96%; left: 50%; } /* R */
+
+        /* Legend List Styling */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-sm);
+            padding: var(--space-sm);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.08);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(4px);
+        }
+
+        .legend-badge {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        
+        .legend-item.active .legend-badge {
+            background: var(--accent-cyan);
+            color: var(--bg-base);
+        }
+
+        .legend-content h4 {
+            color: #FFF;
+            font-size: var(--step-0);
+            margin-bottom: 2px;
+        }
+
+        .legend-content p {
+            font-size: var(--step--1);
+            margin: 0;
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM SECTION
+           ========================================================================== */
+        .mechanism-stages {
+            position: relative;
+            padding-left: 24px;
+            border-left: 2px solid rgba(255,255,255,0.1);
+            margin-bottom: var(--space-md);
+        }
+
+        .stage {
+            position: relative;
+            padding-bottom: var(--space-md);
+            opacity: 0.3;
+            transition: opacity 0.4s ease;
+        }
+
+        .stage::before {
+            content: '';
+            position: absolute;
+            left: -31px;
+            top: 4px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--bg-panel);
+            border: 2px solid var(--text-muted);
+            transition: all 0.4s ease;
+        }
+
+        .stage.active {
+            opacity: 1;
+        }
+
+        .stage.active::before {
+            background: var(--accent-green);
+            border-color: var(--accent-green);
+            box-shadow: 0 0 10px var(--accent-green);
+        }
+        
+        .stage.completed::before {
+             background: var(--accent-cyan);
+             border-color: var(--accent-cyan);
+        }
+
+        .stage h4 {
+            color: #FFF;
+            font-size: var(--step-0);
+            margin-bottom: 4px;
+        }
+
+        .stage p {
+            font-size: var(--step--1);
+            margin: 0;
+        }
+
+        .mech-controls {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            background: rgba(0,0,0,0.2);
+            padding: 8px;
+            border-radius: 100px;
+            width: fit-content;
+        }
+
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid var(--border-glass);
+            background: rgba(255,255,255,0.05);
+            color: #FFF;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-icon:hover {
+            background: rgba(255,255,255,0.15);
+            transform: scale(1.05);
+        }
+
+        .btn-icon:active { transform: scale(0.95); }
+        .btn-icon svg { width: 18px; height: 18px; fill: currentColor; }
+        
+        .progress-dots {
+            display: flex;
+            gap: 6px;
+            padding: 0 8px;
+        }
+        
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: background 0.3s ease;
+        }
+        
+        .dot.active { background: var(--accent-green); }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION
+           ========================================================================== */
+        .control-group {
+            margin-bottom: var(--space-md);
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: var(--step--1);
+            color: #FFF;
+        }
+
+        .slider-value { color: var(--accent-cyan); font-weight: bold; font-variant-numeric: tabular-nums;}
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 24px; /* Touch target size */
+        }
+
+        input[type=range]:focus { outline: none; }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+            transition: transform 0.1s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+
+        /* ==========================================================================
+           INFO CARDS & UTILS
+           ========================================================================== */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-sm);
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: var(--space-sm);
+            border-radius: 12px;
+        }
+
+        .info-card h5 { color: var(--accent-cyan); margin-bottom: 4px; font-size: var(--step--1); text-transform: uppercase; letter-spacing: 0.05em;}
+        .info-card p { margin: 0; font-size: var(--step--1); }
+        
+        .fact-box {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.1), transparent);
+            border-left: 3px solid var(--accent-green);
+        }
+        
+        .mistake-box {
+            background: linear-gradient(135deg, rgba(255, 100, 100, 0.1), transparent);
+            border-left: 3px solid #ff6464;
+        }
+        
+        .mistake-box h5 { color: #ff6464; }
+
+        /* SVG Element Animations */
+        .svg-root, .svg-water-layer { transition: all 1s ease; }
+        .leaching-arrow { opacity: 0; transition: opacity 0.5s ease; stroke-dasharray: 10; animation: dash 1s linear infinite; }
+        @keyframes dash { to { stroke-dashoffset: -20; } }
+
+        /* ==========================================================================
+           RESPONSIVE RULES (Mandatory)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .app-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto auto auto;
+                padding: var(--space-sm);
+            }
+            .header-section { flex-direction: column; align-items: flex-start; gap: 8px;}
+            .visual-section { height: 50vh; min-height: 400px; }
+            .interaction-section { height: auto; overflow: visible; padding-right: 0; }
+        }
+
+        @media (max-width: 767px) {
+            .app-container { padding: 12px; gap: 16px; }
+            .glass-panel { padding: 16px; border-radius: 16px; backdrop-filter: blur(8px); }
+            .visual-section { height: 45vh; min-height: 350px; }
+            .marker { width: 28px; height: 28px; font-size: 12px; }
+            .grid-2 { grid-template-columns: 1fr; }
+            .mech-controls { width: 100%; justify-content: space-between; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <!-- Header -->
+    <header class="header-section">
+        <div>
+            <h1>Soil Layers Explorer</h1>
+            <div class="subtitle">Pedosphere Architecture & Dynamics</div>
+        </div>
+        <p style="margin:0; font-size: var(--step--1); max-width: 300px; text-align: right; display:none;">Interactive visualization of soil horizons and hydrological processes.</p>
+    </header>
+
+    <!-- Left Panel: Visualization -->
+    <section class="visual-section">
+        <div class="soil-container" id="soilContainer">
+            <!-- SVG Illustration -->
+            <svg class="svg-layer" viewBox="0 0 1000 1200" preserveAspectRatio="xMidYMax slice" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <!-- Textures/Gradients -->
+                    <linearGradient id="grad-o" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#1A120A" />
+                        <stop offset="100%" stop-color="#2C1E16" />
+                    </linearGradient>
+                    <linearGradient id="grad-a" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#2C1E16" />
+                        <stop offset="100%" stop-color="#4A3220" />
+                    </linearGradient>
+                    <linearGradient id="grad-e" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#8A7C6B" />
+                        <stop offset="100%" stop-color="#B5AFA6" />
+                    </linearGradient>
+                    <linearGradient id="grad-b" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#A65D32" />
+                        <stop offset="100%" stop-color="#733A1F" />
+                    </linearGradient>
+                    <linearGradient id="grad-c" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#6B6158" />
+                        <stop offset="100%" stop-color="#554D46" />
+                    </linearGradient>
+                    <linearGradient id="grad-r" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#4A4E54" />
+                        <stop offset="100%" stop-color="#222529" />
+                    </linearGradient>
+                    
+                    <filter id="noise">
+                        <feTurbulence type="fractalNoise" baseFrequency="0.015" numOctaves="3" result="noise" />
+                        <feColorMatrix type="matrix" values="1 0 0 0 0, 0 1 0 0 0, 0 0 1 0 0, 0 0 0 0.1 0" in="noise" result="coloredNoise" />
+                        <feComposite operator="in" in="coloredNoise" in2="SourceGraphic" result="composite" />
+                        <feBlend mode="multiply" in="composite" in2="SourceGraphic" />
+                    </filter>
+                    
+                    <pattern id="pattern-rock" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse">
+                        <path d="M10,10 L30,5 L40,25 L15,30 Z M60,50 L85,40 L90,65 L55,70 Z M20,70 L40,65 L35,90 L10,80 Z M70,10 L95,15 L85,35 L65,25 Z" fill="#443D38" opacity="0.6"/>
+                    </pattern>
+                </defs>
+
+                <!-- Ground Surface Geometry (Uneven) -->
+                <path d="M0,80 Q250,110 500,80 T1000,90 L1000,1200 L0,1200 Z" fill="url(#grad-o)" />
+                
+                <!-- Soil Horizons (Layers) -->
+                <!-- O Horizon (Organic) -->
+                <path id="layer-o-path" d="M0,80 Q250,110 500,80 T1000,90 L1000,140 Q650,160 500,130 T0,140 Z" fill="url(#grad-o)" filter="url(#noise)"/>
+                
+                <!-- Grass/Surface details -->
+                <g fill="#2D4A22">
+                    <path d="M50,85 Q40,60 30,85 Z M55,87 Q65,65 75,87 Z M150,97 Q145,70 140,97 Z M450,88 Q460,60 470,88 Z M750,82 Q740,55 730,82 Z M900,90 Q910,65 920,90 Z" />
+                </g>
+                <g fill="#4A3B22" opacity="0.8">
+                    <!-- Fallen leaves/twigs -->
+                    <ellipse cx="200" cy="105" rx="15" ry="5" transform="rotate(20 200 105)"/>
+                    <ellipse cx="600" cy="95" rx="12" ry="4" transform="rotate(-15 600 95)"/>
+                    <rect x="350" y="100" width="30" height="3" transform="rotate(10 350 100)"/>
+                </g>
+
+                <!-- A Horizon (Topsoil) -->
+                <path id="layer-a-path" d="M0,140 Q650,160 500,130 T1000,140 L1000,380 Q400,350 0,390 Z" fill="url(#grad-a)" filter="url(#noise)"/>
+                
+                <!-- E Horizon (Eluviation) -->
+                <path id="layer-e-path" d="M0,390 Q400,350 1000,380 L1000,480 Q600,520 0,480 Z" fill="url(#grad-e)" />
+                
+                <!-- B Horizon (Subsoil) -->
+                <path id="layer-b-path" d="M0,480 Q600,520 1000,480 L1000,850 Q500,820 0,860 Z" fill="url(#grad-b)" filter="url(#noise)"/>
+                <!-- Clay Accumulation Blobs in B -->
+                <g fill="#5C2E1A" opacity="0.5">
+                    <circle cx="200" cy="600" r="40" filter="blur(10px)"/>
+                    <circle cx="800" cy="700" r="60" filter="blur(15px)"/>
+                    <circle cx="500" cy="550" r="30" filter="blur(8px)"/>
+                </g>
+
+                <!-- C Horizon (Parent Material) -->
+                <path id="layer-c-path" d="M0,860 Q500,820 1000,850 L1000,1050 Q500,1030 0,1060 Z" fill="url(#grad-c)" />
+                <path d="M0,860 Q500,820 1000,850 L1000,1050 Q500,1030 0,1060 Z" fill="url(#pattern-rock)" />
+                
+                <!-- R Horizon (Bedrock) -->
+                <path id="layer-r-path" d="M0,1060 Q500,1030 1000,1050 L1000,1200 L0,1200 Z" fill="url(#grad-r)" />
+                <!-- Bedrock fractures -->
+                <path d="M0,1080 L200,1100 L300,1150 M400,1040 L450,1120 L600,1180 M750,1040 L800,1080 L950,1090" stroke="#333" stroke-width="4" fill="none" opacity="0.6"/>
+
+                <!-- Roots (Dynamic Element) -->
+                <g class="svg-root" fill="none" stroke="#D1BFA5" stroke-linecap="round" opacity="0.9">
+                    <!-- Main Tree Root -->
+                    <path d="M500,90 Q510,200 480,300 Q450,400 490,550" stroke-width="12" />
+                    <!-- Branches -->
+                    <path d="M500,150 Q560,200 600,280" stroke-width="8" />
+                    <path d="M600,280 Q640,320 620,400" stroke-width="4" />
+                    <path d="M480,300 Q400,350 350,450" stroke-width="6" />
+                    <path d="M490,500 Q550,600 520,700" stroke-width="3" />
+                    
+                    <!-- Small plant root -->
+                    <path d="M150,97 Q140,150 160,200" stroke-width="4" />
+                    <path d="M750,82 Q760,180 720,250" stroke-width="3" />
+                </g>
+
+                <!-- Mechanism Animations Overlays -->
+                <!-- Illuviation Arrows (hidden by default) -->
+                <g id="anim-arrows" stroke="var(--accent-cyan)" stroke-width="4" fill="none" opacity="0">
+                    <path class="leaching-arrow" d="M200,400 L200,550" />
+                    <path class="leaching-arrow" d="M500,420 L500,580" />
+                    <path class="leaching-arrow" d="M800,390 L800,600" />
+                    <circle cx="500" cy="600" r="20" fill="var(--accent-cyan)" opacity="0.2" filter="blur(5px)"/>
+                </g>
+                
+                <!-- Water Table Line -->
+                <path id="water-table" d="M0,1100 Q500,1080 1000,1120 L1000,1200 L0,1200 Z" fill="rgba(0, 240, 255, 0.2)" opacity="0.5" transition="d 0.5s"/>
+            </svg>
+
+            <!-- HTML Markers -->
+            <div class="marker" id="marker-1" data-target="O">1</div>
+            <div class="marker" id="marker-2" data-target="A">2</div>
+            <div class="marker" id="marker-3" data-target="E">3</div>
+            <div class="marker" id="marker-4" data-target="B">4</div>
+            <div class="marker" id="marker-5" data-target="C">5</div>
+            <div class="marker" id="marker-6" data-target="R">6</div>
+
+            <!-- Particle Canvas Overlay -->
+            <canvas class="canvas-layer" id="particleCanvas"></canvas>
+        </div>
+    </section>
+
+    <!-- Right Panel: Information & Controls -->
+    <section class="interaction-section">
+        
+        <!-- Legend Component -->
+        <div class="glass-panel">
+            <h2><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg> Horizons Legend</h2>
+            <div class="legend-list">
+                <div class="legend-item" data-target="O">
+                    <div class="legend-badge">1</div>
+                    <div class="legend-content">
+                        <h4>O Horizon (Organic)</h4>
+                        <p>Leaf litter, humus, and decomposing plant matter.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="A">
+                    <div class="legend-badge">2</div>
+                    <div class="legend-content">
+                        <h4>A Horizon (Topsoil)</h4>
+                        <p>Mineral soil mixed with organic matter. Most biologically active.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="E">
+                    <div class="legend-badge">3</div>
+                    <div class="legend-content">
+                        <h4>E Horizon (Eluviation)</h4>
+                        <p>Leached layer, pale and sandy, depleted of clay and minerals.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="B">
+                    <div class="legend-badge">4</div>
+                    <div class="legend-content">
+                        <h4>B Horizon (Subsoil)</h4>
+                        <p>Zone of accumulation (illuviation) for minerals leached from above.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="C">
+                    <div class="legend-badge">5</div>
+                    <div class="legend-content">
+                        <h4>C Horizon (Parent Material)</h4>
+                        <p>Weathered rock fragments with little biological activity.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="R">
+                    <div class="legend-badge">6</div>
+                    <div class="legend-content">
+                        <h4>R Horizon (Bedrock)</h4>
+                        <p>Unweathered solid rock mass at the base of the profile.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mechanism Section -->
+        <div class="glass-panel">
+            <h2><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> The Hydrologic Cycle in Soil</h2>
+            <p>Observe how water drives soil formation through a continuous vertical flow mechanism.</p>
+            
+            <div class="mechanism-stages">
+                <div class="stage active" id="stage-0">
+                    <h4>1. Precipitation</h4>
+                    <p>Rainwater falls onto the surface O Horizon.</p>
+                </div>
+                <div class="stage" id="stage-1">
+                    <h4>2. Infiltration & Solution</h4>
+                    <p>Water enters Topsoil, dissolving organic acids and soluble minerals.</p>
+                </div>
+                <div class="stage" id="stage-2">
+                    <h4>3. Eluviation (Leaching)</h4>
+                    <p>Water washes clays and minerals <em>out</em> of the E Horizon, leaving sand.</p>
+                </div>
+                <div class="stage" id="stage-3">
+                    <h4>4. Illuviation (Accumulation)</h4>
+                    <p>Minerals precipitate and deposit <em>into</em> the denser B Horizon (Subsoil).</p>
+                </div>
+                <div class="stage" id="stage-4">
+                    <h4>5. Percolation to Aquifer</h4>
+                    <p>Filtered water reaches bedrock, joining the groundwater table.</p>
+                </div>
+            </div>
+
+            <div class="mech-controls">
+                <button class="btn-icon" id="btn-prev" title="Previous Stage"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+                <div class="progress-dots" id="mech-dots">
+                    <div class="dot active"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+                <button class="btn-icon" id="btn-next" title="Next Stage"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+                <div style="width:1px; height:20px; background:rgba(255,255,255,0.2); margin:0 4px;"></div>
+                <button class="btn-icon" id="btn-play" title="Auto-Play Cycle"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+            </div>
+        </div>
+
+        <!-- Interactive Simulation Tools -->
+        <div class="glass-panel">
+            <h2><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Simulation Tools</h2>
+            
+            <div class="control-group">
+                <div class="control-header">
+                    <span>Rainfall Intensity</span>
+                    <span class="slider-value" id="val-rain">Moderate</span>
+                </div>
+                <input type="range" id="slider-rain" min="0" max="100" value="50">
+            </div>
+
+            <div class="control-group">
+                <div class="control-header">
+                    <span>Vegetation Density (Root Depth)</span>
+                    <span class="slider-value" id="val-veg">Mature</span>
+                </div>
+                <input type="range" id="slider-veg" min="0" max="100" value="80">
+            </div>
+        </div>
+
+        <!-- Extra Info -->
+        <div class="grid-2">
+            <div class="info-card fact-box">
+                <h5>Did You Know?</h5>
+                <p>It takes approximately 500 to 1,000 years to form just one inch of topsoil naturally.</p>
+            </div>
+            <div class="info-card mistake-box">
+                <h5>Common Mistake</h5>
+                <p>Dirt isn't soil. "Dirt" is dead, displaced earth. "Soil" is a living ecosystem full of microbes.</p>
+            </div>
+        </div>
+
+    </section>
+</div>
+
+<script>
+/**
+ * Soil Layers Explorer - Core Logic
+ */
+
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // --- UI Elements ---
+    const markers = document.querySelectorAll('.marker');
+    const legendItems = document.querySelectorAll('.legend-item');
+    
+    // --- Canvas Setup ---
+    const canvas = document.getElementById('particleCanvas');
+    const ctx = canvas.getContext('2d', { alpha: true });
+    const container = document.getElementById('soilContainer');
+    
+    // --- State ---
+    let width, height;
+    let particles = [];
+    let animationFrameId;
+    let rainIntensity = 50; // 0-100
+    
+    // Mechanism State
+    let currentStage = 0;
+    const maxStages = 4;
+    let autoPlayInterval = null;
+
+    // SVG Elements for animation
+    const svgArrows = document.getElementById('anim-arrows');
+    const svgRoots = document.querySelector('.svg-root');
+    const waterTable = document.getElementById('water-table');
+
+    // ==========================================================================
+    // 1. RESPONSIVE CANVAS SIZING
+    // ==========================================================================
+    function resizeCanvas() {
+        const rect = container.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        
+        width = rect.width;
+        height = rect.height;
+        
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        
+        ctx.scale(dpr, dpr);
+        
+        // Adjust CSS size
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+    resizeCanvas();
+
+    // ==========================================================================
+    // 2. MARKER & LEGEND INTERACTION
+    // ==========================================================================
+    function setActiveLayer(targetId) {
+        // Clear all
+        markers.forEach(m => m.classList.remove('active'));
+        legendItems.forEach(l => l.classList.remove('active'));
+        
+        if (targetId) {
+            document.querySelector(`.marker[data-target="${targetId}"]`).classList.add('active');
+            document.querySelector(`.legend-item[data-target="${targetId}"]`).classList.add('active');
+            
+            // Scroll legend into view on mobile
+            if (window.innerWidth < 1024) {
+                const activeLegend = document.querySelector(`.legend-item[data-target="${targetId}"]`);
+                activeLegend.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+    }
+
+    // Attach events
+    markers.forEach(marker => {
+        ['mouseenter', 'touchstart'].forEach(evt => 
+            marker.addEventListener(evt, (e) => {
+                e.preventDefault();
+                setActiveLayer(marker.getAttribute('data-target'));
+            })
+        );
+        marker.addEventListener('mouseleave', () => setActiveLayer(null));
+    });
+
+    legendItems.forEach(item => {
+        ['mouseenter', 'touchstart'].forEach(evt => 
+            item.addEventListener(evt, (e) => {
+                // e.preventDefault(); // Don't prevent scroll on legend list
+                setActiveLayer(item.getAttribute('data-target'));
+            })
+        );
+        item.addEventListener('mouseleave', () => setActiveLayer(null));
+    });
+
+    // ==========================================================================
+    // 3. WORKING MECHANISM LOGIC (Hydrologic Cycle)
+    // ==========================================================================
+    const stages = document.querySelectorAll('.stage');
+    const dots = document.querySelectorAll('.dot');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const btnPlay = document.getElementById('btn-play');
+
+    function updateMechanismUI() {
+        // Update text/dots
+        stages.forEach((s, idx) => {
+            s.classList.remove('active', 'completed');
+            if (idx < currentStage) s.classList.add('completed');
+            if (idx === currentStage) s.classList.add('active');
+        });
+        dots.forEach((d, idx) => {
+            d.classList.toggle('active', idx === currentStage);
+        });
+
+        // Update Visuals based on stage
+        applyStageVisuals(currentStage);
+    }
+
+    function applyStageVisuals(stage) {
+        // Reset base states
+        svgArrows.style.opacity = '0';
+        rainIntensity = document.getElementById('slider-rain').value; // Default to slider
+        
+        // Approximate heights based on SVG viewbox mappings
+        // Surface: ~10%, O/A: ~15-35%, E/B: ~40-70%, C/R: 70%+
+        
+        switch(stage) {
+            case 0: // Precip
+                // Rain falls but doesn't penetrate deep yet (handled in particle logic)
+                break;
+            case 1: // Infiltration
+                // Visual focus on Topsoil
+                setActiveLayer('A');
+                break;
+            case 2: // Eluviation
+                setActiveLayer('E');
+                // Show leaching particles leaving E
+                svgArrows.style.opacity = '0.5';
+                break;
+            case 3: // Illuviation
+                setActiveLayer('B');
+                // Show deposition in B
+                svgArrows.style.opacity = '1';
+                break;
+            case 4: // Percolation
+                setActiveLayer('R');
+                // Raise water table slightly
+                waterTable.setAttribute('d', 'M0,1050 Q500,1030 1000,1070 L1000,1200 L0,1200 Z');
+                setTimeout(() => {
+                    waterTable.setAttribute('d', 'M0,1100 Q500,1080 1000,1120 L1000,1200 L0,1200 Z'); // reset
+                }, 2000);
+                break;
+        }
+        
+        // Remove active highlights after a delay to not lock UI
+        if(stage > 0) {
+            setTimeout(() => setActiveLayer(null), 1500);
+        }
+    }
+
+    btnNext.addEventListener('click', () => {
+        currentStage = Math.min(currentStage + 1, maxStages);
+        stopAutoPlay();
+        updateMechanismUI();
+    });
+
+    btnPrev.addEventListener('click', () => {
+        currentStage = Math.max(currentStage - 1, 0);
+        stopAutoPlay();
+        updateMechanismUI();
+    });
+
+    btnPlay.addEventListener('click', () => {
+        if (autoPlayInterval) {
+            stopAutoPlay();
+            btnPlay.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+        } else {
+            currentStage = 0;
+            updateMechanismUI();
+            btnPlay.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+            autoPlayInterval = setInterval(() => {
+                currentStage++;
+                if (currentStage > maxStages) {
+                    currentStage = 0; // Loop
+                }
+                updateMechanismUI();
+            }, 3000); // 3 seconds per stage
+        }
+    });
+
+    function stopAutoPlay() {
+        if(autoPlayInterval) {
+            clearInterval(autoPlayInterval);
+            autoPlayInterval = null;
+            btnPlay.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+        }
+    }
+
+    // ==========================================================================
+    // 4. INTERACTIVE SIMULATION (Sliders)
+    // ==========================================================================
+    const sliderRain = document.getElementById('slider-rain');
+    const valRain = document.getElementById('val-rain');
+    
+    sliderRain.addEventListener('input', (e) => {
+        rainIntensity = parseInt(e.target.value);
+        if (rainIntensity === 0) valRain.textContent = "None";
+        else if (rainIntensity < 30) valRain.textContent = "Light";
+        else if (rainIntensity < 70) valRain.textContent = "Moderate";
+        else valRain.textContent = "Heavy";
+        
+        // Pause mechanism if user overrides with sliders
+        stopAutoPlay();
+    });
+
+    const sliderVeg = document.getElementById('slider-veg');
+    const valVeg = document.getElementById('val-veg');
+
+    sliderVeg.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value);
+        if (val < 25) valVeg.textContent = "Sparse";
+        else if (val < 75) valVeg.textContent = "Growing";
+        else valVeg.textContent = "Mature";
+        
+        // Scale the roots group via CSS transform based on slider
+        const scale = 0.3 + (val / 100) * 0.7; // Scale from 0.3 to 1.0
+        svgRoots.style.transform = `scaleY(${scale})`;
+        svgRoots.style.transformOrigin = "top center";
+        svgRoots.style.opacity = (val/100) + 0.2;
+    });
+
+    // ==========================================================================
+    // 5. PARTICLE SYSTEM (Rain & Infiltration)
+    // ==========================================================================
+    
+    class Particle {
+        constructor() {
+            this.reset(true);
+        }
+
+        reset(isInitial = false) {
+            this.x = Math.random() * width;
+            this.y = isInitial ? Math.random() * height : -10;
+            this.vy = 2 + Math.random() * 5;
+            this.vx = (Math.random() - 0.5) * 0.5;
+            this.size = 1 + Math.random() * 1.5;
+            this.state = 'rain'; // 'rain', 'soil_water'
+            this.opacity = Math.random() * 0.5 + 0.2;
+        }
+
+        update() {
+            this.y += this.vy;
+            this.x += this.vx;
+
+            // Define ground level relative to container height (~10% down)
+            const groundY = height * 0.1;
+            
+            // Logic based on mechanism stage
+            let maxDepth = height; 
+            
+            if (currentStage === 0) maxDepth = groundY + 10;
+            else if (currentStage === 1) maxDepth = height * 0.35; // A horizon
+            else if (currentStage === 2) maxDepth = height * 0.5;  // E horizon
+            else if (currentStage === 3) maxDepth = height * 0.7;  // B horizon
+
+            if (this.y > groundY && this.state === 'rain') {
+                // Hit soil - slow down, change color, simulate percolation
+                this.state = 'soil_water';
+                this.vy = 0.5 + Math.random() * 1; // Slow down
+                this.vx = (Math.random() - 0.5) * 1.5; // Spread out horizontally
+                this.size = 2;
+                
+                // If leaching stage, color changes slightly
+                if (currentStage === 2) this.color = 'rgba(255, 230, 180, '; // Dissolving minerals
+                else this.color = 'rgba(0, 240, 255, '; // Pure water
+            }
+
+            // Kill particle if it goes past current max depth allowed by stage/slider
+            if (this.y > maxDepth || this.y > height) {
+                this.reset(false);
+            }
+        }
+
+        draw(ctx) {
+            ctx.beginPath();
+            if (this.state === 'rain') {
+                // Draw streak
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x - this.vx * 2, this.y - this.vy * 2);
+                ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                ctx.lineWidth = this.size;
+                ctx.stroke();
+            } else {
+                // Draw droplet in soil
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                const col = this.color || 'rgba(0, 200, 255, ';
+                ctx.fillStyle = `${col}${this.opacity})`;
+                ctx.fill();
+            }
+        }
+    }
+
+    // Initialize particles
+    const maxParticles = 300;
+    for (let i = 0; i < maxParticles; i++) {
+        particles.push(new Particle());
+    }
+
+    function animate() {
+        ctx.clearRect(0, 0, width, height);
+
+        // Determine how many particles to draw based on slider (0-100)
+        // If auto-playing, override rain slider visually
+        let currentIntensity = rainIntensity;
+        if (currentStage > 0 && autoPlayInterval) {
+            currentIntensity = 60; // Forced moderate rain during cycle
+        }
+
+        const activeParticleCount = Math.floor((currentIntensity / 100) * maxParticles);
+
+        for (let i = 0; i < activeParticleCount; i++) {
+            particles[i].update();
+            particles[i].draw(ctx);
+        }
+
+        animationFrameId = requestAnimationFrame(animate);
+    }
+
+    // Start Simulation
+    animate();
+    
+    // Initial Setup
+    document.getElementById('slider-veg').dispatchEvent(new Event('input'));
+});
+</script>
+</body>
+</html>

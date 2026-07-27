@@ -4,7 +4,6 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? 'dev-api-key'
 // Per-endpoint timeouts (ms)
 const TIMEOUTS = {
   default: 30_000,
-  simulation: 90_000,
   model3d: 120_000,
   story: 30_000,   // job submission only — actual work is async
   bella: 15_000,
@@ -149,6 +148,25 @@ export interface AssetRecord {
   presigned_url: string
 }
 
+// --- Simulation types ---
+export interface SimulationItem {
+  id: string
+  title: string
+  filename: string
+  category: string
+}
+
+export interface SimulationCategory {
+  name: string
+  icon: string
+  simulations: SimulationItem[]
+}
+
+export interface SimulationListResponse {
+  categories: SimulationCategory[]
+  total: number
+}
+
 // --- Bella types ---
 export interface HistoryMessage { role: string; text: string; timestamp: string }
 
@@ -157,8 +175,11 @@ export const api = {
   generateAnime: (topic: string, style: string, include_animation = false) =>
     request<Job>('/api/v1/anime/generate', { method: 'POST', body: JSON.stringify({ topic, style, include_animation }) }),
 
-  generateSimulation: (topic: string, category: string) =>
-    request<Job>('/api/v1/simulation/generate', { method: 'POST', body: JSON.stringify({ topic, category }), timeoutMs: TIMEOUTS.simulation }),
+  listSimulations: () =>
+    request<SimulationListResponse>('/api/v1/simulation/list'),
+
+  getSimulationFileUrl: (category: string, filename: string) =>
+    `${BASE}/api/v1/storage/Bucket_simulation/${category === 'Maths' ? 'Maths_simulations' : 'Science_simulations'}/${filename}`,
 
   generateModel3D: (object_name: string, category: string) =>
     request<Job>('/api/v1/model3d/generate', { method: 'POST', body: JSON.stringify({ object_name, category }), timeoutMs: TIMEOUTS.model3d }),
@@ -182,13 +203,13 @@ export const api = {
   exportAllZip: () => `${BASE}/api/v1/assets/export/zip`,
 
   // --- Bella ---
-  bellaChat: (message: string, session_id: string) =>
+  bellaChat: (message: string, session_id: string, language?: string) =>
     request<{ reply: string; audio_b64?: string; phonemes?: { phoneme: string; time: number }[]; tts_available: boolean }>(
-      '/api/v1/bella/chat', { method: 'POST', body: JSON.stringify({ message, session_id }) }
+      '/api/v1/bella/chat', { method: 'POST', body: JSON.stringify({ message, session_id, language }) }
     ),
-  bellaExplain: (topic: string, image_context?: { source?: string; category?: string; caption?: string; prompt?: string }) =>
+  bellaExplain: (topic: string, options?: { image_context?: { source?: string; category?: string; caption?: string; prompt?: string }, section?: string, language?: string }) =>
     request<{ explanation: string; audio_b64?: string; tts_available: boolean }>(
-      '/api/v1/bella/explain', { method: 'POST', body: JSON.stringify({ topic, image_context }) }
+      '/api/v1/bella/explain', { method: 'POST', body: JSON.stringify({ topic, image_context: options?.image_context, section: options?.section, language: options?.language }) }
     ),
   bellaTTS: async (text: string): Promise<ArrayBuffer> => {
     const res = await requestRaw('/api/v1/bella/tts', { method: 'POST', body: JSON.stringify({ text }), headers: { 'Content-Type': 'application/json' } })

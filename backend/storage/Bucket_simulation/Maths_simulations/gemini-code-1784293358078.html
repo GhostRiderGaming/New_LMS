@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arc Explorer | Interactive Lab</title>
+    <style>
+        :root {
+            --bg-dark: #07090F;
+            --bg-gradient: radial-gradient(circle at top right, #13172E, #07090F);
+            --cyan: #00E5FF;
+            --blue: #4FC3F7;
+            --purple: #8E44FF;
+            --orange: #FFA726;
+            --green: #00E676;
+            --text-main: #F0F4F8;
+            --text-muted: #94A3B8;
+            --glass-bg: rgba(20, 25, 45, 0.45);
+            --glass-border: rgba(0, 229, 255, 0.15);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-dark);
+            background-image: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Subtle glowing background particles effect via CSS */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(142, 68, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(0, 229, 255, 0.05) 0%, transparent 50%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        /* Header & Typography */
+        header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--cyan), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            text-shadow: 0 0 40px rgba(0, 229, 255, 0.2);
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            color: var(--blue);
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        .definition-box {
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+            font-size: 1.1rem;
+            color: var(--text-muted);
+        }
+
+        /* Glassmorphism Cards */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 1.5rem;
+            box-shadow: var(--glass-shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .glass-card:hover {
+            box-shadow: 0 8px 32px 0 rgba(0, 229, 255, 0.1);
+        }
+
+        /* Layout Grid */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .main-app-grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 1.5rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .main-app-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Formulas Styling */
+        .formula-container {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 1.3rem;
+            letter-spacing: 1px;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .formula {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            background: rgba(0,0,0,0.3);
+            padding: 0.8rem 1rem;
+            border-radius: 10px;
+            border-left: 4px solid var(--purple);
+        }
+
+        .math-frac {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: middle;
+            margin: 0 0.2rem;
+        }
+        .math-frac span {
+            padding: 0 0.2rem;
+        }
+        .math-frac .num {
+            border-bottom: 1px solid var(--text-main);
+        }
+
+        /* Simulation Area */
+        .simulation-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            background: rgba(0,0,0,0.4);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+            aspect-ratio: 16/9;
+        }
+
+        @media (max-width: 768px) {
+            .canvas-wrapper {
+                aspect-ratio: 4/3;
+            }
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Graph Area */
+        .graph-wrapper {
+            position: relative;
+            width: 100%;
+            height: 250px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+            overflow: hidden;
+        }
+
+        /* Controls Area */
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.95rem;
+            color: var(--cyan);
+            font-weight: 600;
+        }
+
+        .input-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            outline: none;
+            transition: 0.2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--cyan);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--cyan);
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        input[type="number"] {
+            width: 70px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 0.4rem;
+            border-radius: 6px;
+            text-align: center;
+            font-family: inherit;
+            outline: none;
+        }
+
+        input[type="number"]:focus {
+            border-color: var(--cyan);
+        }
+
+        /* Buttons */
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.8rem;
+            margin-top: 1rem;
+        }
+
+        button {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--text-main);
+            padding: 0.8rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--cyan);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        button.primary {
+            background: linear-gradient(135deg, rgba(0,229,255,0.2), rgba(142,68,255,0.2));
+            border-color: var(--cyan);
+        }
+
+        /* Live Calculations */
+        .live-stats {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            margin-top: 1rem;
+        }
+
+        .stat-box {
+            background: rgba(0,0,0,0.3);
+            border-left: 4px solid var(--blue);
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: background 0.3s;
+        }
+
+        .stat-box.highlight {
+            background: rgba(0, 229, 255, 0.15);
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .stat-value {
+            font-family: monospace;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--text-main);
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: relative;
+            cursor: help;
+            border-bottom: 1px dotted var(--text-muted);
+        }
+        
+        .fact-box {
+            border-left: 4px solid var(--orange);
+            background: rgba(255, 167, 38, 0.05);
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <h1>Arc on Circles</h1>
+        <div class="definition-box">
+            An <strong>arc</strong> is a connected portion of the circumference of a circle. Its size and length depend entirely on the circle's radius and the central angle it subtends.
+        </div>
+    </header>
+
+    <div class="info-grid">
+        <div class="glass-card">
+            <h2>Understanding the Arc</h2>
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">
+                Imagine slicing a pie. The curved crust on the edge of your slice is the <strong>Arc</strong>. The straight edges are the <strong>Radii</strong>, and the angle between them at the center is the <strong>Central Angle</strong>.
+            </p>
+            <ul style="color: var(--text-muted); padding-left: 1.5rem;">
+                <li><span class="tooltip" title="Angle less than 180°">Minor Arc:</span> Less than a semicircle.</li>
+                <li><span class="tooltip" title="Angle greater than 180°">Major Arc:</span> Greater than a semicircle.</li>
+            </ul>
+        </div>
+
+        <div class="glass-card">
+            <h2>Mathematical Formulas</h2>
+            <div class="formula-container">
+                <div class="formula">
+                    <span style="color: var(--cyan)">Arc Length (<i>s</i>):</span>
+                    <span><i>s</i> = 2<i>&pi;r</i> &times; </span>
+                    <div class="math-frac">
+                        <span class="num"><i>&theta;</i></span>
+                        <span>360&deg;</span>
+                    </div>
+                </div>
+                <div class="formula" style="border-color: var(--purple);">
+                    <span style="color: var(--purple)">Sector Area (<i>A</i>):</span>
+                    <span><i>A</i> = <i>&pi;r</i>&sup2; &times; </span>
+                    <div class="math-frac">
+                        <span class="num"><i>&theta;</i></span>
+                        <span>360&deg;</span>
+                    </div>
+                </div>
+                <div class="formula" style="border-color: var(--orange);">
+                    <span style="color: var(--orange)">Chord Length (<i>c</i>):</span>
+                    <span><i>c</i> = 2<i>r</i> sin( </span>
+                    <div class="math-frac">
+                        <span class="num"><i>&theta;</i></span>
+                        <span>2</span>
+                    </div>
+                    <span> )</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card fact-box">
+            <h2 style="color: var(--orange)">Scientific Fact</h2>
+            <p style="color: var(--text-muted)">
+                Over 2,200 years ago, the Greek polymath <strong>Eratosthenes</strong> calculated the circumference of the Earth with remarkable accuracy. He did this by measuring the shadow angle of the sun in two different cities, effectively calculating the arc length of the Earth's surface between them!
+            </p>
+        </div>
+    </div>
+
+    <div class="main-app-grid">
+        <div class="simulation-container">
+            <!-- Main Circle Canvas -->
+            <div class="glass-card" style="padding: 0;">
+                <div class="canvas-wrapper" id="simWrapper">
+                    <canvas id="simCanvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Graph Canvas -->
+            <div class="glass-card" style="padding: 1rem;">
+                <h3 style="font-size: 1rem; color: var(--text-muted); margin-bottom: 0.5rem; display:flex; justify-content: space-between;">
+                    <span>Arc Length vs. Central Angle</span>
+                    <span style="font-size: 0.8rem; font-weight: normal;">(Linear relationship for constant radius)</span>
+                </h3>
+                <div class="graph-wrapper" id="graphWrapper">
+                    <canvas id="graphCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card controls-panel">
+            <h2>Laboratory Controls</h2>
+            
+            <div class="control-group">
+                <div class="control-header">
+                    <label>Radius (r) <span class="tooltip" title="Distance from center to edge">ⓘ</span></label>
+                    <span id="radiusValDisplay">10 m</span>
+                </div>
+                <div class="input-row">
+                    <input type="range" id="radiusSlider" min="5" max="25" step="0.1" value="10">
+                    <input type="number" id="radiusInput" min="5" max="25" step="0.1" value="10">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-header">
+                    <label>Central Angle (θ) <span class="tooltip" title="Angle at the center of the circle">ⓘ</span></label>
+                    <span id="angleValDisplay">60°</span>
+                </div>
+                <div class="input-row">
+                    <input type="range" id="angleSlider" min="0" max="360" step="1" value="60">
+                    <input type="number" id="angleInput" min="0" max="360" step="1" value="60">
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button id="btnPlay" class="primary">▶ Play Auto</button>
+                <button id="btnPause">⏸ Pause</button>
+                <button id="btnReset">⏹ Reset</button>
+                <button id="btnRandom">🎲 Randomize</button>
+            </div>
+
+            <h3 style="margin-top: 1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">Live Calculations</h3>
+            <div class="live-stats">
+                <div class="stat-box" id="statArc">
+                    <div class="stat-label">
+                        <span class="color-dot" style="background: var(--cyan); box-shadow: 0 0 8px var(--cyan);"></span>
+                        Arc Length (s)
+                    </div>
+                    <div class="stat-value" id="valArcLength">0.00</div>
+                </div>
+                
+                <div class="stat-box" id="statArea" style="border-left-color: var(--purple);">
+                    <div class="stat-label">
+                        <span class="color-dot" style="background: var(--purple); box-shadow: 0 0 8px var(--purple);"></span>
+                        Sector Area (A)
+                    </div>
+                    <div class="stat-value" id="valSectorArea">0.00</div>
+                </div>
+
+                <div class="stat-box" id="statChord" style="border-left-color: var(--orange);">
+                    <div class="stat-label">
+                        <span class="color-dot" style="background: var(--orange); box-shadow: 0 0 8px var(--orange);"></span>
+                        Chord Length (c)
+                    </div>
+                    <div class="stat-value" id="valChordLength">0.00</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // System State
+    const state = {
+        radius: 10,     // internal units (meters)
+        angle: 60,      // degrees
+        isPlaying: false,
+        animSpeed: 0.5, // degrees per frame
+        lastCalculations: { arc: 0, area: 0, chord: 0 }
+    };
+
+    // DOM Elements
+    const simCanvas = document.getElementById('simCanvas');
+    const simCtx = simCanvas.getContext('2d');
+    const simWrapper = document.getElementById('simWrapper');
+
+    const graphCanvas = document.getElementById('graphCanvas');
+    const graphCtx = graphCanvas.getContext('2d');
+    const graphWrapper = document.getElementById('graphWrapper');
+
+    const radiusSlider = document.getElementById('radiusSlider');
+    const radiusInput = document.getElementById('radiusInput');
+    const radiusValDisplay = document.getElementById('radiusValDisplay');
+
+    const angleSlider = document.getElementById('angleSlider');
+    const angleInput = document.getElementById('angleInput');
+    const angleValDisplay = document.getElementById('angleValDisplay');
+
+    const btnPlay = document.getElementById('btnPlay');
+    const btnPause = document.getElementById('btnPause');
+    const btnReset = document.getElementById('btnReset');
+    const btnRandom = document.getElementById('btnRandom');
+
+    const valArcLength = document.getElementById('valArcLength');
+    const valSectorArea = document.getElementById('valSectorArea');
+    const valChordLength = document.getElementById('valChordLength');
+    const statBoxes = [
+        document.getElementById('statArc'),
+        document.getElementById('statArea'),
+        document.getElementById('statChord')
+    ];
+
+    // Colors
+    const colors = {
+        cyan: '#00E5FF',
+        blue: '#4FC3F7',
+        purple: '#8E44FF',
+        orange: '#FFA726',
+        green: '#00E676',
+        bg: '#07090F',
+        grid: 'rgba(255,255,255,0.05)'
+    };
+
+    // Setup High DPI Canvas
+    function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        
+        // Sim Canvas
+        const simRect = simWrapper.getBoundingClientRect();
+        simCanvas.width = simRect.width * dpr;
+        simCanvas.height = simRect.height * dpr;
+        simCtx.scale(dpr, dpr);
+        simCanvas.style.width = `${simRect.width}px`;
+        simCanvas.style.height = `${simRect.height}px`;
+
+        // Graph Canvas
+        const graphRect = graphWrapper.getBoundingClientRect();
+        graphCanvas.width = graphRect.width * dpr;
+        graphCanvas.height = graphRect.height * dpr;
+        graphCtx.scale(dpr, dpr);
+        graphCanvas.style.width = `${graphRect.width}px`;
+        graphCanvas.style.height = `${graphRect.height}px`;
+
+        drawAll();
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
+    // Sync Controls
+    function syncControls(source, type) {
+        let val = parseFloat(source.value);
+        if (type === 'radius') {
+            if (val < 5) val = 5;
+            if (val > 25) val = 25;
+            state.radius = val;
+            radiusSlider.value = val;
+            radiusInput.value = val;
+            radiusValDisplay.innerText = val.toFixed(1) + ' m';
+        } else if (type === 'angle') {
+            if (val < 0) val = 0;
+            if (val > 360) val = 360;
+            state.angle = val;
+            angleSlider.value = val;
+            angleInput.value = val;
+            angleValDisplay.innerText = Math.round(val) + '°';
+        }
+        updateCalculations();
+        drawAll();
+    }
+
+    radiusSlider.addEventListener('input', (e) => syncControls(e.target, 'radius'));
+    radiusInput.addEventListener('input', (e) => syncControls(e.target, 'radius'));
+    
+    angleSlider.addEventListener('input', (e) => syncControls(e.target, 'angle'));
+    angleInput.addEventListener('input', (e) => syncControls(e.target, 'angle'));
+
+    // Buttons
+    btnPlay.addEventListener('click', () => { state.isPlaying = true; });
+    btnPause.addEventListener('click', () => { state.isPlaying = false; });
+    btnReset.addEventListener('click', () => {
+        state.isPlaying = false;
+        radiusSlider.value = 10;
+        angleSlider.value = 60;
+        syncControls(radiusSlider, 'radius');
+        syncControls(angleSlider, 'angle');
+    });
+    btnRandom.addEventListener('click', () => {
+        radiusSlider.value = (Math.random() * 20 + 5).toFixed(1);
+        angleSlider.value = Math.floor(Math.random() * 360);
+        syncControls(radiusSlider, 'radius');
+        syncControls(angleSlider, 'angle');
+    });
+
+    // Math Calculations
+    function updateCalculations() {
+        const r = state.radius;
+        const thetaDeg = state.angle;
+        const thetaRad = thetaDeg * (Math.PI / 180);
+
+        const arc = r * thetaRad;
+        const area = 0.5 * Math.pow(r, 2) * thetaRad;
+        const chord = 2 * r * Math.sin(thetaRad / 2);
+
+        // Highlight effect if values changed significantly
+        if (Math.abs(state.lastCalculations.arc - arc) > 0.1) highlightStatBox(0);
+        if (Math.abs(state.lastCalculations.area - area) > 0.5) highlightStatBox(1);
+        if (Math.abs(state.lastCalculations.chord - chord) > 0.1) highlightStatBox(2);
+
+        state.lastCalculations = { arc, area, chord };
+
+        valArcLength.innerText = arc.toFixed(2) + ' m';
+        valSectorArea.innerText = area.toFixed(2) + ' m²';
+        valChordLength.innerText = chord.toFixed(2) + ' m';
+    }
+
+    function highlightStatBox(index) {
+        const box = statBoxes[index];
+        box.classList.add('highlight');
+        setTimeout(() => box.classList.remove('highlight'), 300);
+    }
+
+    // Drawing Functions
+    function drawGrid(ctx, width, height, spacing) {
+        ctx.beginPath();
+        ctx.strokeStyle = colors.grid;
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= width; x += spacing) {
+            ctx.moveTo(x, 0); ctx.lineTo(x, height);
+        }
+        for (let y = 0; y <= height; y += spacing) {
+            ctx.moveTo(0, y); ctx.lineTo(width, y);
+        }
+        ctx.stroke();
+    }
+
+    function drawSimulation() {
+        const width = simWrapper.clientWidth;
+        const height = simWrapper.clientHeight;
+        
+        simCtx.clearRect(0, 0, width, height);
+        
+        // Draw futuristic grid background
+        drawGrid(simCtx, width, height, 40);
+
+        const cx = width / 2;
+        const cy = height / 2;
+        
+        // Visual Scale mapping (max radius 25 maps to ~80% of min dimension)
+        const maxDrawRadius = Math.min(width, height) * 0.4;
+        const scale = maxDrawRadius / 25; 
+        const drawRadius = state.radius * scale;
+        const angleRad = state.angle * (Math.PI / 180);
+
+        // 1. Draw full faint circle
+        simCtx.beginPath();
+        simCtx.arc(cx, cy, drawRadius, 0, Math.PI * 2);
+        simCtx.strokeStyle = 'rgba(255,255,255,0.1)';
+        simCtx.lineWidth = 2;
+        simCtx.stroke();
+        
+        // Circle center point
+        simCtx.beginPath();
+        simCtx.arc(cx, cy, 4, 0, Math.PI * 2);
+        simCtx.fillStyle = 'white';
+        simCtx.fill();
+
+        if (state.angle > 0) {
+            // 2. Draw Sector Area Fill (Purple Gradient)
+            simCtx.beginPath();
+            simCtx.moveTo(cx, cy);
+            simCtx.arc(cx, cy, drawRadius, 0, -angleRad, true); // true = counter-clockwise
+            simCtx.closePath();
+            
+            const grad = simCtx.createRadialGradient(cx, cy, 0, cx, cy, drawRadius);
+            grad.addColorStop(0, 'rgba(142, 68, 255, 0.4)');
+            grad.addColorStop(1, 'rgba(0, 229, 255, 0.1)');
+            simCtx.fillStyle = grad;
+            simCtx.fill();
+
+            // 3. Draw Arc (Cyan Glow)
+            simCtx.beginPath();
+            simCtx.arc(cx, cy, drawRadius, 0, -angleRad, true);
+            simCtx.strokeStyle = colors.cyan;
+            simCtx.lineWidth = 6;
+            simCtx.lineCap = 'round';
+            simCtx.shadowBlur = 15;
+            simCtx.shadowColor = colors.cyan;
+            simCtx.stroke();
+            simCtx.shadowBlur = 0; // reset
+
+            // 4. Draw Radii lines
+            simCtx.beginPath();
+            simCtx.moveTo(cx, cy);
+            simCtx.lineTo(cx + drawRadius, cy); // 0 deg line
+            simCtx.moveTo(cx, cy);
+            simCtx.lineTo(cx + drawRadius * Math.cos(-angleRad), cy + drawRadius * Math.sin(-angleRad)); // theta line
+            simCtx.strokeStyle = colors.text_main;
+            simCtx.lineWidth = 2;
+            simCtx.stroke();
+
+            // 5. Draw Chord (Dashed Orange)
+            simCtx.beginPath();
+            simCtx.moveTo(cx + drawRadius, cy);
+            simCtx.lineTo(cx + drawRadius * Math.cos(-angleRad), cy + drawRadius * Math.sin(-angleRad));
+            simCtx.strokeStyle = colors.orange;
+            simCtx.lineWidth = 2;
+            simCtx.setLineDash([5, 5]);
+            simCtx.stroke();
+            simCtx.setLineDash([]); // reset
+
+            // 6. Draw Angle Arc at center
+            if (drawRadius > 30) {
+                const angleDisplayRadius = 25;
+                simCtx.beginPath();
+                simCtx.arc(cx, cy, angleDisplayRadius, 0, -angleRad, true);
+                simCtx.strokeStyle = 'rgba(255,255,255,0.5)';
+                simCtx.lineWidth = 2;
+                simCtx.stroke();
+                
+                // Label angle
+                simCtx.fillStyle = 'white';
+                simCtx.font = '12px Inter';
+                simCtx.textAlign = 'left';
+                simCtx.textBaseline = 'middle';
+                const midAngle = -angleRad / 2;
+                simCtx.fillText(`${Math.round(state.angle)}°`, cx + (angleDisplayRadius + 15) * Math.cos(midAngle), cy + (angleDisplayRadius + 15) * Math.sin(midAngle));
+            }
+        } else {
+            // Draw baseline radius if 0 deg
+            simCtx.beginPath();
+            simCtx.moveTo(cx, cy);
+            simCtx.lineTo(cx + drawRadius, cy);
+            simCtx.strokeStyle = 'white';
+            simCtx.lineWidth = 2;
+            simCtx.stroke();
+        }
+
+        // Draw labels
+        simCtx.fillStyle = 'rgba(255,255,255,0.7)';
+        simCtx.font = '14px Inter';
+        simCtx.textAlign = 'center';
+        simCtx.fillText(`Radius: ${state.radius.toFixed(1)}m`, cx + drawRadius/2, cy + 15);
+    }
+
+    function drawGraph() {
+        const width = graphWrapper.clientWidth;
+        const height = graphWrapper.clientHeight;
+        
+        graphCtx.clearRect(0, 0, width, height);
+
+        const padX = 40;
+        const padY = 30;
+        const plotWidth = width - padX * 2;
+        const plotHeight = height - padY * 2;
+
+        // Axes
+        graphCtx.beginPath();
+        graphCtx.moveTo(padX, padY);
+        graphCtx.lineTo(padX, height - padY);
+        graphCtx.lineTo(width - padX + 10, height - padY);
+        graphCtx.strokeStyle = 'rgba(255,255,255,0.5)';
+        graphCtx.lineWidth = 2;
+        graphCtx.stroke();
+
+        // Labels
+        graphCtx.fillStyle = 'rgba(255,255,255,0.7)';
+        graphCtx.font = '10px Inter';
+        graphCtx.textAlign = 'center';
+        graphCtx.fillText("Central Angle (°)", width / 2, height - 5);
+        
+        graphCtx.save();
+        graphCtx.translate(15, height / 2);
+        graphCtx.rotate(-Math.PI / 2);
+        graphCtx.fillText("Arc Length (s)", 0, 0);
+        graphCtx.restore();
+
+        // Ticks & Grid for X (0 to 360)
+        graphCtx.textAlign = 'center';
+        graphCtx.textBaseline = 'top';
+        for(let i=0; i<=360; i+=90) {
+            const x = padX + (i / 360) * plotWidth;
+            // grid
+            graphCtx.beginPath();
+            graphCtx.moveTo(x, padY);
+            graphCtx.lineTo(x, height - padY);
+            graphCtx.strokeStyle = colors.grid;
+            graphCtx.lineWidth = 1;
+            graphCtx.stroke();
+            // tick label
+            graphCtx.fillStyle = 'rgba(255,255,255,0.5)';
+            graphCtx.fillText(i, x, height - padY + 5);
+        }
+
+        // Max Y depends on current radius (max arc length = 2 * PI * r)
+        const maxS = 2 * Math.PI * state.radius;
+        const yStep = Math.max(10, Math.floor(maxS / 3));
+        
+        graphCtx.textAlign = 'right';
+        graphCtx.textBaseline = 'middle';
+        for(let j=0; j<=maxS; j+=yStep) {
+            const y = (height - padY) - (j / maxS) * plotHeight;
+            // grid
+            graphCtx.beginPath();
+            graphCtx.moveTo(padX, y);
+            graphCtx.lineTo(width - padX, y);
+            graphCtx.strokeStyle = colors.grid;
+            graphCtx.stroke();
+            // tick label
+            graphCtx.fillStyle = 'rgba(255,255,255,0.5)';
+            graphCtx.fillText(Math.round(j), padX - 5, y);
+        }
+
+        // Plot the Line (s = r * theta)
+        graphCtx.beginPath();
+        for (let deg = 0; deg <= 360; deg += 5) {
+            const thetaR = deg * Math.PI / 180;
+            const s = state.radius * thetaR;
+            const px = padX + (deg / 360) * plotWidth;
+            const py = (height - padY) - (s / maxS) * plotHeight;
+            
+            if (deg === 0) graphCtx.moveTo(px, py);
+            else graphCtx.lineTo(px, py);
+        }
+        graphCtx.strokeStyle = colors.purple;
+        graphCtx.lineWidth = 3;
+        graphCtx.stroke();
+
+        // Draw Current Point
+        const curS = state.radius * (state.angle * Math.PI / 180);
+        const curPx = padX + (state.angle / 360) * plotWidth;
+        const curPy = (height - padY) - (curS / maxS) * plotHeight;
+
+        graphCtx.beginPath();
+        graphCtx.arc(curPx, curPy, 6, 0, Math.PI * 2);
+        graphCtx.fillStyle = colors.cyan;
+        graphCtx.shadowBlur = 10;
+        graphCtx.shadowColor = colors.cyan;
+        graphCtx.fill();
+        graphCtx.shadowBlur = 0;
+        graphCtx.strokeStyle = '#fff';
+        graphCtx.lineWidth = 2;
+        graphCtx.stroke();
+        
+        // Draw dotted lines to axes for current point
+        graphCtx.beginPath();
+        graphCtx.setLineDash([4, 4]);
+        graphCtx.moveTo(curPx, height - padY);
+        graphCtx.lineTo(curPx, curPy);
+        graphCtx.lineTo(padX, curPy);
+        graphCtx.strokeStyle = 'rgba(0, 229, 255, 0.5)';
+        graphCtx.stroke();
+        graphCtx.setLineDash([]);
+    }
+
+    function drawAll() {
+        drawSimulation();
+        drawGraph();
+    }
+
+    // Animation Loop
+    function animate() {
+        if (state.isPlaying) {
+            let newAngle = state.angle + state.animSpeed;
+            if (newAngle >= 360) newAngle = 0; // Loop back
+            
+            angleSlider.value = newAngle;
+            syncControls(angleSlider, 'angle');
+        }
+        requestAnimationFrame(animate);
+    }
+
+    // Initialize
+    window.onload = () => {
+        resizeCanvas();
+        updateCalculations();
+        animate();
+    };
+
+</script>
+</body>
+</html>

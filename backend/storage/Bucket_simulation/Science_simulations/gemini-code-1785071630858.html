@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Amplitude vs Loudness | Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            --bg-color: #05050A;
+            --surface: rgba(20, 22, 35, 0.6);
+            --surface-hover: rgba(30, 34, 50, 0.8);
+            --border: rgba(255, 255, 255, 0.08);
+            --text-main: #FFFFFF;
+            --text-muted: #8B949E;
+            
+            --accent-cyan: #00F0FF;
+            --accent-purple: #8A2BE2;
+            --accent-pink: #FF007F;
+            
+            --glass-blur: blur(16px);
+            --shadow-glow: 0 0 20px rgba(0, 240, 255, 0.2);
+            
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* ==========================================================================
+           RESET & TYPOGRAPHY (Fluid Scaling)
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(138, 43, 226, 0.04) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        h1 { font-size: clamp(2rem, 5vw, 4rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 700; margin-bottom: 1rem; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; color: var(--text-main); }
+        p { font-size: clamp(0.9rem, 1.2vw, 1.1rem); color: var(--text-muted); }
+
+        .text-gradient {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ==========================================================================
+           LAYOUT & CONTAINERS
+           ========================================================================== */
+        .container {
+            width: min(100%, 1400px);
+            margin: 0 auto;
+            padding: clamp(20px, 4vw, 60px) clamp(16px, 4vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 100px);
+        }
+
+        .glass-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: clamp(20px, 3vw, 40px);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: var(--transition-smooth);
+        }
+
+        .glass-panel:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+            gap: 24px;
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            text-align: center;
+            padding: 40px 0;
+            position: relative;
+        }
+        
+        .hero p {
+            max-width: 600px;
+            margin: 20px auto 0;
+            font-size: clamp(1rem, 1.5vw, 1.25rem);
+        }
+
+        /* ==========================================================================
+           COMPONENTS SECTION (Markers & Legend System)
+           ========================================================================== */
+        .components-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        @media (min-width: 1024px) {
+            .components-layout {
+                flex-direction: row;
+                align-items: center;
+            }
+        }
+
+        .diagram-container {
+            flex: 1.5;
+            position: relative;
+            min-height: 250px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 20px;
+            padding: 20px;
+            border: 1px solid var(--border);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .diagram-svg {
+            width: 100%;
+            height: auto;
+            max-height: 400px;
+            filter: drop-shadow(0 0 20px rgba(0,240,255,0.1));
+        }
+
+        /* Markers overlaying SVG */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--bg-color);
+            border: 2px solid var(--accent-cyan);
+            color: var(--text-main);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+            transition: var(--transition-smooth);
+            z-index: 10;
+        }
+        
+        .marker::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px solid var(--accent-cyan);
+            animation: pulse 2s infinite;
+            pointer-events: none;
+        }
+
+        .marker:hover, .marker.active {
+            background: var(--accent-cyan);
+            color: var(--bg-color);
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        /* Legend List */
+        .legend-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 16px;
+            border: 1px solid transparent;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.05);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--accent-cyan);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            border: 1px solid rgba(0,240,255,0.3);
+        }
+
+        .legend-content h4 {
+            margin: 0 0 4px 0;
+            font-size: 1.1rem;
+            color: var(--text-main);
+        }
+
+        .legend-content p {
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (Interactive Slideshow)
+           ========================================================================== */
+        .mechanism-card {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .mech-visual-container {
+            height: clamp(250px, 40vh, 400px);
+            position: relative;
+            background: radial-gradient(circle at center, rgba(30,34,50,0.8) 0%, rgba(10,12,20,1) 100%);
+            border-radius: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* Stage Content (Absolute for crossfade) */
+        .mech-stage {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s ease-in-out;
+        }
+
+        .mech-stage.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .mech-stage-svg {
+            width: 80%;
+            height: 80%;
+            max-width: 400px;
+        }
+
+        .mech-info {
+            min-height: 100px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .mech-info h3 {
+            color: var(--accent-cyan);
+            margin-bottom: 8px;
+        }
+
+        .mech-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.4);
+            padding: 12px 24px;
+            border-radius: 100px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: rgba(255,255,255,0.05);
+        }
+
+        .btn-icon:hover {
+            background: rgba(0, 240, 255, 0.2);
+            color: var(--accent-cyan);
+            transform: scale(1.1);
+        }
+
+        .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+
+        .dot.active {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            transform: scale(1.3);
+        }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (Core)
+           ========================================================================== */
+        .sim-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .sim-visuals {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        @media (min-width: 768px) {
+            .sim-visuals {
+                flex-direction: row;
+                height: 400px;
+            }
+        }
+
+        .canvas-wrapper {
+            flex: 2;
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #0A0A10, #141623);
+            border: 1px solid var(--border);
+            min-height: 250px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .sim-overlay-text {
+            position: absolute;
+            top: 16px; left: 16px;
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.5);
+            pointer-events: none;
+        }
+
+        /* Perception Meter */
+        .perception-meter {
+            flex: 1;
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .brain-glow {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--accent-purple) 0%, transparent 70%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: transform 0.1s ease-out, opacity 0.1s ease-out, filter 0.1s ease-out;
+            margin-bottom: 20px;
+        }
+        
+        .brain-icon {
+            width: 60px;
+            height: 60px;
+            fill: white;
+            z-index: 2;
+        }
+
+        /* Controls */
+        .control-panel {
+            background: rgba(0,0,0,0.2);
+            padding: 24px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .slider-value {
+            font-family: monospace;
+            font-size: 1.2rem;
+            color: var(--accent-cyan);
+            font-weight: bold;
+        }
+
+        /* Custom Range Input */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            padding: 10px 0;
+            touch-action: none; /* Prevent scroll while sliding on mobile */
+        }
+        
+        input[type=range]:focus { outline: none; }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: var(--text-main);
+            border: 3px solid var(--accent-cyan);
+            margin-top: -9px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0,240,255,0.5);
+            transition: transform 0.1s;
+        }
+        
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        /* ==========================================================================
+           COMPARISON & INFO SECTIONS
+           ========================================================================== */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .comp-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 24px;
+            border-radius: 16px;
+        }
+
+        .comp-card h4 {
+            color: var(--accent-cyan);
+            margin-bottom: 12px;
+            font-size: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .comp-card h4.subjective { color: var(--accent-pink); }
+
+        .fact-card {
+            border-left: 4px solid var(--accent-purple);
+            background: linear-gradient(90deg, rgba(138,43,226,0.1) 0%, transparent 100%);
+        }
+
+        /* ==========================================================================
+           ANIMATIONS
+           ========================================================================== */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        @keyframes soundwave {
+            0%, 100% { transform: scaleY(1); opacity: 0.5; }
+            50% { transform: scaleY(1.5); opacity: 1; }
+        }
+
+        .anim-float { animation: float 6s ease-in-out infinite; }
+        
+        /* Particle effects for Mechanism */
+        .particle {
+            position: absolute;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            opacity: 0.6;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <!-- HERO SECTION -->
+    <header class="hero anim-float">
+        <h1>Amplitude vs <span class="text-gradient">Loudness</span></h1>
+        <p>Uncover the journey of sound. Amplitude is the <strong>physics</strong> of the wave. Loudness is the <strong>perception</strong> in your brain.</p>
+    </header>
+
+    <!-- OVERVIEW COMPARISON -->
+    <section class="grid-2">
+        <div class="glass-panel comp-card">
+            <h4>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v-4M8 12v-8M12 12v-2M16 12v-6M20 12v-4" stroke-linecap="round"/></svg>
+                Amplitude (Objective Physics)
+            </h4>
+            <p>The measurable, physical height of a sound wave. It represents the maximum displacement of particles from their rest position and dictates the total energy carried by the wave.</p>
+        </div>
+        <div class="glass-panel comp-card">
+            <h4 class="subjective">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                Loudness (Subjective Biology)
+            </h4>
+            <p>How the human brain perceives that physical energy. While higher amplitude generally means a louder sound, our ears do not interpret sound linearly—it's a complex biological sensation.</p>
+        </div>
+    </section>
+
+    <!-- SYSTEM COMPONENTS (Marker & Legend) -->
+    <section class="glass-panel">
+        <h2>The Acoustic System</h2>
+        <p>Before a sound becomes "loud," it travels through a physical and biological chain.</p>
+        
+        <div class="components-layout">
+            <!-- Diagram Area -->
+            <div class="diagram-container" id="sysDiagram">
+                <!-- SVG Illustration -->
+                <svg class="diagram-svg" viewBox="0 0 800 300" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                        <linearGradient id="speakerGrad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#2a2d3e"/>
+                            <stop offset="100%" stop-color="#141623"/>
+                        </linearGradient>
+                        <radialGradient id="coneGrad" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#111"/>
+                            <stop offset="80%" stop-color="#333"/>
+                            <stop offset="100%" stop-color="#555"/>
+                        </radialGradient>
+                    </defs>
+                    
+                    <!-- 1. Source (Speaker) -->
+                    <g id="svg-comp-1">
+                        <rect x="20" y="50" width="120" height="200" rx="10" fill="url(#speakerGrad)" stroke="#444" stroke-width="2"/>
+                        <circle cx="140" cy="150" r="60" fill="#222"/>
+                        <circle cx="140" cy="150" r="50" fill="url(#coneGrad)"/>
+                        <circle cx="140" cy="150" r="15" fill="#111"/>
+                    </g>
+                    
+                    <!-- 2. Medium (Sound Waves in Air) -->
+                    <g id="svg-comp-2" stroke="var(--accent-cyan)" stroke-width="3" fill="none" opacity="0.7">
+                        <path d="M160 100 Q 180 150 160 200" />
+                        <path d="M190 80 Q 220 150 190 220" opacity="0.8"/>
+                        <path d="M230 60 Q 270 150 230 240" opacity="0.6"/>
+                        <path d="M280 40 Q 330 150 280 260" opacity="0.4"/>
+                        <path d="M340 30 Q 400 150 340 270" opacity="0.2"/>
+                    </g>
+                    
+                    <!-- 3. Receiver (Ear/Eardrum) -->
+                    <g id="svg-comp-3">
+                        <!-- Simplified Ear Outer -->
+                        <path d="M480 80 C 440 60, 420 120, 420 150 C 420 190, 450 240, 480 230 C 460 200, 450 170, 460 150 C 470 120, 490 100, 480 80 Z" fill="#3a2a35"/>
+                        <!-- Ear Canal -->
+                        <path d="M460 150 L 580 150" stroke="#22151e" stroke-width="20" stroke-linecap="round"/>
+                        <!-- Eardrum -->
+                        <ellipse cx="580" cy="150" rx="5" ry="25" fill="#ff7da9" transform="rotate(15 580 150)"/>
+                    </g>
+                    
+                    <!-- 4. Processor (Brain/Nerve) -->
+                    <g id="svg-comp-4">
+                        <path d="M585 150 Q 640 160 670 120" fill="none" stroke="#f0e68c" stroke-width="3" stroke-dasharray="5,5"/>
+                        <!-- Brain abstract -->
+                        <path d="M660 120 C 640 80, 680 40, 730 60 C 780 40, 790 90, 760 120 C 780 150, 740 180, 700 150 C 670 180, 640 150, 660 120 Z" fill="rgba(138,43,226,0.3)" stroke="var(--accent-purple)" stroke-width="2"/>
+                    </g>
+                </svg>
+
+                <!-- Absolute positioned markers (Positions set via CSS/style attribute relative to container) -->
+                <!-- Since SVG is responsive, we place markers based on % to keep them aligned -->
+                <div class="marker" data-target="1" style="left: 10%; top: 50%;">1</div>
+                <div class="marker" data-target="2" style="left: 33%; top: 50%;">2</div>
+                <div class="marker" data-target="3" style="left: 68%; top: 50%;">3</div>
+                <div class="marker" data-target="4" style="left: 88%; top: 35%;">4</div>
+            </div>
+
+            <!-- Legend List -->
+            <div class="legend-container">
+                <div class="legend-item" data-id="1">
+                    <div class="legend-badge">1</div>
+                    <div class="legend-content">
+                        <h4>Source (Vibration)</h4>
+                        <p>An object (like a speaker cone) physically moves back and forth, displacing air.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="2">
+                    <div class="legend-badge">2</div>
+                    <div class="legend-content">
+                        <h4>Medium (Air Compression)</h4>
+                        <p>The vibration creates high and low pressure zones (longitudinal wave) traveling through the air.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="3">
+                    <div class="legend-badge">3</div>
+                    <div class="legend-content">
+                        <h4>Receiver (Tympanic Membrane)</h4>
+                        <p>The pressure wave strikes the eardrum, forcing it to vibrate at the same amplitude.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="4">
+                    <div class="legend-badge">4</div>
+                    <div class="legend-content">
+                        <h4>Processor (Brain Perception)</h4>
+                        <p>Mechanical vibrations become electrical signals. The brain interprets high energy as "Loud".</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING MECHANISM (Interactive Slideshow) -->
+    <section class="glass-panel mechanism-card">
+        <h2>Working Process: Energy to Experience</h2>
+        <p>A linear sequence of how physical amplitude is translated into the perception of loudness.</p>
+        
+        <div class="mech-visual-container" id="mechVisualArea">
+            
+            <!-- Stage 1 -->
+            <div class="mech-stage active" id="stage-0">
+                <svg class="mech-stage-svg" viewBox="0 0 200 200">
+                    <!-- Speaker pushing out -->
+                    <rect x="20" y="40" width="40" height="120" fill="#333"/>
+                    <path id="mech-cone" d="M60 100 L 120 60 L 120 140 Z" fill="var(--accent-cyan)"/>
+                    <circle cx="140" cy="100" r="5" fill="#fff" id="particle-out"/>
+                </svg>
+            </div>
+            
+            <!-- Stage 2 -->
+            <div class="mech-stage" id="stage-1">
+                <canvas id="mechCanvas2" width="400" height="200" style="width: 100%; height: 100%;"></canvas>
+            </div>
+            
+            <!-- Stage 3 -->
+            <div class="mech-stage" id="stage-2">
+                 <svg class="mech-stage-svg" viewBox="0 0 200 200">
+                    <ellipse cx="100" cy="100" rx="10" ry="60" fill="none" stroke="var(--accent-pink)" stroke-width="4" id="eardrum-mech"/>
+                    <path d="M40 100 L 80 100" stroke="#fff" stroke-width="2" stroke-dasharray="4,4" id="force-arrow"/>
+                </svg>
+            </div>
+            
+            <!-- Stage 4 -->
+            <div class="mech-stage" id="stage-3">
+                 <svg class="mech-stage-svg" viewBox="0 0 200 200">
+                    <path d="M50 100 C 80 50, 120 150, 150 100" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
+                    <circle cx="50" cy="100" r="8" fill="var(--accent-purple)" id="signal-dot"/>
+                    <path d="M120 60 Q 150 20, 180 60" fill="none" stroke="var(--accent-cyan)" stroke-width="3" id="brain-wave"/>
+                </svg>
+            </div>
+
+        </div>
+
+        <div class="mech-info" id="mechTextInfo">
+            <h3 id="mechTitle">1. Vibration Generation</h3>
+            <p id="mechDesc">The speaker cone pushes outward with a specific amplitude, displacing air molecules directly in front of it.</p>
+        </div>
+
+        <div class="mech-controls">
+            <button class="btn-icon" id="btnPrev">
+                <svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            
+            <div class="progress-dots" id="mechDots">
+                <div class="dot active"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+            
+            <button class="btn-icon" id="btnNext">
+                <svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+        </div>
+    </section>
+
+    <!-- CORE INTERACTIVE SIMULATION -->
+    <section class="glass-panel sim-container">
+        <h2>Interactive Physics Simulator</h2>
+        <p>Adjust the physical amplitude and observe how the wave, air pressure, and subjective perception change in real-time.</p>
+        
+        <div class="sim-visuals">
+            <!-- Physical Wave Canvas -->
+            <div class="canvas-wrapper">
+                <div class="sim-overlay-text">Objective: Physical Wave (Amplitude)</div>
+                <canvas id="simCanvas"></canvas>
+            </div>
+            
+            <!-- Subjective Perception Meter -->
+            <div class="perception-meter">
+                <div class="sim-overlay-text" style="top: 10px; left: 50%; transform: translateX(-50%);">Subjective: Loudness</div>
+                
+                <div class="brain-glow" id="perceptionGlow">
+                    <!-- Brain Icon SVG -->
+                    <svg class="brain-icon" viewBox="0 0 24 24">
+                        <path d="M12 4c-4.418 0-8 3.582-8 8s3.582 8 8 8 8-3.582 8-8-3.582-8-8-8zm0 14c-3.314 0-6-2.686-6-6s2.686-6 6-6 6 2.686 6 6-2.686 6-6 6zm-2-7h4v2h-4v-2z" />
+                    </svg>
+                </div>
+                
+                <div>
+                    <h3 id="loudnessLabel" style="color: var(--text-main);">Quiet</h3>
+                    <p style="font-size: 0.8rem; margin-top: 5px;">Perceived Intensity</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Simulator Controls -->
+        <div class="control-panel">
+            <div class="slider-group">
+                <div class="slider-header">
+                    <label for="ampSlider">Physical Amplitude (Energy)</label>
+                    <span class="slider-value" id="ampValue">1.0</span>
+                </div>
+                <!-- Min 0.1, Max 5.0 -->
+                <input type="range" id="ampSlider" min="0.1" max="5.0" step="0.1" value="1.0">
+            </div>
+        </div>
+    </section>
+
+    <!-- FACTS & MISTAKES -->
+    <section class="grid-2">
+        <div class="glass-panel fact-card">
+            <h3>Did you know?</h3>
+            <p>The Decibel (dB) scale used for loudness is <strong>logarithmic</strong>. A sound that is 10 dB higher has 10 times the physical amplitude/energy, but to human ears, it only sounds about <em>twice</em> as loud.</p>
+        </div>
+        
+        <div class="glass-panel" style="border-left: 4px solid var(--accent-pink);">
+            <h3>Common Mistake</h3>
+            <p><strong>"Pitch is the same as Loudness."</strong> <br>False! Pitch (high vs low note) is determined by <em>Frequency</em> (how fast the wave vibrates). Loudness is determined by <em>Amplitude</em> (how tall/forceful the wave is).</p>
+        </div>
+    </section>
+
+</div>
+
+<script>
+    /* ==========================================================================
+       JS CORE: Utilities & Initialization
+       ========================================================================== */
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+    /* ==========================================================================
+       MODULE 1: Components Marker System
+       ========================================================================== */
+    const markers = document.querySelectorAll('.marker');
+    const legendItems = document.querySelectorAll('.legend-item');
+
+    function activateComponent(id) {
+        markers.forEach(m => m.classList.remove('active'));
+        legendItems.forEach(l => l.classList.remove('active'));
+        
+        const activeMarker = document.querySelector(`.marker[data-target="${id}"]`);
+        const activeLegend = document.querySelector(`.legend-item[data-id="${id}"]`);
+        
+        if (activeMarker) activeMarker.classList.add('active');
+        if (activeLegend) {
+            activeLegend.classList.add('active');
+            // Slight scroll if mobile
+            if (window.innerWidth < 1024) {
+               activeLegend.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+    }
+
+    markers.forEach(marker => {
+        marker.addEventListener('mouseenter', () => activateComponent(marker.dataset.target));
+        marker.addEventListener('click', () => activateComponent(marker.dataset.target));
+    });
+
+    legendItems.forEach(item => {
+        item.addEventListener('mouseenter', () => activateComponent(item.dataset.id));
+        item.addEventListener('click', () => activateComponent(item.dataset.id));
+    });
+
+    /* ==========================================================================
+       MODULE 2: Working Mechanism Slideshow
+       ========================================================================== */
+    const stagesData = [
+        { title: "1. Vibration Generation", desc: "The speaker cone physically pushes outward, creating mechanical kinetic energy." },
+        { title: "2. Air Compression", desc: "Air particles bunch together (compression) and spread apart (rarefaction), forming a longitudinal wave." },
+        { title: "3. Tympanic Transfer", desc: "The pressure wave hits the eardrum. Higher amplitude = harder strike = wider vibration." },
+        { title: "4. Neural Translation", desc: "Hair cells in the cochlea bend, sending electrical signals. The brain interprets strong signals as 'Loud'." }
+    ];
+
+    let currentStage = 0;
+    const stages = document.querySelectorAll('.mech-stage');
+    const dots = document.querySelectorAll('.dot');
+    const mechTitle = document.getElementById('mechTitle');
+    const mechDesc = document.getElementById('mechDesc');
+    let mechAnimFrame;
+    let mechTime = 0;
+
+    function updateStage(index) {
+        stages.forEach(s => s.classList.remove('active'));
+        dots.forEach(d => d.classList.remove('active'));
+        
+        currentStage = index;
+        if(currentStage < 0) currentStage = stages.length - 1;
+        if(currentStage >= stages.length) currentStage = 0;
+        
+        stages[currentStage].classList.add('active');
+        dots[currentStage].classList.add('active');
+        mechTitle.textContent = stagesData[currentStage].title;
+        mechDesc.textContent = stagesData[currentStage].desc;
+    }
+
+    document.getElementById('btnPrev').addEventListener('click', () => updateStage(currentStage - 1));
+    document.getElementById('btnNext').addEventListener('click', () => updateStage(currentStage + 1));
+    dots.forEach((dot, index) => {
+        dot.addEventListener('click', () => updateStage(index));
+    });
+
+    // Specific Animations for Stages (Driven by requestAnimationFrame)
+    const mCanvas2 = document.getElementById('mechCanvas2');
+    const mCtx2 = mCanvas2.getContext('2d');
+    
+    function animateMechanism() {
+        mechTime += 0.05;
+        
+        // Stage 0: Speaker
+        if (currentStage === 0) {
+            const offset = Math.sin(mechTime) * 20;
+            document.getElementById('mech-cone').setAttribute('transform', `translate(${offset}, 0)`);
+            document.getElementById('particle-out').setAttribute('cx', 140 + offset + (mechTime*10 % 50));
+        }
+        
+        // Stage 1: Particles bunching
+        if (currentStage === 1) {
+            mCtx2.clearRect(0,0, mCanvas2.width, mCanvas2.height);
+            mCtx2.fillStyle = '#00F0FF';
+            for(let i=0; i<80; i++) {
+                let xBase = (i * 10) % 400;
+                let yBase = (i * 7) % 200;
+                // create bunching effect based on sine wave
+                let compression = Math.sin((xBase / 40) - mechTime) * 15; 
+                mCtx2.beginPath();
+                mCtx2.arc(xBase + compression, yBase, 2, 0, Math.PI*2);
+                mCtx2.fill();
+            }
+        }
+        
+        // Stage 2: Eardrum
+        if (currentStage === 2) {
+            const bend = Math.sin(mechTime) * 10;
+            document.getElementById('eardrum-mech').setAttribute('transform', `translate(${bend}, 0)`);
+            document.getElementById('force-arrow').setAttribute('stroke-dashoffset', -mechTime * 10);
+        }
+
+        // Stage 3: Brain wave
+        if (currentStage === 3) {
+            const sigX = 50 + (mechTime*40 % 100);
+            // approximate path curve manually
+            const sigY = 100 + Math.sin(sigX/20)*30; 
+            document.getElementById('signal-dot').setAttribute('cx', sigX);
+            document.getElementById('signal-dot').setAttribute('cy', sigY);
+        }
+
+        mechAnimFrame = requestAnimationFrame(animateMechanism);
+    }
+    
+    // Fix blurry canvas on high DPI for mech stage 2
+    function resizeMechCanvas() {
+        const rect = mCanvas2.parentElement.getBoundingClientRect();
+        mCanvas2.width = rect.width * window.devicePixelRatio;
+        mCanvas2.height = rect.height * window.devicePixelRatio;
+        mCtx2.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    window.addEventListener('resize', resizeMechCanvas);
+    resizeMechCanvas();
+    animateMechanism();
+
+
+    /* ==========================================================================
+       MODULE 3: Core Physics Simulator (Amplitude -> Wave & Loudness)
+       ========================================================================== */
+    const simCanvas = document.getElementById('simCanvas');
+    const simCtx = simCanvas.getContext('2d');
+    const ampSlider = document.getElementById('ampSlider');
+    const ampValueLabel = document.getElementById('ampValue');
+    const perceptionGlow = document.getElementById('perceptionGlow');
+    const loudnessLabel = document.getElementById('loudnessLabel');
+
+    let simTime = 0;
+    let currentAmplitude = parseFloat(ampSlider.value); // Logical multiplier (0.1 to 5.0)
+
+    // Handle high-DPI displays for sharp rendering
+    function resizeSimCanvas() {
+        const rect = simCanvas.parentElement.getBoundingClientRect();
+        simCanvas.width = rect.width * window.devicePixelRatio;
+        simCanvas.height = rect.height * window.devicePixelRatio;
+        simCtx.setTransform(1, 0, 0, 1, 0, 0); // reset
+        simCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+    window.addEventListener('resize', resizeSimCanvas);
+    // Initial setup
+    setTimeout(resizeSimCanvas, 0); // wait for layout
+
+    // Update state from slider
+    ampSlider.addEventListener('input', (e) => {
+        currentAmplitude = parseFloat(e.target.value);
+        ampValueLabel.textContent = currentAmplitude.toFixed(1);
+        updatePerceptionMeter(currentAmplitude);
+    });
+
+    function updatePerceptionMeter(amp) {
+        // Human perception of loudness is roughly logarithmic.
+        // We simulate this by applying a curve to the visual glow.
+        // Using a modified square root or log function for visual scaling.
+        
+        // Base mapping: amp 0.1 -> scale 0.5. amp 5.0 -> scale 1.8
+        const perceptionScale = 0.5 + Math.pow(amp, 0.6) * 0.4; 
+        
+        // Calculate glow intensity based on amplitude
+        const glowOpacity = Math.min(1, 0.3 + (amp / 5));
+        const blurRadius = 10 + (amp * 10);
+        
+        perceptionGlow.style.transform = `scale(${perceptionScale})`;
+        perceptionGlow.style.boxShadow = `0 0 ${blurRadius}px rgba(138,43,226, ${glowOpacity}), inset 0 0 ${blurRadius/2}px rgba(255,0,127, ${glowOpacity})`;
+        
+        // Update text labels
+        if(amp < 1.0) loudnessLabel.textContent = "Whisper / Quiet";
+        else if (amp < 2.5) loudnessLabel.textContent = "Normal Conversation";
+        else if (amp < 4.0) loudnessLabel.textContent = "Loud Music";
+        else loudnessLabel.textContent = "Painful / Rock Concert";
+    }
+    
+    // Initialize meter
+    updatePerceptionMeter(currentAmplitude);
+
+    // Render Loop
+    function renderSimulation() {
+        simTime += 0.05;
+        
+        // Logical width/height independent of DPI
+        const w = simCanvas.width / window.devicePixelRatio;
+        const h = simCanvas.height / window.devicePixelRatio;
+        
+        simCtx.clearRect(0, 0, w, h);
+
+        const centerY = h / 2;
+        
+        // Map logical amplitude (0.1 - 5.0) to pixel amplitude
+        // Max slider (5.0) should take up most of the canvas height
+        const maxPixelAmp = (h / 2) * 0.8; 
+        const pixelAmplitude = (currentAmplitude / 5.0) * maxPixelAmp;
+        const frequency = 0.02; // How tight the waves are
+
+        // 1. Draw center reference line
+        simCtx.beginPath();
+        simCtx.moveTo(0, centerY);
+        simCtx.lineTo(w, centerY);
+        simCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        simCtx.lineWidth = 1;
+        simCtx.stroke();
+
+        // 2. Draw amplitude measurement brackets (objective measurement)
+        simCtx.beginPath();
+        simCtx.moveTo(w/4, centerY);
+        simCtx.lineTo(w/4, centerY - pixelAmplitude);
+        simCtx.moveTo(w/4 - 5, centerY - pixelAmplitude);
+        simCtx.lineTo(w/4 + 5, centerY - pixelAmplitude);
+        simCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        simCtx.lineWidth = 2;
+        simCtx.stroke();
+        
+        simCtx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        simCtx.font = '12px monospace';
+        simCtx.fillText('Amplitude', w/4 + 10, centerY - (pixelAmplitude/2));
+
+        // 3. Draw the Sine Wave
+        simCtx.beginPath();
+        simCtx.moveTo(0, centerY);
+        
+        for (let x = 0; x < w; x++) {
+            // y = A * sin(f*x - t)
+            const y = centerY - (pixelAmplitude * Math.sin(frequency * x - simTime * 2));
+            simCtx.lineTo(x, y);
+        }
+        
+        // Neon wave styling
+        simCtx.strokeStyle = '#00F0FF';
+        simCtx.lineWidth = 3;
+        simCtx.lineCap = 'round';
+        simCtx.lineJoin = 'round';
+        simCtx.shadowBlur = 15;
+        simCtx.shadowColor = '#00F0FF';
+        simCtx.stroke();
+        
+        // Reset shadow for performance on next frame
+        simCtx.shadowBlur = 0;
+
+        // 4. Draw Air Particles (Longitudinal representation)
+        // Draw particles below the wave
+        const particleZoneY = centerY + maxPixelAmp + 20;
+        if (particleZoneY < h - 10) {
+            simCtx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            
+            // Generate a grid of particles
+            for(let px = 0; px < w; px += 15) {
+                for(let py = particleZoneY; py < h - 10; py += 15) {
+                    // Displacement based on the derivative of the sine wave (pressure is 90deg out of phase with displacement, or closely related)
+                    // We want particles to bunch up where the wave crosses zero going down (compression)
+                    const phase = frequency * px - simTime * 2;
+                    const displacement = currentAmplitude * 3 * Math.cos(phase);
+                    
+                    simCtx.beginPath();
+                    simCtx.arc(px + displacement, py, 2, 0, Math.PI * 2);
+                    simCtx.fill();
+                }
+            }
+        }
+
+        requestAnimationFrame(renderSimulation);
+    }
+
+    // Start simulation loop
+    renderSimulation();
+
+</script>
+</body>
+</html>

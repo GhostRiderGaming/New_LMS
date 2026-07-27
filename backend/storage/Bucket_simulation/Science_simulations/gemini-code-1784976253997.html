@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wind Turbine Visualization</title>
+    <style>
+        /* ==========================================================================
+           ROOT VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            /* Colors */
+            --bg-base: #05050A;
+            --bg-surface: rgba(20, 22, 30, 0.6);
+            --bg-surface-hover: rgba(30, 35, 50, 0.8);
+            --text-main: #FFFFFF;
+            --text-muted: #9BA1B0;
+            --accent-wind: #00E5FF;
+            --accent-wind-glow: rgba(0, 229, 255, 0.4);
+            --accent-power: #FFD600;
+            --accent-power-glow: rgba(255, 214, 0, 0.4);
+            --accent-mech: #FF3D00;
+            
+            /* Glassmorphism */
+            --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            /* Typography (Fluid) */
+            --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --h1: clamp(2.5rem, 5vw, 4rem);
+            --h2: clamp(1.8rem, 3vw, 2.5rem);
+            --h3: clamp(1.2rem, 2vw, 1.5rem);
+            --body: clamp(0.9rem, 1.2vw, 1.1rem);
+            --small: clamp(0.75rem, 1vw, 0.9rem);
+            
+            /* Spacing */
+            --spacing-sm: clamp(0.5rem, 1vw, 1rem);
+            --spacing-md: clamp(1rem, 2vw, 2rem);
+            --spacing-lg: clamp(2rem, 4vw, 4rem);
+            
+            /* Layout */
+            --max-width: 1400px;
+            --border-radius: 24px;
+            
+            /* Transition */
+            --transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* ==========================================================================
+           RESET & GLOBAL
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(255, 214, 0, 0.05), transparent 25%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: var(--max-width);
+            margin: 0 auto;
+            padding: var(--spacing-md) var(--spacing-lg);
+        }
+
+        h1, h2, h3, h4 { font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
+        p { color: var(--text-muted); }
+        
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: var(--glass-border);
+            border-radius: var(--border-radius);
+            box-shadow: var(--glass-shadow);
+            padding: var(--spacing-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Reduce blur on mobile for performance */
+        @media (max-width: 768px) {
+            .glass-panel { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: var(--spacing-md); }
+        }
+
+        .section-header { text-align: center; margin-bottom: var(--spacing-lg); }
+        .section-header h2 { font-size: var(--h2); margin-bottom: var(--spacing-sm); background: linear-gradient(to right, #fff, var(--text-muted)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        
+        .highlight { color: var(--accent-wind); font-weight: 500; }
+        .highlight-power { color: var(--accent-power); font-weight: 500; }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        #hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            position: relative;
+            padding-top: 80px;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+            max-width: 600px;
+        }
+
+        .hero-content h1 { font-size: var(--h1); margin-bottom: 1rem; text-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        .hero-content p { font-size: var(--h3); color: #E0E5F0; margin-bottom: 2rem; }
+        
+        .hero-canvas-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+            pointer-events: none;
+            background: linear-gradient(180deg, #05050A 0%, #0A0D18 50%, #05050A 100%);
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 40px; left: 50%;
+            transform: translateX(-50%);
+            z-index: 3;
+            animation: bounce 2s infinite;
+            color: var(--text-muted);
+            font-size: var(--small);
+            display: flex; flex-direction: column; align-items: center; gap: 8px;
+        }
+        
+        .scroll-indicator::after {
+            content: ''; width: 2px; height: 24px;
+            background: linear-gradient(to bottom, var(--accent-wind), transparent);
+            border-radius: 2px;
+        }
+
+        @keyframes bounce { 0%, 20%, 50%, 80%, 100% { transform: translateY(0) translateX(-50%); } 40% { transform: translateY(-10px) translateX(-50%); } 60% { transform: translateY(-5px) translateX(-50%); } }
+
+        /* ==========================================================================
+           COMPONENTS SECTION (STRICT MARKER + LEGEND)
+           ========================================================================== */
+        .components-grid {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: var(--spacing-lg);
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .components-grid { grid-template-columns: 1fr; }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--border-radius);
+            border: var(--glass-border);
+            padding: var(--spacing-md);
+            min-height: 300px; /* Mandatory minimum height */
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        .svg-illustration { width: 100%; height: auto; max-height: 500px; display: block; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); }
+
+        /* Markers overlay */
+        .marker {
+            position: absolute;
+            width: 32px; height: 32px;
+            background: var(--bg-surface);
+            border: 2px solid var(--accent-wind);
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-size: 14px; color: #fff;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px var(--accent-wind-glow);
+            transition: var(--transition);
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--accent-wind);
+            color: #000;
+            box-shadow: 0 0 25px var(--accent-wind);
+        }
+
+        /* Legend List (Normal document flow, no overlap) */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            list-style: none;
+        }
+
+        .legend-item {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 16px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition);
+            align-items: center;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 229, 255, 0.08);
+            border-color: rgba(0, 229, 255, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-number {
+            width: 28px; height: 28px;
+            background: var(--bg-base);
+            border: 1px solid var(--accent-wind);
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-size: 12px; color: var(--accent-wind);
+            transition: var(--transition);
+        }
+
+        .legend-item.active .legend-number { background: var(--accent-wind); color: #000; }
+
+        .legend-text h4 { font-size: 1rem; margin-bottom: 2px; color: #fff; }
+        .legend-text p { font-size: 0.85rem; margin: 0; color: var(--text-muted); }
+
+        /* ==========================================================================
+           WORKING PROCESS (MANDATORY DEDICATED SECTION)
+           ========================================================================== */
+        .working-container {
+            display: flex; flex-direction: column; gap: var(--spacing-md);
+        }
+
+        .working-visual {
+            width: 100%; height: 350px;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--border-radius);
+            border: var(--glass-border);
+            position: relative; overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        /* Canvas for procedural working animation overlay */
+        #working-canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none;
+        }
+
+        .working-svg-base { width: 90%; max-height: 90%; z-index: 1; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5)); transition: var(--transition); }
+
+        /* SVG highlight classes managed by JS */
+        .svg-part { transition: all 0.5s ease; opacity: 0.4; }
+        .svg-part.active { opacity: 1; filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.8)); stroke: var(--accent-wind); }
+
+        .working-controls-panel {
+            display: flex; flex-direction: column; gap: var(--spacing-md);
+            padding: var(--spacing-md); background: rgba(255,255,255,0.02); border-radius: 16px; border: var(--glass-border);
+        }
+
+        .working-stage-info { min-height: 80px; }
+        .working-stage-info h3 { color: var(--accent-wind); font-size: var(--h3); margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .working-stage-info .badge { background: rgba(0,229,255,0.1); color: var(--accent-wind); padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; border: 1px solid rgba(0,229,255,0.3); }
+        .working-stage-info p { font-size: var(--body); }
+
+        .working-io {
+            display: flex; gap: 16px; margin-top: 8px; font-size: 0.85rem;
+        }
+        .io-item { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(255,255,255,0.05); border-radius: 8px; }
+        .io-item.in::before { content: '→'; color: var(--accent-wind); }
+        .io-item.out::before { content: '→'; color: var(--accent-power); }
+
+        .controls-row {
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+        }
+
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: var(--transition); cursor: pointer; }
+        .dot.active { background: var(--accent-wind); box-shadow: 0 0 10px var(--accent-wind-glow); transform: scale(1.2); }
+
+        .btn-group { display: flex; gap: 8px; }
+        .btn {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff;
+            padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: var(--transition);
+            font-family: var(--font-main); font-weight: 500; display: flex; align-items: center; gap: 6px;
+        }
+        .btn:hover { background: rgba(255,255,255,0.2); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: rgba(0, 229, 255, 0.15); border-color: rgba(0, 229, 255, 0.4); color: var(--accent-wind); }
+        .btn-primary:hover { background: rgba(0, 229, 255, 0.3); box-shadow: 0 0 15px var(--accent-wind-glow); }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: var(--spacing-lg);
+        }
+
+        @media (max-width: 1024px) {
+            .sim-grid { grid-template-columns: 1fr; }
+        }
+
+        .sim-viewport {
+            background: linear-gradient(to bottom, #0A1128, #05050A);
+            border-radius: var(--border-radius);
+            border: var(--glass-border);
+            height: 500px;
+            position: relative; overflow: hidden;
+            display: flex; justify-content: center; align-items: flex-end;
+        }
+
+        #sim-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+
+        .sim-metrics {
+            position: absolute; top: var(--spacing-md); left: var(--spacing-md); right: var(--spacing-md);
+            display: flex; justify-content: space-between; z-index: 10;
+        }
+
+        .metric-card {
+            background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+            border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px 20px;
+            text-align: center;
+        }
+        .metric-value { font-size: 2rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+        .metric-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+        .val-power { color: var(--accent-power); text-shadow: 0 0 10px var(--accent-power-glow); }
+        .val-rpm { color: var(--accent-wind); text-shadow: 0 0 10px var(--accent-wind-glow); }
+
+        .sim-controls {
+            display: flex; flex-direction: column; gap: var(--spacing-md);
+        }
+
+        .control-group {
+            background: rgba(255,255,255,0.02); padding: 16px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .control-header { display: flex; justify-content: space-between; margin-bottom: 12px; align-items: flex-end; }
+        .control-header label { font-weight: 500; font-size: 0.95rem; }
+        .control-header span { font-family: monospace; font-size: 1.1rem; color: var(--accent-wind); background: rgba(0,229,255,0.1); padding: 2px 8px; border-radius: 4px; }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; margin: 10px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer; background: rgba(255,255,255,0.1); border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px; width: 20px; border-radius: 50%; background: #fff; cursor: pointer;
+            -webkit-appearance: none; margin-top: -7px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5); border: 2px solid var(--bg-base); transition: transform 0.1s;
+        }
+        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); }
+        
+        .control-desc { font-size: 0.8rem; color: var(--text-muted); margin-top: 8px; line-height: 1.4; }
+
+        /* ==========================================================================
+           INFO GRID (Facts, Mistakes, etc)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-lg);
+        }
+
+        .info-card {
+            background: linear-gradient(145deg, rgba(30, 35, 50, 0.4) 0%, rgba(20, 22, 30, 0.2) 100%);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 16px; padding: 24px;
+            transition: var(--transition);
+        }
+        .info-card:hover { border-color: rgba(255,255,255,0.15); transform: translateY(-5px); }
+        
+        .icon-wrapper {
+            width: 48px; height: 48px; border-radius: 12px; background: rgba(255,255,255,0.05);
+            display: flex; justify-content: center; align-items: center; margin-bottom: 16px; font-size: 1.5rem;
+        }
+        .info-card h3 { font-size: 1.1rem; margin-bottom: 8px; }
+        .info-card p { font-size: 0.9rem; margin-bottom: 0; }
+
+        /* SVG Gradients definition hidden container */
+        .svg-defs { width: 0; height: 0; position: absolute; }
+
+    </style>
+</head>
+<body>
+
+    <!-- SVG Definitions for reuse across the page -->
+    <svg class="svg-defs">
+        <defs>
+            <linearGradient id="metal-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#E0E5F0" />
+                <stop offset="50%" stop-color="#9BA1B0" />
+                <stop offset="100%" stop-color="#4A5060" />
+            </linearGradient>
+            <linearGradient id="blade-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#FFFFFF" />
+                <stop offset="100%" stop-color="#B0B6C4" />
+            </linearGradient>
+            <linearGradient id="copper-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FF9E80" />
+                <stop offset="50%" stop-color="#E64A19" />
+                <stop offset="100%" stop-color="#3E2723" />
+            </linearGradient>
+            <filter id="glow">
+                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+            </filter>
+        </defs>
+    </svg>
+
+    <!-- HERO SECTION -->
+    <section id="hero">
+        <div class="hero-canvas-container">
+            <canvas id="bg-canvas"></canvas>
+        </div>
+        <div class="container">
+            <div class="hero-content">
+                <h1>Harnessing the <span class="highlight">Wind</span></h1>
+                <p>An interactive exploration of wind turbine engineering, fluid dynamics, and clean energy generation.</p>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <span>Explore</span>
+        </div>
+    </section>
+
+    <!-- TOPIC OVERVIEW -->
+    <section class="container" style="margin-top: -60px; position: relative; z-index: 10;">
+        <div class="glass-panel">
+            <div class="section-header">
+                <h2>Kinetic to Electric</h2>
+                <p>How invisible air currents power our modern world.</p>
+            </div>
+            <p style="text-align: center; max-width: 800px; margin: 0 auto;">
+                A wind turbine is an engineering marvel that converts the kinetic energy of moving air into mechanical energy, and finally into electrical power. Modern utility-scale turbines are massive structures, with blades sweeping an area larger than a football field, precisely engineered to extract maximum energy from the wind.
+            </p>
+        </div>
+    </section>
+
+    <!-- COMPONENTS SECTION (Strict Marker Implementation) -->
+    <section class="container">
+        <div class="glass-panel">
+            <div class="section-header">
+                <h2>Inside the Nacelle</h2>
+                <p>The machinery housed hundreds of feet in the air.</p>
+            </div>
+            
+            <div class="components-grid">
+                <!-- Illustration Side -->
+                <div class="illustration-container" id="components-viz">
+                    <!-- High Quality SVG Illustration of Nacelle Interior -->
+                    <svg viewBox="0 0 800 500" class="svg-illustration" id="nacelle-svg">
+                        <!-- Tower -->
+                        <path d="M 350,500 L 450,500 L 430,350 L 370,350 Z" fill="url(#metal-grad)" />
+                        <!-- Yaw mechanism -->
+                        <rect x="360" y="330" width="80" height="20" fill="#333" rx="5" />
+                        <!-- Nacelle Casing (Backhalf cutaway) -->
+                        <path d="M 150,150 C 150,100 650,100 700,150 L 700,300 C 650,330 200,330 150,300 Z" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)" stroke-width="2" />
+                        
+                        <!-- Rotor Hub (Left) -->
+                        <path d="M 100,150 C 50,170 50,280 100,300 L 150,300 L 150,150 Z" fill="url(#metal-grad)" />
+                        <!-- Blade stumps -->
+                        <rect x="30" y="120" width="60" height="40" fill="url(#blade-grad)" transform="rotate(-30, 60, 140)" rx="10"/>
+                        <rect x="30" y="290" width="60" height="40" fill="url(#blade-grad)" transform="rotate(30, 60, 310)" rx="10"/>
+                        
+                        <!-- Main Shaft (Low Speed) -->
+                        <rect x="150" y="210" width="180" height="30" fill="url(#metal-grad)" />
+                        <!-- Main Bearing -->
+                        <rect x="180" y="190" width="40" height="70" fill="#666" rx="5" />
+                        
+                        <!-- Gearbox -->
+                        <rect x="330" y="160" width="120" height="130" fill="#444" rx="15" />
+                        <circle cx="370" cy="225" r="40" fill="#555" stroke="#222" stroke-width="2"/>
+                        <circle cx="420" cy="225" r="20" fill="#555" stroke="#222" stroke-width="2"/>
+                        
+                        <!-- High Speed Shaft -->
+                        <rect x="450" y="215" width="70" height="15" fill="url(#metal-grad)" />
+                        <!-- Mechanical Brake -->
+                        <rect x="470" y="200" width="20" height="45" fill="#B71C1C" rx="3" />
+
+                        <!-- Generator -->
+                        <rect x="520" y="170" width="140" height="110" fill="#2C3E50" rx="10" />
+                        <rect x="540" y="180" width="100" height="90" fill="url(#copper-grad)" rx="5" />
+                        <!-- Power Cables -->
+                        <path d="M 640,260 Q 670,260 670,350 L 670,500" fill="none" stroke="#FDD835" stroke-width="8" stroke-linecap="round" />
+                        
+                        <!-- Anemometer on top -->
+                        <path d="M 600,100 L 600,60" fill="none" stroke="#999" stroke-width="4" />
+                        <circle cx="600" cy="50" r="15" fill="#CCC" />
+                        
+                        <!-- Controller / Electronics -->
+                        <rect x="200" y="270" width="100" height="50" fill="#1A237E" rx="5" />
+                        <circle cx="220" cy="295" r="4" fill="#00E5FF" filter="url(#glow)"/>
+                        <circle cx="240" cy="295" r="4" fill="#00E5FF" />
+                    </svg>
+                    
+                    <!-- Markers (Positioned via inline styles % for responsiveness) -->
+                    <!-- Marker indices match legend data attributes -->
+                    <div class="marker" style="left: 10%; top: 45%;" data-index="1">1</div>
+                    <div class="marker" style="left: 31%; top: 45%;" data-index="2">2</div>
+                    <div class="marker" style="left: 49%; top: 45%;" data-index="3">3</div>
+                    <div class="marker" style="left: 60%; top: 45%;" data-index="4">4</div>
+                    <div class="marker" style="left: 74%; top: 45%;" data-index="5">5</div>
+                    <div class="marker" style="left: 75%; top: 10%;" data-index="6">6</div>
+                    <div class="marker" style="left: 50%; top: 68%;" data-index="7">7</div>
+                </div>
+
+                <!-- Legend List Side -->
+                <div class="legend-container">
+                    <ul class="legend-list" id="component-legend">
+                        <li class="legend-item" data-index="1">
+                            <div class="legend-number">1</div>
+                            <div class="legend-text">
+                                <h4>Rotor Hub & Blades</h4>
+                                <p>Captures wind energy; pitch mechanism angles blades.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-index="2">
+                            <div class="legend-number">2</div>
+                            <div class="legend-text">
+                                <h4>Low-Speed Shaft</h4>
+                                <p>Transmits rotational force from rotor at ~10-20 RPM.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-index="3">
+                            <div class="legend-number">3</div>
+                            <div class="legend-text">
+                                <h4>Gearbox</h4>
+                                <p>Increases rotational speed by roughly 100x for generator.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-index="4">
+                            <div class="legend-number">4</div>
+                            <div class="legend-text">
+                                <h4>High-Speed Shaft & Brake</h4>
+                                <p>Spins generator; brake holds rotor during maintenance.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-index="5">
+                            <div class="legend-number">5</div>
+                            <div class="legend-text">
+                                <h4>Generator</h4>
+                                <p>Converts mechanical rotation into electrical energy using induction.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-index="6">
+                            <div class="legend-number">6</div>
+                            <div class="legend-text">
+                                <h4>Anemometer & Vane</h4>
+                                <p>Measures wind speed and direction to align turbine.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-index="7">
+                            <div class="legend-number">7</div>
+                            <div class="legend-text">
+                                <h4>Yaw Drive</h4>
+                                <p>Motors that rotate the entire nacelle to face the wind.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING PROCESS (MANDATORY STRUCTURE) -->
+    <section class="container">
+        <div class="glass-panel">
+            <div class="section-header">
+                <h2>How It Works</h2>
+                <p>The stage-by-stage energy transformation process.</p>
+            </div>
+
+            <div class="working-container">
+                <!-- Visual Display -->
+                <div class="working-visual">
+                    <canvas id="working-canvas"></canvas>
+                    <!-- Simplified schematic for process highlighting -->
+                    <svg viewBox="0 0 1000 400" class="working-svg-base" id="working-svg">
+                        <!-- Wind representation zone -->
+                        <rect x="0" y="0" width="200" height="400" fill="transparent" />
+                        
+                        <!-- Rotor (Stage 1) -->
+                        <g id="wp-rotor" class="svg-part">
+                            <path d="M 250,200 L 200,50 Q 220,150 250,180 Z" fill="url(#blade-grad)" />
+                            <path d="M 250,200 L 200,350 Q 220,250 250,220 Z" fill="url(#blade-grad)" />
+                            <ellipse cx="260" cy="200" rx="15" ry="30" fill="#E0E5F0" />
+                        </g>
+                        
+                        <!-- Low Speed Shaft (Stage 2) -->
+                        <rect id="wp-shaft-low" class="svg-part" x="275" y="190" width="150" height="20" fill="#9BA1B0" />
+                        
+                        <!-- Gearbox (Stage 3) -->
+                        <g id="wp-gearbox" class="svg-part">
+                            <rect x="425" y="140" width="120" height="120" fill="#444" rx="10" />
+                            <circle cx="460" cy="200" r="35" fill="none" stroke="#888" stroke-width="4" stroke-dasharray="10 5" />
+                            <circle cx="515" cy="200" r="15" fill="none" stroke="#888" stroke-width="4" stroke-dasharray="5 3" />
+                        </g>
+
+                        <!-- High Speed Shaft (Stage 4) -->
+                        <rect id="wp-shaft-high" class="svg-part" x="545" y="195" width="80" height="10" fill="#ccc" />
+
+                        <!-- Generator (Stage 5) -->
+                        <g id="wp-generator" class="svg-part">
+                            <rect x="625" y="150" width="130" height="100" fill="#2C3E50" rx="8" />
+                            <path d="M 640,160 L 740,160 M 640,180 L 740,180 M 640,200 L 740,200 M 640,220 L 740,220 M 640,240 L 740,240" stroke="url(#copper-grad)" stroke-width="6" />
+                        </g>
+
+                        <!-- Grid Output (Stage 6) -->
+                        <g id="wp-grid" class="svg-part">
+                            <path d="M 755,200 Q 800,200 800,350" fill="none" stroke="#FDD835" stroke-width="6" />
+                            <rect x="780" y="350" width="40" height="50" fill="#666" /> <!-- Transformer -->
+                            <path d="M 820,375 L 950,375" fill="none" stroke="#FDD835" stroke-width="3" stroke-dasharray="8 4"/>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Controls Panel -->
+                <div class="working-controls-panel">
+                    <div class="working-stage-info">
+                        <h3 id="wp-title"><span class="badge">Stage 1</span> Wind Capture</h3>
+                        <div class="working-io" id="wp-io">
+                            <div class="io-item in">Kinetic Energy (Air)</div>
+                            <div class="io-item out">Mechanical Rotation</div>
+                        </div>
+                        <p id="wp-desc">Aerodynamic lift on the blades forces the rotor hub to turn, extracting energy from the moving air.</p>
+                    </div>
+
+                    <div class="controls-row">
+                        <div class="progress-dots" id="wp-dots">
+                            <!-- Filled by JS -->
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn" id="wp-prev">← Prev</button>
+                            <button class="btn btn-primary" id="wp-play">Auto-Play</button>
+                            <button class="btn" id="wp-next">Next →</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION -->
+    <section class="container">
+        <div class="glass-panel">
+            <div class="section-header">
+                <h2>Turbine Simulator</h2>
+                <p>Adjust environmental and mechanical variables to see the effect on power output.</p>
+            </div>
+
+            <div class="sim-grid">
+                <!-- Visual Viewport (Canvas 3D-ish representation) -->
+                <div class="sim-viewport" id="sim-container">
+                    <canvas id="sim-canvas"></canvas>
+                    
+                    <div class="sim-metrics">
+                        <div class="metric-card">
+                            <div class="metric-value val-power" id="sim-power-val">0</div>
+                            <div class="metric-label">Power Output (kW)</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-value val-rpm" id="sim-rpm-val">0</div>
+                            <div class="metric-label">Rotor Speed (RPM)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <label>Wind Speed</label>
+                            <span id="val-wind">12.0 m/s</span>
+                        </div>
+                        <input type="range" id="ctrl-wind" min="0" max="25" step="0.1" value="12">
+                        <p class="control-desc">Turbines typically start generating at 3-4 m/s, hit rated power at ~12 m/s, and shut down above 25 m/s to prevent damage.</p>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <label>Blade Pitch Angle</label>
+                            <span id="val-pitch">0&deg;</span>
+                        </div>
+                        <input type="range" id="ctrl-pitch" min="0" max="90" step="1" value="0">
+                        <p class="control-desc">Rotating the blades on their axis (feathering). 0° captures maximum wind. 90° lets air pass freely (used for braking/storm safety).</p>
+                    </div>
+                    
+                    <div class="control-group">
+                        <div class="control-header">
+                            <label>Air Density (Altitude/Temp)</label>
+                            <span id="val-density">1.225 kg/m&sup3;</span>
+                        </div>
+                        <input type="range" id="ctrl-density" min="1.0" max="1.4" step="0.01" value="1.225">
+                        <p class="control-desc">Cold, dense air at sea level pushes blades harder than warm, thin air at high altitudes, increasing power output.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INFORMATION CARDS -->
+    <section class="container">
+        <div class="info-grid">
+            <div class="info-card glass-panel">
+                <div class="icon-wrapper" style="color: #00E5FF;">🌊</div>
+                <h3>Offshore vs Onshore</h3>
+                <p>Offshore turbines can be much larger and capture stronger, more consistent ocean winds, but cost significantly more to install and maintain via specialized vessels.</p>
+            </div>
+            
+            <div class="info-card glass-panel">
+                <div class="icon-wrapper" style="color: #FF3D00;">⚠️</div>
+                <h3>Common Misconception</h3>
+                <p><strong>"They kill more birds than anything else."</strong><br>While avian collisions occur, studies show house cats, buildings, and fossil fuel pollution cause millions of times more bird fatalities annually than wind turbines.</p>
+            </div>
+
+            <div class="info-card glass-panel">
+                <div class="icon-wrapper" style="color: #FFD600;">⚡</div>
+                <h3>Betz's Limit</h3>
+                <p>According to fluid dynamics laws formulated by Albert Betz in 1919, no wind turbine can capture more than <strong>59.3%</strong> of the kinetic energy in wind. Modern turbines hit ~70-80% of this theoretical maximum.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER PADDING -->
+    <div style="height: 100px;"></div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        /**
+         * UTILITY FUNCTIONS
+         */
+        const $ = id => document.getElementById(id);
+        const $$ = selector => document.querySelectorAll(selector);
+
+        // Resize Canvas properly for retina displays
+        function setupCanvas(canvas) {
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.parentElement.getBoundingClientRect();
+            
+            // Set actual size in memory (scaled for retina)
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            
+            // Normalize coordinate system to use css pixels
+            ctx.scale(dpr, dpr);
+            
+            return { ctx, width: rect.width, height: rect.height };
+        }
+
+        /**
+         * 1. HERO BACKGROUND ANIMATION (Wind Particles)
+         */
+        class HeroBg {
+            constructor() {
+                this.canvas = $('bg-canvas');
+                this.particles = [];
+                this.init();
+                window.addEventListener('resize', () => this.init());
+                this.animate();
+            }
+
+            init() {
+                const setup = setupCanvas(this.canvas);
+                this.ctx = setup.ctx;
+                this.width = setup.width;
+                this.height = setup.height;
+                
+                this.particles = [];
+                const numParticles = window.innerWidth < 768 ? 40 : 100;
+                for(let i=0; i<numParticles; i++) {
+                    this.particles.push({
+                        x: Math.random() * this.width,
+                        y: Math.random() * this.height,
+                        length: Math.random() * 60 + 20,
+                        speed: Math.random() * 2 + 0.5,
+                        opacity: Math.random() * 0.3 + 0.05
+                    });
+                }
+            }
+
+            animate() {
+                this.ctx.clearRect(0, 0, this.width, this.height);
+                
+                this.ctx.lineWidth = 1;
+                this.ctx.strokeStyle = 'rgba(0, 229, 255, 0.4)';
+                
+                this.particles.forEach(p => {
+                    this.ctx.beginPath();
+                    this.ctx.globalAlpha = p.opacity;
+                    // Slightly angled lines
+                    this.ctx.moveTo(p.x, p.y);
+                    this.ctx.lineTo(p.x + p.length, p.y + (p.length * 0.1));
+                    this.ctx.stroke();
+
+                    p.x += p.speed;
+                    if(p.x > this.width + 100) {
+                        p.x = -100;
+                        p.y = Math.random() * this.height;
+                    }
+                });
+                
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+
+        /**
+         * 2. COMPONENTS INTERACTION (Marker & Legend)
+         */
+        class ComponentsManager {
+            constructor() {
+                this.markers = $$('.marker');
+                this.legendItems = $$('.legend-item');
+                this.bindEvents();
+            }
+
+            bindEvents() {
+                const activate = (index) => {
+                    this.markers.forEach(m => m.classList.toggle('active', m.dataset.index === index));
+                    this.legendItems.forEach(l => l.classList.toggle('active', l.dataset.index === index));
+                    
+                    // Optional: scroll legend item into view on mobile if needed, 
+                    // but normal flow usually handles this okay if height isn't constrained.
+                };
+
+                this.markers.forEach(marker => {
+                    marker.addEventListener('mouseenter', () => activate(marker.dataset.index));
+                    marker.addEventListener('click', () => activate(marker.dataset.index));
+                });
+
+                this.legendItems.forEach(item => {
+                    item.addEventListener('mouseenter', () => activate(item.dataset.index));
+                    item.addEventListener('click', () => activate(item.dataset.index));
+                });
+
+                // Clear on mouseleave container
+                $('components-viz').addEventListener('mouseleave', () => activate(null));
+                $('component-legend').addEventListener('mouseleave', () => activate(null));
+            }
+        }
+
+        /**
+         * 3. WORKING PROCESS SECTION (State Machine & Visuals)
+         */
+        const processData = [
+            {
+                title: "Wind Capture",
+                in: "Kinetic Energy (Moving Air)", out: "Mechanical Rotation",
+                desc: "Aerodynamic lift on the curved blade surfaces forces the heavy rotor hub to turn.",
+                svgId: "wp-rotor"
+            },
+            {
+                title: "Low-Speed Shaft",
+                in: "Rotation (~15 RPM)", out: "High Torque Transfer",
+                desc: "The massive rotor spins the main shaft slowly but with immense rotational force (torque).",
+                svgId: "wp-shaft-low"
+            },
+            {
+                title: "Gearbox Step-up",
+                in: "High Torque / Low Speed", out: "Low Torque / High Speed",
+                desc: "A series of planetary gears converts the slow 15 RPM rotation into roughly 1500 RPM.",
+                svgId: "wp-gearbox"
+            },
+            {
+                title: "High-Speed Transfer",
+                in: "Fast Rotation", out: "Direct Generator Input",
+                desc: "The high-speed shaft rapidly spins, providing the necessary RPMs required by the electrical generator.",
+                svgId: "wp-shaft-high"
+            },
+            {
+                title: "Power Generation",
+                in: "Mechanical Energy", out: "Electrical Energy",
+                desc: "Magnets spin past copper coils (electromagnetic induction), forcing electrons to flow and creating electricity.",
+                svgId: "wp-generator"
+            },
+            {
+                title: "Grid Export",
+                in: "Raw Electricity", out: "Grid-Ready Power",
+                desc: "A transformer steps up the voltage for efficient long-distance travel through power lines to cities.",
+                svgId: "wp-grid"
+            }
+        ];
+
+        class WorkingProcess {
+            constructor() {
+                this.stage = 0;
+                this.isPlaying = false;
+                this.timer = null;
+                
+                this.canvas = $('working-canvas');
+                this.particles = [];
+                
+                this.initUI();
+                this.initCanvas();
+                this.updateStage();
+                this.bindEvents();
+                this.animateCanvas();
+                
+                window.addEventListener('resize', () => this.initCanvas());
+            }
+
+            initUI() {
+                const dotsContainer = $('wp-dots');
+                processData.forEach((_, i) => {
+                    const dot = document.createElement('div');
+                    dot.className = 'dot';
+                    dot.addEventListener('click', () => { this.stopAuto(); this.stage = i; this.updateStage(); });
+                    dotsContainer.appendChild(dot);
+                });
+            }
+
+            initCanvas() {
+                const setup = setupCanvas(this.canvas);
+                this.ctx = setup.ctx;
+                this.width = setup.width;
+                this.height = setup.height;
+            }
+
+            bindEvents() {
+                $('wp-prev').addEventListener('click', () => { this.stopAuto(); this.prev(); });
+                $('wp-next').addEventListener('click', () => { this.stopAuto(); this.next(); });
+                $('wp-play').addEventListener('click', () => {
+                    if(this.isPlaying) this.stopAuto();
+                    else this.startAuto();
+                });
+            }
+
+            prev() { this.stage = (this.stage - 1 + processData.length) % processData.length; this.updateStage(); }
+            next() { this.stage = (this.stage + 1) % processData.length; this.updateStage(); }
+
+            startAuto() {
+                this.isPlaying = true;
+                $('wp-play').textContent = 'Pause';
+                $('wp-play').classList.remove('btn-primary');
+                // Immediate next if stuck on last
+                if(this.stage === processData.length-1) this.next();
+                this.timer = setInterval(() => this.next(), 3000);
+            }
+
+            stopAuto() {
+                this.isPlaying = false;
+                $('wp-play').textContent = 'Auto-Play';
+                $('wp-play').classList.add('btn-primary');
+                clearInterval(this.timer);
+            }
+
+            updateStage() {
+                const data = processData[this.stage];
+                
+                // Update Text UI
+                $('wp-title').innerHTML = `<span class="badge">Stage ${this.stage + 1}</span> ${data.title}`;
+                $('wp-io').innerHTML = `<div class="io-item in">${data.in}</div><div class="io-item out">${data.out}</div>`;
+                $('wp-desc').textContent = data.desc;
+
+                // Update Dots
+                $$('.dot').forEach((d, i) => d.classList.toggle('active', i === this.stage));
+
+                // Update SVG Highlighting
+                $$('.svg-part').forEach(p => p.classList.remove('active'));
+                $(data.svgId).classList.add('active');
+
+                // Spawn specific particles based on stage for visual reinforcement
+                this.spawnParticlesForStage();
+            }
+
+            spawnParticlesForStage() {
+                this.particles = []; // clear old
+                const stageNum = this.stage + 1;
+                let count = 20;
+                
+                for(let i=0; i<count; i++) {
+                    let p = { age: 0, maxAge: 100 + Math.random()*50, type: 'wind' };
+                    
+                    if(stageNum === 1) { // Wind in
+                        p.x = Math.random() * (this.width * 0.2);
+                        p.y = this.height * 0.2 + Math.random() * (this.height * 0.6);
+                        p.vx = 2 + Math.random(); p.vy = 0;
+                        p.color = '#00E5FF'; p.size = 2;
+                    } 
+                    else if(stageNum >= 2 && stageNum <= 4) { // Mechanical (sparks/stress)
+                        p.x = this.width * (0.25 + (stageNum*0.1));
+                        p.y = this.height * 0.5 + (Math.random()*40 - 20);
+                        p.vx = 1 + Math.random(); p.vy = (Math.random() - 0.5) * 2;
+                        p.color = '#FF3D00'; p.size = 1.5; p.type = 'mech';
+                    }
+                    else { // Electrical (electrons)
+                        p.x = this.width * 0.65 + Math.random() * (this.width * 0.1);
+                        p.y = this.height * 0.45 + (Math.random()*40 - 20);
+                        p.vx = 3 + Math.random(); p.vy = 0;
+                        p.color = '#FFD600'; p.size = 3; p.type = 'elec';
+                        if(stageNum === 6) p.x = this.width * 0.8; // Move further right
+                    }
+                    this.particles.push(p);
+                }
+            }
+
+            animateCanvas() {
+                this.ctx.clearRect(0, 0, this.width, this.height);
+                
+                for(let i = this.particles.length - 1; i >= 0; i--) {
+                    let p = this.particles[i];
+                    p.age++;
+                    
+                    if(p.type === 'elec' && this.stage === 5) {
+                        // Wavy motion for electricity
+                        p.y += Math.sin(p.age * 0.2) * 2;
+                    }
+
+                    p.x += p.vx;
+                    p.y += p.vy;
+
+                    let alpha = 1 - (p.age / p.maxAge);
+                    this.ctx.globalAlpha = Math.max(0, alpha);
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    this.ctx.fill();
+
+                    if(p.type === 'elec') {
+                        this.ctx.shadowBlur = 10;
+                        this.ctx.shadowColor = p.color;
+                        this.ctx.fill();
+                        this.ctx.shadowBlur = 0;
+                    }
+
+                    if(p.age > p.maxAge || p.x > this.width) {
+                        this.particles.splice(i, 1);
+                        // Respawn continuously while stage is active
+                        this.spawnSingleParticle(); 
+                    }
+                }
+                
+                requestAnimationFrame(() => this.animateCanvas());
+            }
+
+            spawnSingleParticle() {
+                if(this.particles.length > 50) return;
+                const stageNum = this.stage + 1;
+                let p = { age: 0, maxAge: 100 + Math.random()*50, type: 'wind' };
+                
+                if(stageNum === 1) {
+                    p.x = 0; p.y = this.height * 0.2 + Math.random() * (this.height * 0.6);
+                    p.vx = 2 + Math.random(); p.vy = 0; p.color = '#00E5FF'; p.size = 2;
+                } else if(stageNum >= 2 && stageNum <= 4) {
+                    p.x = this.width * (0.25 + (stageNum*0.1)); p.y = this.height * 0.5 + (Math.random()*20 - 10);
+                    p.vx = 1 + Math.random(); p.vy = (Math.random() - 0.5) * 2; p.color = '#FF3D00'; p.size = 1.5; p.type = 'mech';
+                } else {
+                    p.x = this.width * (stageNum===6 ? 0.75 : 0.65); p.y = this.height * 0.5 + (Math.random()*30 - 15);
+                    p.vx = 3 + Math.random(); p.vy = 0; p.color = '#FFD600'; p.size = 3; p.type = 'elec';
+                }
+                this.particles.push(p);
+            }
+        }
+
+        /**
+         * 4. INTERACTIVE SIMULATION (Physics & 3D-ish Canvas Rendering)
+         */
+        class TurbineSimulation {
+            constructor() {
+                this.canvas = $('sim-canvas');
+                
+                // Inputs
+                this.ctrlWind = $('ctrl-wind');
+                this.ctrlPitch = $('ctrl-pitch');
+                this.ctrlDensity = $('ctrl-density');
+                
+                // Display Values
+                this.valWind = $('val-wind');
+                this.valPitch = $('val-pitch');
+                this.valDensity = $('val-density');
+                this.dispPower = $('sim-power-val');
+                this.dispRPM = $('sim-rpm-val');
+
+                // State
+                this.rotorAngle = 0;
+                this.currentRPM = 0;
+                this.targetRPM = 0;
+                
+                // Constants (Simplified Physics)
+                this.bladeLength = 40; // meters (simulated)
+                this.sweptArea = Math.PI * Math.pow(this.bladeLength, 2);
+                
+                this.initCanvas();
+                this.bindEvents();
+                this.calculatePhysics();
+                this.animate();
+                
+                window.addEventListener('resize', () => this.initCanvas());
+            }
+
+            initCanvas() {
+                const setup = setupCanvas(this.canvas);
+                this.ctx = setup.ctx;
+                this.width = setup.width;
+                this.height = setup.height;
+                this.cx = this.width / 2;
+                this.cy = this.height * 0.45; // slightly above center
+                
+                // Adjust scale based on screen width
+                this.scale = Math.min(this.width / 400, this.height / 500) * 1.5; 
+            }
+
+            bindEvents() {
+                const update = () => this.calculatePhysics();
+                
+                // Touch & Mouse events for sliders
+                [this.ctrlWind, this.ctrlPitch, this.ctrlDensity].forEach(ctrl => {
+                    ctrl.addEventListener('input', update);
+                    // Ensure touchmove works smoothly without scrolling page
+                    ctrl.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
+                });
+            }
+
+            calculatePhysics() {
+                const v = parseFloat(this.ctrlWind.value);
+                const pitch = parseFloat(this.ctrlPitch.value);
+                const rho = parseFloat(this.ctrlDensity.value);
+
+                // Update UI Labels
+                this.valWind.textContent = v.toFixed(1) + ' m/s';
+                this.valPitch.innerHTML = pitch + '&deg;';
+                this.valDensity.innerHTML = rho.toFixed(3) + ' kg/m&sup3;';
+
+                // 1. Calculate Coefficient of Performance (Cp) based on pitch
+                // Ideal Cp is ~0.45 at 0 pitch. Pitching to 90 degrees drops it to 0.
+                // Highly simplified curve for visual purpose.
+                let pitchFactor = Math.cos(pitch * (Math.PI / 180)); 
+                // Penalty if pitched too far
+                let Cp = 0.45 * Math.pow(pitchFactor, 3); 
+                if (Cp < 0) Cp = 0;
+
+                // 2. Power Equation: P = 0.5 * rho * A * V^3 * Cp
+                let powerKW = 0;
+                let targetRPM = 0;
+
+                // Cut-in speed ~3m/s, Cut-out ~25m/s
+                if (v >= 3 && v <= 25) {
+                    const powerWatts = 0.5 * rho * this.sweptArea * Math.pow(v, 3) * Cp;
+                    powerKW = powerWatts / 1000;
+                    
+                    // Cap at rated power (e.g. 2000 kW)
+                    if(powerKW > 2500) powerKW = 2500;
+
+                    // RPM relates roughly linearly to wind speed until rated, then governed.
+                    // Max RPM ~18.
+                    targetRPM = (v / 12) * 15 * pitchFactor; 
+                    if(targetRPM > 20) targetRPM = 20;
+                } else if (v > 25) {
+                    // Furled/braked for safety
+                    powerKW = 0;
+                    targetRPM = 0;
+                }
+
+                this.targetRPM = targetRPM;
+                this.targetPower = powerKW;
+
+                // Update numeric displays immediately for responsiveness
+                this.dispPower.textContent = Math.round(powerKW).toLocaleString();
+            }
+
+            drawTurbine() {
+                const ctx = this.ctx;
+                ctx.save();
+                ctx.translate(this.cx, this.cy);
+                ctx.scale(this.scale, this.scale);
+
+                // Draw Tower
+                ctx.fillStyle = '#4A5060';
+                ctx.beginPath();
+                ctx.moveTo(-10, 0);
+                ctx.lineTo(-20, 300);
+                ctx.lineTo(20, 300);
+                ctx.lineTo(10, 0);
+                ctx.fill();
+                
+                // Add tower gradient shadow for depth
+                const grad = ctx.createLinearGradient(-20, 0, 20, 0);
+                grad.addColorStop(0, 'rgba(0,0,0,0.5)');
+                grad.addColorStop(0.5, 'rgba(255,255,255,0.2)');
+                grad.addColorStop(1, 'rgba(0,0,0,0.7)');
+                ctx.fillStyle = grad;
+                ctx.fill();
+
+                // Draw Nacelle
+                ctx.fillStyle = '#E0E5F0';
+                ctx.beginPath();
+                ctx.ellipse(0, -10, 25, 15, 0, 0, Math.PI*2);
+                ctx.fill();
+
+                // Draw Rotor (Rotated based on state)
+                ctx.rotate(this.rotorAngle);
+                
+                // Visual effect of pitch (make blades narrower visually when pitched)
+                const pitch = parseFloat(this.ctrlPitch.value);
+                const visualWidth = 12 * Math.max(0.1, Math.cos(pitch * Math.PI/180));
+
+                for(let i=0; i<3; i++) {
+                    ctx.save();
+                    ctx.rotate((i * 120) * Math.PI / 180);
+                    
+                    // Blade
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.quadraticCurveTo(visualWidth, -50, 2, -120); // Tip
+                    ctx.quadraticCurveTo(-visualWidth, -50, 0, 0);
+                    ctx.fill();
+                    
+                    // Blade shading
+                    ctx.fillStyle = 'rgba(0,0,0,0.1)';
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.quadraticCurveTo(visualWidth, -50, 2, -120);
+                    ctx.lineTo(0,-120);
+                    ctx.fill();
+
+                    ctx.restore();
+                }
+
+                // Hub Center
+                ctx.fillStyle = '#9BA1B0';
+                ctx.beginPath();
+                ctx.arc(0, 0, 10, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = '#333';
+                ctx.beginPath();
+                ctx.arc(0, 0, 3, 0, Math.PI*2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            drawWindFlow() {
+                // Visualize wind speed through particle lines passing the turbine
+                const v = parseFloat(this.ctrlWind.value);
+                if (v < 0.5) return; // No wind
+
+                this.ctx.strokeStyle = `rgba(0, 229, 255, ${Math.min(0.3, v/50)})`;
+                this.ctx.lineWidth = 1;
+                
+                // create a few streaks based on time
+                const time = Date.now() / 1000;
+                for(let i=0; i<5; i++) {
+                    const yOffset = Math.sin(time * 2 + i) * 100;
+                    const yPos = this.cy + yOffset;
+                    
+                    // Speed multiplier for visual
+                    const xOffset = ((time * v * 20) + (i * 200)) % this.width;
+                    
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(xOffset, yPos);
+                    this.ctx.lineTo(xOffset + v*5, yPos);
+                    this.ctx.stroke();
+                }
+            }
+
+            animate() {
+                // Clear
+                this.ctx.clearRect(0, 0, this.width, this.height);
+
+                // Smooth RPM transition (inertia)
+                this.currentRPM += (this.targetRPM - this.currentRPM) * 0.05;
+                
+                // Update display
+                this.dispRPM.textContent = this.currentRPM.toFixed(1);
+
+                // Convert RPM to radians per frame (assuming 60fps)
+                // RPM / 60 = Rev per sec. Rev per sec * 2PI = Rads per sec.
+                const radsPerSec = (this.currentRPM / 60) * Math.PI * 2;
+                this.rotorAngle += radsPerSec / 60; 
+
+                this.drawWindFlow();
+                this.drawTurbine();
+
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+
+        /**
+         * INITIALIZATION
+         */
+        window.addEventListener('DOMContentLoaded', () => {
+            new HeroBg();
+            new ComponentsManager();
+            new WorkingProcess();
+            new TurbineSimulation();
+        });
+
+    </script>
+</body>
+</html>

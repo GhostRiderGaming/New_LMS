@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Acid Rain Formation | Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           ROOT VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Colors - Premium Dark Theme */
+            --bg-base: #05050A;
+            --bg-panel: rgba(20, 20, 30, 0.6);
+            --bg-panel-hover: rgba(30, 30, 45, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-main: #E0E0E5;
+            --text-muted: #8A8A9E;
+            
+            /* Thematic Colors */
+            --color-so2: #FFD166; /* Sulfur Yellow */
+            --color-nox: #EF476F; /* Nitrogen Red */
+            --color-acid: #06D6A0; /* Acid Green */
+            --color-water: #118AB2; /* Water Blue */
+            
+            /* Typography (Fluid) */
+            --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --fs-h1: clamp(2rem, 5vw, 4rem);
+            --fs-h2: clamp(1.5rem, 3vw, 2.5rem);
+            --fs-h3: clamp(1.1rem, 2vw, 1.5rem);
+            --fs-body: clamp(0.9rem, 1.2vw, 1.1rem);
+            
+            /* Spacing & Borders */
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 32px;
+            --spacing-xl: 64px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-full: 999px;
+            
+            /* Effects */
+            --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --glow-so2: 0 0 15px rgba(255, 209, 102, 0.5);
+            --glow-nox: 0 0 15px rgba(239, 71, 111, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(17, 138, 178, 0.1), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(239, 71, 111, 0.1), transparent 25%);
+            background-attachment: fixed;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+
+        /* ==========================================================================
+           UTILITIES (Glassmorphism & Layout)
+           ========================================================================== */
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-glass);
+            padding: var(--spacing-lg);
+            transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94), background 0.3s;
+        }
+
+        @media (max-width: 768px) {
+            /* Reduce blur on mobile for performance */
+            .glass-panel { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); padding: var(--spacing-md); }
+        }
+
+        h1 { font-size: var(--fs-h1); font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: var(--spacing-md); background: linear-gradient(135deg, #fff, #8A8A9E); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--fs-h2); font-weight: 600; margin-bottom: var(--spacing-md); }
+        h3 { font-size: var(--fs-h3); font-weight: 500; color: #fff; margin-bottom: var(--spacing-sm); }
+        p { font-size: var(--fs-body); color: var(--text-muted); margin-bottom: var(--spacing-md); }
+        
+        .highlight { color: #fff; font-weight: 600; }
+        .text-so2 { color: var(--color-so2); }
+        .text-nox { color: var(--color-nox); }
+        .text-acid { color: var(--color-acid); }
+
+        /* ==========================================================================
+           MAIN LAYOUT
+           ========================================================================== */
+        #app-container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: 1600px;
+            margin: 0 auto;
+            min-height: 100vh;
+        }
+
+        header {
+            padding: var(--spacing-lg) 5%;
+            text-align: center;
+            border-bottom: 1px solid var(--glass-border);
+            position: sticky;
+            top: 0;
+            background: rgba(5, 5, 10, 0.8);
+            backdrop-filter: blur(20px);
+            z-index: 100;
+        }
+
+        .subtitle {
+            font-size: var(--fs-body);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--color-acid);
+            font-weight: 600;
+            display: block;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        main {
+            padding: var(--spacing-xl) 5%;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xl);
+        }
+
+        section {
+            width: 100%;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeUp 0.8s forwards;
+        }
+        
+        section:nth-child(2) { animation-delay: 0.2s; }
+        section:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes fadeUp {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* ==========================================================================
+           COMPONENTS & MARKER SYSTEM (MANDATORY PATTERN)
+           ========================================================================== */
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: #0A0A12;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            aspect-ratio: 16/9;
+        }
+
+        .diagram-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--bg-panel);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: #fff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255,255,255,0.3);
+            transition: all 0.3s ease;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--color-acid);
+            border-color: #fff;
+            box-shadow: 0 0 20px var(--color-acid);
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            width: 100%;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-md);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--glass-border);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #fff;
+            flex-shrink: 0;
+            transition: all 0.3s;
+        }
+
+        .legend-item.active .legend-badge {
+            background: var(--color-acid);
+            box-shadow: 0 0 15px var(--color-acid);
+        }
+
+        .legend-content {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .legend-title { font-weight: 600; color: #fff; font-size: 1rem; }
+        .legend-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.3; }
+
+        /* ==========================================================================
+           WORKING MECHANISM (CANVAS & CONTROLS)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .canvas-wrapper {
+            width: 100%;
+            height: 400px;
+            background: #0A0A12;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Mechanism Controls */
+        .mechanism-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-panel);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            flex-wrap: wrap;
+            gap: var(--spacing-md);
+        }
+
+        .stage-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stage-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+
+        .stage-dot.active {
+            background: var(--color-acid);
+            box-shadow: 0 0 10px var(--color-acid);
+            transform: scale(1.3);
+        }
+
+        .stage-info {
+            flex: 1;
+            text-align: center;
+            min-width: 200px;
+        }
+
+        .stage-title { font-weight: bold; color: #fff; font-size: 1.1rem; }
+        .stage-caption { font-size: 0.9rem; color: var(--text-muted); }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        button {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            font-weight: 600;
+            font-family: inherit;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        button:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-1px);
+        }
+        
+        button:active { transform: translateY(1px); }
+
+        button.primary {
+            background: var(--color-acid);
+            color: #000;
+            border: none;
+        }
+        button.primary:hover { background: #08f0b5; box-shadow: 0 0 15px var(--color-acid); }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: var(--spacing-lg);
+        }
+
+        @media (max-width: 1024px) {
+            .sim-grid { grid-template-columns: 1fr; }
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .control-label { font-weight: 600; color: #fff; font-size: 0.9rem;}
+        .control-value { font-family: monospace; color: var(--color-acid); }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+        
+        #slider-so2::-webkit-slider-thumb { background: var(--color-so2); box-shadow: var(--glow-so2); }
+        #slider-nox::-webkit-slider-thumb { background: var(--color-nox); box-shadow: var(--glow-nox); }
+
+        /* Simulation Visual Output */
+        .sim-output {
+            position: relative;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: linear-gradient(to bottom, #87CEEB, #E0F6FF); /* Normal sky */
+            transition: background 0.5s ease;
+            min-height: 400px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .sim-sky-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, #4A4A4A, #8B8B7A); /* Smog sky */
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            z-index: 1;
+        }
+
+        .sim-elements {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+        }
+
+        /* Ph Meter UI inside Simulation */
+        .ph-meter {
+            position: absolute;
+            top: var(--spacing-md);
+            right: var(--spacing-md);
+            background: var(--bg-panel);
+            backdrop-filter: blur(8px);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            text-align: center;
+            z-index: 10;
+        }
+        .ph-value {
+            font-size: 2rem;
+            font-weight: 700;
+            font-family: monospace;
+            color: #fff;
+            transition: color 0.3s;
+        }
+        .ph-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+
+        /* SVG Environment in Sim */
+        .sim-tree { transition: all 0.5s; transform-origin: bottom center; }
+        .sim-building { transition: all 0.5s; }
+        
+        /* ==========================================================================
+           INFO CARDS (Facts, Impacts)
+           ========================================================================== */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .info-card {
+            background: rgba(20, 20, 30, 0.4);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            border-top: 2px solid var(--glass-border);
+            transition: transform 0.3s;
+        }
+        
+        .info-card:hover { transform: translateY(-5px); background: rgba(30,30,45,0.6); }
+        .info-card h3 { display: flex; align-items: center; gap: 8px; font-size: 1.1rem; }
+        
+        .icon {
+            display: inline-flex;
+            width: 24px; height: 24px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            align-items: center; justify-content: center;
+            font-size: 12px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        
+        <header>
+            <span class="subtitle">Atmospheric Chemistry</span>
+            <h1>Acid Rain Formation</h1>
+            <p>Interactive educational visualization exploring the causes, mechanics, and effects of acidic precipitation.</p>
+        </header>
+
+        <main>
+            
+            <!-- ========================================================== -->
+            <!-- 1. COMPONENTS SECTION (Marker Pattern) -->
+            <!-- ========================================================== -->
+            <section id="components" class="glass-panel">
+                <h2>The Cycle Components</h2>
+                <p>Discover the primary sources and environmental elements involved in the formation of acid rain. Tap markers to learn more.</p>
+                
+                <div class="grid-2" style="align-items: start;">
+                    
+                    <!-- Diagram Container -->
+                    <div class="diagram-container">
+                        <svg class="diagram-svg" viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice">
+                            <!-- Background Sky & Ground -->
+                            <rect width="100%" height="100%" fill="#0F172A"/>
+                            <path d="M0,350 Q200,320 400,350 T800,340 L800,450 L0,450 Z" fill="#1E293B"/>
+                            
+                            <!-- Factory (Source) -->
+                            <g transform="translate(50, 220)">
+                                <rect x="10" y="50" width="80" height="80" fill="#334155" rx="5"/>
+                                <rect x="30" y="0" width="20" height="50" fill="#475569"/>
+                                <rect x="60" y="20" width="15" height="30" fill="#475569"/>
+                                <!-- Smoke -->
+                                <circle cx="40" cy="-10" r="15" fill="rgba(255,209,102,0.3)" filter="blur(2px)"/>
+                                <circle cx="50" cy="-30" r="25" fill="rgba(255,209,102,0.2)" filter="blur(4px)"/>
+                            </g>
+
+                            <!-- Car (Source) -->
+                            <g transform="translate(180, 310)">
+                                <path d="M10,20 L20,10 L40,10 L50,20 L60,20 L60,30 L0,30 L0,20 Z" fill="#94A3B8"/>
+                                <circle cx="15" cy="30" r="5" fill="#000"/>
+                                <circle cx="45" cy="30" r="5" fill="#000"/>
+                                <!-- Exhaust -->
+                                <circle cx="-10" cy="25" r="8" fill="rgba(239,71,111,0.4)" filter="blur(2px)"/>
+                            </g>
+
+                            <!-- Cloud (Reactor) -->
+                            <g transform="translate(350, 50)">
+                                <path d="M40,50 A30,30 0 0,1 40,0 A40,40 0 0,1 110,-10 A30,30 0 0,1 150,20 A20,20 0 0,1 140,50 Z" fill="#64748B"/>
+                                <path d="M40,55 A30,30 0 0,1 40,5 A40,40 0 0,1 110,-5 A30,30 0 0,1 150,25 A20,20 0 0,1 140,55 Z" fill="#94A3B8" opacity="0.5"/>
+                            </g>
+
+                            <!-- Rain (Precipitation) -->
+                            <g transform="translate(380, 120)">
+                                <line x1="10" y1="0" x2="5" y2="20" stroke="rgba(6,214,160,0.8)" stroke-width="2" stroke-linecap="round" stroke-dasharray="4,4"/>
+                                <line x1="40" y1="20" x2="35" y2="40" stroke="rgba(6,214,160,0.8)" stroke-width="2" stroke-linecap="round" stroke-dasharray="4,4"/>
+                                <line x1="70" y1="10" x2="65" y2="30" stroke="rgba(6,214,160,0.8)" stroke-width="2" stroke-linecap="round" stroke-dasharray="4,4"/>
+                                <line x1="100" y1="30" x2="95" y2="50" stroke="rgba(6,214,160,0.8)" stroke-width="2" stroke-linecap="round" stroke-dasharray="4,4"/>
+                            </g>
+
+                            <!-- Forest/Lake (Deposition) -->
+                            <g transform="translate(600, 250)">
+                                <!-- Trees -->
+                                <path d="M20,90 L20,60" stroke="#5C4033" stroke-width="6"/>
+                                <circle cx="20" cy="50" r="25" fill="#2E8B57"/>
+                                <path d="M60,90 L60,70" stroke="#5C4033" stroke-width="4"/>
+                                <circle cx="60" cy="65" r="15" fill="#3CB371"/>
+                                <!-- Lake -->
+                                <ellipse cx="100" cy="110" rx="80" ry="15" fill="#118AB2"/>
+                            </g>
+                        </svg>
+
+                        <!-- Absolute Markers -->
+                        <div class="marker" data-target="m1" style="left: 11%; top: 50%;">1</div>
+                        <div class="marker" data-target="m2" style="left: 26%; top: 72%;">2</div>
+                        <div class="marker" data-target="m3" style="left: 55%; top: 15%;">3</div>
+                        <div class="marker" data-target="m4" style="left: 55%; top: 35%;">4</div>
+                        <div class="marker" data-target="m5" style="left: 80%; top: 75%;">5</div>
+                    </div>
+
+                    <!-- Legend List -->
+                    <div class="legend-list">
+                        <div class="legend-item" id="leg-m1">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-content">
+                                <span class="legend-title">Industrial Emissions (<span class="text-so2">SO₂</span>)</span>
+                                <span class="legend-desc">Power plants and factories burning fossil fuels release Sulfur Dioxide.</span>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="leg-m2">
+                            <div class="legend-badge">2</div>
+                            <div class="legend-content">
+                                <span class="legend-title">Vehicle Exhaust (<span class="text-nox">NOₓ</span>)</span>
+                                <span class="legend-desc">Combustion engines in cars and trucks release Nitrogen Oxides.</span>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="leg-m3">
+                            <div class="legend-badge">3</div>
+                            <div class="legend-content">
+                                <span class="legend-title">Atmospheric Reaction</span>
+                                <span class="legend-desc">Gases mix with water vapor (<span style="color:var(--color-water)">H₂O</span>) and oxygen in clouds to form acids.</span>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="leg-m4">
+                            <div class="legend-badge">4</div>
+                            <div class="legend-content">
+                                <span class="legend-title">Acidic Precipitation</span>
+                                <span class="legend-desc">Rain, snow, or fog falls with elevated levels of Sulfuric and Nitric acid.</span>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="leg-m5">
+                            <div class="legend-badge">5</div>
+                            <div class="legend-content">
+                                <span class="legend-title">Deposition Environment</span>
+                                <span class="legend-desc">Forests, lakes, and soils absorb the acid, lowering their natural pH.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- ========================================================== -->
+            <!-- 2. WORKING PROCESS (Canvas Animation) -->
+            <!-- ========================================================== -->
+            <section id="working" class="glass-panel">
+                <h2>Chemical Mechanism</h2>
+                <p>Observe the continuous chemical transformation from pollutant gases to acid rain at a molecular level.</p>
+                
+                <div class="working-container">
+                    <div class="canvas-wrapper">
+                        <canvas id="mech-canvas"></canvas>
+                        
+                        <!-- Overlay Labels inside Canvas Wrapper -->
+                        <div style="position: absolute; top: 10px; left: 10px; font-size: 0.8rem; color: rgba(255,255,255,0.5);">
+                            Height: <span id="alt-display">Ground Level</span>
+                        </div>
+                    </div>
+
+                    <div class="mechanism-controls">
+                        <div class="stage-indicator" id="stage-dots">
+                            <div class="stage-dot active"></div>
+                            <div class="stage-dot"></div>
+                            <div class="stage-dot"></div>
+                            <div class="stage-dot"></div>
+                            <div class="stage-dot"></div>
+                        </div>
+                        
+                        <div class="stage-info">
+                            <div class="stage-title" id="stage-title">1. Emission</div>
+                            <div class="stage-caption" id="stage-caption">SO₂ and NOₓ are released into the air.</div>
+                        </div>
+
+                        <div class="btn-group">
+                            <button id="btn-prev">◄ Prev</button>
+                            <button id="btn-play" class="primary">▶ Auto-Play</button>
+                            <button id="btn-next">Next ►</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- ========================================================== -->
+            <!-- 3. INTERACTIVE SIMULATION -->
+            <!-- ========================================================== -->
+            <section id="simulation" class="glass-panel">
+                <h2>Environmental Impact Simulator</h2>
+                <p>Adjust emission levels to see how varying concentrations of pollutants affect the environment's pH and health.</p>
+                
+                <div class="sim-grid">
+                    <div class="sim-controls">
+                        <div class="control-group">
+                            <div class="control-header">
+                                <span class="control-label">Coal Plant (<span class="text-so2">SO₂</span>)</span>
+                                <span class="control-value" id="val-so2">50%</span>
+                            </div>
+                            <input type="range" id="slider-so2" min="0" max="100" value="50">
+                        </div>
+                        
+                        <div class="control-group">
+                            <div class="control-header">
+                                <span class="control-label">Traffic (<span class="text-nox">NOₓ</span>)</span>
+                                <span class="control-value" id="val-nox">50%</span>
+                            </div>
+                            <input type="range" id="slider-nox" min="0" max="100" value="50">
+                        </div>
+                        
+                        <div style="margin-top: auto; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; font-size: 0.85rem; color: var(--text-muted);">
+                            <strong>Simulation Logic:</strong> Increased emissions lower the pH. Below pH 5.0, aquatic life suffers. Below 4.5, forest foliage decays.
+                        </div>
+                    </div>
+
+                    <div class="sim-output">
+                        <div class="sim-sky-overlay" id="sim-smog"></div>
+                        
+                        <div class="ph-meter">
+                            <div class="ph-label">Lake pH Level</div>
+                            <div class="ph-value" id="sim-ph">5.6</div>
+                        </div>
+
+                        <svg class="sim-elements" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid slice">
+                            <!-- Background Mountains -->
+                            <path d="M0,350 Q100,200 250,300 T600,250 L600,400 L0,400 Z" fill="#2D3748" opacity="0.6"/>
+                            
+                            <!-- Sun -->
+                            <circle cx="100" cy="80" r="30" fill="#FCD34D" opacity="0.8" id="sim-sun"/>
+                            
+                            <!-- Lake -->
+                            <ellipse cx="300" cy="360" rx="250" ry="40" fill="#38BDF8" id="sim-lake"/>
+                            
+                            <!-- Fish -->
+                            <g id="sim-fish" fill="#fff" opacity="1" transform="translate(250, 350)">
+                                <path d="M0,0 Q10,-5 20,0 Q10,5 0,0" />
+                                <polygon points="20,0 25,-3 25,3"/>
+                            </g>
+                            <g id="sim-fish2" fill="#fff" opacity="1" transform="translate(350, 365) scale(-0.8, 0.8)">
+                                <path d="M0,0 Q10,-5 20,0 Q10,5 0,0" />
+                                <polygon points="20,0 25,-3 25,3"/>
+                            </g>
+
+                            <!-- Tree 1 -->
+                            <g class="sim-tree" id="tree1" transform="translate(80, 280)">
+                                <rect x="-4" y="-40" width="8" height="40" fill="#78350F"/>
+                                <circle cx="0" cy="-50" r="25" fill="#22C55E" class="foliage"/>
+                                <circle cx="-15" cy="-35" r="15" fill="#16A34A" class="foliage"/>
+                                <circle cx="15" cy="-35" r="15" fill="#16A34A" class="foliage"/>
+                            </g>
+                            
+                            <!-- Tree 2 -->
+                            <g class="sim-tree" id="tree2" transform="translate(500, 300) scale(0.8)">
+                                <rect x="-4" y="-40" width="8" height="40" fill="#78350F"/>
+                                <circle cx="0" cy="-50" r="25" fill="#22C55E" class="foliage"/>
+                                <circle cx="-15" cy="-35" r="15" fill="#16A34A" class="foliage"/>
+                                <circle cx="15" cy="-35" r="15" fill="#16A34A" class="foliage"/>
+                            </g>
+
+                            <!-- Limestone Statue -->
+                            <g transform="translate(420, 290)">
+                                <rect x="-15" y="-10" width="30" height="10" fill="#9CA3AF"/>
+                                <path d="M-10,-10 L-5,-50 A5,5 0 0,1 5,-50 L10,-10 Z" fill="#D1D5DB" id="sim-statue"/>
+                            </g>
+                            
+                            <!-- Rain overlay (Canvas takes care of this usually, but SVG lines for simple effect) -->
+                            <g id="sim-rain" stroke="rgba(255,255,255,0.4)" stroke-width="1" stroke-dasharray="10, 10" opacity="0"></g>
+                        </svg>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================================== -->
+            <!-- 4. FACTS & REVISION -->
+            <!-- ========================================================== -->
+            <section id="facts" class="glass-panel" style="margin-bottom: var(--spacing-xl);">
+                <h2>Key Insights</h2>
+                <div class="cards-grid">
+                    <div class="info-card">
+                        <h3><span class="icon">pH</span> Normal vs Acid</h3>
+                        <p>Normal rain is slightly acidic (pH ~5.6) due to natural <span class="highlight">CO₂</span>. Acid rain typically has a pH between <span class="highlight">4.2 and 4.4</span>.</p>
+                    </div>
+                    <div class="info-card">
+                        <h3><span class="icon">⛨</span> Human Safety</h3>
+                        <p>Walking in acid rain won't burn your skin. The acids are dilute. The real harm to humans comes from inhaling the fine sulfate and nitrate particles in the air.</p>
+                    </div>
+                    <div class="info-card">
+                        <h3><span class="icon">🏛</span> Cultural Decay</h3>
+                        <p>Acid rain reacts with Calcium Carbonate (<span class="highlight">CaCO₃</span>) found in marble and limestone, slowly dissolving historical statues and buildings (Gypsum formation).</p>
+                    </div>
+                    <div class="info-card">
+                        <h3><span class="icon">⚖</span> Recovery</h3>
+                        <p>Thanks to regulations like the Clean Air Act (scrubbers in smokestacks, catalytic converters in cars), acid rain in North America and Europe has decreased significantly since the 1990s.</p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        // ----------------------------------------------------------------------
+        // MARKER SYSTEM LOGIC (Section 1)
+        // ----------------------------------------------------------------------
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function activateMarker(id) {
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            const marker = document.querySelector(`.marker[data-target="${id}"]`);
+            const legend = document.getElementById(`leg-${id}`);
+            
+            if (marker) marker.classList.add('active');
+            if (legend) legend.classList.add('active');
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => activateMarker(marker.dataset.target));
+            marker.addEventListener('click', () => activateMarker(marker.dataset.target));
+        });
+
+        legendItems.forEach(item => {
+            const id = item.id.replace('leg-', '');
+            item.addEventListener('mouseenter', () => activateMarker(id));
+            item.addEventListener('click', () => activateMarker(id));
+        });
+
+        // ----------------------------------------------------------------------
+        // WORKING MECHANISM (Canvas Particle Engine - Section 2)
+        // ----------------------------------------------------------------------
+        const canvas = document.getElementById('mech-canvas');
+        const ctx = canvas.getContext('2d');
+        const altDisplay = document.getElementById('alt-display');
+        
+        let mechW, mechH;
+        let particles = [];
+        let animationFrameId;
+        
+        // Stage Machine
+        const stages = [
+            { id: 0, title: "1. Emission", caption: "SO₂ (yellow) and NOₓ (red) rise from sources.", targetAlt: 100 },
+            { id: 1, title: "2. Transport", caption: "Gases are carried upwards into the troposphere.", targetAlt: 400 },
+            { id: 2, title: "3. Hydration", caption: "Pollutants mix with water vapor (blue) in clouds.", targetAlt: 800 },
+            { id: 3, title: "4. Oxidation", caption: "Sunlight and catalysts form Sulfuric and Nitric acids.", targetAlt: 800 },
+            { id: 4, title: "5. Precipitation", caption: "Acidic droplets (green) fall back to earth.", targetAlt: 0 }
+        ];
+        
+        let currentStage = 0;
+        let isAutoPlay = true;
+        let simulatedAltitude = 0; // Visual helper
+
+        // Resize handler
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            mechW = canvas.width;
+            mechH = canvas.height;
+            ctx.scale(dpr, dpr);
+            mechW /= dpr; mechH /= dpr;
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Particle Class
+        class Particle {
+            constructor(type, x, y) {
+                this.type = type; // 'so2', 'nox', 'h2o', 'acid'
+                this.x = x || Math.random() * mechW;
+                this.y = y || mechH + 20;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = -Math.random() * 2 - 1;
+                this.radius = type === 'h2o' ? 4 : 6;
+                this.opacity = 0;
+                this.targetOpacity = 1;
+                this.life = 0;
+                this.active = true;
+            }
+
+            update(stageId) {
+                this.life++;
+                
+                // Fade in
+                if (this.opacity < this.targetOpacity) this.opacity += 0.05;
+
+                // Stage specific behavior
+                if (stageId === 0 || stageId === 1) {
+                    // Rising
+                    this.y += this.vy;
+                    this.x += this.vx + Math.sin(this.life * 0.05) * 0.5;
+                    // Reset if out of bounds
+                    if (this.y < -20 && stageId === 0) this.y = mechH + 20;
+                    if (this.y < mechH * 0.4 && stageId === 1) this.vy *= 0.95; // cluster
+                } 
+                else if (stageId === 2 || stageId === 3) {
+                    // Hovering in cloud
+                    this.vx += (Math.random() - 0.5) * 0.2;
+                    this.vy += (Math.random() - 0.5) * 0.2;
+                    // Dampen
+                    this.vx *= 0.95; this.vy *= 0.95;
+                    // Keep in bounds
+                    if (this.x < 0) this.vx *= -1;
+                    if (this.x > mechW) this.vx *= -1;
+                    if (this.y < 0) this.vy = Math.abs(this.vy);
+                    if (this.y > mechH * 0.6) this.vy = -Math.abs(this.vy);
+
+                    // Transformation in Stage 3
+                    if (stageId === 3 && this.type !== 'h2o' && Math.random() < 0.02) {
+                        this.type = 'acid';
+                        this.radius = 8;
+                    }
+                } 
+                else if (stageId === 4) {
+                    // Falling
+                    this.vy += 0.1; // gravity
+                    this.y += this.vy;
+                    this.x += this.vx;
+                    if (this.y > mechH + 20) this.active = false;
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                
+                let color;
+                if (this.type === 'so2') color = `rgba(255, 209, 102, ${this.opacity})`;
+                else if (this.type === 'nox') color = `rgba(239, 71, 111, ${this.opacity})`;
+                else if (this.type === 'h2o') color = `rgba(17, 138, 178, ${this.opacity})`;
+                else if (this.type === 'acid') color = `rgba(6, 214, 160, ${this.opacity})`;
+                
+                ctx.fillStyle = color;
+                ctx.shadowBlur = this.type === 'acid' ? 10 : 5;
+                ctx.shadowColor = color;
+                ctx.fill();
+                ctx.shadowBlur = 0; // reset
+            }
+        }
+
+        function initParticles(stageId) {
+            particles = [];
+            let count = 50;
+            if(mechW < 500) count = 30; // Mobile opt
+
+            for (let i = 0; i < count; i++) {
+                let type = Math.random() > 0.5 ? 'so2' : 'nox';
+                let y = mechH;
+                if (stageId > 0) y = Math.random() * mechH;
+                if (stageId >= 2) {
+                    type = Math.random() > 0.3 ? 'h2o' : type;
+                    y = Math.random() * (mechH * 0.6); // in cloud
+                }
+                if (stageId === 4) type = 'acid';
+                
+                particles.push(new Particle(type, null, y));
+            }
+        }
+
+        function drawEnvironment(stageId) {
+            // Draw background flow
+            ctx.fillStyle = `rgba(10, 10, 18, 0.3)`;
+            ctx.fillRect(0, 0, mechW, mechH);
+
+            // Draw decorative elements based on altitude
+            ctx.save();
+            if (simulatedAltitude < 200) {
+                // Ground hints
+                ctx.fillStyle = '#1E293B';
+                ctx.fillRect(0, mechH - 20, mechW, 20);
+                altDisplay.innerText = "Ground Level";
+            } else if (simulatedAltitude > 600) {
+                // Cloud hints
+                ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                ctx.beginPath();
+                ctx.arc(mechW*0.3, 50, 100, 0, Math.PI*2);
+                ctx.arc(mechW*0.7, 80, 120, 0, Math.PI*2);
+                ctx.fill();
+                altDisplay.innerText = "Troposphere (~3km)";
+            } else {
+                altDisplay.innerText = "Ascending...";
+            }
+            ctx.restore();
+        }
+
+        function animateMechanism() {
+            // Altitude interpolation for visuals
+            simulatedAltitude += (stages[currentStage].targetAlt - simulatedAltitude) * 0.05;
+
+            drawEnvironment(currentStage);
+
+            // Add new particles if emitting or raining
+            if (currentStage === 0 && Math.random() < 0.2) {
+                particles.push(new Particle(Math.random() > 0.5 ? 'so2' : 'nox', Math.random() * mechW, mechH + 10));
+            }
+            if (currentStage === 4 && Math.random() < 0.3) {
+                particles.push(new Particle('acid', Math.random() * mechW, -10));
+            }
+
+            // Update and Draw
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.update(currentStage);
+                p.draw();
+                if (!p.active) particles.splice(i, 1);
+            }
+
+            // Limit particles for performance
+            if (particles.length > 150) particles.shift();
+
+            animationFrameId = requestAnimationFrame(animateMechanism);
+        }
+
+        // Controls Logic
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnPlay = document.getElementById('btn-play');
+        const stageDots = document.querySelectorAll('.stage-dot');
+        const elTitle = document.getElementById('stage-title');
+        const elCaption = document.getElementById('stage-caption');
+
+        let playInterval;
+
+        function setStage(index) {
+            if (index < 0) index = stages.length - 1;
+            if (index >= stages.length) index = 0;
+            currentStage = index;
+
+            // Update UI
+            stageDots.forEach((dot, i) => dot.classList.toggle('active', i === currentStage));
+            elTitle.innerText = stages[currentStage].title;
+            elCaption.innerText = stages[currentStage].caption;
+
+            // Re-init state somewhat
+            if (currentStage === 1 || currentStage === 2) initParticles(currentStage);
+            if (currentStage === 4) particles = []; // Clear for rain
+        }
+
+        function togglePlay() {
+            isAutoPlay = !isAutoPlay;
+            if (isAutoPlay) {
+                btnPlay.innerHTML = '⏸ Pause';
+                btnPlay.classList.add('primary');
+                playInterval = setInterval(() => setStage(currentStage + 1), 4000);
+            } else {
+                btnPlay.innerHTML = '▶ Auto-Play';
+                btnPlay.classList.remove('primary');
+                clearInterval(playInterval);
+            }
+        }
+
+        btnPrev.addEventListener('click', () => { setStage(currentStage - 1); isAutoPlay = true; togglePlay(); });
+        btnNext.addEventListener('click', () => { setStage(currentStage + 1); isAutoPlay = true; togglePlay(); });
+        btnPlay.addEventListener('click', togglePlay);
+
+        // Start mechanism
+        initParticles(0);
+        animateMechanism();
+        togglePlay(); // start playing
+
+
+        // ----------------------------------------------------------------------
+        // SIMULATION LOGIC (Section 3)
+        // ----------------------------------------------------------------------
+        const slSo2 = document.getElementById('slider-so2');
+        const slNox = document.getElementById('slider-nox');
+        const valSo2 = document.getElementById('val-so2');
+        const valNox = document.getElementById('val-nox');
+        
+        const uiPh = document.getElementById('sim-ph');
+        const uiSmog = document.getElementById('sim-smog');
+        const uiSun = document.getElementById('sim-sun');
+        const uiLake = document.getElementById('sim-lake');
+        const foliage = document.querySelectorAll('.foliage');
+        const uiStatue = document.getElementById('sim-statue');
+        const uiFish1 = document.getElementById('sim-fish');
+        const uiFish2 = document.getElementById('sim-fish2');
+
+        function updateSimulation() {
+            const vSo2 = parseInt(slSo2.value);
+            const vNox = parseInt(slNox.value);
+            
+            valSo2.innerText = vSo2 + '%';
+            valNox.innerText = vNox + '%';
+
+            // Pollution index 0 to 100
+            const pollution = (vSo2 + vNox) / 2;
+            
+            // Map pollution 0->100 to pH 5.6 -> 3.5
+            // p = 0 -> 5.6, p = 50 -> 4.5, p = 100 -> 3.5
+            let currentPh = 5.6 - (pollution / 100) * 2.1;
+            uiPh.innerText = currentPh.toFixed(1);
+
+            // 1. Sky/Smog (opacity 0 to 0.8)
+            uiSmog.style.opacity = (pollution / 100) * 0.8;
+            
+            // 2. Sun color
+            if (pollution > 70) uiSun.setAttribute('fill', '#EF4444'); // Red sun in heavy smog
+            else uiSun.setAttribute('fill', '#FCD34D');
+
+            // 3. Lake Color (Blue to Acidic murky green)
+            // #38BDF8 -> #65A30D
+            if (currentPh < 5.0) {
+                uiLake.setAttribute('fill', '#65A30D');
+                uiFish1.style.opacity = '0.2'; // Fish dying
+                uiFish2.style.opacity = '0';
+            } else {
+                uiLake.setAttribute('fill', '#38BDF8');
+                uiFish1.style.opacity = '1';
+                uiFish2.style.opacity = '1';
+            }
+
+            // 4. Foliage Color (Green to Brown)
+            foliage.forEach(f => {
+                if (currentPh < 4.8) f.setAttribute('fill', '#92400E'); // Brown
+                else if (currentPh < 5.2) f.setAttribute('fill', '#A3E635'); // Sickly green
+                else f.setAttribute('fill', '#22C55E'); // Healthy green
+            });
+
+            // 5. Statue degradation (scale Y down slightly and change color)
+            if (currentPh < 4.5) {
+                uiStatue.setAttribute('fill', '#6B7280');
+                uiStatue.style.transform = 'scale(0.9, 0.8)';
+            } else {
+                uiStatue.setAttribute('fill', '#D1D5DB');
+                uiStatue.style.transform = 'scale(1, 1)';
+            }
+            
+            // Ph color warning
+            if (currentPh < 4.5) uiPh.style.color = '#EF4444';
+            else if (currentPh < 5.0) uiPh.style.color = '#F59E0B';
+            else uiPh.style.color = '#10B981';
+        }
+
+        slSo2.addEventListener('input', updateSimulation);
+        slNox.addEventListener('input', updateSimulation);
+        
+        // Handle touch explicitly for sliders to prevent scrolling issues on some devices
+        [slSo2, slNox].forEach(slider => {
+            slider.addEventListener('touchmove', (e) => {
+                // Prevent vertical scroll while sliding
+                e.stopPropagation(); 
+            }, {passive: true});
+        });
+
+        // Initial setup
+        updateSimulation();
+
+    </script>
+</body>
+</html>

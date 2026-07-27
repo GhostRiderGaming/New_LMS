@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Water Table Simulator | Interactive Science</title>
+    <style>
+        /* ==========================================================================
+           ROOT VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-dark: #090c15;
+            --bg-glow: #1a243d;
+            --glass-bg: rgba(22, 30, 49, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f0f4f8;
+            --text-muted: #94a3b8;
+            --accent-cyan: #00f2fe;
+            --accent-blue: #4facfe;
+            --soil-light: #8c6a4b;
+            --soil-dark: #5c4033;
+            --bedrock: #3a3f47;
+            --water-top: rgba(0, 242, 254, 0.4);
+            --water-bottom: rgba(79, 172, 254, 0.8);
+            
+            /* Typography */
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --spacing-sm: clamp(8px, 1.5vw, 12px);
+            --spacing-md: clamp(16px, 3vw, 24px);
+            --spacing-lg: clamp(24px, 5vw, 40px);
+            --radius-md: 16px;
+            --radius-lg: 24px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(circle at 50% -20%, var(--bg-glow) 0%, transparent 60%),
+                linear-gradient(to bottom, #090c15, #04060a);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Ambient Background Blobs */
+        .ambient-blob {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.15;
+            z-index: -1;
+            pointer-events: none;
+            animation: float 20s infinite alternate ease-in-out;
+        }
+        .blob-1 { top: 10%; left: 10%; width: 40vw; height: 40vw; background: var(--accent-cyan); animation-delay: 0s; }
+        .blob-2 { bottom: 10%; right: 10%; width: 50vw; height: 50vw; background: var(--accent-blue); animation-delay: -5s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(5%, 10%) scale(1.1); }
+        }
+
+        /* ==========================================================================
+           LAYOUT & COMPONENTS
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-md) var(--spacing-lg);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: var(--spacing-lg);
+            padding-top: var(--spacing-lg);
+        }
+
+        h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            background: linear-gradient(to right, #fff, var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -1px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: clamp(1rem, 2vw, 1.25rem);
+            color: var(--text-muted);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        h2 {
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 700;
+            margin-bottom: var(--spacing-md);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h2::before {
+            content: '';
+            display: block;
+            width: 4px;
+            height: 24px;
+            background: var(--accent-cyan);
+            border-radius: 4px;
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+
+        /* ==========================================================================
+           SECTION: COMPONENTS (DIAGRAM + LABELS)
+           ========================================================================== */
+        .diagram-section {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+        }
+
+        @media (min-width: 900px) {
+            .diagram-section { grid-template-columns: 2fr 1fr; align-items: start; }
+        }
+
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            min-height: 250px;
+        }
+
+        .diagram-svg {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* Markers overlay */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: rgba(0, 242, 254, 0.1);
+            border: 2px solid var(--accent-cyan);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 700;
+            font-size: 14px;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+        .marker::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 1px solid var(--accent-cyan);
+            animation: pulse 2s infinite;
+        }
+        .marker:hover, .marker.active {
+            background: var(--accent-cyan);
+            color: #000;
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 16px;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            border-radius: var(--radius-md);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 242, 254, 0.05);
+            border-color: rgba(0, 242, 254, 0.3);
+            transform: translateX(4px);
+        }
+
+        .legend-num {
+            width: 28px;
+            height: 28px;
+            background: var(--accent-cyan);
+            color: #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .legend-title { font-weight: 600; color: #fff; font-size: 0.95rem; }
+        .legend-desc { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+
+        /* ==========================================================================
+           SECTION: WORKING PROCESS (STEPPER)
+           ========================================================================== */
+        .process-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+        }
+
+        @media (min-width: 900px) {
+            .process-layout { grid-template-columns: 1.5fr 1fr; align-items: stretch; }
+        }
+
+        .process-visual {
+            position: relative;
+            background: #0b0f19;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+            overflow: hidden;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .process-svg { width: 100%; height: 100%; display: block; }
+
+        /* Dynamic SVG animation classes */
+        .proc-element { opacity: 0.2; transition: all 0.5s ease; }
+        .proc-element.active { opacity: 1; filter: drop-shadow(0 0 8px rgba(0,242,254,0.6)); }
+        
+        .proc-particles circle { opacity: 0; }
+        .proc-particles.active circle {
+            animation: flowDown 2s infinite linear;
+            opacity: 1;
+        }
+        .proc-particles.active circle:nth-child(2) { animation-delay: 0.6s; }
+        .proc-particles.active circle:nth-child(3) { animation-delay: 1.2s; }
+
+        @keyframes flowDown {
+            0% { transform: translateY(0) scale(0); opacity: 0; }
+            20% { transform: translateY(10px) scale(1); opacity: 1; }
+            80% { transform: translateY(40px) scale(1); opacity: 1; }
+            100% { transform: translateY(50px) scale(0); opacity: 0; }
+        }
+
+        .process-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .stage-indicator {
+            display: flex;
+            gap: 8px;
+            margin-bottom: var(--spacing-md);
+        }
+        .stage-dot {
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            transition: background 0.3s;
+        }
+        .stage-dot.active { background: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-cyan); }
+
+        .stage-content { flex-grow: 1; }
+        .stage-title { font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 8px; }
+        .stage-io { font-size: 0.85rem; color: #a5b4fc; margin-bottom: 12px; font-family: monospace; background: rgba(165,180,252,0.1); padding: 4px 8px; border-radius: 4px; display: inline-block;}
+        .stage-desc { color: var(--text-main); font-size: 1rem; line-height: 1.5; }
+
+        .process-controls {
+            display: flex;
+            gap: 12px;
+            margin-top: var(--spacing-md);
+        }
+
+        button {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        button:hover { background: rgba(255,255,255,0.1); }
+        button.primary { background: var(--accent-blue); color: #000; border: none; }
+        button.primary:hover { filter: brightness(1.1); box-shadow: 0 0 15px rgba(79,172,254,0.4); }
+
+        /* ==========================================================================
+           SECTION: INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-layout {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .canvas-container {
+            width: 100%;
+            height: 50vh;
+            min-height: 400px;
+            background: #05070a;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--spacing-md);
+            background: rgba(0,0,0,0.2);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .val-badge {
+            background: rgba(0, 242, 254, 0.15);
+            color: var(--accent-cyan);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        .soil-selector {
+            display: flex;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .soil-btn {
+            flex: 1;
+            background: transparent;
+            border: none;
+            padding: 8px 0;
+            border-radius: 0;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        .soil-btn.active {
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            box-shadow: inset 0 -2px 0 var(--accent-cyan);
+        }
+
+        /* ==========================================================================
+           INFO GRIDS (Facts, Mistakes, etc)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .info-card {
+            background: rgba(0,0,0,0.15);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+        }
+
+        .info-icon {
+            font-size: 1.5rem;
+            margin-bottom: 12px;
+            display: inline-block;
+            background: rgba(255,255,255,0.1);
+            width: 40px; height: 40px;
+            line-height: 40px;
+            text-align: center;
+            border-radius: 8px;
+        }
+        
+        .fact-card { border-top: 3px solid #10b981; }
+        .mistake-card { border-top: 3px solid #ef4444; }
+
+        h3 { font-size: 1.1rem; margin-bottom: 8px; color: #fff; }
+        p { color: var(--text-muted); font-size: 0.95rem; }
+
+        /* Media queries for fine-tuning */
+        @media (max-width: 768px) {
+            .glass-card { padding: var(--spacing-md); backdrop-filter: blur(8px); }
+            .canvas-container { height: 40vh; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background Elements -->
+    <div class="ambient-blob blob-1"></div>
+    <div class="ambient-blob blob-2"></div>
+
+    <div class="container">
+        
+        <header>
+            <h1>Water Table Explorer</h1>
+            <p class="subtitle">A premium interactive visualization of groundwater dynamics, aquifers, and hydrology.</p>
+        </header>
+
+        <!-- 1. TOPIC OVERVIEW -->
+        <section class="glass-card">
+            <p>
+                Beneath our feet lies a hidden ocean. The <strong>Water Table</strong> is the invisible boundary underground separating the dry, air-filled soil near the surface from the deeply soaked rock and gravel below. It is the surface of groundwater, shifting dynamically with rain and human usage.
+            </p>
+        </section>
+
+        <!-- 2. MAIN COMPONENTS (Labeled Diagram) -->
+        <section class="glass-card" id="components-section">
+            <h2>Anatomy of the Underground</h2>
+            
+            <div class="diagram-section">
+                <!-- Illustration Wrapper -->
+                <div class="diagram-container">
+                    <svg class="diagram-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#1e3c72"/>
+                                <stop offset="100%" stop-color="#2a5298"/>
+                            </linearGradient>
+                            <linearGradient id="soilGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#5c4033"/>
+                                <stop offset="100%" stop-color="#4a332a"/>
+                            </linearGradient>
+                            <linearGradient id="aquiferGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#006680"/>
+                                <stop offset="100%" stop-color="#003d4d"/>
+                            </linearGradient>
+                            <linearGradient id="bedrockGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#2a2a2a"/>
+                                <stop offset="100%" stop-color="#1a1a1a"/>
+                            </linearGradient>
+                            <pattern id="soilPattern" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                                <circle cx="10" cy="10" r="1" fill="rgba(255,255,255,0.1)"/>
+                                <circle cx="4" cy="4" r="1.5" fill="rgba(0,0,0,0.2)"/>
+                            </pattern>
+                        </defs>
+
+                        <!-- Sky/Surface -->
+                        <rect width="800" height="100" fill="url(#skyGrad)" />
+                        <!-- Grass Line -->
+                        <path d="M0 100 Q 200 90, 400 100 T 800 95 L 800 110 L 0 110 Z" fill="#2d5a27"/>
+
+                        <!-- Unsaturated Zone (Soil) -->
+                        <rect y="105" width="800" height="150" fill="url(#soilGrad)" />
+                        <rect y="105" width="800" height="150" fill="url(#soilPattern)" />
+
+                        <!-- Water Table Line -->
+                        <path d="M 0 255 L 550 255 Q 600 255, 630 300 Q 660 255, 800 255" fill="none" stroke="#00f2fe" stroke-width="3" stroke-dasharray="8,4" />
+                        
+                        <!-- Saturated Zone (Aquifer) - with Cone of Depression -->
+                        <path d="M 0 255 L 550 255 Q 600 255, 630 300 Q 660 255, 800 255 L 800 400 L 0 400 Z" fill="url(#aquiferGrad)" />
+                        <path d="M 0 255 L 550 255 Q 600 255, 630 300 Q 660 255, 800 255 L 800 400 L 0 400 Z" fill="url(#soilPattern)" opacity="0.5"/>
+
+                        <!-- Bedrock -->
+                        <path d="M 0 400 Q 200 390, 400 410 T 800 395 L 800 500 L 0 500 Z" fill="url(#bedrockGrad)" />
+                        
+                        <!-- Well -->
+                        <rect x="620" y="50" width="20" height="300" fill="#cbd5e1" stroke="#475569" stroke-width="2"/>
+                        <!-- Well Head/Pump -->
+                        <rect x="610" y="30" width="40" height="30" fill="#94a3b8" rx="4"/>
+                        <path d="M 600 45 L 610 45" stroke="#94a3b8" stroke-width="8"/>
+                        <!-- Water spraying from well -->
+                        <path d="M 590 45 Q 570 45, 560 70" fill="none" stroke="#00f2fe" stroke-width="4" stroke-linecap="round"/>
+                        <circle cx="558" cy="78" r="3" fill="#00f2fe"/>
+                        <circle cx="555" cy="88" r="2" fill="#00f2fe"/>
+                    </svg>
+
+                    <!-- HTML Markers overlays (positioned via absolute percentages) -->
+                    <div class="marker" data-target="item-1" style="top: 35%; left: 25%;">1</div>
+                    <div class="marker" data-target="item-2" style="top: 51%; left: 35%;">2</div>
+                    <div class="marker" data-target="item-3" style="top: 65%; left: 25%;">3</div>
+                    <div class="marker" data-target="item-4" style="top: 88%; left: 25%;">4</div>
+                    <div class="marker" data-target="item-5" style="top: 40%; left: 78%;">5</div>
+                    <div class="marker" data-target="item-6" style="top: 60%; left: 71%;">6</div>
+                </div>
+
+                <!-- Legend List -->
+                <div class="legend-list" id="components-legend">
+                    <div class="legend-item" id="item-1">
+                        <div class="legend-num">1</div>
+                        <div>
+                            <div class="legend-title">Unsaturated Zone</div>
+                            <div class="legend-desc">Soil pores contain both air and moisture.</div>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-2">
+                        <div class="legend-num">2</div>
+                        <div>
+                            <div class="legend-title">Water Table</div>
+                            <div class="legend-desc">The exact boundary line where complete saturation begins.</div>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-3">
+                        <div class="legend-num">3</div>
+                        <div>
+                            <div class="legend-title">Saturated Zone (Aquifer)</div>
+                            <div class="legend-desc">Pores are 100% filled with groundwater.</div>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-4">
+                        <div class="legend-num">4</div>
+                        <div>
+                            <div class="legend-title">Impermeable Rock (Aquitard)</div>
+                            <div class="legend-desc">Dense rock that water cannot pass through easily.</div>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-5">
+                        <div class="legend-num">5</div>
+                        <div>
+                            <div class="legend-title">Extraction Well</div>
+                            <div class="legend-desc">A pipe drilled down into the aquifer to pump water up.</div>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-6">
+                        <div class="legend-num">6</div>
+                        <div>
+                            <div class="legend-title">Cone of Depression</div>
+                            <div class="legend-desc">The dip in the water table caused by active pumping.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. WORKING PROCESS (MANDATORY) -->
+        <section class="glass-card">
+            <h2>Mechanism: The Groundwater Cycle</h2>
+            <p style="margin-bottom: var(--spacing-md); color: var(--text-muted);">
+                A continuous flow mechanism balancing surface input with underground storage and human extraction.
+            </p>
+
+            <div class="process-layout">
+                <!-- Visual Area -->
+                <div class="process-visual">
+                    <svg viewBox="0 0 500 400" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">
+                        <!-- Background simplified ground -->
+                        <rect y="150" width="500" height="250" fill="#2d221c"/>
+                        <!-- Aquifer base (always visible dimly) -->
+                        <rect y="280" width="500" height="120" fill="#003d4d" opacity="0.4"/>
+                        <path d="M 0 280 L 500 280" stroke="#00f2fe" stroke-dasharray="4,4" opacity="0.3"/>
+
+                        <!-- Stage 1: Precipitation -->
+                        <g id="proc-1" class="proc-element">
+                            <path d="M 100 50 Q 130 20, 160 50 Q 190 20, 220 50 Q 250 20, 280 50 Q 300 80, 260 100 L 120 100 Q 80 80, 100 50" fill="rgba(255,255,255,0.8)"/>
+                            <g class="proc-particles">
+                                <circle cx="150" cy="110" r="3" fill="#00f2fe"/>
+                                <circle cx="190" cy="110" r="3" fill="#00f2fe"/>
+                                <circle cx="230" cy="110" r="3" fill="#00f2fe"/>
+                            </g>
+                        </g>
+
+                        <!-- Stage 2: Infiltration -->
+                        <g id="proc-2" class="proc-element">
+                            <rect y="150" width="500" height="20" fill="rgba(0, 242, 254, 0.3)"/>
+                            <path d="M 190 140 L 190 160 M 230 140 L 230 160" stroke="#00f2fe" stroke-width="2" stroke-linecap="round"/>
+                            <polygon points="186,156 194,156 190,162" fill="#00f2fe"/>
+                            <polygon points="226,156 234,156 230,162" fill="#00f2fe"/>
+                        </g>
+
+                        <!-- Stage 3: Percolation -->
+                        <g id="proc-3" class="proc-element">
+                            <g class="proc-particles" style="transform: translateY(60px)">
+                                <circle cx="170" cy="110" r="2" fill="#00f2fe"/>
+                                <circle cx="210" cy="110" r="2" fill="#00f2fe"/>
+                                <circle cx="250" cy="110" r="2" fill="#00f2fe"/>
+                            </g>
+                            <path d="M 210 180 Q 220 220, 200 260" fill="none" stroke="rgba(0,242,254,0.5)" stroke-width="2" stroke-dasharray="5,5"/>
+                        </g>
+
+                        <!-- Stage 4: Saturation (Recharge) -->
+                        <g id="proc-4" class="proc-element">
+                            <rect y="250" width="500" height="150" fill="#008cb3" opacity="0.8"/>
+                            <path d="M 0 250 L 500 250" stroke="#00f2fe" stroke-width="3"/>
+                            <path d="M 250 270 L 250 250" stroke="#00f2fe" stroke-width="3" stroke-linecap="round"/>
+                            <polygon points="245,255 255,255 250,245" fill="#00f2fe"/>
+                        </g>
+
+                        <!-- Stage 5: Extraction -->
+                        <g id="proc-5" class="proc-element">
+                            <rect y="250" width="500" height="150" fill="#008cb3" opacity="0.8"/>
+                            <!-- Well pipe -->
+                            <rect x="400" y="100" width="16" height="250" fill="#cbd5e1"/>
+                            <!-- Drawdown curve -->
+                            <path d="M 0 250 L 320 250 Q 380 250, 400 320 Q 420 250, 500 250" fill="#2d221c"/>
+                            <path d="M 0 250 L 320 250 Q 380 250, 400 320 Q 420 250, 500 250" fill="none" stroke="#00f2fe" stroke-width="2"/>
+                            <!-- Upward flow -->
+                            <g class="proc-particles" style="transform: rotate(180deg) translate(-408px, -330px);">
+                                <circle cx="408" cy="110" r="3" fill="#1d4ed8"/>
+                                <circle cx="408" cy="140" r="3" fill="#1d4ed8"/>
+                            </g>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Info Area -->
+                <div class="process-info">
+                    <div>
+                        <div class="stage-indicator" id="stage-dots">
+                            <div class="stage-dot active"></div>
+                            <div class="stage-dot"></div>
+                            <div class="stage-dot"></div>
+                            <div class="stage-dot"></div>
+                            <div class="stage-dot"></div>
+                        </div>
+                        <div class="stage-content">
+                            <div class="stage-io" id="stage-io">Input: Vapor → Output: Droplets</div>
+                            <h3 class="stage-title" id="stage-title">1. Precipitation</h3>
+                            <p class="stage-desc" id="stage-desc">Water falls from the atmosphere as rain or snow, landing on the surface of the earth.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="process-controls">
+                        <button id="btn-prev">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        <button id="btn-auto" class="primary">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9V3z"/></svg> Auto-Play
+                        </button>
+                        <button id="btn-next">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. INTERACTIVE SIMULATION -->
+        <section class="glass-card">
+            <h2>Interactive Simulator</h2>
+            <p style="margin-bottom: var(--spacing-md); color: var(--text-muted);">
+                Experiment with environmental variables. Observe how rainfall recharges the aquifer and how aggressive pumping draws down the water table, creating a cone of depression.
+            </p>
+
+            <div class="sim-layout">
+                <div class="canvas-container" id="canvas-wrapper">
+                    <canvas id="sim-canvas"></canvas>
+                </div>
+
+                <div class="controls-panel">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Rainfall Intensity</span>
+                            <span class="val-badge" id="val-rain">Low</span>
+                        </div>
+                        <input type="range" id="sim-rain" min="0" max="100" value="20">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Well Pumping Rate</span>
+                            <span class="val-badge" id="val-pump">Off</span>
+                        </div>
+                        <input type="range" id="sim-pump" min="0" max="100" value="0">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Soil Permeability</span>
+                        </div>
+                        <div class="soil-selector">
+                            <button class="soil-btn" data-val="0.2">Clay</button>
+                            <button class="soil-btn active" data-val="1.0">Sand</button>
+                            <button class="soil-btn" data-val="2.5">Gravel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. SUPPLEMENTARY INFO -->
+        <div class="info-grid">
+            <div class="info-card fact-card">
+                <div class="info-icon">💧</div>
+                <h3>Fossil Water</h3>
+                <p>Some deep aquifers contain "fossil water" that seeped underground thousands of years ago. If pumped, they do not recharge in a human lifetime.</p>
+            </div>
+            <div class="info-card mistake-card">
+                <div class="info-icon">❌</div>
+                <h3>"Underground Rivers"</h3>
+                <p>A common mistake is thinking groundwater flows like rivers in vast caverns. In reality, 99% of groundwater sits in tiny pores between grains of sand and rock, like water in a sponge.</p>
+            </div>
+            <div class="info-card">
+                <div class="info-icon">📉</div>
+                <h3>Land Subsidence</h3>
+                <p>When too much water is pumped out, the empty spaces in the soil collapse under the weight of the earth above, causing the ground level to permanently sink.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            /* --- 1. COMPONENTS DIAGRAM INTERACTION --- */
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function highlightComponent(id) {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                
+                const marker = document.querySelector(`.marker[data-target="${id}"]`);
+                const legend = document.getElementById(id);
+                
+                if (marker) marker.classList.add('active');
+                if (legend) legend.classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                const events = ['mouseenter', 'touchstart'];
+                events.forEach(evt => {
+                    marker.addEventListener(evt, (e) => {
+                        e.preventDefault();
+                        highlightComponent(marker.getAttribute('data-target'));
+                    });
+                });
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => highlightComponent(item.id));
+            });
+
+
+            /* --- 2. WORKING PROCESS STEPPER --- */
+            const steps = [
+                { id: 'proc-1', title: '1. Precipitation', io: 'Input: Clouds → Output: Droplets', desc: 'Water falls from the atmosphere as rain or snow, landing on the surface of the earth.' },
+                { id: 'proc-2', title: '2. Infiltration', io: 'Input: Droplets → Output: Soil Moisture', desc: 'Water penetrates the top layer of soil. If the ground is too hard or saturated, runoff occurs instead.' },
+                { id: 'proc-3', title: '3. Percolation', io: 'Input: Gravity → Output: Downward Flow', desc: 'Gravity pulls water deeper through the porous spaces between soil and rock particles.' },
+                { id: 'proc-4', title: '4. Saturation & Recharge', io: 'Input: Percolating Water → Output: Raised Table', desc: 'Water hits an impermeable layer and builds up, fully saturating the rock and raising the Water Table.' },
+                { id: 'proc-5', title: '5. Extraction & Drawdown', io: 'Input: Pump Force → Output: Surface Water', desc: 'Wells draw water up faster than it flows in, creating a local dip called the Cone of Depression.' }
+            ];
+
+            let currentStep = 0;
+            let autoPlayInterval = null;
+            let isPlaying = false;
+
+            const titleEl = document.getElementById('stage-title');
+            const ioEl = document.getElementById('stage-io');
+            const descEl = document.getElementById('stage-desc');
+            const dots = document.querySelectorAll('.stage-dot');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnAuto = document.getElementById('btn-auto');
+
+            function updateProcessStep(index) {
+                // Bounds check
+                if (index < 0) index = steps.length - 1;
+                if (index >= steps.length) index = 0;
+                currentStep = index;
+
+                // Update UI Texts
+                titleEl.textContent = steps[currentStep].title;
+                ioEl.textContent = steps[currentStep].io;
+                descEl.textContent = steps[currentStep].desc;
+
+                // Update Dots
+                dots.forEach((dot, i) => dot.classList.toggle('active', i === currentStep));
+
+                // Update SVG visuals
+                steps.forEach((step, i) => {
+                    const el = document.getElementById(step.id);
+                    if(el) {
+                        el.classList.toggle('active', i === currentStep);
+                        // trigger particle animation restart by removing/adding active class to children
+                        const parts = el.querySelector('.proc-particles');
+                        if(parts) {
+                            parts.classList.remove('active');
+                            if(i === currentStep) void parts.offsetWidth; // trigger reflow
+                            if(i === currentStep) parts.classList.add('active');
+                        }
+                    }
+                });
+            }
+
+            function toggleAutoPlay() {
+                isPlaying = !isPlaying;
+                if (isPlaying) {
+                    btnAuto.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg> Pause';
+                    btnAuto.style.background = '#f59e0b';
+                    updateProcessStep(currentStep + 1); // immediate next
+                    autoPlayInterval = setInterval(() => updateProcessStep(currentStep + 1), 3500);
+                } else {
+                    btnAuto.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9V3z"/></svg> Auto-Play';
+                    btnAuto.style.background = ''; // reset to CSS defined
+                    clearInterval(autoPlayInterval);
+                }
+            }
+
+            btnPrev.addEventListener('click', () => { if(isPlaying) toggleAutoPlay(); updateProcessStep(currentStep - 1); });
+            btnNext.addEventListener('click', () => { if(isPlaying) toggleAutoPlay(); updateProcessStep(currentStep + 1); });
+            btnAuto.addEventListener('click', toggleAutoPlay);
+
+            // Init process view
+            updateProcessStep(0);
+
+
+            /* --- 3. INTERACTIVE SIMULATOR (CANVAS) --- */
+            const wrapper = document.getElementById('canvas-wrapper');
+            const canvas = document.getElementById('sim-canvas');
+            const ctx = canvas.getContext('2d', { alpha: false }); // Optimize
+
+            // Controls
+            const inRain = document.getElementById('sim-rain');
+            const inPump = document.getElementById('sim-pump');
+            const valRain = document.getElementById('val-rain');
+            const valPump = document.getElementById('val-pump');
+            const soilBtns = document.querySelectorAll('.soil-btn');
+
+            // Physics State
+            let state = {
+                width: 0,
+                height: 0,
+                dpr: window.devicePixelRatio || 1,
+                rainRate: 20,      // 0-100
+                pumpRate: 0,       // 0-100
+                permeability: 1.0, // Speed modifier for percolation
+                baseWaterLevel: 0, // Y coordinate of water table (0 is bottom, height is top)
+                targetWaterLevel: 0,
+                particles: []
+            };
+
+            // Calculate dimensions based on container
+            function resizeCanvas() {
+                const rect = wrapper.getBoundingClientRect();
+                state.width = rect.width;
+                state.height = rect.height;
+                
+                canvas.width = state.width * state.dpr;
+                canvas.height = state.height * state.dpr;
+                
+                // CSS size
+                canvas.style.width = `${state.width}px`;
+                canvas.style.height = `${state.height}px`;
+                
+                ctx.scale(state.dpr, state.dpr);
+
+                // Initial setup heights
+                if(state.baseWaterLevel === 0) {
+                    state.targetWaterLevel = state.height * 0.4; // start 40% full
+                    state.baseWaterLevel = state.targetWaterLevel;
+                }
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            // Inputs logic
+            inRain.addEventListener('input', (e) => {
+                state.rainRate = parseInt(e.target.value);
+                valRain.textContent = state.rainRate === 0 ? 'None' : (state.rainRate < 40 ? 'Low' : (state.rainRate < 75 ? 'Med' : 'High'));
+            });
+
+            inPump.addEventListener('input', (e) => {
+                state.pumpRate = parseInt(e.target.value);
+                valPump.textContent = state.pumpRate === 0 ? 'Off' : (state.pumpRate < 50 ? 'Active' : 'Max');
+            });
+
+            soilBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    soilBtns.forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    state.permeability = parseFloat(e.target.getAttribute('data-val'));
+                });
+            });
+
+            // Particle Class
+            class Particle {
+                constructor() {
+                    this.reset(true);
+                }
+                reset(initial = false) {
+                    this.x = Math.random() * state.width;
+                    this.y = initial ? (Math.random() * state.height * 0.2) : 0;
+                    this.speed = (Math.random() * 2 + 8); // Fast in air
+                    this.size = Math.random() * 1.5 + 1;
+                    this.inSoil = false;
+                }
+                update() {
+                    const surfaceY = state.height * 0.2;
+                    if (this.y > surfaceY && !this.inSoil) {
+                        this.inSoil = true;
+                        // Slow down when hitting ground, based on soil type
+                        this.speed = (Math.random() * 1 + 0.5) * state.permeability;
+                    }
+                    
+                    this.y += this.speed;
+                    
+                    // Slightly jitter X in soil
+                    if(this.inSoil) this.x += (Math.random() - 0.5) * 0.5;
+
+                    // If hits water table, reset
+                    const currentWaterY = state.height - state.baseWaterLevel;
+                    if (this.y > currentWaterY || this.y > state.height) {
+                        this.reset();
+                        return true; // Reached water table
+                    }
+                    return false;
+                }
+                draw(ctx) {
+                    ctx.fillStyle = this.inSoil ? 'rgba(0, 242, 254, 0.4)' : 'rgba(255, 255, 255, 0.6)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // Initialize particle pool based on max rain
+            for(let i=0; i<150; i++) {
+                state.particles.push(new Particle());
+            }
+
+            // Main Animation Loop
+            function render() {
+                // 1. Update Physics
+                // Net change: Rain adds, Pump removes, slight natural drainage
+                const activeRain = state.rainRate;
+                const inflow = activeRain * 0.002 * state.permeability; 
+                const outflow = (state.pumpRate * 0.005) + 0.05; // base drainage
+                
+                state.targetWaterLevel += (inflow - outflow);
+                
+                // Clamp levels (prevent filling past surface, or emptying past bedrock)
+                const maxLevel = state.height * 0.75; // Surface is at 0.2, so max water is 0.8
+                const minLevel = state.height * 0.05;
+                state.targetWaterLevel = Math.max(minLevel, Math.min(maxLevel, state.targetWaterLevel));
+
+                // Smooth interpolation for global water level
+                state.baseWaterLevel += (state.targetWaterLevel - state.baseWaterLevel) * 0.02;
+
+                // 2. Draw Frame
+                // Background sky
+                const skyGrad = ctx.createLinearGradient(0,0,0,state.height*0.2);
+                skyGrad.addColorStop(0, '#0a192f');
+                skyGrad.addColorStop(1, '#112240');
+                ctx.fillStyle = skyGrad;
+                ctx.fillRect(0, 0, state.width, state.height);
+
+                // Soil background
+                const soilGrad = ctx.createLinearGradient(0,state.height*0.2,0,state.height);
+                // Adjust colors based on permeability (clay = darker, sand = med, gravel = light/grey)
+                let sColor1 = '#4a332a', sColor2 = '#2d1e18';
+                if(state.permeability > 2) { sColor1 = '#4b5563'; sColor2 = '#1f2937'; } // Gravel
+                else if (state.permeability < 0.5) { sColor1 = '#3e2723'; sColor2 = '#1a100c'; } // Clay
+                
+                soilGrad.addColorStop(0, sColor1);
+                soilGrad.addColorStop(1, sColor2);
+                ctx.fillStyle = soilGrad;
+                ctx.fillRect(0, state.height*0.2, state.width, state.height*0.8);
+
+                // Draw Particles (Rain / Percolation)
+                const activeParticleCount = Math.floor((state.rainRate / 100) * state.particles.length);
+                for(let i=0; i<activeParticleCount; i++) {
+                    state.particles[i].update();
+                    state.particles[i].draw(ctx);
+                }
+
+                // Draw Saturated Zone (Water Table)
+                const wellX = state.width * 0.7;
+                
+                // Cone of depression math
+                // Depth depends on pump rate and INVERSELY on permeability (sand recovers fast, clay recovers slow)
+                const maxDrawdown = (state.pumpRate / 100) * (state.height * 0.3) * (1 / Math.max(0.5, state.permeability)); 
+                const spread = state.width * 0.3 * Math.max(1, state.permeability); // wider in sand/gravel
+
+                ctx.beginPath();
+                ctx.moveTo(0, state.height); // bottom left
+                
+                // Draw water table line with cone
+                const waterTopBaseY = state.height - state.baseWaterLevel;
+                ctx.lineTo(0, waterTopBaseY);
+
+                // Calculate curve points
+                for(let x = 0; x <= state.width; x += 10) {
+                    const distance = Math.abs(x - wellX);
+                    // Gaussian curve for drawdown
+                    const drawdown = maxDrawdown * Math.exp(-(distance * distance) / (spread * spread));
+                    
+                    // Prevent water table going below bedrock entirely
+                    let y = waterTopBaseY + drawdown;
+                    y = Math.min(y, state.height * 0.95);
+                    
+                    ctx.lineTo(x, y);
+                }
+
+                ctx.lineTo(state.width, state.height); // bottom right
+                ctx.closePath();
+
+                // Water styling
+                const waterGrad = ctx.createLinearGradient(0, waterTopBaseY, 0, state.height);
+                waterGrad.addColorStop(0, 'rgba(0, 242, 254, 0.6)');
+                waterGrad.addColorStop(1, 'rgba(0, 102, 128, 0.9)');
+                ctx.fillStyle = waterGrad;
+                ctx.fill();
+
+                // Draw Water Table dotted line
+                ctx.beginPath();
+                for(let x = 0; x <= state.width; x += 15) {
+                    const distance = Math.abs(x - wellX);
+                    const drawdown = maxDrawdown * Math.exp(-(distance * distance) / (spread * spread));
+                    let y = waterTopBaseY + drawdown;
+                    y = Math.min(y, state.height * 0.95);
+                    if (x===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+                }
+                ctx.strokeStyle = '#00f2fe';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]); // reset
+
+                // Draw Well Pipe
+                ctx.fillStyle = '#64748b'; // outer casing
+                ctx.fillRect(wellX - 10, state.height*0.1, 20, state.height*0.85);
+                ctx.fillStyle = '#1e293b'; // inner darkness
+                ctx.fillRect(wellX - 6, state.height*0.1, 12, state.height*0.85);
+
+                // Well Pump Head
+                ctx.fillStyle = '#94a3b8';
+                ctx.fillRect(wellX - 20, state.height*0.08, 40, 20);
+                
+                // Pump animation (particles flying up pipe)
+                if(state.pumpRate > 0) {
+                    const time = Date.now() / 1000;
+                    ctx.fillStyle = '#00f2fe';
+                    for(let i=0; i<3; i++) {
+                        // Math.random for offset, modulus to loop
+                        const t = (time * (state.pumpRate/20) + i*0.33) % 1;
+                        const py = (state.height * 0.95) - (t * (state.height * 0.85)); // travel up pipe
+                        // Only draw if above current actual water level in well
+                        const currentDrawdown = maxDrawdown * Math.exp(0);
+                        if (py < (waterTopBaseY + currentDrawdown)) {
+                            ctx.beginPath();
+                            ctx.arc(wellX, py, 3, 0, Math.PI*2);
+                            ctx.fill();
+                        }
+                    }
+                }
+
+                // Surface Line (Grass/Ground)
+                ctx.beginPath();
+                ctx.moveTo(0, state.height * 0.2);
+                ctx.lineTo(state.width, state.height * 0.2);
+                ctx.strokeStyle = '#2d5a27';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                requestAnimationFrame(render);
+            }
+
+            // Start simulation loop
+            render();
+        });
+    </script>
+</body>
+</html>

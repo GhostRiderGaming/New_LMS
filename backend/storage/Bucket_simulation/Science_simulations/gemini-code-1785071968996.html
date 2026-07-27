@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Echo: Acoustic Reflection Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-base: #05050a;
+            --bg-panel: rgba(15, 18, 30, 0.6);
+            --bg-panel-hover: rgba(25, 30, 45, 0.7);
+            
+            --accent-primary: #00E5FF; /* Cyan - Incident */
+            --accent-primary-glow: rgba(0, 229, 255, 0.4);
+            --accent-secondary: #FF007F; /* Pink - Reflected */
+            --accent-secondary-glow: rgba(255, 0, 127, 0.4);
+            --accent-tertiary: #7000FF; /* Purple */
+            
+            --text-main: rgba(255, 255, 255, 0.95);
+            --text-muted: rgba(255, 255, 255, 0.6);
+            
+            --border-light: rgba(255, 255, 255, 0.08);
+            --border-glow: rgba(0, 229, 255, 0.2);
+            
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            
+            --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-ui);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            /* Animated background gradient */
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(255, 0, 127, 0.05), transparent 25%);
+            background-attachment: fixed;
+        }
+
+        h1, h2, h3, h4 {
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 0.5em;
+        }
+
+        h1 { font-size: clamp(2rem, 5vw, 4rem); background: linear-gradient(to right, #fff, #aaa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); }
+        p { font-size: clamp(0.9rem, 1.5vw, 1.1rem); color: var(--text-muted); margin-bottom: 1em; }
+
+        /* ==========================================================================
+           LAYOUT & UTILITIES
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 3vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(30px, 5vw, 80px);
+        }
+
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+            padding: clamp(16px, 3vw, 32px);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Reduce blur on mobile for performance */
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+            }
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 24px;
+        }
+
+        .flex-between {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(255,255,255,0.1);
+            margin-bottom: 16px;
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            text-align: center;
+            padding: 60px 0 20px;
+            position: relative;
+        }
+
+        .hero-visual {
+            width: 200px;
+            height: 200px;
+            margin: 0 auto 30px;
+            position: relative;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .hero-pulse {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid var(--accent-primary);
+            animation: pulse-out 3s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        .hero-pulse:nth-child(2) { animation-delay: 1s; border-color: var(--accent-secondary); }
+        .hero-pulse:nth-child(3) { animation-delay: 2s; border-color: var(--accent-tertiary); }
+
+        @keyframes pulse-out {
+            0% { transform: scale(0.1); opacity: 1; border-width: 4px; }
+            100% { transform: scale(2); opacity: 0; border-width: 1px; }
+        }
+
+        /* ==========================================================================
+           MANDATORY COMPONENTS DIAGRAM PATTERN
+           ========================================================================== */
+        .components-section {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .components-section {
+                grid-template-columns: 2fr 1fr; /* Illustration | Legend */
+                align-items: center;
+            }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 280px; /* Guarantee height so layout doesn't jump */
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid var(--border-light);
+        }
+
+        .illustration-container svg {
+            width: 100%;
+            height: 100%;
+            max-height: 400px;
+        }
+
+        /* Numbered Markers on Illustration */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--bg-base);
+            border: 2px solid var(--color);
+            color: var(--color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--color-glow);
+            transform: translate(-50%, -50%);
+            transition: var(--transition-smooth);
+            z-index: 10;
+        }
+        
+        .marker::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--color);
+            opacity: 0.2;
+            animation: pulse-marker 2s infinite;
+        }
+
+        @keyframes pulse-marker {
+            0% { transform: scale(1); opacity: 0.5; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--color);
+            color: #000;
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--color-glow);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            background: var(--color-glow);
+            border: 1px solid var(--color);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .legend-text h4 { margin-bottom: 2px; font-size: 1rem; color: var(--color); }
+        .legend-text p { margin: 0; font-size: 0.85rem; color: var(--text-muted); }
+
+        /* ==========================================================================
+           MANDATORY WORKING SECTION (STEP-BY-STEP)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .working-canvas-wrapper {
+            width: 100%;
+            height: 300px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(180deg, #0a0f1a 0%, #151b2b 100%);
+            border: 1px solid var(--border-light);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .working-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            padding: 12px 20px;
+            border-radius: var(--radius-sm);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: var(--font-ui);
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover { background: rgba(255,255,255,0.2); }
+        .btn.active { background: var(--accent-primary); border-color: var(--accent-primary); color: #000; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .progress-indicator {
+            display: flex;
+            gap: 8px;
+        }
+
+        .progress-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-smooth);
+        }
+        
+        .progress-dot.active {
+            background: var(--accent-primary);
+            box-shadow: 0 0 8px var(--accent-primary-glow);
+            transform: scale(1.3);
+        }
+
+        .stage-info {
+            background: rgba(255,255,255,0.03);
+            padding: 20px;
+            border-radius: var(--radius-sm);
+            border-left: 4px solid var(--accent-primary);
+            min-height: 100px;
+        }
+
+        .stage-info h3 { color: var(--accent-primary); margin-bottom: 8px; }
+        .stage-info p { margin: 0; }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION CORE
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .sim-layout { grid-template-columns: 3fr 1fr; } /* Canvas | Controls */
+        }
+
+        .sim-canvas-wrapper {
+            width: 100%;
+            height: clamp(300px, 40vh, 500px);
+            background: linear-gradient(to bottom, #050810, #111827);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .control-value {
+            color: var(--accent-primary);
+            font-family: monospace;
+            font-size: 1rem;
+        }
+
+        /* Custom Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            border: 1px solid rgba(0,0,0,0.5);
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -8px;
+            box-shadow: 0 0 10px var(--accent-primary-glow);
+            transition: transform 0.1s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+
+        .btn-large {
+            width: 100%;
+            padding: 16px;
+            font-size: 1.1rem;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, var(--accent-primary), #0099cc);
+            color: #000;
+            border: none;
+            box-shadow: 0 4px 15px var(--accent-primary-glow);
+            justify-content: center;
+        }
+        .btn-large:hover { transform: translateY(-2px); box-shadow: 0 6px 20px var(--accent-primary-glow); }
+        
+        .sim-stats {
+            background: rgba(0,0,0,0.4);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            margin-top: 10px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-family: monospace;
+            font-size: 0.9rem;
+        }
+        
+        .stat-row:last-child { margin-bottom: 0; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; font-weight: bold;}
+
+        .result-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-top: 10px;
+            width: 100%;
+            text-align: center;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            transition: all 0.3s;
+        }
+
+        .result-echo { background: rgba(0, 229, 255, 0.2); color: var(--accent-primary); border: 1px solid var(--accent-primary); }
+        .result-reverb { background: rgba(255, 0, 127, 0.2); color: var(--accent-secondary); border: 1px solid var(--accent-secondary); }
+
+        /* ==========================================================================
+           INFO CARDS (Facts, Apps, Mistakes)
+           ========================================================================== */
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            transition: var(--transition-smooth);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .info-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+            background: var(--color, var(--accent-primary));
+            opacity: 0.5;
+        }
+
+        .info-card:hover {
+            background: rgba(255,255,255,0.05);
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.1);
+        }
+        
+        .icon-circle {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.05);
+            display: flex; justify-content: center; align-items: center;
+            margin-bottom: 16px;
+            color: var(--color, white);
+            font-size: 1.5rem;
+        }
+
+        /* Formula display */
+        .formula-box {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0,0,0,0.5);
+            border-radius: var(--radius-sm);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: clamp(1.2rem, 2vw, 1.8rem);
+            margin: 20px 0;
+            border: 1px dashed rgba(255,255,255,0.2);
+            color: var(--accent-primary);
+        }
+        
+        .math-var { font-style: italic; color: white; }
+
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        /* Utility for hiding */
+        .hidden { display: none !important; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- ==========================================
+         HERO SECTION
+         ========================================== -->
+    <section class="hero">
+        <div class="tag">Physics / Acoustics</div>
+        <div class="hero-visual">
+            <div class="hero-pulse"></div>
+            <div class="hero-pulse"></div>
+            <div class="hero-pulse"></div>
+            <!-- Central speaker icon SVG -->
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+        </div>
+        <h1>Echo Simulation</h1>
+        <p>Explore the physics of sound reflection. Understand how distance, speed, and human perception interact to create distinct echoes versus reverberation.</p>
+    </section>
+
+    <!-- ==========================================
+         COMPONENTS (MANDATORY DIAGRAM PATTERN)
+         ========================================== -->
+    <section class="glass-panel">
+        <h2>Anatomy of an Echo</h2>
+        <p>An echo requires specific elements to occur. The reflecting surface must be large, rigid, and far enough away for the sound to travel back after a slight delay.</p>
+        
+        <div class="components-section">
+            <!-- Left: Illustration -->
+            <div class="illustration-container" id="components-illustration">
+                <!-- SVG Illustration -> Premium Vector Art -->
+                <svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice">
+                    <defs>
+                        <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#0a0f1a"/>
+                            <stop offset="100%" stop-color="#1a253c"/>
+                        </linearGradient>
+                        <linearGradient id="cliff-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#2a354c"/>
+                            <stop offset="100%" stop-color="#151b2b"/>
+                        </linearGradient>
+                        <filter id="glow-cyan"><feGaussianBlur stdDeviation="4" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                        <filter id="glow-pink"><feGaussianBlur stdDeviation="4" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                    </defs>
+                    
+                    <rect width="800" height="400" fill="url(#bg-grad)"/>
+                    
+                    <!-- Ground -->
+                    <path d="M0,320 L800,320 L800,400 L0,400 Z" fill="#0c121e" stroke="rgba(255,255,255,0.1)"/>
+                    
+                    <!-- Distance indicator -->
+                    <line x1="120" y1="350" x2="680" y2="350" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-dasharray="5,5"/>
+                    <text x="400" y="375" fill="rgba(255,255,255,0.5)" font-size="16" font-family="sans-serif" text-anchor="middle">Distance (d)</text>
+                    <path d="M120,345 L120,355 M680,345 L680,355" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+
+                    <!-- Cliff / Reflector (Right) -->
+                    <path d="M680,320 L690,150 L710,120 L750,80 L800,80 L800,320 Z" fill="url(#cliff-grad)" stroke="#3a4a6b" stroke-width="2"/>
+                    <path d="M680,320 L690,150" stroke="rgba(255,255,255,0.4)" stroke-width="3"/> <!-- Hard reflective surface -->
+
+                    <!-- Source/Person (Left) -->
+                    <g transform="translate(120, 270)">
+                        <!-- Simple sleek avatar -->
+                        <circle cx="0" cy="-30" r="12" fill="#fff"/>
+                        <path d="M-15,-5 C-15,-15 15,-15 15,-5 L15,50 L-15,50 Z" fill="#ccc" rx="5"/>
+                        <!-- Speaker symbol -->
+                        <path d="M 20,-20 L 30,-30 L 30,-10 Z" fill="var(--accent-primary)"/>
+                        <path d="M 35,-25 A 10 10 0 0 1 35,-15 M 40,-30 A 15 15 0 0 1 40,-10" fill="none" stroke="var(--accent-primary)" stroke-width="2"/>
+                    </g>
+
+                    <!-- Incident Waves (Cyan, moving right) -->
+                    <g stroke="var(--accent-primary)" fill="none" stroke-width="3" filter="url(#glow-cyan)" opacity="0.8">
+                        <path d="M 220,250 A 120 120 0 0 0 220,110"/>
+                        <path d="M 280,270 A 180 180 0 0 0 280,90"/>
+                        <path d="M 340,290 A 240 240 0 0 0 340,70"/>
+                        <!-- Direction Arrow -->
+                        <path d="M 250,180 L 290,180 L 280,170 M 290,180 L 280,190" stroke-width="2"/>
+                    </g>
+
+                    <!-- Reflected Waves (Pink, moving left) -->
+                    <g stroke="var(--accent-secondary)" fill="none" stroke-width="3" filter="url(#glow-pink)" opacity="0.7">
+                        <path d="M 580,290 A 240 240 0 0 1 580,70"/>
+                        <path d="M 520,270 A 180 180 0 0 1 520,90"/>
+                        <!-- Direction Arrow -->
+                        <path d="M 550,180 L 510,180 L 520,170 M 510,180 L 520,190" stroke-width="2"/>
+                    </g>
+                </svg>
+
+                <!-- Markers (Injected via JS for DRYness, styled by CSS) -->
+                <div class="marker" data-target="1" style="left: 15%; top: 60%; --color: #fff; --color-glow: rgba(255,255,255,0.5);">1</div>
+                <div class="marker" data-target="2" style="left: 35%; top: 45%; --color: var(--accent-primary); --color-glow: var(--accent-primary-glow);">2</div>
+                <div class="marker" data-target="3" style="left: 85%; top: 50%; --color: #aaa; --color-glow: rgba(170,170,170,0.5);">3</div>
+                <div class="marker" data-target="4" style="left: 65%; top: 45%; --color: var(--accent-secondary); --color-glow: var(--accent-secondary-glow);">4</div>
+                <div class="marker" data-target="5" style="left: 15%; top: 40%; --color: var(--accent-tertiary); --color-glow: rgba(112,0,255,0.5);">5</div>
+            </div>
+
+            <!-- Right/Bottom: Legend List -->
+            <div class="legend-list" id="components-legend">
+                <!-- Legend Items -->
+                <div class="legend-item" data-id="1" style="--color: #fff; --color-glow: rgba(255,255,255,0.2);">
+                    <div class="legend-badge">1</div>
+                    <div class="legend-text">
+                        <h4>Sound Source</h4>
+                        <p>Generates the initial sound wave (e.g., a person shouting or a speaker).</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="2" style="--color: var(--accent-primary); --color-glow: var(--accent-primary-glow);">
+                    <div class="legend-badge">2</div>
+                    <div class="legend-text">
+                        <h4>Incident Wave</h4>
+                        <p>The original sound energy traveling forward through a medium (like air) at velocity <i>v</i>.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="3" style="--color: #aaa; --color-glow: rgba(170,170,170,0.2);">
+                    <div class="legend-badge">3</div>
+                    <div class="legend-text">
+                        <h4>Reflecting Surface</h4>
+                        <p>A hard, rigid obstacle (cliff, wall). Soft surfaces absorb sound instead of reflecting.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="4" style="--color: var(--accent-secondary); --color-glow: var(--accent-secondary-glow);">
+                    <div class="legend-badge">4</div>
+                    <div class="legend-text">
+                        <h4>Reflected Wave (Echo)</h4>
+                        <p>Sound bouncing back. Some energy is lost, so the echo is always quieter than the original.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="5" style="--color: var(--accent-tertiary); --color-glow: rgba(112,0,255,0.2);">
+                    <div class="legend-badge">5</div>
+                    <div class="legend-text">
+                        <h4>Receiver & Brain</h4>
+                        <p>The ear detects the return wave. The brain needs a minimum ~0.1s delay to distinguish it from the original sound.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================
+         WORKING MECHANISM (MANDATORY STRUCTURE)
+         ========================================== -->
+    <section class="glass-panel">
+        <h2>How an Echo Forms</h2>
+        <p>The formation of an echo is a linear sequential process of physics and biology. Follow the stages below.</p>
+        
+        <div class="working-container">
+            <!-- Stage Info Card -->
+            <div class="stage-info" id="work-info">
+                <h3 id="work-title">1. Emission</h3>
+                <p id="work-desc">The source creates a mechanical disturbance in the air, creating high and low pressure zones (sound waves).</p>
+            </div>
+
+            <!-- Visualization Canvas -->
+            <div class="working-canvas-wrapper" id="working-canvas-container">
+                <canvas id="working-canvas"></canvas>
+            </div>
+
+            <!-- Controls -->
+            <div class="working-controls">
+                <div class="progress-indicator" id="work-progress">
+                    <div class="progress-dot active" data-step="0"></div>
+                    <div class="progress-dot" data-step="1"></div>
+                    <div class="progress-dot" data-step="2"></div>
+                    <div class="progress-dot" data-step="3"></div>
+                    <div class="progress-dot" data-step="4"></div>
+                </div>
+                
+                <div style="display:flex; gap: 8px;">
+                    <button class="btn" id="btn-prev">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                    </button>
+                    <button class="btn" id="btn-next">
+                        Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                    <button class="btn" id="btn-auto">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="icon-play"><polygon points="5 3 19 12 5 21 5 3"/></svg> Auto-Play
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================
+         INTERACTIVE SIMULATION CORE
+         ========================================== -->
+    <section class="glass-panel">
+        <h2>Laboratory: The 0.1 Second Rule</h2>
+        <p>The human brain retains a sound impression for about <strong>0.1 seconds</strong>. If reflected sound arrives <em>before</em> 0.1s, it blends with the original (reverberation). If it arrives <em>after</em> 0.1s, it is heard as a distinct echo. Adjust distance and temperature to see the effect.</p>
+        
+        <div class="formula-box">
+            Time (<span class="math-var">t</span>) = Total Distance (2<span class="math-var">d</span>) / Speed (<span class="math-var">v</span>)
+        </div>
+
+        <div class="sim-layout">
+            <!-- Canvas -->
+            <div class="sim-canvas-wrapper" id="sim-canvas-container">
+                <canvas id="sim-canvas"></canvas>
+                <!-- Overlay UI on canvas for stats -->
+                <div style="position:absolute; top:20px; left:20px; color:white; font-family:monospace; font-size:1.2rem; text-shadow: 0 2px 4px rgba(0,0,0,0.8);">
+                    Timer: <span id="sim-timer" style="color: var(--accent-primary);">0.000s</span>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="sim-controls">
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Distance to Wall (<span class="math-var">d</span>)</span>
+                        <span class="control-value" id="val-dist">17.0 m</span>
+                    </div>
+                    <input type="range" id="slider-dist" min="5" max="50" step="0.5" value="17">
+                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted);">
+                        <span>5m</span><span>50m</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Air Temperature (<span class="math-var">T</span>)</span>
+                        <span class="control-value" id="val-temp">20 °C</span>
+                    </div>
+                    <input type="range" id="slider-temp" min="-10" max="40" step="1" value="20">
+                    <p style="font-size:0.8rem; margin:0; line-height:1.2;">Speed of sound increases by ~0.6 m/s per °C.</p>
+                </div>
+
+                <div class="sim-stats">
+                    <div class="stat-row">
+                        <span>Speed (v = 331 + 0.6T):</span>
+                        <span id="stat-speed">343.0 m/s</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Total Travel (2d):</span>
+                        <span id="stat-travel">34.0 m</span>
+                    </div>
+                    <div class="stat-row">
+                        <span>Expected Delay (t):</span>
+                        <span id="stat-delay" style="color: var(--accent-primary);">0.099 s</span>
+                    </div>
+                    
+                    <div id="sim-result" class="result-badge result-reverb">
+                        Reverberation (Too Close)
+                    </div>
+                </div>
+
+                <button class="btn btn-large" id="btn-trigger">
+                    Generate Sound Pulse
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================
+         INFORMATION GRIDS
+         ========================================== -->
+    <div class="grid-2">
+        <section class="glass-panel">
+            <h2>Applications</h2>
+            <div class="grid-1" style="display:grid; gap:16px;">
+                <div class="info-card" style="--color: #00E5FF;">
+                    <div class="flex-between">
+                        <h3>SONAR</h3>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <p>Ships use Sound Navigation and Ranging. They emit ultrasound pulses into water and measure the time taken for echoes to return from the seabed or submarines to calculate depth.</p>
+                </div>
+                <div class="info-card" style="--color: #FF007F;">
+                    <div class="flex-between">
+                        <h3>Medical Ultrasound</h3>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-secondary)" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    </div>
+                    <p>High-frequency sound waves enter the body. Different tissues reflect sound differently. The returning echoes are mapped by a computer to create real-time internal images.</p>
+                </div>
+                <div class="info-card" style="--color: #7000FF;">
+                    <div class="flex-between">
+                        <h3>Animal Echolocation</h3>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-tertiary)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    </div>
+                    <p>Bats and dolphins navigate and hunt in total darkness by emitting clicks and analyzing the echoes to determine the size, distance, and speed of objects.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="glass-panel">
+            <h2>Facts & Misconceptions</h2>
+            <div class="grid-1" style="display:grid; gap:16px;">
+                <div class="info-card" style="--color: #FFB300;">
+                    <h3>The 17 Meter Minimum</h3>
+                    <p>At room temperature (20°C), sound travels at ~343 m/s. To hear an echo (0.1s delay), sound must travel at least 34.3 meters total. Therefore, the reflecting wall must be at least <strong>17.15 meters</strong> away.</p>
+                </div>
+                <div class="info-card" style="--color: #00E676;">
+                    <h3><span style="color:var(--text-muted); text-decoration:line-through;">Mistake:</span> Echo is a new sound</h3>
+                    <p><strong>Correction:</strong> An echo is not a new sound created by the wall. It is the exact same mechanical energy that left the source, bouncing back like a tennis ball hitting a wall.</p>
+                </div>
+                <div class="info-card" style="--color: #F44336;">
+                    <h3><span style="color:var(--text-muted); text-decoration:line-through;">Mistake:</span> Reverberation is just a fast echo</h3>
+                    <p><strong>Correction:</strong> While physically similar, reverberation involves <em>multiple, rapid reflections</em> blending together, prolonging the sound (like in an empty hall). A true echo is a distinct, separate repetition.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+</div>
+
+<!-- ==========================================================================
+     JAVASCRIPT LOGIC
+     ========================================================================== -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    /* ==========================================================================
+       1. COMPONENTS DIAGRAM INTERACTION (MARKERS <-> LEGEND)
+       ========================================================================== */
+    const markers = document.querySelectorAll('.marker');
+    const legendItems = document.querySelectorAll('.legend-item');
+
+    function setActiveComponent(id) {
+        // Clear all
+        markers.forEach(m => m.classList.remove('active'));
+        legendItems.forEach(l => l.classList.remove('active'));
+        
+        if (id) {
+            document.querySelector(`.marker[data-target="${id}"]`).classList.add('active');
+            document.querySelector(`.legend-item[data-id="${id}"]`).classList.add('active');
+        }
+    }
+
+    markers.forEach(marker => {
+        marker.addEventListener('mouseenter', () => setActiveComponent(marker.dataset.target));
+        marker.addEventListener('click', () => setActiveComponent(marker.dataset.target));
+    });
+
+    legendItems.forEach(item => {
+        item.addEventListener('mouseenter', () => setActiveComponent(item.dataset.id));
+        item.addEventListener('click', () => setActiveComponent(item.dataset.id));
+    });
+
+    // Clear on leaving container
+    document.querySelector('.components-section').addEventListener('mouseleave', () => setActiveComponent(null));
+
+
+    /* ==========================================================================
+       2. CANVAS UTILITIES
+       ========================================================================== */
+    function setupCanvas(canvasId, containerId) {
+        const canvas = document.getElementById(canvasId);
+        const container = document.getElementById(containerId);
+        const ctx = canvas.getContext('2d');
+        
+        function resize() {
+            const rect = container.getBoundingClientRect();
+            // Handle retina displays
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+            return { w: rect.width, h: rect.height };
+        }
+        
+        let dims = resize();
+        window.addEventListener('resize', () => { dims = resize(); });
+        
+        return { canvas, ctx, getDims: () => dims };
+    }
+
+    /* ==========================================================================
+       3. WORKING MECHANISM ANIMATION (STATE MACHINE)
+       ========================================================================== */
+    const work = setupCanvas('working-canvas', 'working-canvas-container');
+    
+    const stages = [
+        { title: "1. Emission", desc: "The source generates a sound wave. Vocal cords or a speaker cone vibrate, compressing adjacent air molecules.", particlesIn: "Energy", particlesOut: "Wavefront" },
+        { title: "2. Propagation", desc: "The sound wave travels outward spherically at velocity 'v'. The particles themselves don't move far, only the energy does.", particlesIn: "Wavefront", particlesOut: "Wavefront" },
+        { title: "3. Impact", desc: "The wave hits a boundary (denser medium). It cannot pass through easily, causing an immediate build-up of pressure.", particlesIn: "Wavefront", particlesOut: "Pressure" },
+        { title: "4. Reflection", desc: "According to Newton's Third Law, the wall pushes back. The wave inverts and travels back through the same medium.", particlesIn: "Pressure", particlesOut: "Reflected Wave" },
+        { title: "5. Detection", desc: "The weakened reflected wave reaches the receiver. If time > 0.1s, the brain processes it as a distinct 'echo'.", particlesIn: "Reflected Wave", particlesOut: "Perception" }
+    ];
+
+    let currentStage = 0;
+    let workAutoPlay = false;
+    let workTime = 0; // 0 to 1 representing progress through current stage
+    let workAnimationId;
+
+    const domWorkTitle = document.getElementById('work-title');
+    const domWorkDesc = document.getElementById('work-desc');
+    const domDots = document.querySelectorAll('.progress-dot');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const btnAuto = document.getElementById('btn-auto');
+    const iconPlay = document.getElementById('icon-play');
+
+    function updateWorkUI() {
+        domWorkTitle.textContent = stages[currentStage].title;
+        domWorkDesc.textContent = stages[currentStage].desc;
+        domDots.forEach((dot, idx) => {
+            dot.classList.toggle('active', idx === currentStage);
+        });
+        btnPrev.disabled = currentStage === 0 && !workAutoPlay;
+        btnNext.disabled = currentStage === 4 && !workAutoPlay;
+    }
+
+    function drawWorkingCanvas() {
+        const { ctx } = work;
+        const dims = work.getDims();
+        const w = dims.w;
+        const h = dims.h;
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        // Define key positions
+        const sourceX = w * 0.15;
+        const wallX = w * 0.85;
+        const cy = h / 2;
+        
+        // Draw Wall
+        ctx.fillStyle = currentStage === 2 || currentStage === 3 ? '#4a5a7b' : '#2a354c';
+        ctx.fillRect(wallX, cy - 80, 40, 160);
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillRect(wallX, cy - 80, 5, 160); // reflection face
+
+        // Draw Source (Person/Speaker)
+        ctx.fillStyle = currentStage === 0 || currentStage === 4 ? '#fff' : '#aaa';
+        ctx.beginPath();
+        ctx.arc(sourceX, cy, 20, 0, Math.PI * 2);
+        ctx.fill();
+        // highlight ring
+        if (currentStage === 0) {
+            ctx.strokeStyle = '#00E5FF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(sourceX, cy, 20 + Math.sin(workTime * Math.PI) * 10, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        if (currentStage === 4) {
+             ctx.strokeStyle = '#7000FF';
+             ctx.lineWidth = 2;
+             ctx.beginPath();
+             ctx.arc(sourceX, cy, 20 + Math.sin(workTime * Math.PI) * 10, 0, Math.PI * 2);
+             ctx.stroke();
+        }
+
+        // Draw Waves based on stage and time
+        // Calculate global progress 0 to 1 across all 5 stages for smooth morphing
+        let globalProgress = (currentStage + workTime) / 5;
+        
+        // Wave logic: Travels source->wall (0 to 0.5 global), wall->source (0.5 to 1.0)
+        let waveX, waveRadius, waveColor;
+        let showWave = false;
+
+        if (globalProgress > 0.1 && globalProgress < 0.5) {
+            // Forward (Stage 1 to 2 to 3)
+            let pathProgress = (globalProgress - 0.1) / 0.4; // 0 to 1 along path
+            waveX = sourceX + (wallX - sourceX) * pathProgress;
+            waveColor = `rgba(0, 229, 255, ${1 - pathProgress*0.5})`; // fades slightly
+            showWave = true;
+            
+            // Draw expanding arcs
+            ctx.strokeStyle = waveColor;
+            ctx.lineWidth = 3;
+            for(let i=0; i<3; i++) {
+                let r = 20 + i*30 + (pathProgress * 20);
+                if (sourceX + r < wallX) { // don't draw past wall
+                    ctx.beginPath();
+                    ctx.arc(sourceX, cy, r, -Math.PI/4, Math.PI/4);
+                    ctx.stroke();
+                }
+            }
+        } 
+        else if (globalProgress >= 0.5 && globalProgress < 0.9) {
+            // Return (Stage 3 to 4 to 5)
+            let pathProgress = (globalProgress - 0.5) / 0.4;
+            waveX = wallX - (wallX - sourceX) * pathProgress;
+            waveColor = `rgba(255, 0, 127, ${0.8 - pathProgress*0.5})`;
+            showWave = true;
+            
+            // Draw returning arcs
+            ctx.strokeStyle = waveColor;
+            ctx.lineWidth = 3;
+            for(let i=0; i<3; i++) {
+                let r = 20 + i*30 + (pathProgress * 20);
+                if (wallX - r > sourceX) {
+                    ctx.beginPath();
+                    ctx.arc(wallX, cy, r, Math.PI - Math.PI/4, Math.PI + Math.PI/4);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Particles/Labels for specific stages
+        ctx.font = "14px sans-serif";
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.textAlign = "center";
+        
+        if (currentStage === 2) { // Impact
+            ctx.fillStyle = "#FF007F";
+            ctx.beginPath();
+            ctx.arc(wallX, cy, 10 + Math.sin(workTime * Math.PI*4)*5, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillText("Energy Transfer", wallX - 40, cy - 30);
+        }
+        
+        if (showWave && (currentStage === 1 || currentStage === 3)) {
+            // Arrow indicator
+            let dir = currentStage === 1 ? 1 : -1;
+            ctx.beginPath();
+            ctx.moveTo(waveX - 10*dir, cy + 60);
+            ctx.lineTo(waveX + 10*dir, cy + 60);
+            ctx.lineTo(waveX, cy + 60 + 5*dir); // arrowhead pseudo logic
+            ctx.strokeStyle = waveColor;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+    }
+
+    function workLoop() {
+        if (workAutoPlay) {
+            workTime += 0.015; // Speed
+            if (workTime >= 1.0) {
+                workTime = 0;
+                currentStage = (currentStage + 1) % 5;
+                updateWorkUI();
+            }
+        } else {
+            // Smoothly ease to center of current stage (workTime = 0.5) if paused
+            workTime += (0.5 - workTime) * 0.1;
+        }
+        
+        drawWorkingCanvas();
+        workAnimationId = requestAnimationFrame(workLoop);
+    }
+
+    btnNext.addEventListener('click', () => {
+        if (currentStage < 4) { currentStage++; workTime = 0; updateWorkUI(); }
+    });
+    btnPrev.addEventListener('click', () => {
+        if (currentStage > 0) { currentStage--; workTime = 0; updateWorkUI(); }
+    });
+    btnAuto.addEventListener('click', () => {
+        workAutoPlay = !workAutoPlay;
+        btnAuto.classList.toggle('active', workAutoPlay);
+        iconPlay.innerHTML = workAutoPlay 
+            ? '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>' // pause icon
+            : '<polygon points="5 3 19 12 5 21 5 3"></polygon>'; // play icon
+        if (!workAutoPlay) workTime = 0.5; // settle in middle
+    });
+
+    domDots.forEach((dot) => {
+        dot.addEventListener('click', (e) => {
+            currentStage = parseInt(e.target.dataset.step);
+            workTime = 0.5;
+            workAutoPlay = false;
+            btnAuto.classList.remove('active');
+            iconPlay.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"></polygon>';
+            updateWorkUI();
+        });
+    });
+
+    updateWorkUI();
+    workLoop();
+
+
+    /* ==========================================================================
+       4. INTERACTIVE LABORATORY SIMULATION
+       ========================================================================== */
+    const sim = setupCanvas('sim-canvas', 'sim-canvas-container');
+    
+    // UI Elements
+    const slDist = document.getElementById('slider-dist');
+    const slTemp = document.getElementById('slider-temp');
+    const valDist = document.getElementById('val-dist');
+    const valTemp = document.getElementById('val-temp');
+    const stSpeed = document.getElementById('stat-speed');
+    const stTravel = document.getElementById('stat-travel');
+    const stDelay = document.getElementById('stat-delay');
+    const simResult = document.getElementById('sim-result');
+    const simTimer = document.getElementById('sim-timer');
+    const btnTrigger = document.getElementById('btn-trigger');
+
+    // State variables
+    let simDist = parseFloat(slDist.value);
+    let simTemp = parseFloat(slTemp.value);
+    let simSpeed = 331.3 + (0.606 * simTemp);
+    
+    let simActive = false;
+    let simStartTime = 0;
+    let simCurrentTime = 0; // seconds
+    let simDuration = 0;
+    
+    // Wave state
+    let pulseWave = { active: false, x: 0, r: 0, direction: 1, type: 'incident' };
+
+    function calculateStats() {
+        simDist = parseFloat(slDist.value);
+        simTemp = parseFloat(slTemp.value);
+        
+        // Physics math
+        simSpeed = 331.3 + (0.606 * simTemp);
+        let totalD = simDist * 2;
+        let expectedDelay = totalD / simSpeed;
+        
+        // Update UI
+        valDist.textContent = `${simDist.toFixed(1)} m`;
+        valTemp.textContent = `${simTemp} °C`;
+        
+        stSpeed.textContent = `${simSpeed.toFixed(1)} m/s`;
+        stTravel.textContent = `${totalD.toFixed(1)} m`;
+        stDelay.textContent = `${expectedDelay.toFixed(3)} s`;
+        
+        if (expectedDelay >= 0.1) {
+            simResult.className = 'result-badge result-echo';
+            simResult.textContent = 'Result: Distinct Echo';
+            stDelay.style.color = 'var(--accent-primary)';
+        } else {
+            simResult.className = 'result-badge result-reverb';
+            simResult.textContent = 'Result: Reverberation (Too Close)';
+            stDelay.style.color = 'var(--accent-secondary)';
+        }
+        
+        if (!simActive) {
+            simTimer.textContent = "0.000s";
+            drawSimCanvas();
+        }
+    }
+
+    function triggerSimulation() {
+        if (simActive) return; // Prevent multiple clicks
+        
+        simActive = true;
+        simStartTime = performance.now();
+        simDuration = (simDist * 2) / simSpeed; // total time in seconds
+        
+        pulseWave = { active: true, r: 0, direction: 1, type: 'incident' };
+        btnTrigger.disabled = true;
+        btnTrigger.textContent = "Sound Wave Traveling...";
+        btnTrigger.style.background = "#333";
+        
+        requestAnimationFrame(simLoop);
+    }
+
+    function drawSimCanvas() {
+        const { ctx } = sim;
+        const dims = sim.getDims();
+        const w = dims.w;
+        const h = dims.h;
+        
+        ctx.clearRect(0, 0, w, h);
+        
+        // Scale physics distance to canvas pixels
+        // Max distance is 50m. Let's map 0-60m to canvas width with padding
+        const padX = 50;
+        const pxPerMeter = (w - padX * 2) / 60; 
+        
+        const sourceX = padX;
+        const wallX = padX + (simDist * pxPerMeter);
+        const cy = h / 2;
+
+        // Draw Ground Line
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, h - 30);
+        ctx.lineTo(w, h - 30);
+        ctx.stroke();
+
+        // Draw Source (Person)
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(sourceX, h - 50, 15, 0, Math.PI*2); // Head
+        ctx.fill();
+        ctx.fillRect(sourceX - 10, h - 35, 20, 30); // Body
+        
+        // Draw Wall
+        ctx.fillStyle = '#3a4a6b';
+        ctx.fillRect(wallX, h - 150, 20, 120);
+        
+        // Distance label on canvas
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${simDist.toFixed(1)}m`, sourceX + (wallX-sourceX)/2, h - 15);
+
+        // Draw Animated Wave
+        if (simActive && pulseWave.active) {
+            let color = pulseWave.type === 'incident' ? 'rgba(0, 229, 255, 0.8)' : 'rgba(255, 0, 127, 0.8)';
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 4;
+            
+            // Calculate pixel position based on simulated time and speed
+            let distanceTraveledPixels = (simCurrentTime * simSpeed) * pxPerMeter;
+            
+            let currentWaveX;
+            if (pulseWave.type === 'incident') {
+                currentWaveX = sourceX + distanceTraveledPixels;
+                pulseWave.r = distanceTraveledPixels;
+                
+                // Switch to reflected if hit wall
+                if (currentWaveX >= wallX) {
+                    pulseWave.type = 'reflected';
+                    // Trigger flash on wall
+                    ctx.fillStyle = 'white';
+                    ctx.fillRect(wallX, h - 150, 5, 120);
+                }
+            } else {
+                // Return journey
+                let returnDistancePx = distanceTraveledPixels - (simDist * pxPerMeter);
+                currentWaveX = wallX - returnDistancePx;
+                pulseWave.r = returnDistancePx;
+                
+                // Stop if returned to source
+                if (currentWaveX <= sourceX) {
+                    simActive = false;
+                    pulseWave.active = false;
+                    
+                    // Visual feedback on receiver
+                    ctx.beginPath();
+                    ctx.arc(sourceX, h - 50, 25, 0, Math.PI*2);
+                    ctx.fillStyle = 'rgba(255, 0, 127, 0.5)';
+                    ctx.fill();
+                    
+                    btnTrigger.disabled = false;
+                    btnTrigger.textContent = "Generate Sound Pulse";
+                    btnTrigger.style.background = "";
+                }
+            }
+            
+            // Draw arcs
+            ctx.beginPath();
+            if (pulseWave.type === 'incident') {
+                ctx.arc(sourceX, cy - 20, pulseWave.r, -Math.PI/3, Math.PI/3);
+            } else {
+                ctx.arc(wallX, cy - 20, pulseWave.r, Math.PI - Math.PI/3, Math.PI + Math.PI/3);
+            }
+            ctx.stroke();
+        }
+    }
+
+    function simLoop(timestamp) {
+        if (!simActive) {
+            drawSimCanvas();
+            return;
+        }
+
+        // Time in seconds, scaled slightly for visual comprehension if it's too fast
+        // Actual physics delay for 17m is 0.1s, which is 6 frames at 60fps (too fast to see)
+        // We will slow time visually by a factor of 10 for education.
+        const TIME_SCALE = 0.1; // 1 real second = 0.1 simulated physics seconds
+        
+        let deltaRealMs = timestamp - simStartTime;
+        simCurrentTime = (deltaRealMs / 1000) * TIME_SCALE;
+        
+        // Update timer UI (show simulated physics time)
+        simTimer.textContent = simCurrentTime.toFixed(3) + "s";
+        
+        drawSimCanvas();
+        
+        requestAnimationFrame(simLoop);
+    }
+
+    // Event Listeners for controls
+    slDist.addEventListener('input', calculateStats);
+    slTemp.addEventListener('input', calculateStats);
+    btnTrigger.addEventListener('click', triggerSimulation);
+
+    // Initial calculation and draw
+    calculateStats();
+
+});
+</script>
+
+</body>
+</html>

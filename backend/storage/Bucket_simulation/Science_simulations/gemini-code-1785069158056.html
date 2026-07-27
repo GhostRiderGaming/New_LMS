@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Animal Cell Explorer | Premium Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME SETUP
+           ========================================================================== */
+        :root {
+            --bg-color: #030712; /* Very dark slate */
+            --bg-gradient: radial-gradient(circle at 50% 50%, #0f172a 0%, #020617 100%);
+            
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            /* Organelle Colors */
+            --color-nucleus: #a855f7;
+            --color-mito: #f97316;
+            --color-membrane: #06b6d4;
+            --color-er: #3b82f6;
+            --color-golgi: #22c55e;
+            --color-lysosome: #eab308;
+            --color-cyto: #1e293b;
+
+            --glow-spread: 15px;
+            
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            
+            --border-radius-lg: 24px;
+            --border-radius-md: 16px;
+            --border-radius-sm: 8px;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ==========================================================================
+           RESET & TYPOGRAPHY
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background: var(--bg-color);
+            background-image: var(--bg-gradient);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+            font-size: clamp(14px, 1.5vw, 16px);
+        }
+
+        h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 1rem; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; }
+        p { color: var(--text-muted); margin-bottom: 1rem; }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #60a5fa, #c084fc, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* ==========================================================================
+           LAYOUT & CONTAINERS
+           ========================================================================== */
+        #app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 3vw, 40px);
+            position: relative;
+            z-index: 10;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius-lg);
+            padding: clamp(20px, 4vw, 40px);
+            margin-bottom: clamp(24px, 4vw, 40px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            transition: var(--transition-smooth);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+            gap: clamp(20px, 3vw, 32px);
+        }
+
+        /* Ambient Background Canvas */
+        #ambient-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        /* ==========================================================================
+           HEADER / INTRO
+           ========================================================================== */
+        header {
+            text-align: center;
+            margin-bottom: clamp(40px, 6vw, 80px);
+            padding-top: clamp(20px, 5vw, 60px);
+        }
+        
+        header p {
+            max-width: 600px;
+            margin: 1rem auto 0;
+            font-size: clamp(1rem, 2vw, 1.25rem);
+        }
+
+        /* ==========================================================================
+           MAIN COMPONENTS SECTION (SVG + LEGEND)
+           ========================================================================== */
+        .components-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        @media (min-width: 1024px) {
+            .components-layout {
+                flex-direction: row;
+                align-items: center;
+            }
+        }
+
+        .illustration-container {
+            flex: 1.5;
+            position: relative;
+            width: 100%;
+            min-height: 350px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .legend-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Interactive SVG Styles */
+        #cell-svg {
+            width: 100%;
+            height: 100%;
+            max-height: 70vh;
+            filter: drop-shadow(0 0 30px rgba(6, 182, 212, 0.1));
+        }
+
+        .organelle {
+            transition: var(--transition-smooth);
+            transform-origin: center;
+        }
+
+        .organelle.active {
+            filter: brightness(1.3) contrast(1.2);
+        }
+        
+        .nucleus.active { filter: url(#glow-nucleus); }
+        .mito.active { filter: url(#glow-mito); }
+        .membrane.active { filter: url(#glow-membrane); stroke-width: 6px; }
+        .er.active { filter: url(#glow-er); }
+        .golgi.active { filter: url(#glow-golgi); }
+        .lysosome.active { filter: url(#glow-lysosome); }
+
+        /* Floating Markers */
+        .marker-group {
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .marker-group circle.bg {
+            fill: rgba(0,0,0,0.6);
+            stroke: rgba(255,255,255,0.2);
+            stroke-width: 1.5;
+            transition: var(--transition-smooth);
+        }
+
+        .marker-group text {
+            fill: white;
+            font-size: 14px;
+            font-family: var(--font-main);
+            font-weight: bold;
+            pointer-events: none;
+            text-anchor: middle;
+            dominant-baseline: central;
+        }
+
+        .marker-group:hover circle.bg,
+        .marker-group.active circle.bg {
+            stroke: white;
+            stroke-width: 2.5;
+            r: 16;
+            filter: drop-shadow(0 0 8px currentColor);
+        }
+
+        /* Legend List Items */
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            border-radius: var(--border-radius-md);
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover,
+        .legend-item.active {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--glass-highlight);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+            box-shadow: 0 0 10px currentColor;
+            flex-shrink: 0;
+        }
+
+        .legend-content h4 {
+            font-size: 1rem;
+            color: #fff;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .legend-content p {
+            font-size: 0.85rem;
+            margin: 0;
+            opacity: 0.8;
+            line-height: 1.3;
+        }
+
+        /* ==========================================================================
+           WORKING SECTION (Mechanism Animation)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .working-stage {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--border-radius-md);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #working-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .working-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255,255,255,0.05);
+            padding: 16px 24px;
+            border-radius: var(--border-radius-full);
+            border: 1px solid var(--glass-border);
+            border-radius: 50px;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border: none;
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: linear-gradient(135deg, #60a5fa, #a78bfa);
+            box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-smooth);
+        }
+
+        .dot.active {
+            background: #fff;
+            box-shadow: 0 0 8px #fff;
+            transform: scale(1.2);
+        }
+
+        .working-info {
+            text-align: center;
+            min-height: 80px;
+        }
+
+        .working-info h3 {
+            color: #60a5fa;
+            margin-bottom: 4px;
+        }
+
+        /* ==========================================================================
+           SIMULATION SECTION
+           ========================================================================== */
+        .sim-container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+            align-items: center;
+        }
+        
+        .sim-visual {
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 1;
+            position: relative;
+        }
+
+        #mito-sim-svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 0 20px rgba(249, 115, 22, 0.3));
+        }
+
+        /* Particles div for simulation */
+        #atp-particles {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        .atp-particle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #fbbf24;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #fbbf24, 0 0 20px #f59e0b;
+            top: 50%;
+            left: 50%;
+            opacity: 0;
+            /* Animation applied via JS */
+        }
+
+        .sim-controls {
+            width: 100%;
+            max-width: 600px;
+            background: rgba(0,0,0,0.2);
+            padding: 24px;
+            border-radius: var(--border-radius-md);
+            border: 1px solid var(--glass-border);
+        }
+
+        .slider-group {
+            margin-bottom: 20px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        /* Custom Futuristic Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -9px;
+            box-shadow: 0 0 15px rgba(255,255,255,0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active {
+            transform: scale(1.2);
+        }
+        
+        .meter {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 10px;
+        }
+        .meter-bar {
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            flex-grow: 1;
+            margin: 0 15px;
+            position: relative;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .meter-fill {
+            position: absolute;
+            top: 0; left: 0; height: 100%;
+            background: linear-gradient(90deg, #f59e0b, #ef4444);
+            width: 20%;
+            transition: width 0.3s ease;
+        }
+
+        /* ==========================================================================
+           INFO CARDS (Facts, Applications)
+           ========================================================================== */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .info-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+            border: 1px solid var(--glass-border);
+            padding: 24px;
+            border-radius: var(--border-radius-md);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: var(--transition-smooth);
+        }
+
+        .info-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.2);
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+        }
+
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 8px;
+            display: inline-block;
+            background: rgba(255,255,255,0.1);
+            width: 50px; height: 50px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 12px;
+        }
+
+        /* ==========================================================================
+           UTILITIES & ANIMATIONS
+           ========================================================================== */
+        .highlight-text { color: #fff; font-weight: 600; }
+        
+        @keyframes pulse-gentle {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.02); opacity: 0.8; }
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        @keyframes atp-fly {
+            0% { transform: translate(-50%, -50%) scale(0.5); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(1.5); opacity: 0; }
+        }
+        
+        /* Mobile Specific Adjustments */
+        @media (max-width: 768px) {
+            .glass-panel { padding: 20px; }
+            .working-controls { flex-direction: column; gap: 16px; border-radius: var(--border-radius-md); }
+            .btn { width: 100%; justify-content: center; }
+            .marker-group circle.bg { r: 16; } /* Larger tap target */
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient background effect -->
+    <canvas id="ambient-canvas"></canvas>
+
+    <div id="app-container">
+        
+        <!-- Header -->
+        <header>
+            <div style="display:inline-block; padding: 6px 16px; background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6,182,212,0.3); border-radius: 20px; color: #67e8f9; font-weight: 600; font-size: 0.85rem; margin-bottom: 16px; letter-spacing: 1px; text-transform: uppercase;">
+                Interactive Biological Simulation
+            </div>
+            <h1>The <span class="gradient-text">Animal Cell</span> Explorer</h1>
+            <p>Journey into the microscopic world. Discover how billions of these fundamental building blocks collaborate to create life, operating like a highly advanced, automated city.</p>
+        </header>
+
+        <!-- Components Explorer Section -->
+        <section class="glass-panel" id="components-section">
+            <h2>1. Anatomy of the Cell</h2>
+            <p>Interact with the diagram to explore the organelles. Think of a cell as a microscopic city where every structure has a specific job to keep the city alive.</p>
+            
+            <div class="components-layout">
+                <!-- SVG Illustration -->
+                <div class="illustration-container">
+                    <svg id="cell-svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Filters for Glows and Depth -->
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#000" flood-opacity="0.6"/>
+                            </filter>
+                            
+                            <!-- Organelle Specific Glows -->
+                            <filter id="glow-nucleus"><feGaussianBlur stdDeviation="8" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                            <filter id="glow-mito"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                            <filter id="glow-membrane"><feGaussianBlur stdDeviation="6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                            <filter id="glow-er"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                            <filter id="glow-golgi"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                            <filter id="glow-lysosome"><feGaussianBlur stdDeviation="6" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+
+                            <!-- Gradients -->
+                            <radialGradient id="grad-cyto" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#1e3a5f" stop-opacity="0.8"/>
+                                <stop offset="80%" stop-color="#0f172a" stop-opacity="0.9"/>
+                                <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.4"/>
+                            </radialGradient>
+                            
+                            <radialGradient id="grad-nucleus" cx="40%" cy="40%" r="60%">
+                                <stop offset="0%" stop-color="#d8b4fe"/>
+                                <stop offset="70%" stop-color="#9333ea"/>
+                                <stop offset="100%" stop-color="#581c87"/>
+                            </radialGradient>
+                            
+                            <linearGradient id="grad-mito" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#fdba74"/>
+                                <stop offset="50%" stop-color="#ea580c"/>
+                                <stop offset="100%" stop-color="#9a3412"/>
+                            </linearGradient>
+
+                            <linearGradient id="grad-golgi" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#86efac"/>
+                                <stop offset="100%" stop-color="#16a34a"/>
+                            </linearGradient>
+
+                            <radialGradient id="grad-lyso" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#fef08a"/>
+                                <stop offset="100%" stop-color="#ca8a04"/>
+                            </radialGradient>
+                        </defs>
+
+                        <!-- Base Cell Shape (Cytoplasm & Membrane) -->
+                        <g class="organelle membrane" id="org-membrane">
+                            <!-- Fluid blob shape -->
+                            <path d="M400,50 C550,40 680,120 730,250 C780,380 700,520 550,560 C400,600 220,550 120,450 C20,350 50,150 200,80 C280,40 330,55 400,50 Z" 
+                                  fill="url(#grad-cyto)" 
+                                  stroke="#06b6d4" stroke-width="3" 
+                                  filter="url(#shadow)"/>
+                        </g>
+
+                        <!-- Rough ER (Placed behind nucleus slightly) -->
+                        <g class="organelle er" id="org-er">
+                            <!-- Folds surrounding nucleus -->
+                            <path d="M300,180 C250,150 180,220 220,280 C180,320 230,400 280,370 C250,430 350,450 380,400 C450,450 520,400 500,350 C560,320 520,220 450,250 C500,180 400,150 350,200" 
+                                  fill="none" stroke="#3b82f6" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+                            <path d="M320,160 C220,130 150,230 190,300 C140,350 200,430 270,390" 
+                                  fill="none" stroke="#60a5fa" stroke-width="10" stroke-linecap="round" opacity="0.6"/>
+                            <!-- Ribosomes on ER -->
+                            <g fill="#f8fafc" opacity="0.8">
+                                <circle cx="220" cy="280" r="2.5"/><circle cx="230" cy="260" r="2.5"/><circle cx="200" cy="290" r="2.5"/>
+                                <circle cx="250" cy="380" r="2.5"/><circle cx="270" cy="370" r="2.5"/><circle cx="260" cy="390" r="2.5"/>
+                                <circle cx="480" cy="340" r="2.5"/><circle cx="490" cy="320" r="2.5"/><circle cx="470" cy="360" r="2.5"/>
+                            </g>
+                        </g>
+
+                        <!-- Nucleus -->
+                        <g class="organelle nucleus" id="org-nucleus">
+                            <circle cx="380" cy="280" r="90" fill="url(#grad-nucleus)" filter="url(#shadow)"/>
+                            <!-- Nucleolus -->
+                            <circle cx="360" cy="260" r="30" fill="#fdf4ff" opacity="0.9" filter="url(#glow-nucleus)"/>
+                            <!-- Pores -->
+                            <g fill="#4c1d95" opacity="0.5">
+                                <circle cx="320" cy="230" r="4"/><circle cx="440" cy="250" r="4"/><circle cx="410" cy="350" r="4"/>
+                                <circle cx="310" cy="310" r="4"/><circle cx="450" cy="310" r="4"/><circle cx="360" cy="360" r="4"/>
+                            </g>
+                        </g>
+
+                        <!-- Mitochondria -->
+                        <g class="organelle mito" id="org-mito">
+                            <!-- Mito 1 -->
+                            <g transform="translate(550, 200) rotate(30)">
+                                <rect x="-40" y="-20" width="80" height="40" rx="20" fill="url(#grad-mito)" filter="url(#shadow)"/>
+                                <path d="M-30,0 Q-20,15 -10,-5 T10,5 T30,0" fill="none" stroke="#fff" stroke-width="2" opacity="0.6"/>
+                            </g>
+                            <!-- Mito 2 -->
+                            <g transform="translate(200, 400) rotate(-45)">
+                                <rect x="-35" y="-18" width="70" height="36" rx="18" fill="url(#grad-mito)" filter="url(#shadow)"/>
+                                <path d="M-25,0 Q-15,12 -5,-3 T10,3 T25,0" fill="none" stroke="#fff" stroke-width="2" opacity="0.6"/>
+                            </g>
+                        </g>
+
+                        <!-- Golgi Apparatus -->
+                        <g class="organelle golgi" id="org-golgi" transform="translate(520, 380)">
+                            <path d="M-40,-20 Q0,-40 40,-20" fill="none" stroke="url(#grad-golgi)" stroke-width="12" stroke-linecap="round" filter="url(#shadow)"/>
+                            <path d="M-50,0 Q0,-25 50,0" fill="none" stroke="url(#grad-golgi)" stroke-width="10" stroke-linecap="round" filter="url(#shadow)"/>
+                            <path d="M-30,20 Q0,5 30,20" fill="none" stroke="url(#grad-golgi)" stroke-width="8" stroke-linecap="round" filter="url(#shadow)"/>
+                            <!-- Vesicles -->
+                            <circle cx="-50" cy="-10" r="6" fill="#86efac" opacity="0.8"/>
+                            <circle cx="55" cy="5" r="5" fill="#86efac" opacity="0.8"/>
+                            <circle cx="20" cy="35" r="7" fill="#86efac" opacity="0.8"/>
+                        </g>
+
+                        <!-- Lysosomes -->
+                        <g class="organelle lysosome" id="org-lysosome">
+                            <circle cx="220" cy="180" r="15" fill="url(#grad-lyso)" filter="url(#shadow)"/>
+                            <circle cx="620" cy="300" r="12" fill="url(#grad-lyso)" filter="url(#shadow)"/>
+                            <circle cx="350" cy="480" r="18" fill="url(#grad-lyso)" filter="url(#shadow)"/>
+                        </g>
+
+                        <!-- MARKERS (Interactive dots overlay) -->
+                        <g class="marker-group" data-target="nucleus" transform="translate(380, 280)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="1">1</text>
+                        </g>
+                        <g class="marker-group" data-target="mito" transform="translate(550, 200)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="1">2</text>
+                        </g>
+                        <g class="marker-group" data-target="membrane" transform="translate(680, 150)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="1">3</text>
+                            <line x1="-14" y1="14" x2="-30" y2="30" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-dasharray="2 2"/>
+                        </g>
+                        <g class="marker-group" data-target="er" transform="translate(230, 280)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="1">4</text>
+                        </g>
+                        <g class="marker-group" data-target="golgi" transform="translate(520, 380)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="1">5</text>
+                        </g>
+                        <g class="marker-group" data-target="lysosome" transform="translate(220, 180)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="1">6</text>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Legend List -->
+                <div class="legend-container" id="legend-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Working Process Section (Protein Synthesis) -->
+        <section class="glass-panel">
+            <h2>2. How It Works: Protein Export</h2>
+            <p>The cell operates like an automated factory. Follow the linear sequence of how a cell manufactures, packages, and exports a protein (like a hormone or antibody) step-by-step.</p>
+            
+            <div class="working-container">
+                <!-- Visual Animation Canvas/SVG Area -->
+                <div class="working-stage">
+                    <canvas id="working-canvas"></canvas>
+                    <svg style="position: absolute; width: 100%; height: 100%; pointer-events: none;" viewBox="0 0 800 450" preserveAspectRatio="xMidYMid meet">
+                        <!-- Abstract environment -->
+                        <path d="M -100 225 Q 400 400 900 225" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="200" stroke-linecap="round"/>
+                        
+                        <!-- Base static elements -->
+                        <!-- Nucleus abstract -->
+                        <path d="M -50 0 C 150 0 200 150 200 225 C 200 300 150 450 -50 450" fill="rgba(168, 85, 247, 0.2)" stroke="#a855f7" stroke-width="2"/>
+                        <text x="20" y="40" fill="#a855f7" font-size="16" opacity="0.7">NUCLEUS</text>
+                        
+                        <!-- ER abstract -->
+                        <path d="M 230 100 Q 280 225 230 350 M 260 120 Q 310 225 260 330" fill="none" stroke="#3b82f6" stroke-width="12" stroke-linecap="round" opacity="0.5"/>
+                        <text x="230" y="80" fill="#3b82f6" font-size="16" opacity="0.7">ROUGH ER</text>
+
+                        <!-- Golgi abstract -->
+                        <path d="M 450 150 Q 500 225 450 300 M 480 160 Q 520 225 480 290 M 510 170 Q 540 225 510 280" fill="none" stroke="#22c55e" stroke-width="10" stroke-linecap="round" opacity="0.5"/>
+                        <text x="450" y="130" fill="#22c55e" font-size="16" opacity="0.7">GOLGI APP.</text>
+
+                        <!-- Membrane abstract -->
+                        <path d="M 750 0 Q 700 225 750 450" fill="none" stroke="#06b6d4" stroke-width="8" opacity="0.5"/>
+                        <text x="730" y="40" fill="#06b6d4" font-size="16" opacity="0.7">MEMBRANE</text>
+                    </svg>
+                </div>
+
+                <!-- Info Display -->
+                <div class="working-info">
+                    <h3 id="working-title">Stage 1: Instruction</h3>
+                    <p id="working-desc">The Nucleus copies DNA instructions into messenger RNA (mRNA) and sends it out into the cytoplasm.</p>
+                </div>
+
+                <!-- Controls -->
+                <div class="working-controls">
+                    <button class="btn" id="btn-prev" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg> Previous
+                    </button>
+                    
+                    <div class="progress-dots" id="working-dots">
+                        <!-- Populated via JS -->
+                    </div>
+
+                    <div style="display:flex; gap:12px;">
+                        <button class="btn btn-primary" id="btn-auto">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Auto-Play
+                        </button>
+                        <button class="btn" id="btn-next">
+                            Next <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Simulation -->
+        <section class="glass-panel" style="margin-top: 40px;">
+            <h2>3. Cellular Respiration (Energy Simulation)</h2>
+            <p>Mitochondria convert nutrients and oxygen into ATP (cellular energy). Interact with the slider below to see how nutrient availability affects the continuous flow of energy production.</p>
+            
+            <div class="grid-2" style="align-items: center;">
+                <div class="sim-container">
+                    <div class="sim-visual">
+                        <!-- Standalone Mitochondrion -->
+                        <svg id="mito-sim-svg" viewBox="0 0 200 200">
+                            <defs>
+                                <radialGradient id="sim-glow" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="rgba(249, 115, 22, 0.8)"/>
+                                    <stop offset="100%" stop-color="rgba(249, 115, 22, 0)"/>
+                                </radialGradient>
+                            </defs>
+                            <!-- Inner glowing aura -->
+                            <circle cx="100" cy="100" r="80" fill="url(#sim-glow)" id="mito-aura"/>
+                            
+                            <!-- Mito Body -->
+                            <g transform="translate(100,100)">
+                                <rect x="-60" y="-30" width="120" height="60" rx="30" fill="url(#grad-mito)" filter="url(#shadow)"/>
+                                <!-- Inner membrane folds (Cristae) animated via stroke-dashoffset later -->
+                                <path id="cristae-path" d="M-45,0 Q-30,25 -15,-10 T15,10 T35,-5 T45,0" fill="none" stroke="#fde047" stroke-width="3" opacity="0.8" stroke-linecap="round"/>
+                            </g>
+                        </svg>
+                        <div id="atp-particles"></div>
+                    </div>
+                </div>
+
+                <div class="sim-controls">
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Nutrient Input (Glucose/O₂)</span>
+                            <span id="input-val" style="color: #60a5fa;">Low</span>
+                        </div>
+                        <input type="range" id="nutrient-slider" min="0" max="100" value="20">
+                    </div>
+                    
+                    <div class="slider-group" style="margin-top: 30px;">
+                        <div class="slider-header">
+                            <span>ATP Production Rate</span>
+                            <span id="output-val" style="color: #f59e0b;">20%</span>
+                        </div>
+                        <div class="meter">
+                            <div style="font-size: 12px; color: var(--text-muted);">Idle</div>
+                            <div class="meter-bar">
+                                <div class="meter-fill" id="atp-meter"></div>
+                            </div>
+                            <div style="font-size: 12px; color: var(--text-muted);">Max</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-top: 24px; padding: 16px; background: rgba(249, 115, 22, 0.1); border-left: 4px solid #f97316; border-radius: 4px;">
+                        <p style="margin:0; font-size: 0.9rem; color: #fff;">
+                            <strong>Observation:</strong> As input increases, the inner membrane (cristae) processes molecules faster, generating more ATP energy packets for the cell to use.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Facts & Applications Grid -->
+        <section style="margin-top: 40px;">
+            <h2 style="text-align: center;">Beyond the Basics</h2>
+            <div class="card-grid">
+                <div class="info-card">
+                    <div class="card-icon" style="color: #60a5fa;">🧬</div>
+                    <h3>Interesting Fact</h3>
+                    <p>Your body replaces roughly <span class="highlight-text">330 billion cells every single day</span>. That means every second, millions of cells are duplicating their entire internal structure.</p>
+                </div>
+                <div class="info-card">
+                    <div class="card-icon" style="color: #ef4444;">⚠️</div>
+                    <h3>Common Mistake</h3>
+                    <p>People often think cells are flat, 2D circles like in textbooks. In reality, they are <span class="highlight-text">3D fluid-filled blobs</span>, constantly moving and shifting shapes.</p>
+                </div>
+                <div class="info-card">
+                    <div class="card-icon" style="color: #10b981;">🔬</div>
+                    <h3>Real-world Application</h3>
+                    <p>Understanding the cell membrane's selective permeability is crucial for <span class="highlight-text">developing medications</span>. Drugs must be designed specifically to pass through this lipid barrier to treat diseases.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer / Revision -->
+        <footer class="glass-panel" style="margin-top: 40px; text-align: center; border-color: rgba(6, 182, 212, 0.3);">
+            <h3>Quick Revision</h3>
+            <p style="margin-bottom: 0;">
+                The <strong>Nucleus</strong> holds the blueprint. The <strong>ER</strong> and <strong>Golgi</strong> manufacture and ship products. <strong>Mitochondria</strong> provide the power, and the <strong>Membrane</strong> protects the borders. Together, they create the foundation of complex life.
+            </p>
+        </footer>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* --------------------------------------------------------------------------
+               DATA STRUCTURES
+               -------------------------------------------------------------------------- */
+            const componentsData = [
+                { id: 'nucleus', color: 'var(--color-nucleus)', name: 'Nucleus', func: 'Stores DNA & controls cell activities.' },
+                { id: 'mito', color: 'var(--color-mito)', name: 'Mitochondria', func: 'Generates ATP energy (Powerhouse).' },
+                { id: 'membrane', color: 'var(--color-membrane)', name: 'Cell Membrane', func: 'Controls what enters and exits.' },
+                { id: 'er', color: 'var(--color-er)', name: 'Rough ER', func: 'Synthesizes proteins (studded with ribosomes).' },
+                { id: 'golgi', color: 'var(--color-golgi)', name: 'Golgi Apparatus', func: 'Modifies, sorts, and packages proteins.' },
+                { id: 'lysosome', color: 'var(--color-lysosome)', name: 'Lysosome', func: 'Breaks down waste materials.' }
+            ];
+
+            const workingStages = [
+                { title: 'Stage 1: Instruction', desc: 'The Nucleus copies DNA instructions into messenger RNA (mRNA) and sends it out.', x: 150, y: 225, color: '#a855f7' },
+                { title: 'Stage 2: Manufacturing', desc: 'Ribosomes on the Rough ER read the mRNA blueprint and assemble a raw protein chain.', x: 260, y: 225, color: '#3b82f6' },
+                { title: 'Stage 3: Transport', desc: 'A tiny vesicle pinches off from the ER, carrying the raw protein through the cytoplasm.', x: 350, y: 225, color: '#94a3b8' },
+                { title: 'Stage 4: Packaging', desc: 'The Golgi Apparatus receives the protein, folds it into its final shape, and tags it for delivery.', x: 480, y: 225, color: '#22c55e' },
+                { title: 'Stage 5: Secretion', desc: 'A new vesicle carries the finished protein to the Cell Membrane, fusing to release it outside.', x: 730, y: 225, color: '#06b6d4' }
+            ];
+
+            /* --------------------------------------------------------------------------
+               1. AMBIENT BACKGROUND SYSTEM (Canvas)
+               -------------------------------------------------------------------------- */
+            const bgCanvas = document.getElementById('ambient-canvas');
+            const bgCtx = bgCanvas.getContext('2d');
+            let particles = [];
+
+            function resizeBg() {
+                bgCanvas.width = window.innerWidth * window.devicePixelRatio;
+                bgCanvas.height = window.innerHeight * window.devicePixelRatio;
+                bgCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                initParticles();
+            }
+
+            function initParticles() {
+                particles = [];
+                const count = window.innerWidth < 768 ? 30 : 70;
+                for(let i=0; i<count; i++) {
+                    particles.push({
+                        x: Math.random() * window.innerWidth,
+                        y: Math.random() * window.innerHeight,
+                        r: Math.random() * 2 + 1,
+                        vx: (Math.random() - 0.5) * 0.5,
+                        vy: (Math.random() - 0.5) * 0.5,
+                        alpha: Math.random() * 0.5 + 0.1
+                    });
+                }
+            }
+
+            function drawBg() {
+                bgCtx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    if(p.x < 0 || p.x > window.innerWidth) p.vx *= -1;
+                    if(p.y < 0 || p.y > window.innerHeight) p.vy *= -1;
+                    
+                    bgCtx.beginPath();
+                    bgCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                    bgCtx.fillStyle = `rgba(100, 200, 255, ${p.alpha})`;
+                    bgCtx.fill();
+                });
+                requestAnimationFrame(drawBg);
+            }
+
+            window.addEventListener('resize', resizeBg);
+            resizeBg();
+            drawBg();
+
+            /* --------------------------------------------------------------------------
+               2. COMPONENTS EXPLORER LOGIC
+               -------------------------------------------------------------------------- */
+            const legendList = document.getElementById('legend-list');
+            const markers = document.querySelectorAll('.marker-group');
+            let activeComponent = null;
+
+            // Generate Legend
+            componentsData.forEach((comp, index) => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.dataset.id = comp.id;
+                item.innerHTML = `
+                    <div class="legend-badge" style="background-color: ${comp.color}">${index + 1}</div>
+                    <div class="legend-content">
+                        <h4>${comp.name}</h4>
+                        <p>${comp.func}</p>
+                    </div>
+                `;
+                
+                // Interaction Events (Mouse & Touch)
+                const triggerHover = () => activateComponent(comp.id);
+                const triggerLeave = () => deactivateComponent(comp.id);
+                
+                item.addEventListener('mouseenter', triggerHover);
+                item.addEventListener('mouseleave', triggerLeave);
+                item.addEventListener('touchstart', (e) => { e.preventDefault(); activateComponent(comp.id, true); });
+
+                legendList.appendChild(item);
+            });
+
+            // Wire SVG Markers
+            markers.forEach(marker => {
+                const id = marker.dataset.target;
+                marker.addEventListener('mouseenter', () => activateComponent(id));
+                marker.addEventListener('mouseleave', () => deactivateComponent(id));
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); activateComponent(id, true); });
+            });
+
+            // Global touch release to clear active states on mobile
+            document.addEventListener('touchend', (e) => {
+                if(!e.target.closest('.legend-item') && !e.target.closest('.marker-group')) {
+                    deactivateAll();
+                }
+            });
+
+            function activateComponent(id, isTouch = false) {
+                if(isTouch) deactivateAll(); // clear previous on mobile tap
+                
+                // Highlight Legend
+                const legendItem = document.querySelector(`.legend-item[data-id="${id}"]`);
+                if(legendItem) legendItem.classList.add('active');
+
+                // Highlight Marker
+                const marker = document.querySelector(`.marker-group[data-target="${id}"]`);
+                if(marker) marker.classList.add('active');
+
+                // Highlight Organelle SVG element
+                const organelle = document.getElementById(`org-${id}`);
+                if(organelle) organelle.classList.add('active');
+            }
+
+            function deactivateComponent(id) {
+                const legendItem = document.querySelector(`.legend-item[data-id="${id}"]`);
+                if(legendItem) legendItem.classList.remove('active');
+
+                const marker = document.querySelector(`.marker-group[data-target="${id}"]`);
+                if(marker) marker.classList.remove('active');
+
+                const organelle = document.getElementById(`org-${id}`);
+                if(organelle) organelle.classList.remove('active');
+            }
+
+            function deactivateAll() {
+                componentsData.forEach(comp => deactivateComponent(comp.id));
+            }
+
+
+            /* --------------------------------------------------------------------------
+               3. WORKING PROCESS LOGIC (Canvas Animation)
+               -------------------------------------------------------------------------- */
+            let currentStage = 0;
+            let isPlaying = false;
+            let animationFrameId;
+            let particle = { x: workingStages[0].x, y: workingStages[0].y, color: workingStages[0].color, radius: 8 };
+            
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnAuto = document.getElementById('btn-auto');
+            const titleEl = document.getElementById('working-title');
+            const descEl = document.getElementById('working-desc');
+            const dotsContainer = document.getElementById('working-dots');
+            
+            const workCanvas = document.getElementById('working-canvas');
+            const workCtx = workCanvas.getContext('2d');
+
+            // Setup Dots
+            workingStages.forEach((_, i) => {
+                const dot = document.createElement('div');
+                dot.className = `dot ${i === 0 ? 'active' : ''}`;
+                dotsContainer.appendChild(dot);
+            });
+
+            function resizeWorkCanvas() {
+                const rect = workCanvas.parentElement.getBoundingClientRect();
+                workCanvas.width = rect.width * window.devicePixelRatio;
+                workCanvas.height = rect.height * window.devicePixelRatio;
+                workCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                
+                // The SVG background relies on a viewBox of 800x450.
+                // We map canvas coordinates to this logical space.
+                workCtx.scale(rect.width / 800, rect.height / 450);
+            }
+            window.addEventListener('resize', resizeWorkCanvas);
+            resizeWorkCanvas();
+
+            function updateStageUI() {
+                titleEl.textContent = workingStages[currentStage].title;
+                descEl.textContent = workingStages[currentStage].desc;
+                titleEl.style.color = workingStages[currentStage].color;
+                
+                document.querySelectorAll('.dot').forEach((dot, i) => {
+                    dot.classList.toggle('active', i === currentStage);
+                });
+
+                btnPrev.disabled = currentStage === 0;
+                btnNext.disabled = currentStage === workingStages.length - 1;
+            }
+
+            // Animation Loop for the moving particle
+            let targetX = workingStages[0].x;
+            let targetY = workingStages[0].y;
+            let targetColor = workingStages[0].color;
+
+            function hexToRgb(hex) {
+                let result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : {r:255,g:255,b:255};
+            }
+
+            function lerpColor(c1, c2, factor) {
+                const rgb1 = hexToRgb(c1);
+                const rgb2 = hexToRgb(c2);
+                const r = Math.round(rgb1.r + factor * (rgb2.r - rgb1.r));
+                const g = Math.round(rgb1.g + factor * (rgb2.g - rgb1.g));
+                const b = Math.round(rgb1.b + factor * (rgb2.b - rgb1.b));
+                return `rgb(${r},${g},${b})`;
+            }
+
+            function drawWorkingFrame() {
+                workCtx.clearRect(0, 0, 800, 450);
+
+                // Smoothly interpolate position (easing)
+                const dx = targetX - particle.x;
+                const dy = targetY - particle.y;
+                particle.x += dx * 0.08;
+                particle.y += dy * 0.08;
+
+                // Simple color lerp based on distance (hacky but works for this demo)
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                if(dist > 1) {
+                    particle.color = lerpColor(particle.color, targetColor, 0.05);
+                } else {
+                    particle.color = targetColor;
+                }
+
+                // Draw Particle (The Protein/Vesicle)
+                workCtx.beginPath();
+                workCtx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+                workCtx.fillStyle = '#fff';
+                workCtx.shadowColor = particle.color;
+                workCtx.shadowBlur = 15;
+                workCtx.fill();
+                
+                // Pulse effect
+                workCtx.beginPath();
+                workCtx.arc(particle.x, particle.y, particle.radius * 2, 0, Math.PI * 2);
+                workCtx.fillStyle = particle.color.replace('rgb', 'rgba').replace(')', ', 0.3)');
+                workCtx.shadowBlur = 0;
+                workCtx.fill();
+
+                animationFrameId = requestAnimationFrame(drawWorkingFrame);
+            }
+            
+            drawWorkingFrame();
+
+            function goToStage(index) {
+                if(index < 0 || index >= workingStages.length) return;
+                currentStage = index;
+                targetX = workingStages[currentStage].x;
+                targetY = workingStages[currentStage].y;
+                targetColor = workingStages[currentStage].color;
+                updateStageUI();
+            }
+
+            btnNext.addEventListener('click', () => { goToStage(currentStage + 1); stopAuto(); });
+            btnPrev.addEventListener('click', () => { goToStage(currentStage - 1); stopAuto(); });
+
+            // Auto-Play Logic
+            let autoInterval;
+            function toggleAuto() {
+                isPlaying = !isPlaying;
+                if(isPlaying) {
+                    btnAuto.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
+                    btnAuto.classList.add('btn-primary');
+                    
+                    // Loop
+                    autoInterval = setInterval(() => {
+                        let next = currentStage + 1;
+                        if(next >= workingStages.length) {
+                            // Instant reset to start for loop
+                            currentStage = 0;
+                            particle.x = workingStages[0].x;
+                            particle.y = workingStages[0].y;
+                            targetX = workingStages[0].x;
+                            targetY = workingStages[0].y;
+                            particle.color = workingStages[0].color;
+                            updateStageUI();
+                        } else {
+                            goToStage(next);
+                        }
+                    }, 2500);
+                } else {
+                    stopAuto();
+                }
+            }
+
+            function stopAuto() {
+                isPlaying = false;
+                clearInterval(autoInterval);
+                btnAuto.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Auto-Play`;
+            }
+
+            btnAuto.addEventListener('click', toggleAuto);
+
+
+            /* --------------------------------------------------------------------------
+               4. SIMULATION LOGIC (Mitochondria & ATP)
+               -------------------------------------------------------------------------- */
+            const slider = document.getElementById('nutrient-slider');
+            const inputValEl = document.getElementById('input-val');
+            const outputValEl = document.getElementById('output-val');
+            const atpMeter = document.getElementById('atp-meter');
+            const cristaePath = document.getElementById('cristae-path');
+            const mitoAura = document.getElementById('mito-aura');
+            const particlesContainer = document.getElementById('atp-particles');
+
+            let simInterval;
+
+            function updateSimulation() {
+                const val = parseInt(slider.value); // 0 to 100
+                
+                // Update text
+                if(val < 30) inputValEl.textContent = 'Low';
+                else if(val < 70) inputValEl.textContent = 'Normal';
+                else inputValEl.textContent = 'High';
+                
+                outputValEl.textContent = val + '%';
+                atpMeter.style.width = val + '%';
+
+                // Visual changes on SVG
+                // Opacity and color intensity
+                const opacity = 0.4 + (val / 100) * 0.6;
+                cristaePath.style.opacity = opacity;
+                
+                const auraSize = 50 + (val / 100) * 50;
+                mitoAura.setAttribute('r', auraSize);
+
+                // Update particle spawn rate based on slider
+                clearInterval(simInterval);
+                if(val > 0) {
+                    // Spawn interval maps inversely to slider value (faster when val is high)
+                    const spawnRate = 1000 - (val * 8); 
+                    simInterval = setInterval(spawnATP, Math.max(100, spawnRate));
+                }
+            }
+
+            function spawnATP() {
+                const particle = document.createElement('div');
+                particle.className = 'atp-particle';
+                
+                // Random outward trajectory
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 100 + Math.random() * 50;
+                const tx = Math.cos(angle) * distance + 'px';
+                const ty = Math.sin(angle) * distance + 'px';
+                
+                particle.style.setProperty('--tx', tx);
+                particle.style.setProperty('--ty', ty);
+                
+                // Speed depends on slider slightly
+                const duration = 1.5 - (parseInt(slider.value)/100)*0.5;
+                particle.style.animation = `atp-fly ${duration}s cubic-bezier(0.25, 1, 0.5, 1) forwards`;
+                
+                particlesContainer.appendChild(particle);
+                
+                // Cleanup DOM
+                setTimeout(() => {
+                    if(particle.parentNode) particle.remove();
+                }, duration * 1000);
+            }
+
+            // Slider events (Desktop & Touch)
+            slider.addEventListener('input', updateSimulation);
+            
+            // Initial call
+            updateSimulation();
+
+        });
+    </script>
+</body>
+</html>

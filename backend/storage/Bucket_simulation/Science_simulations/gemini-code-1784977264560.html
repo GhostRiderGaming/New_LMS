@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Solubility Lab - Interactive Science Simulation</title>
+    <style>
+        /* ==========================================================================
+           BASE VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-deep: #0B0E14;
+            --bg-gradient: radial-gradient(circle at top right, #1A1F35, #0B0E14 70%);
+            
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --color-primary: #00F0FF; /* Cyan - Water/Solvent */
+            --color-secondary: #FF2A6D; /* Magenta - Solute/Heat */
+            --color-tertiary: #05D5FF;
+            --color-text: #E2E8F0;
+            --color-text-muted: #94A3B8;
+            
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --spacing-section: clamp(40px, 8vw, 100px);
+            --spacing-card: clamp(16px, 3vw, 32px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: var(--bg-deep);
+            background-image: var(--bg-gradient);
+            color: var(--color-text);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Ambient background glow */
+        .ambient-light {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(100px);
+            opacity: 0.15;
+            z-index: -1;
+            pointer-events: none;
+        }
+        .light-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: var(--color-primary); }
+        .light-2 { bottom: -10%; right: -10%; width: 40vw; height: 40vw; background: var(--color-secondary); }
+
+        /* Typography */
+        h1, h2, h3 { font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+        h1 { font-size: clamp(2.5rem, 5vw, 4rem); background: linear-gradient(to right, #fff, var(--color-primary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 1rem; }
+        h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); margin-bottom: 1.5rem; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); margin-bottom: 0.5rem; color: #fff; }
+        p { font-size: clamp(0.9rem, 1.5vw, 1.1rem); color: var(--color-text-muted); margin-bottom: 1rem; }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 clamp(16px, 4vw, 40px);
+        }
+
+        /* ==========================================================================
+           GLASSMORPHISM UTILITIES
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            padding: var(--spacing-card);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ==========================================================================
+           LAYOUT SECTIONS
+           ========================================================================== */
+        section {
+            padding: var(--spacing-section) 0;
+            position: relative;
+        }
+
+        /* Hero */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+        .hero-content {
+            max-width: 800px;
+            z-index: 2;
+        }
+        
+        /* Intro Grid */
+        .intro-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-top: 40px;
+        }
+
+        /* ==========================================================================
+           COMPONENTS DIAGRAM (Strict Legend Pattern)
+           ========================================================================== */
+        .diagram-container {
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            gap: 40px;
+            align-items: center;
+        }
+
+        .diagram-visual {
+            position: relative;
+            width: 100%;
+            min-height: 350px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-lg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .svg-container {
+            width: 100%;
+            max-width: 400px;
+            height: auto;
+            position: relative;
+        }
+
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+        }
+
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: inherit;
+            z-index: -1;
+            animation: pulse-marker 2s infinite;
+        }
+
+        @keyframes pulse-marker {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+
+        .marker.active, .marker:hover {
+            background: var(--color-primary);
+            border-color: #fff;
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        .marker-1 { top: 75%; left: 50%; } /* Solute */
+        .marker-2 { top: 40%; left: 70%; } /* Solvent */
+        .marker-3 { top: 60%; left: 30%; } /* Solution */
+
+        .diagram-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--glass-highlight);
+            transform: translateX(5px);
+        }
+
+        .legend-number {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: #2A2F45;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+        }
+
+        .legend-item.active .legend-number {
+            background: var(--color-primary);
+        }
+
+        .legend-text h4 { margin: 0 0 4px 0; color: #fff; font-size: 1rem; }
+        .legend-text p { margin: 0; font-size: 0.9rem; color: var(--color-text-muted); }
+
+        /* ==========================================================================
+           WORKING PROCESS (Mandatory Section)
+           ========================================================================== */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .mechanism-visual {
+            width: 100%;
+            height: 400px;
+            border-radius: var(--radius-lg);
+            background: #0D111A;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        #mechanismCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .mechanism-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--glass-bg);
+            padding: 16px 24px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .mech-nav {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn:hover { background: rgba(255,255,255,0.2); }
+        .btn:active { transform: scale(0.95); }
+        .btn-primary { background: var(--color-primary); color: #000; border: none; font-weight: 600;}
+        .btn-primary:hover { background: #33F5FF; box-shadow: 0 0 15px rgba(0, 240, 255, 0.4); }
+
+        .mech-progress {
+            display: flex;
+            gap: 8px;
+        }
+        .step-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+        .step-dot.active { background: var(--color-primary); transform: scale(1.3); box-shadow: 0 0 10px var(--color-primary); }
+
+        .mech-info {
+            text-align: center;
+            flex-grow: 1;
+            min-width: 200px;
+        }
+        .mech-title { font-size: 1.2rem; font-weight: 600; color: var(--color-primary); margin-bottom: 4px; }
+        .mech-desc { font-size: 0.95rem; color: var(--color-text-muted); margin: 0;}
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (Lab)
+           ========================================================================== */
+        .lab-grid {
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 24px;
+        }
+
+        .lab-viewport {
+            height: 500px;
+            background: #080A10;
+            border-radius: var(--radius-lg);
+            position: relative;
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        #labCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Overlay UI in canvas area */
+        .lab-stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(8px);
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255,255,255,0.1);
+            pointer-events: none;
+        }
+        .stat-line { display: flex; justify-content: space-between; gap: 20px; font-size: 0.9rem; margin-bottom: 4px;}
+        .stat-line:last-child { margin-bottom: 0; }
+        .stat-val { font-weight: bold; color: var(--color-primary); font-variant-numeric: tabular-nums;}
+
+        .lab-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .control-header { display: flex; justify-content: space-between; align-items: center; }
+        .control-label { font-size: 0.95rem; font-weight: 600; color: #fff;}
+        .control-value { font-size: 0.85rem; color: var(--color-primary); font-family: monospace; background: rgba(0,240,255,0.1); padding: 2px 6px; border-radius: 4px;}
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+        }
+        
+        #tempSlider::-webkit-slider-thumb { background: var(--color-secondary); box-shadow: 0 0 10px rgba(255, 42, 109, 0.5); }
+        #tempSlider::-webkit-slider-runnable-track { background: linear-gradient(to right, #4facfe 0%, #ff0844 100%); opacity: 0.5;}
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        /* ==========================================================================
+           INFO GRIDS (Facts, Mistakes)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        .info-card {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .icon-box {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            border: 1px solid var(--glass-border);
+        }
+        .info-card h4 { color: #fff; font-size: 1.1rem; }
+        .info-card p { font-size: 0.9rem; margin: 0; }
+        
+        .mistake-card .icon-box { color: #FF4A4A; background: rgba(255, 74, 74, 0.1); border-color: rgba(255, 74, 74, 0.2);}
+        .fact-card .icon-box { color: #FFD700; background: rgba(255, 215, 0, 0.1); border-color: rgba(255, 215, 0, 0.2);}
+
+        /* ==========================================================================
+           RESPONSIVE DESIGN (Strict Rules)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .diagram-container { grid-template-columns: 1fr; }
+            .lab-grid { grid-template-columns: 1fr; }
+            .lab-viewport { height: 400px; }
+            .mech-info { order: -1; width: 100%; margin-bottom: 12px; }
+        }
+
+        @media (max-width: 768px) {
+            .glass-panel { padding: 16px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+            section { padding: 40px 0; }
+            .lab-viewport { height: 300px; }
+            .mechanism-visual { height: 300px; }
+            .diagram-visual { min-height: 250px; padding: 10px; }
+            .marker { width: 24px; height: 24px; font-size: 12px; }
+            .mech-controls { justify-content: center; }
+            
+            /* Sizing discipline */
+            h2 { font-size: clamp(1.4rem, 5vw, 1.75rem); }
+            .container { padding: 0 16px; }
+            .btn { padding: 12px 16px; font-size: 1rem; width: 100%; } /* Touch friendly */
+            .btn-grid { grid-template-columns: 1fr; }
+            .mech-nav { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-light light-1"></div>
+    <div class="ambient-light light-2"></div>
+
+    <!-- ==========================================================================
+         HERO SECTION
+         ========================================================================== -->
+    <section class="hero">
+        <div class="container hero-content">
+            <h1>The Solubility Lab</h1>
+            <p style="font-size: clamp(1.1rem, 2vw, 1.4rem); color: #fff; max-width: 600px; margin: 0 auto 30px;">
+                Discover how substances dissolve at the molecular level. A premium interactive exploration of solvents, solutes, and solutions.
+            </p>
+            <div class="intro-grid">
+                <div class="glass-panel" style="text-align: left;">
+                    <div class="icon-box" style="margin-bottom: 12px; color: var(--color-primary);">💧</div>
+                    <h3>Solvent</h3>
+                    <p>The liquid that does the dissolving. Water is known as the "universal solvent".</p>
+                </div>
+                <div class="glass-panel" style="text-align: left;">
+                    <div class="icon-box" style="margin-bottom: 12px; color: var(--color-secondary);">🧊</div>
+                    <h3>Solute</h3>
+                    <p>The substance being dissolved, like sugar crystals or salt particles.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         COMPONENTS SECTION (SVG + Legend)
+         ========================================================================== -->
+    <section>
+        <div class="container">
+            <h2>Anatomy of a Solution</h2>
+            <p>Hover or tap the numbers to identify the core components before we zoom into the molecular level.</p>
+            
+            <div class="glass-panel diagram-container">
+                
+                <!-- Illustration Side -->
+                <div class="diagram-visual">
+                    <!-- Marker overlays -->
+                    <div class="marker marker-1" data-target="legend-1">1</div>
+                    <div class="marker marker-2" data-target="legend-2">2</div>
+                    <div class="marker marker-3" data-target="legend-3">3</div>
+                    
+                    <!-- High Quality SVG Illustration -->
+                    <div class="svg-container">
+                        <svg viewBox="0 0 200 250" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <!-- Water Gradient -->
+                                <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="rgba(0, 240, 255, 0.4)" />
+                                    <stop offset="100%" stop-color="rgba(0, 100, 255, 0.8)" />
+                                </linearGradient>
+                                <!-- Glass Gradient -->
+                                <linearGradient id="glassGrad" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stop-color="rgba(255,255,255,0.4)" />
+                                    <stop offset="20%" stop-color="rgba(255,255,255,0.05)" />
+                                    <stop offset="80%" stop-color="rgba(255,255,255,0.05)" />
+                                    <stop offset="100%" stop-color="rgba(255,255,255,0.3)" />
+                                </linearGradient>
+                                <!-- Solute Gradient -->
+                                <radialGradient id="soluteGrad" cx="30%" cy="30%" r="70%">
+                                    <stop offset="0%" stop-color="#FF7EB3" />
+                                    <stop offset="100%" stop-color="#FF2A6D" />
+                                </radialGradient>
+                                <!-- Drop Shadow -->
+                                <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feDropShadow dx="0" dy="10" stdDeviation="10" flood-opacity="0.3" />
+                                </filter>
+                                <filter id="glow">
+                                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                    <feMerge>
+                                        <feMergeNode in="coloredBlur"/>
+                                        <feMergeNode in="SourceGraphic"/>
+                                    </feMerge>
+                                </filter>
+                            </defs>
+                            
+                            <!-- Background Beaker back wall -->
+                            <path d="M 40 40 L 40 200 Q 40 220 60 220 L 140 220 Q 160 220 160 200 L 160 40" fill="rgba(255,255,255,0.05)" stroke="none"/>
+                            
+                            <!-- Liquid (Solvent/Solution) -->
+                            <path d="M 42 100 Q 100 110 158 100 L 158 200 Q 158 218 140 218 L 60 218 Q 42 218 42 200 Z" fill="url(#waterGrad)" />
+                            
+                            <!-- Liquid surface oval -->
+                            <ellipse cx="100" cy="100" rx="58" ry="10" fill="rgba(0, 240, 255, 0.6)" />
+                            
+                            <!-- Solute Particles at bottom -->
+                            <g filter="url(#drop-shadow)">
+                                <polygon points="90,190 105,185 110,205 95,210" fill="url(#soluteGrad)" />
+                                <polygon points="100,195 115,190 125,200 110,210" fill="url(#soluteGrad)" opacity="0.8"/>
+                                <polygon points="80,195 95,190 100,205 85,210" fill="url(#soluteGrad)" opacity="0.9"/>
+                                <polygon points="110,180 120,175 125,190 115,195" fill="url(#soluteGrad)" opacity="0.7"/>
+                            </g>
+                            
+                            <!-- Dissolved particles (floating) -->
+                            <circle cx="60" cy="150" r="3" fill="#FF7EB3" filter="url(#glow)" opacity="0.8"/>
+                            <circle cx="80" cy="130" r="4" fill="#FF7EB3" filter="url(#glow)" opacity="0.6"/>
+                            <circle cx="130" cy="160" r="3" fill="#FF7EB3" filter="url(#glow)" opacity="0.7"/>
+                            <circle cx="140" cy="120" r="2.5" fill="#FF7EB3" filter="url(#glow)" opacity="0.5"/>
+                            <circle cx="100" cy="140" r="3.5" fill="#FF7EB3" filter="url(#glow)" opacity="0.9"/>
+
+                            <!-- Front Beaker Glass -->
+                            <path d="M 40 40 L 40 200 Q 40 220 60 220 L 140 220 Q 160 220 160 200 L 160 40" fill="url(#glassGrad)" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+                            
+                            <!-- Rim -->
+                            <ellipse cx="100" cy="40" rx="60" ry="12" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2" />
+                            <ellipse cx="100" cy="40" rx="56" ry="9" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1" />
+                            
+                            <!-- Volume marks -->
+                            <line x1="160" y1="80" x2="150" y2="80" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" />
+                            <line x1="160" y1="120" x2="150" y2="120" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" />
+                            <line x1="160" y1="160" x2="150" y2="160" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" />
+                            
+                            <!-- Highlight reflection -->
+                            <path d="M 45 60 Q 55 120 45 190" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <!-- Legend Side -->
+                <div class="diagram-legend">
+                    <div class="legend-item" id="legend-1">
+                        <div class="legend-number">1</div>
+                        <div class="legend-text">
+                            <h4>Solute (e.g., Salt)</h4>
+                            <p>The solid substance introduced into the liquid. It consists of tightly bound particles.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-2">
+                        <div class="legend-number">2</div>
+                        <div class="legend-text">
+                            <h4>Solvent (e.g., Water)</h4>
+                            <p>The liquid medium. Its molecules are in constant motion, ready to interact.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-3">
+                        <div class="legend-number">3</div>
+                        <div class="legend-text">
+                            <h4>Solution</h4>
+                            <p>The homogeneous mixture formed when solute particles are evenly distributed throughout the solvent.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         WORKING PROCESS (Mandatory Mechanism)
+         ========================================================================== -->
+    <section>
+        <div class="container">
+            <h2>Mechanism of Dissolving</h2>
+            <p>How does a solid disappear into a liquid? Watch this linear sequence of molecular interactions.</p>
+            
+            <div class="glass-panel mechanism-container">
+                <div class="mechanism-visual">
+                    <canvas id="mechanismCanvas"></canvas>
+                </div>
+                
+                <div class="mechanism-controls">
+                    <div class="mech-info">
+                        <div class="mech-title" id="mechTitle">1. Introduction</div>
+                        <p class="mech-desc" id="mechDesc">Solute crystal is dropped into the solvent.</p>
+                    </div>
+                    
+                    <div class="mech-progress" id="mechDots">
+                        <div class="step-dot active"></div>
+                        <div class="step-dot"></div>
+                        <div class="step-dot"></div>
+                        <div class="step-dot"></div>
+                    </div>
+
+                    <div class="mech-nav">
+                        <button class="btn" id="btnPrev">◄ Prev</button>
+                        <button class="btn btn-primary" id="btnAutoPlay">Auto-Play</button>
+                        <button class="btn" id="btnNext">Next ►</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         INTERACTIVE SIMULATION
+         ========================================================================== -->
+    <section>
+        <div class="container">
+            <h2>Solubility Laboratory</h2>
+            <p>Experiment with variables. Notice how temperature affects the maximum amount of solute that can dissolve (Saturation Point).</p>
+            
+            <div class="glass-panel lab-grid">
+                
+                <!-- Visualization -->
+                <div class="lab-viewport">
+                    <canvas id="labCanvas"></canvas>
+                    <div class="lab-stats">
+                        <div class="stat-line">
+                            <span>Status:</span>
+                            <span class="stat-val" id="statStatus">Unsaturated</span>
+                        </div>
+                        <div class="stat-line">
+                            <span>Dissolved:</span>
+                            <span class="stat-val"><span id="statDissolved">0</span>g</span>
+                        </div>
+                        <div class="stat-line" style="color: var(--color-text-muted);">
+                            <span>Sediment (Solid):</span>
+                            <span class="stat-val"><span id="statSolid">0</span>g</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="glass-panel lab-controls" style="background: rgba(0,0,0,0.2);">
+                    
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span class="control-label">Heat (Temperature)</span>
+                            <span class="control-value" id="valTemp">20°C</span>
+                        </div>
+                        <input type="range" id="tempSlider" min="0" max="100" value="20">
+                        <p style="font-size: 0.8rem; margin:0; line-height:1.2;">Higher temp increases kinetic energy, expanding capacity.</p>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span class="control-label">Add Solute</span>
+                        </div>
+                        <div class="btn-grid">
+                            <button class="btn" id="btnAddSmall">+ 5g</button>
+                            <button class="btn" id="btnAddLarge">+ 25g</button>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span class="control-label">Agitation (Stirring)</span>
+                        </div>
+                        <button class="btn" id="btnStir" style="width:100%;">Hold to Stir</button>
+                        <p style="font-size: 0.8rem; margin:4px 0 0; line-height:1.2;">Speeds up the process, but doesn't change max capacity.</p>
+                    </div>
+                    
+                    <button class="btn btn-primary" id="btnResetLab" style="margin-top: auto;">Reset Lab</button>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         APPLICATIONS & FACTS
+         ========================================================================== -->
+    <section>
+        <div class="container">
+            <h2>Real World Connections</h2>
+            <div class="info-grid">
+                
+                <div class="glass-panel info-card fact-card">
+                    <div class="icon-box">☕</div>
+                    <h4>Brewing Coffee</h4>
+                    <p>Hot water extracts flavor compounds much faster and more efficiently than cold water due to increased solubility.</p>
+                </div>
+                
+                <div class="glass-panel info-card fact-card">
+                    <div class="icon-box">🌊</div>
+                    <h4>Ocean Salinity</h4>
+                    <p>Oceans are giant solutions. Rain washes minerals (solutes) from land into the sea, where they dissolve in water.</p>
+                </div>
+
+                <div class="glass-panel info-card mistake-card">
+                    <div class="icon-box">⚠️</div>
+                    <h4>Melting vs. Dissolving</h4>
+                    <p><strong>Mistake:</strong> Thinking sugar "melts" in tea. <br><strong>Truth:</strong> Melting requires heat to change a solid to liquid. Dissolving requires a solvent to break bonds.</p>
+                </div>
+
+                <div class="glass-panel info-card mistake-card">
+                    <div class="icon-box">⚠️</div>
+                    <h4>"It disappeared!"</h4>
+                    <p><strong>Mistake:</strong> Thinking dissolved matter vanishes. <br><strong>Truth:</strong> The law of conservation of mass applies. If you boil off the water, the solid remains.</p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        /**
+         * UTILITY: Resize handling for Canvases to maintain sharpness
+         */
+        function setupCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            function resize() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
+                return { width: rect.width, height: rect.height };
+            }
+            
+            const dims = resize();
+            return { canvas, ctx, resize, dims };
+        }
+
+        /**
+         * SECTION 2: Diagram Marker Interaction logic
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            const markers = document.querySelectorAll('.marker');
+            const legends = document.querySelectorAll('.legend-item');
+
+            function activatePair(id) {
+                markers.forEach(m => m.classList.remove('active'));
+                legends.forEach(l => l.classList.remove('active'));
+                
+                if(id) {
+                    const marker = document.querySelector(`.marker[data-target="${id}"]`);
+                    const legend = document.getElementById(id);
+                    if(marker) marker.classList.add('active');
+                    if(legend) legend.classList.add('active');
+                }
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => activatePair(marker.dataset.target));
+                marker.addEventListener('click', () => activatePair(marker.dataset.target));
+            });
+
+            legends.forEach(legend => {
+                legend.addEventListener('mouseenter', () => activatePair(legend.id));
+                legend.addEventListener('click', () => activatePair(legend.id));
+            });
+            
+            // Remove active on container leave
+            document.querySelector('.diagram-container').addEventListener('mouseleave', () => activatePair(null));
+        });
+
+        /**
+         * SECTION 3: Molecular Mechanism Animation (State Machine)
+         */
+        class MechanismSim {
+            constructor() {
+                const setup = setupCanvas('mechanismCanvas');
+                this.ctx = setup.ctx;
+                this.getDims = setup.resize;
+                
+                // Animation states
+                this.stages = [
+                    { title: "1. Crystal Lattice", desc: "Solute particles are tightly bound in a solid structure.", duration: 3000 },
+                    { title: "2. Solvent Collision", desc: "Water molecules (solvent) crash into the outer edges of the crystal.", duration: 3000 },
+                    { title: "3. Breaking Bonds", desc: "Solvent attraction overcomes the crystal's internal bonds.", duration: 3000 },
+                    { title: "4. Hydration Shells", desc: "Water molecules surround individual solute particles.", duration: 3000 }
+                ];
+                
+                this.currentStage = 0;
+                this.isPlaying = false;
+                this.progressTime = 0;
+                this.lastTime = 0;
+                this.reqId = null;
+
+                // Objects
+                this.crystalParticles = [];
+                this.solventParticles = [];
+                this.initParticles();
+
+                // Bind UI
+                this.titleEl = document.getElementById('mechTitle');
+                this.descEl = document.getElementById('mechDesc');
+                this.dots = document.querySelectorAll('.step-dot');
+                
+                document.getElementById('btnPrev').addEventListener('click', () => this.setStage(this.currentStage - 1));
+                document.getElementById('btnNext').addEventListener('click', () => this.setStage(this.currentStage + 1));
+                
+                const btnAuto = document.getElementById('btnAutoPlay');
+                btnAuto.addEventListener('click', () => {
+                    this.isPlaying = !this.isPlaying;
+                    btnAuto.textContent = this.isPlaying ? "Pause" : "Auto-Play";
+                    btnAuto.style.background = this.isPlaying ? "#FF2A6D" : "";
+                });
+
+                window.addEventListener('resize', () => { this.getDims(); this.initParticles(); });
+                
+                requestAnimationFrame(this.render.bind(this));
+            }
+
+            initParticles() {
+                const { width, height } = this.getDims();
+                this.crystalParticles = [];
+                this.solventParticles = [];
+                
+                const cx = width / 2;
+                const cy = height / 2 + 30;
+
+                // Build Crystal (Grid)
+                const cols = 5;
+                const rows = 4;
+                const size = 18;
+                const startX = cx - (cols * size) / 2;
+                const startY = cy - (rows * size) / 2;
+
+                for (let i = 0; i < cols; i++) {
+                    for (let j = 0; j < rows; j++) {
+                        this.crystalParticles.push({
+                            id: i * rows + j,
+                            ox: startX + i * size + size/2, // origin x
+                            oy: startY + j * size + size/2, // origin y
+                            x: startX + i * size + size/2,
+                            y: startY + j * size + size/2,
+                            radius: 7,
+                            color: ((i+j)%2===0) ? '#FF2A6D' : '#FF7EB3', // alternating ions
+                            state: 'lattice', // lattice, breaking, surrounded
+                            targetX: 0,
+                            targetY: 0
+                        });
+                    }
+                }
+
+                // Build Solvent (Water dipoles - simplified as blue orbs)
+                for (let i = 0; i < 40; i++) {
+                    this.solventParticles.push({
+                        x: Math.random() * width,
+                        y: Math.random() * height,
+                        vx: (Math.random() - 0.5) * 2,
+                        vy: (Math.random() - 0.5) * 2,
+                        radius: 5,
+                        color: '#00F0FF',
+                        targetId: null // ID of crystal particle to attack
+                    });
+                }
+            }
+
+            setStage(index) {
+                if(index < 0) index = 0;
+                if(index >= this.stages.length) index = 0; // loop
+                
+                this.currentStage = index;
+                this.progressTime = 0; // reset stage timer
+                
+                // Update UI
+                this.titleEl.textContent = this.stages[index].title;
+                this.descEl.textContent = this.stages[index].desc;
+                this.dots.forEach((dot, i) => {
+                    dot.classList.toggle('active', i === index);
+                });
+
+                // Reset physics state based on stage
+                const { width, height } = this.getDims();
+                if(index === 0) {
+                    // Reset to lattice
+                    this.crystalParticles.forEach(p => {
+                        p.x = p.ox; p.y = p.oy; p.state = 'lattice';
+                    });
+                    this.solventParticles.forEach(s => s.targetId = null);
+                }
+                else if(index === 1) {
+                    // Assign targets to outer crystal particles
+                    const outerIds = [0, 1, 2, 3, 4, 9, 14, 19, 18, 17, 16, 15, 10, 5];
+                    this.solventParticles.forEach((s, i) => {
+                        if(i < outerIds.length * 2) { // 2 waters per ion
+                            s.targetId = outerIds[i % outerIds.length];
+                        }
+                    });
+                }
+                else if(index === 2) {
+                    // Explode outwards
+                    this.crystalParticles.forEach(p => {
+                        if(p.state === 'lattice' && Math.random() > 0.3) {
+                            p.state = 'breaking';
+                            p.targetX = p.ox + (Math.random()-0.5)*150;
+                            p.targetY = p.oy + (Math.random()-0.5)*150;
+                        }
+                    });
+                }
+                else if(index === 3) {
+                    // Ensure all broken, assign hydration shells
+                    this.crystalParticles.forEach(p => {
+                        if(p.state !== 'breaking') {
+                            p.state = 'breaking';
+                            p.targetX = width*0.1 + Math.random()*width*0.8;
+                            p.targetY = height*0.1 + Math.random()*height*0.8;
+                        }
+                    });
+                    // Bind solvent to nearest crystal
+                    this.solventParticles.forEach(s => {
+                        const target = this.crystalParticles[Math.floor(Math.random() * this.crystalParticles.length)];
+                        s.targetId = target.id;
+                    });
+                }
+            }
+
+            render(timestamp) {
+                if (!this.lastTime) this.lastTime = timestamp;
+                const dt = timestamp - this.lastTime;
+                this.lastTime = timestamp;
+
+                if (this.isPlaying) {
+                    this.progressTime += dt;
+                    if (this.progressTime > this.stages[this.currentStage].duration) {
+                        this.setStage(this.currentStage + 1);
+                    }
+                }
+
+                const { width, height } = this.getDims();
+                const ctx = this.ctx;
+                
+                // Clear background
+                ctx.fillStyle = '#0D111A';
+                ctx.fillRect(0, 0, width, height);
+
+                // Physics Update & Draw Solvent
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00F0FF';
+                this.solventParticles.forEach(s => {
+                    // Movement logic based on stage
+                    if (this.currentStage === 0) {
+                        // Ambient float
+                        s.x += s.vx; s.y += s.vy;
+                        if(s.x < 0 || s.x > width) s.vx *= -1;
+                        if(s.y < 0 || s.y > height) s.vy *= -1;
+                    } 
+                    else if (this.currentStage >= 1 && s.targetId !== null) {
+                        // Seek target
+                        const target = this.crystalParticles.find(p => p.id === s.targetId);
+                        if(target) {
+                            // Calculate orbit position
+                            const angle = (timestamp * 0.002) + (s.x * 0.1); // arbitrary offset
+                            const orbitDist = this.currentStage === 3 ? 15 : 25; // tighter in stage 3
+                            const tx = target.x + Math.cos(angle) * orbitDist;
+                            const ty = target.y + Math.sin(angle) * orbitDist;
+                            
+                            s.x += (tx - s.x) * 0.05;
+                            s.y += (ty - s.y) * 0.05;
+                        }
+                    }
+
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = s.color;
+                    ctx.fill();
+                });
+
+                // Physics Update & Draw Crystal Particles
+                this.crystalParticles.forEach(p => {
+                    
+                    if (p.state === 'breaking') {
+                        // Lerp to target position
+                        p.x += (p.targetX - p.x) * 0.03;
+                        p.y += (p.targetY - p.y) * 0.03;
+                        
+                        // Add slight jiggle
+                        p.x += (Math.random()-0.5);
+                        p.y += (Math.random()-0.5);
+                    }
+
+                    ctx.shadowColor = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.fill();
+                    
+                    // Highlight stroke
+                    ctx.shadowBlur = 0;
+                    ctx.lineWidth = 1;
+                    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                    ctx.stroke();
+                });
+                
+                ctx.shadowBlur = 0; // reset
+
+                this.reqId = requestAnimationFrame(this.render.bind(this));
+            }
+        }
+
+        /**
+         * SECTION 4: Interactive Lab Simulation
+         */
+        class LabSim {
+            constructor() {
+                const setup = setupCanvas('labCanvas');
+                this.ctx = setup.ctx;
+                this.getDims = setup.resize;
+
+                // State
+                this.temperature = 20; // 0 to 100
+                this.totalSolute = 0; // grams
+                this.dissolvedSolute = 0;
+                this.solidSolute = 0;
+                this.isStirring = false;
+                
+                // Constants (Simplified solubility curve: Capacity = base + temp*multiplier)
+                this.baseCapacity = 20;
+                this.tempMultiplier = 0.8; 
+                this.stirringSpeed = 5; // How much dissolved per frame when stirring
+                this.naturalSpeed = 0.2; // How much dissolved per frame naturally
+
+                // Visual Particles
+                this.particles = [];
+                this.time = 0;
+
+                // UI Elements
+                this.elTemp = document.getElementById('tempSlider');
+                this.elValTemp = document.getElementById('valTemp');
+                this.elDissolved = document.getElementById('statDissolved');
+                this.elSolid = document.getElementById('statSolid');
+                this.elStatus = document.getElementById('statStatus');
+                
+                this.bindEvents();
+                window.addEventListener('resize', this.getDims);
+                requestAnimationFrame(this.render.bind(this));
+            }
+
+            bindEvents() {
+                this.elTemp.addEventListener('input', (e) => {
+                    this.temperature = parseInt(e.target.value);
+                    this.elValTemp.textContent = `${this.temperature}°C`;
+                    this.calculatePhysics();
+                });
+
+                document.getElementById('btnAddSmall').addEventListener('click', () => this.addSolute(5));
+                document.getElementById('btnAddLarge').addEventListener('click', () => this.addSolute(25));
+                
+                const btnStir = document.getElementById('btnStir');
+                // Touch & Mouse for stirring
+                const startStir = (e) => { e.preventDefault(); this.isStirring = true; btnStir.style.background = 'rgba(255,255,255,0.2)'; };
+                const stopStir = (e) => { e.preventDefault(); this.isStirring = false; btnStir.style.background = ''; };
+                
+                btnStir.addEventListener('mousedown', startStir);
+                btnStir.addEventListener('touchstart', startStir, {passive: false});
+                window.addEventListener('mouseup', stopStir);
+                window.addEventListener('touchend', stopStir);
+
+                document.getElementById('btnResetLab').addEventListener('click', () => {
+                    this.totalSolute = 0;
+                    this.dissolvedSolute = 0;
+                    this.solidSolute = 0;
+                    this.particles = [];
+                    this.temperature = 20;
+                    this.elTemp.value = 20;
+                    this.elValTemp.textContent = "20°C";
+                    this.updateUI();
+                });
+            }
+
+            addSolute(amount) {
+                this.totalSolute += amount;
+                
+                // Add visual particles to drop in from top
+                const { width } = this.getDims();
+                const numVisuals = amount * 2; // scale factor
+                for(let i=0; i<numVisuals; i++) {
+                    this.particles.push({
+                        x: width/2 + (Math.random() - 0.5) * 60,
+                        y: -20 - (Math.random() * 50),
+                        vx: (Math.random() - 0.5) * 2,
+                        vy: Math.random() * 2 + 2,
+                        size: Math.random() * 3 + 2,
+                        state: 'falling' // falling, solid, dissolved
+                    });
+                }
+                this.calculatePhysics();
+            }
+
+            getCapacity() {
+                return this.baseCapacity + (this.temperature * this.tempMultiplier);
+            }
+
+            calculatePhysics() {
+                const capacity = this.getCapacity();
+                
+                // How much SHOULD be dissolved
+                let targetDissolved = Math.min(this.totalSolute, capacity);
+                
+                // Actually dissolve over time in render loop based on rate,
+                // but we calculate bounds here.
+            }
+
+            updateUI() {
+                this.elDissolved.textContent = Math.floor(this.dissolvedSolute);
+                this.elSolid.textContent = Math.ceil(this.solidSolute);
+                
+                const capacity = this.getCapacity();
+                if (this.totalSolute === 0) {
+                    this.elStatus.textContent = "Empty";
+                    this.elStatus.style.color = "#fff";
+                } else if (this.totalSolute < capacity) {
+                    this.elStatus.textContent = "Unsaturated";
+                    this.elStatus.style.color = "#00F0FF";
+                } else if (this.totalSolute >= capacity && this.solidSolute > 0.5) {
+                    this.elStatus.textContent = "Saturated (Sediment present)";
+                    this.elStatus.style.color = "#FF2A6D";
+                } else {
+                    this.elStatus.textContent = "Saturated";
+                    this.elStatus.style.color = "#FFD700";
+                }
+            }
+
+            render(timestamp) {
+                const { width, height } = this.getDims();
+                const ctx = this.ctx;
+                this.time += 0.05;
+
+                // Clear
+                ctx.clearRect(0, 0, width, height);
+                
+                // Draw Heat Glow at bottom if hot
+                if(this.temperature > 20) {
+                    const heatIntensity = (this.temperature - 20) / 80;
+                    const heatGrad = ctx.createRadialGradient(width/2, height, 0, width/2, height, height/2);
+                    heatGrad.addColorStop(0, `rgba(255, 42, 109, ${heatIntensity * 0.5})`);
+                    heatGrad.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = heatGrad;
+                    ctx.fillRect(0, 0, width, height);
+                }
+
+                // Beaker Dimensions
+                const bWidth = Math.min(width * 0.8, 400);
+                const bLeft = (width - bWidth) / 2;
+                const bRight = bLeft + bWidth;
+                const bTop = height * 0.2;
+                const bBottom = height * 0.95;
+                const liquidTop = height * 0.4;
+
+                // 1. Dissolution Logic (gradually move solid to dissolved up to capacity)
+                const capacity = this.getCapacity();
+                const targetDissolved = Math.min(this.totalSolute, capacity);
+                
+                // Dissolve rate depends on stirring and temp
+                const rate = this.isStirring ? this.stirringSpeed : (this.naturalSpeed * (1 + this.temperature/50));
+                
+                if (this.dissolvedSolute < targetDissolved) {
+                    this.dissolvedSolute = Math.min(targetDissolved, this.dissolvedSolute + rate);
+                } else if (this.dissolvedSolute > targetDissolved) {
+                    // Precipitation (cooling down)
+                    this.dissolvedSolute = Math.max(targetDissolved, this.dissolvedSolute - rate*2); 
+                }
+                
+                this.solidSolute = Math.max(0, this.totalSolute - this.dissolvedSolute);
+                this.updateUI();
+
+                // 2. Liquid Area (Color changes based on dissolved amount)
+                const saturationRatio = this.dissolvedSolute / Math.max(capacity, 1);
+                // Base water is cyan, turns deep magenta as it saturates
+                const r = Math.floor(0 + (saturationRatio * 150));
+                const g = Math.floor(240 - (saturationRatio * 180));
+                const b = Math.floor(255 - (saturationRatio * 100));
+                
+                ctx.beginPath();
+                ctx.moveTo(bLeft, bBottom);
+                ctx.lineTo(bRight, bBottom);
+                ctx.lineTo(bRight, liquidTop);
+                
+                // Wavy top
+                const waveAmp = this.isStirring ? 15 : (5 + (this.temperature/20));
+                const waveFreq = this.isStirring ? 0.1 : 0.05;
+                for(let x = bRight; x >= bLeft; x--) {
+                    ctx.lineTo(x, liquidTop + Math.sin(x*waveFreq + this.time) * waveAmp);
+                }
+                
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.6)`;
+                ctx.fill();
+
+                // 3. Update & Draw Particles
+                // We need to manage visual particles to match the mathematical state.
+                // Ratio of visual solid particles to actual solid amount.
+                let solidVisCount = 0;
+                let dissolvedVisCount = 0;
+
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    let p = this.particles[i];
+                    
+                    // Physics
+                    if (p.state === 'falling') {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.vy += 0.2; // gravity
+                        
+                        // Hit liquid
+                        if (p.y > liquidTop) {
+                            p.vy *= 0.5; // slow down in water
+                            p.vx += (Math.random()-0.5); // drift
+                        }
+                        
+                        // Hit bottom
+                        if (p.y >= bBottom - p.size) {
+                            p.y = bBottom - p.size;
+                            p.vy = 0;
+                            p.state = 'solid';
+                        }
+                    } else if (p.state === 'solid') {
+                        solidVisCount++;
+                        // If we have too many visual solids compared to math, dissolve them
+                        // Rough ratio: 2 visual particles per gram
+                        if (solidVisCount > this.solidSolute * 2) {
+                            p.state = 'dissolved';
+                        }
+                        
+                        // Agitation movement at bottom
+                        if(this.isStirring) {
+                            p.x += (Math.random()-0.5)*4;
+                            if(p.x < bLeft) p.x = bLeft;
+                            if(p.x > bRight) p.x = bRight;
+                            if(Math.random() < 0.1) p.y -= Math.random()*20; // kick up
+                        }
+                    } else if (p.state === 'dissolved') {
+                        dissolvedVisCount++;
+                        // If we have too many dissolved visually (precipitating), turn back to solid
+                        if (dissolvedVisCount > this.dissolvedSolute * 2) {
+                             p.state = 'falling'; // fall back down
+                        }
+                        
+                        // Brownian motion / Convection in liquid
+                        const speedMulti = (this.temperature / 30) + (this.isStirring ? 5 : 1);
+                        p.x += (Math.random()-0.5) * speedMulti;
+                        p.y += (Math.random()-0.5) * speedMulti;
+                        
+                        // Constrain to liquid bounding box
+                        if(p.x < bLeft) p.x = bLeft;
+                        if(p.x > bRight) p.x = bRight;
+                        if(p.y < liquidTop) p.y = liquidTop;
+                        if(p.y > bBottom) p.y = bBottom;
+                    }
+
+                    // Draw Particle
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                    
+                    if (p.state === 'falling' || p.state === 'solid') {
+                        ctx.fillStyle = '#FF2A6D'; // Solid crystal color
+                        ctx.fill();
+                        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                        ctx.stroke();
+                    } else {
+                        // Dissolved are smaller, faint, magenta/white
+                        ctx.fillStyle = `rgba(255, 126, 179, ${0.4 + (this.temperature/200)})`;
+                        ctx.fill();
+                    }
+                }
+
+                // 4. Draw Beaker Glass (Foreground)
+                ctx.beginPath();
+                ctx.moveTo(bLeft, bTop);
+                ctx.lineTo(bLeft, bBottom);
+                ctx.quadraticCurveTo(bLeft, bBottom+10, bLeft+10, bBottom+10);
+                ctx.lineTo(bRight-10, bBottom+10);
+                ctx.quadraticCurveTo(bRight, bBottom+10, bRight, bBottom);
+                ctx.lineTo(bRight, bTop);
+                
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                
+                // Glass glare
+                ctx.beginPath();
+                ctx.moveTo(bLeft + 15, bTop + 20);
+                ctx.lineTo(bLeft + 15, bBottom - 20);
+                ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+                ctx.lineWidth = 8;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                requestAnimationFrame(this.render.bind(this));
+            }
+        }
+
+        // Initialize simulations when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new MechanismSim();
+            new LabSim();
+        });
+
+    </script>
+</body>
+</html>

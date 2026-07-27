@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Water Pollution Simulator: Interactive Educational Module</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & GLOBAL RESET
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-base: #060b19;
+            --water-pure: #00b4d8;
+            --water-polluted: #5c6b73;
+            --water-toxic: #7f4f24;
+            --water-algae: #2d6a4f;
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            --accent-green: #34d399;
+            --accent-red: #f87171;
+            --accent-orange: #fb923c;
+            
+            /* Glassmorphism */
+            --glass-bg: rgba(15, 23, 42, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --glass-blur: blur(16px);
+            
+            /* Typography */
+            --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            --step--1: clamp(0.83rem, 0.78rem + 0.27vw, 0.94rem);
+            --step-0: clamp(1.00rem, 0.91rem + 0.43vw, 1.25rem);
+            --step-1: clamp(1.20rem, 1.07rem + 0.66vw, 1.67rem);
+            --step-2: clamp(1.44rem, 1.24rem + 0.99vw, 2.22rem);
+            --step-3: clamp(1.73rem, 1.44rem + 1.45vw, 2.96rem);
+            --step-4: clamp(2.07rem, 1.66rem + 2.08vw, 3.95rem);
+            --step-5: clamp(2.49rem, 1.91rem + 2.94vw, 5.26rem);
+            
+            /* Spacing */
+            --space-xs: clamp(0.5rem, 0.46rem + 0.18vw, 0.63rem);
+            --space-sm: clamp(1rem, 0.93rem + 0.36vw, 1.25rem);
+            --space-md: clamp(1.5rem, 1.39rem + 0.54vw, 1.88rem);
+            --space-lg: clamp(2rem, 1.86rem + 0.71vw, 2.5rem);
+            --space-xl: clamp(3rem, 2.79rem + 1.07vw, 3.75rem);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            background: radial-gradient(circle at 20% 30%, rgba(0, 180, 216, 0.15) 0%, transparent 40%),
+                        radial-gradient(circle at 80% 70%, rgba(52, 211, 153, 0.1) 0%, transparent 40%);
+            animation: breathe 15s ease-in-out infinite alternate;
+        }
+
+        @keyframes breathe {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--space-md);
+        }
+
+        /* Glass Panel Utility */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            box-shadow: var(--glass-shadow);
+            padding: var(--space-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Typography */
+        h1, h2, h3 { line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }
+        h1 { font-size: var(--step-4); margin-bottom: var(--space-sm); background: linear-gradient(135deg, #fff, #a5b4fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--step-3); margin-bottom: var(--space-md); color: var(--accent-blue); }
+        h3 { font-size: var(--step-1); margin-bottom: var(--space-xs); }
+        p { font-size: var(--step-0); color: var(--text-muted); margin-bottom: var(--space-md); }
+        .subtitle { font-size: var(--step-1); font-weight: 300; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 0.1em; }
+
+        /* ==========================================================================
+           SECTION 1: HEADER & INTRO
+           ========================================================================== */
+        header {
+            text-align: center;
+            padding: var(--space-xl) 0 var(--space-lg);
+        }
+
+        /* ==========================================================================
+           SECTION 2: COMPONENTS (DIAGRAM & LEGEND)
+           ========================================================================== */
+        .diagram-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: var(--space-lg);
+            align-items: center;
+        }
+
+        .svg-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 40%, #0077BE 41%, #004d80 100%);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.3);
+        }
+
+        svg {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        /* Interactive Markers */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: rgba(15, 23, 42, 0.8);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .marker::after {
+            content: '';
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            border: 2px solid var(--accent-blue);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .marker.active, .marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--accent-blue);
+            border-color: #fff;
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-sm);
+            padding: var(--space-sm);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(56, 189, 248, 0.1);
+            border-color: rgba(56, 189, 248, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px; height: 28px;
+            flex-shrink: 0;
+            background: var(--accent-blue);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: #fff; font-size: 12px;
+        }
+
+        .legend-content h4 { font-size: var(--step-0); margin-bottom: 2px; }
+        .legend-content p { font-size: var(--step--1); margin: 0; color: var(--text-muted); }
+
+        /* Highlight effects on SVG paths via CSS classes added by JS */
+        .svg-highlight { transition: opacity 0.4s ease; opacity: 0.3; }
+        .svg-highlight.active { opacity: 1; filter: drop-shadow(0 0 8px rgba(255,255,255,0.8)); }
+
+        /* ==========================================================================
+           SECTION 3: WORKING MECHANISM (EUTROPHICATION)
+           ========================================================================== */
+        .mechanism-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-lg);
+        }
+
+        .mech-visual {
+            position: relative;
+            background: #021a2f;
+            border-radius: 12px;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            border: 1px solid var(--glass-border);
+        }
+
+        .mech-controls {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .stage-indicator {
+            display: flex;
+            gap: 8px;
+            margin-bottom: var(--space-md);
+        }
+
+        .stage-dot {
+            flex: 1; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px;
+            transition: all 0.3s;
+        }
+        .stage-dot.active { background: var(--accent-blue); box-shadow: 0 0 10px var(--accent-blue); }
+        .stage-dot.completed { background: rgba(56, 189, 248, 0.5); }
+
+        .mech-content-box { min-height: 180px; }
+        .mech-content-box h3 { color: var(--accent-green); }
+
+        .btn-group { display: flex; gap: var(--space-sm); margin-top: var(--space-md); }
+        button {
+            padding: 12px 24px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: var(--step--1);
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex; align-items: center; gap: 8px;
+        }
+        button:hover:not(:disabled) { background: rgba(255,255,255,0.15); transform: translateY(-2px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button.primary { background: var(--accent-blue); border-color: var(--accent-blue); }
+        button.primary:hover:not(:disabled) { background: #0284c7; }
+
+        /* Mechanism Animation Layers (CSS) */
+        .mech-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transition: all 1s ease; }
+        
+        #mech-water { background: linear-gradient(to bottom, #0077BE, #002b4d); }
+        
+        #mech-nutrients { opacity: 0; background-image: radial-gradient(#34d399 20%, transparent 20%); background-size: 20px 20px; background-position: 0 0; }
+        .stage-2 #mech-nutrients { opacity: 0.6; animation: flowDown 3s linear infinite; }
+        
+        #mech-algae { opacity: 0; background: linear-gradient(to bottom, rgba(45, 106, 79, 0.9) 0%, rgba(45, 106, 79, 0) 30%); height: 30%; transform: translateY(-100%); }
+        .stage-3 #mech-algae, .stage-4 #mech-algae, .stage-5 #mech-algae { opacity: 1; transform: translateY(0); }
+        
+        #mech-light { opacity: 1; background: linear-gradient(to bottom, rgba(255,255,200,0.2) 0%, transparent 100%); clip-path: polygon(20% 0, 80% 0, 100% 100%, 0% 100%); }
+        .stage-3 #mech-light, .stage-4 #mech-light, .stage-5 #mech-light { opacity: 0.1; clip-path: polygon(20% 0, 80% 0, 80% 20%, 20% 20%); }
+
+        #mech-plants { bottom: 0; top: auto; height: 40%; }
+        .plant { transform-origin: bottom center; transition: all 1s; }
+        .stage-4 .plant, .stage-5 .plant { fill: #8b5a2b; transform: scaleY(0.6) rotate(15deg); }
+
+        #mech-bacteria { opacity: 0; }
+        .stage-4 #mech-bacteria { opacity: 1; animation: appear 1s forwards; }
+
+        #mech-fish { width: 100%; height: 100%; }
+        .fish-svg { transition: all 2s ease; transform-origin: center; }
+        .stage-5 .fish-svg { transform: translateY(-40px) rotate(180deg); opacity: 0.6; }
+
+        @keyframes flowDown { 0% { background-position: 0 0; } 100% { background-position: 20px 20px; } }
+        @keyframes appear { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+
+        /* ==========================================================================
+           SECTION 4: INTERACTIVE SIMULATOR (CANVAS)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: var(--space-lg);
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .slider-group {
+            background: rgba(0,0,0,0.2);
+            padding: var(--space-sm);
+            border-radius: 12px;
+            border-left: 4px solid #fff;
+        }
+        .slider-group.ind { border-color: var(--accent-orange); }
+        .slider-group.agr { border-color: var(--accent-green); }
+        .slider-group.urb { border-color: var(--text-muted); }
+
+        .slider-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 8px;
+        }
+        .slider-header label { font-weight: 600; font-size: var(--step--1); }
+        .slider-val { font-family: monospace; color: var(--accent-blue); background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; }
+
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 16px; width: 16px; border-radius: 50%;
+            background: #fff; margin-top: -5px; box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        
+        .metrics {
+            display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm);
+            margin-top: var(--space-md);
+        }
+        .metric-card {
+            background: rgba(0,0,0,0.3); padding: var(--space-sm); border-radius: 8px; text-align: center;
+        }
+        .metric-val { font-size: var(--step-2); font-weight: bold; font-family: monospace; }
+        .metric-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; }
+
+        .canvas-container {
+            width: 100%;
+            height: 500px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            position: relative;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        .sim-overlay {
+            position: absolute; bottom: 10px; left: 10px;
+            background: rgba(0,0,0,0.5); padding: 4px 10px; border-radius: 20px;
+            font-size: 12px; backdrop-filter: blur(4px);
+        }
+
+        /* ==========================================================================
+           SECTION 5: FACTS & REVISION
+           ========================================================================== */
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--space-md); }
+        .card { background: rgba(255,255,255,0.03); border-radius: 12px; padding: var(--space-md); border: 1px solid rgba(255,255,255,0.05); }
+        .card h4 { color: var(--accent-blue); margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .card h4::before { content: '✦'; color: var(--accent-green); }
+
+        /* ==========================================================================
+           MEDIA QUERIES (RESPONSIVE DESIGN)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .diagram-layout, .mechanism-layout, .sim-layout {
+                grid-template-columns: 1fr;
+            }
+            .canvas-container { height: 400px; }
+            .mech-visual { aspect-ratio: 16/9; }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --glass-blur: blur(8px); /* Less blur for mobile GPU performance */
+            }
+            .container { padding: var(--space-sm); }
+            .glass-panel { padding: var(--space-sm); border-radius: 12px; }
+            
+            /* Sizing discipline below 768px */
+            .marker { width: 24px; height: 24px; font-size: 12px; }
+            .legend-item { padding: 8px; }
+            .canvas-container { height: 300px; }
+            
+            /* Ensure tap targets */
+            button, input[type=range]::-webkit-slider-thumb {
+                min-height: 44px;
+                min-width: 44px;
+            }
+            
+            .btn-group { flex-direction: column; }
+            button { width: 100%; justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-bg"></div>
+
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <div class="subtitle">Interactive Science Module</div>
+            <h1>Water Pollution Simulator</h1>
+            <p>Explore the causes, mechanisms, and consequences of aquatic ecosystem degradation.</p>
+        </header>
+
+        <!-- SECTION 1: SOURCES (DIAGRAM) -->
+        <section class="glass-panel" style="margin-bottom: var(--space-xl);">
+            <h2>1. Primary Sources of Pollution</h2>
+            <p>Human activities alter natural water bodies through various point and non-point sources. Hover or tap the markers to identify them.</p>
+            
+            <div class="diagram-layout">
+                <!-- Visual Container -->
+                <div class="svg-container">
+                    <svg viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice" id="main-diagram">
+                        <defs>
+                            <linearGradient id="sky" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#87CEEB"/>
+                                <stop offset="100%" stop-color="#E0F6FF"/>
+                            </linearGradient>
+                            <linearGradient id="water" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#00b4d8"/>
+                                <stop offset="50%" stop-color="#0077BE"/>
+                                <stop offset="100%" stop-color="#004d80"/>
+                            </linearGradient>
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="2" dy="5" stdDeviation="5" flood-opacity="0.3"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Background / Sky -->
+                        <rect width="100%" height="100%" fill="url(#sky)"/>
+                        
+                        <!-- Mountains -->
+                        <path d="M0 250 L100 150 L250 280 L400 120 L550 260 L700 180 L800 250 L800 500 L0 500 Z" fill="#b0c4de" />
+                        <path d="M0 280 L150 180 L300 300 L450 160 L600 280 L800 200 L800 500 L0 500 Z" fill="#9ba8b8" opacity="0.8"/>
+
+                        <!-- Land terrain -->
+                        <path d="M0 350 Q 200 300, 400 350 T 800 350 L800 500 L0 500 Z" fill="#556b2f" />
+                        <path d="M0 380 Q 200 360, 400 400 T 800 380 L800 500 L0 500 Z" fill="#6b8e23" />
+
+                        <!-- River -->
+                        <path d="M-50 450 Q 200 400, 400 450 T 850 450 L850 500 L-50 500 Z" fill="url(#water)" />
+
+                        <!-- COMPONENTS (Groups for highlighting) -->
+                        
+                        <!-- Agricultural Field -->
+                        <g id="svg-agri" class="svg-highlight active">
+                            <path d="M150 360 L250 340 L300 370 L180 390 Z" fill="#8fbc8f"/>
+                            <path d="M160 365 L240 348 M165 372 L245 355 M170 380 L250 362" stroke="#556b2f" stroke-width="2"/>
+                            <!-- Tractor abstract -->
+                            <rect x="220" y="330" width="20" height="15" fill="#d9534f" rx="2"/>
+                            <circle cx="225" cy="345" r="5" fill="#333"/>
+                            <circle cx="235" cy="345" r="5" fill="#333"/>
+                            <!-- Runoff lines -->
+                            <path d="M220 385 Q 230 420, 250 440" stroke="#8fbc8f" stroke-width="3" stroke-dasharray="4" fill="none"/>
+                        </g>
+
+                        <!-- Industrial Factory -->
+                        <g id="svg-ind" class="svg-highlight active">
+                            <rect x="450" y="310" width="80" height="70" fill="#778899" filter="url(#shadow)"/>
+                            <rect x="460" y="330" width="15" height="15" fill="#add8e6"/>
+                            <rect x="500" y="330" width="15" height="15" fill="#add8e6"/>
+                            <polygon points="450,310 475,290 500,310" fill="#696969"/>
+                            <polygon points="500,310 515,290 530,310" fill="#696969"/>
+                            <!-- Smokestacks -->
+                            <rect x="465" y="260" width="10" height="40" fill="#a9a9a9"/>
+                            <rect x="505" y="270" width="10" height="30" fill="#a9a9a9"/>
+                            <!-- Pipe and effluent -->
+                            <path d="M490 380 L490 410 L470 410 L470 435" stroke="#555" stroke-width="6" fill="none"/>
+                            <circle cx="470" cy="440" r="8" fill="#fb923c" opacity="0.8"/>
+                        </g>
+
+                        <!-- Urban/City Area -->
+                        <g id="svg-urb" class="svg-highlight active">
+                            <rect x="620" y="280" width="40" height="100" fill="#dcdcdc" filter="url(#shadow)"/>
+                            <rect x="670" y="300" width="50" height="80" fill="#c0c0c0" filter="url(#shadow)"/>
+                            <rect x="730" y="260" width="35" height="120" fill="#d3d3d3" filter="url(#shadow)"/>
+                            <!-- Windows -->
+                            <rect x="630" y="290" width="8" height="8" fill="#ffffe0"/>
+                            <rect x="680" y="310" width="8" height="8" fill="#ffffe0"/>
+                            <rect x="740" y="280" width="8" height="8" fill="#ffffe0"/>
+                            <!-- Sewer pipe -->
+                            <path d="M680 380 Q 670 420, 640 435" stroke="#444" stroke-width="8" fill="none"/>
+                            <circle cx="635" cy="440" r="10" fill="#8b4513" opacity="0.6"/>
+                        </g>
+
+                        <!-- Solid Waste / Trash -->
+                        <g id="svg-trash" class="svg-highlight active">
+                            <!-- Floating debris in water -->
+                            <circle cx="350" cy="460" r="3" fill="#ff69b4"/>
+                            <rect x="370" y="455" width="8" height="4" fill="#fff" transform="rotate(20 370 455)"/>
+                            <circle cx="550" cy="470" r="4" fill="#ffd700"/>
+                            <rect x="700" y="465" width="10" height="5" fill="#add8e6" transform="rotate(-15 700 465)"/>
+                        </g>
+
+                    </svg>
+
+                    <!-- Interactive Overlays (Markers) -->
+                    <!-- Position percentages relative to viewBox dimensions -->
+                    <div class="marker" style="left: 28.1%; top: 73%;" data-target="legend-agri" data-svg="svg-agri">1</div>
+                    <div class="marker" style="left: 58.7%; top: 76%;" data-target="legend-ind" data-svg="svg-ind">2</div>
+                    <div class="marker" style="left: 83.7%; top: 76%;" data-target="legend-urb" data-svg="svg-urb">3</div>
+                    <div class="marker" style="left: 43.7%; top: 92%;" data-target="legend-trash" data-svg="svg-trash">4</div>
+                </div>
+
+                <!-- Legend List -->
+                <div class="legend-list">
+                    <div class="legend-item" id="legend-agri" data-svg="svg-agri">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Agricultural Runoff</h4>
+                            <p>Rain washes nitrogen/phosphorus fertilizers and pesticides into rivers.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="legend-item" id="legend-ind" data-svg="svg-ind">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4>Industrial Effluent</h4>
+                            <p>Factories discharge toxic chemicals, heavy metals, and heated water.</p>
+                        </div>
+                    </div>
+
+                    <div class="legend-item" id="legend-urb" data-svg="svg-urb">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4>Domestic Sewage</h4>
+                            <p>Untreated urban wastewater introduces pathogens and organic loads.</p>
+                        </div>
+                    </div>
+
+                    <div class="legend-item" id="legend-trash" data-svg="svg-trash">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-content">
+                            <h4>Solid & Microplastics</h4>
+                            <p>Physical debris degrades into harmful micro-particles ingested by fauna.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: WORKING MECHANISM (EUTROPHICATION) -->
+        <section class="glass-panel" style="margin-bottom: var(--space-xl);">
+            <h2>2. The Eutrophication Cascade</h2>
+            <p>How does nutrient pollution actually kill a river? Step through the mechanism.</p>
+            
+            <div class="mechanism-layout">
+                <!-- Visual Animation Area -->
+                <div class="mech-visual" id="mech-container">
+                    <!-- Layer 1: Water Base -->
+                    <div class="mech-layer" id="mech-water"></div>
+                    
+                    <!-- Layer 2: Submerged Plants -->
+                    <svg class="mech-layer" id="mech-plants" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <path class="plant" d="M20,100 Q30,50 15,10 Q25,60 30,100 Z" fill="#2e8b57"/>
+                        <path class="plant" d="M50,100 Q40,40 55,5 Q60,50 60,100 Z" fill="#2e8b57"/>
+                        <path class="plant" d="M80,100 Q90,60 75,20 Q85,70 90,100 Z" fill="#2e8b57"/>
+                    </svg>
+
+                    <!-- Layer 3: Fish -->
+                    <svg class="mech-layer" id="mech-fish" viewBox="0 0 100 100">
+                        <g class="fish-svg" transform="translate(30, 60)">
+                            <path d="M0,0 Q10,-10 20,0 Q10,10 0,0 Z" fill="#ff7f50"/>
+                            <polygon points="0,0 -5,-5 -5,5" fill="#ff7f50"/>
+                            <circle cx="15" cy="-2" r="1" fill="#000"/>
+                        </g>
+                        <g class="fish-svg" transform="translate(60, 40) scale(0.8)">
+                            <path d="M0,0 Q10,-10 20,0 Q10,10 0,0 Z" fill="#ff7f50"/>
+                            <polygon points="0,0 -5,-5 -5,5" fill="#ff7f50"/>
+                            <circle cx="15" cy="-2" r="1" fill="#000"/>
+                        </g>
+                    </svg>
+
+                    <!-- Layer 4: Nutrient Flow -->
+                    <div class="mech-layer" id="mech-nutrients"></div>
+
+                    <!-- Layer 5: Algal Bloom -->
+                    <div class="mech-layer" id="mech-algae"></div>
+
+                    <!-- Layer 6: Sunlight Rays -->
+                    <div class="mech-layer" id="mech-light"></div>
+
+                    <!-- Layer 7: Bacteria (Decomposition) -->
+                    <svg class="mech-layer" id="mech-bacteria" viewBox="0 0 100 100">
+                        <circle cx="30" cy="80" r="1" fill="#fff" opacity="0.8"><animate attributeName="r" values="0;2;0" dur="2s" repeatCount="indefinite"/></circle>
+                        <circle cx="50" cy="90" r="1.5" fill="#fff" opacity="0.8"><animate attributeName="r" values="0;1.5;0" dur="1.5s" repeatCount="indefinite"/></circle>
+                        <circle cx="70" cy="75" r="1" fill="#fff" opacity="0.8"><animate attributeName="r" values="0;2;0" dur="2.5s" repeatCount="indefinite"/></circle>
+                        <circle cx="40" cy="70" r="1" fill="#fff" opacity="0.8"><animate attributeName="r" values="0;2;0" dur="1.8s" repeatCount="indefinite"/></circle>
+                    </svg>
+                </div>
+
+                <!-- Text & Controls Area -->
+                <div class="mech-controls">
+                    <div class="stage-indicator" id="mech-dots">
+                        <div class="stage-dot active"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                    </div>
+
+                    <div class="mech-content-box" id="mech-content">
+                        <!-- Content injected via JS -->
+                    </div>
+
+                    <div class="btn-group">
+                        <button id="btn-prev" disabled>← Previous</button>
+                        <button id="btn-next" class="primary">Next Stage →</button>
+                        <button id="btn-auto">▶ Auto-Play</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: INTERACTIVE SIMULATOR (CANVAS) -->
+        <section class="glass-panel" style="margin-bottom: var(--space-xl);">
+            <h2>3. Real-time Ecosystem Simulator</h2>
+            <p>Adjust the emission levels from different sources and observe the compound effect on Water Quality Index (WQI) and Dissolved Oxygen (DO).</p>
+
+            <div class="sim-layout">
+                <!-- Controls -->
+                <div class="control-panel">
+                    <div class="slider-group ind">
+                        <div class="slider-header">
+                            <label>Industrial Toxins</label>
+                            <span class="slider-val" id="val-ind">0%</span>
+                        </div>
+                        <input type="range" id="sim-ind" min="0" max="100" value="0">
+                        <p style="font-size: 11px; margin-top:4px; margin-bottom:0;">Heavy metals, chemicals, heat.</p>
+                    </div>
+
+                    <div class="slider-group agr">
+                        <div class="slider-header">
+                            <label>Agricultural Runoff</label>
+                            <span class="slider-val" id="val-agr">0%</span>
+                        </div>
+                        <input type="range" id="sim-agr" min="0" max="100" value="0">
+                        <p style="font-size: 11px; margin-top:4px; margin-bottom:0;">Nitrates, Phosphates driving algae.</p>
+                    </div>
+
+                    <div class="slider-group urb">
+                        <div class="slider-header">
+                            <label>Urban Sewage</label>
+                            <span class="slider-val" id="val-urb">0%</span>
+                        </div>
+                        <input type="range" id="sim-urb" min="0" max="100" value="0">
+                        <p style="font-size: 11px; margin-top:4px; margin-bottom:0;">Organic waste consuming oxygen.</p>
+                    </div>
+
+                    <div class="metrics">
+                        <div class="metric-card">
+                            <div class="metric-val" id="metric-wqi" style="color: var(--accent-green);">100</div>
+                            <div class="metric-label">Water Quality Index</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-val" id="metric-do" style="color: var(--accent-blue);">8.5</div>
+                            <div class="metric-label">Dissolved O₂ (mg/L)</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Canvas Visualizer -->
+                <div class="canvas-container">
+                    <canvas id="sim-canvas"></canvas>
+                    <div class="sim-overlay">Flow Direction →</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: FACTS & REVISION -->
+        <section class="glass-panel">
+            <h2>4. Key Takeaways & Facts</h2>
+            <div class="grid-3">
+                <div class="card">
+                    <h4>Bioaccumulation</h4>
+                    <p>Heavy metals from industry don't just stay in water; they build up in the tissues of small fish, and magnify in predators (like humans) at the top of the food chain.</p>
+                </div>
+                <div class="card">
+                    <h4>The "Dead Zone"</h4>
+                    <p>The Gulf of Mexico has a hypoxic "Dead Zone" the size of New Jersey, caused primarily by agricultural runoff traveling down the Mississippi River.</p>
+                </div>
+                <div class="card">
+                    <h4>Thermal Pollution</h4>
+                    <p>Warm water holds <em>less</em> dissolved oxygen than cold water. Industrial cooling pipes discharging warm water can suffocate fish even without adding chemicals.</p>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            /* ----------------------------------------------------------------------
+               MODULE 1: DIAGRAM INTERACTION (Markers & Legend)
+               ---------------------------------------------------------------------- */
+            const markers = document.querySelectorAll('.marker');
+            const legends = document.querySelectorAll('.legend-item');
+            const svgGroups = document.querySelectorAll('.svg-highlight');
+
+            function clearHighlights() {
+                markers.forEach(m => m.classList.remove('active'));
+                legends.forEach(l => l.classList.remove('active'));
+                // Dim all SVG parts slightly, highlight active
+                svgGroups.forEach(g => {
+                    g.classList.remove('active');
+                    g.style.opacity = '0.3';
+                });
+            }
+
+            function activateHighlight(id, svgId) {
+                clearHighlights();
+                // Highlight Marker
+                const marker = document.querySelector(`.marker[data-target="${id}"]`);
+                if(marker) marker.classList.add('active');
+                
+                // Highlight Legend
+                const legend = document.getElementById(id);
+                if(legend) legend.classList.add('active');
+
+                // Highlight SVG Part
+                const svgPart = document.getElementById(svgId);
+                if(svgPart) {
+                    svgPart.classList.add('active');
+                    svgPart.style.opacity = '1';
+                }
+            }
+
+            // Initially set all SVG parts to fully visible
+            svgGroups.forEach(g => g.style.opacity = '1');
+
+            markers.forEach(marker => {
+                const targetId = marker.getAttribute('data-target');
+                const svgId = marker.getAttribute('data-svg');
+                marker.addEventListener('mouseenter', () => activateHighlight(targetId, svgId));
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); activateHighlight(targetId, svgId); }, {passive: false});
+            });
+
+            legends.forEach(legend => {
+                const id = legend.id;
+                const svgId = legend.getAttribute('data-svg');
+                legend.addEventListener('mouseenter', () => activateHighlight(id, svgId));
+            });
+
+            // Reset on leave container
+            document.querySelector('.diagram-layout').addEventListener('mouseleave', () => {
+                markers.forEach(m => m.classList.remove('active'));
+                legends.forEach(l => l.classList.remove('active'));
+                svgGroups.forEach(g => { g.classList.remove('active'); g.style.opacity = '1'; });
+            });
+
+
+            /* ----------------------------------------------------------------------
+               MODULE 2: WORKING MECHANISM (Eutrophication Carousel)
+               ---------------------------------------------------------------------- */
+            const stages = [
+                {
+                    title: "1. Healthy State",
+                    text: "Sunlight reaches submerged plants. Oxygen is plentiful, supporting a healthy fish population.",
+                    class: "stage-1"
+                },
+                {
+                    title: "2. Nutrient Influx",
+                    text: "Excess Nitrogen and Phosphorus from fertilizers wash into the water body.",
+                    class: "stage-2"
+                },
+                {
+                    title: "3. Algal Bloom",
+                    text: "Nutrients trigger explosive growth of algae on the surface, blocking sunlight from reaching the depths.",
+                    class: "stage-3"
+                },
+                {
+                    title: "4. Decomposition",
+                    text: "Submerged plants die from lack of light. Bacteria multiply rapidly to decompose the dead plant matter.",
+                    class: "stage-4"
+                },
+                {
+                    title: "5. Hypoxia (Dead Zone)",
+                    text: "The bacteria consume massive amounts of Dissolved Oxygen. Fish suffocate and die. The ecosystem collapses.",
+                    class: "stage-5"
+                }
+            ];
+
+            let currentStage = 0;
+            const container = document.getElementById('mech-container');
+            const contentBox = document.getElementById('mech-content');
+            const dots = document.querySelectorAll('.stage-dot');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnAuto = document.getElementById('btn-auto');
+            
+            let autoPlayInterval = null;
+
+            function updateStage(index) {
+                // Bounds check
+                if (index < 0) index = 0;
+                if (index >= stages.length) index = stages.length - 1;
+                currentStage = index;
+
+                // Update UI Text
+                contentBox.innerHTML = `
+                    <h3>${stages[currentStage].title}</h3>
+                    <p>${stages[currentStage].text}</p>
+                `;
+
+                // Update Dots
+                dots.forEach((dot, i) => {
+                    dot.className = 'stage-dot';
+                    if (i === currentStage) dot.classList.add('active');
+                    else if (i < currentStage) dot.classList.add('completed');
+                });
+
+                // Update Visual Classes (Clear old, add new up to current)
+                container.className = 'mech-visual'; // reset
+                // To show cumulative effects, we just need the target class, CSS handles state
+                container.classList.add(stages[currentStage].class);
+
+                // Button states
+                btnPrev.disabled = currentStage === 0;
+                btnNext.disabled = currentStage === stages.length - 1;
+                if(currentStage === stages.length - 1 && autoPlayInterval) {
+                    toggleAutoPlay(false); // Stop at end
+                }
+            }
+
+            btnPrev.addEventListener('click', () => { toggleAutoPlay(false); updateStage(currentStage - 1); });
+            btnNext.addEventListener('click', () => { toggleAutoPlay(false); updateStage(currentStage + 1); });
+            
+            function toggleAutoPlay(forceState) {
+                const isPlaying = forceState !== undefined ? forceState : !autoPlayInterval;
+                
+                if (isPlaying) {
+                    if(currentStage === stages.length - 1) updateStage(0); // loop back
+                    btnAuto.textContent = "⏸ Pause";
+                    btnAuto.classList.remove('primary');
+                    autoPlayInterval = setInterval(() => {
+                        if (currentStage < stages.length - 1) {
+                            updateStage(currentStage + 1);
+                        } else {
+                            updateStage(0); // Loop continuously
+                        }
+                    }, 3500);
+                } else {
+                    btnAuto.textContent = "▶ Auto-Play";
+                    btnAuto.classList.add('primary');
+                    clearInterval(autoPlayInterval);
+                    autoPlayInterval = null;
+                }
+            }
+            btnAuto.addEventListener('click', () => toggleAutoPlay());
+
+            // Init mechanism
+            updateStage(0);
+
+
+            /* ----------------------------------------------------------------------
+               MODULE 3: INTERACTIVE SIMULATOR (Canvas + Physics)
+               ---------------------------------------------------------------------- */
+            const canvas = document.getElementById('sim-canvas');
+            const ctx = canvas.getContext('2d', { alpha: false }); // Optimize
+            
+            // Inputs
+            const sliderInd = document.getElementById('sim-ind');
+            const sliderAgr = document.getElementById('sim-agr');
+            const sliderUrb = document.getElementById('sim-urb');
+            
+            // Outputs
+            const valInd = document.getElementById('val-ind');
+            const valAgr = document.getElementById('val-agr');
+            const valUrb = document.getElementById('val-urb');
+            const outWQI = document.getElementById('metric-wqi');
+            const outDO = document.getElementById('metric-do');
+
+            // Sim State
+            let simState = {
+                ind: 0, agr: 0, urb: 0,
+                wqi: 100, do: 8.5,
+                width: 0, height: 0
+            };
+
+            // Entity Arrays
+            let particles = [];
+            let fishes = [];
+            const numFishes = 12;
+
+            function hexToRgb(hex) {
+                var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? { r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16) } : null;
+            }
+            
+            const colorPure = hexToRgb('#0077BE');
+            const colorTox = hexToRgb('#7f4f24'); // Industrial
+            const colorAlg = hexToRgb('#2d6a4f'); // Agri
+            const colorSew = hexToRgb('#4a4036'); // Urban
+
+            function resizeCanvas() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                simState.width = rect.width;
+                simState.height = rect.height;
+                initFishes(); // Re-init positions
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+
+            // Classes
+            class Fish {
+                constructor() {
+                    this.x = Math.random() * simState.width;
+                    this.y = (Math.random() * 0.6 + 0.3) * simState.height; // lower half
+                    this.vx = (Math.random() * 2 + 1) * (Math.random() > 0.5 ? 1 : -1);
+                    this.vy = (Math.random() - 0.5);
+                    this.size = Math.random() * 4 + 6;
+                    this.isDead = false;
+                    this.isSick = false;
+                }
+
+                update(doLevel, toxinLevel) {
+                    if (this.isDead) {
+                        this.y -= 1; // Float to top
+                        if (this.y < 20) this.y = 20;
+                        this.vx = 0; // Float with current slightly
+                        this.x += 0.5;
+                        if(this.x > simState.width + 20) this.x = -20;
+                        return;
+                    }
+
+                    // Physics / Health check
+                    let deathThreshold = 3.0 + (toxinLevel * 0.02); // Toxins make them die at higher DO
+                    if (doLevel < deathThreshold && Math.random() < 0.01) {
+                        this.isDead = true;
+                    } else if (doLevel < 5.0) {
+                        this.isSick = true;
+                    } else {
+                        this.isSick = false;
+                    }
+
+                    // Movement
+                    let speedMult = this.isSick ? 0.4 : 1.0;
+                    
+                    this.x += this.vx * speedMult;
+                    this.y += this.vy * speedMult;
+
+                    // Sick fish go to surface for oxygen
+                    if (this.isSick && this.y > simState.height * 0.3) {
+                        this.vy -= 0.05;
+                    }
+
+                    // Boundaries
+                    if (this.x > simState.width + 20) this.x = -20;
+                    if (this.x < -20) this.x = simState.width + 20;
+                    
+                    if (this.y > simState.height - 20) this.vy *= -1;
+                    if (this.y < 20 && !this.isSick) this.vy *= -1;
+
+                    // Wander
+                    if(Math.random() < 0.05) this.vy += (Math.random() - 0.5) * 0.5;
+                    // Cap Y velocity
+                    if(this.vy > 1) this.vy = 1;
+                    if(this.vy < -1) this.vy = -1;
+                }
+
+                draw(ctx) {
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    
+                    if (this.isDead) {
+                        ctx.rotate(Math.PI); // upside down
+                        ctx.fillStyle = '#ccc';
+                    } else {
+                        // Point in direction of velocity
+                        ctx.rotate(Math.atan2(this.vy, this.vx));
+                        ctx.fillStyle = this.isSick ? '#a8a29e' : '#fb923c';
+                    }
+
+                    // Draw simple fish body
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, this.size, this.size/2, 0, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Tail
+                    ctx.beginPath();
+                    ctx.moveTo(-this.size, 0);
+                    ctx.lineTo(-this.size - this.size/1.5, -this.size/2);
+                    ctx.lineTo(-this.size - this.size/1.5, this.size/2);
+                    ctx.fill();
+
+                    // Eye
+                    ctx.fillStyle = '#000';
+                    ctx.beginPath();
+                    ctx.arc(this.size/2, -this.size/4, this.size/6, 0, Math.PI*2);
+                    ctx.fill();
+
+                    ctx.restore();
+                }
+            }
+
+            class Particle {
+                constructor(type) {
+                    this.type = type; // 'ind', 'agr', 'urb'
+                    this.x = 0; // Starts left
+                    this.y = Math.random() * simState.height;
+                    this.vx = Math.random() * 2 + 1; // Flow right
+                    this.vy = (Math.random() - 0.5) * 0.5;
+                    this.life = 1.0;
+                    this.decay = Math.random() * 0.005 + 0.002;
+                    this.size = Math.random() * 3 + 1;
+                }
+                
+                update() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.life -= this.decay;
+                }
+
+                draw(ctx) {
+                    ctx.globalAlpha = Math.max(0, this.life);
+                    let color = '#fff';
+                    if (this.type === 'ind') color = '#fb923c';
+                    if (this.type === 'agr') color = '#34d399';
+                    if (this.type === 'urb') color = '#8b4513';
+                    
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                }
+            }
+
+            function initFishes() {
+                fishes = [];
+                for(let i=0; i<numFishes; i++) {
+                    fishes.push(new Fish());
+                }
+            }
+
+            // Input Handling
+            function updateSimState() {
+                simState.ind = parseInt(sliderInd.value);
+                simState.agr = parseInt(sliderAgr.value);
+                simState.urb = parseInt(sliderUrb.value);
+
+                valInd.innerText = simState.ind + "%";
+                valAgr.innerText = simState.agr + "%";
+                valUrb.innerText = simState.urb + "%";
+
+                // Calculate Metrics
+                // Total pollution load (0 to 300 max)
+                let totalPollution = simState.ind + simState.agr + simState.urb;
+                
+                // WQI calculation (simplified weighted model)
+                // 100 is pristine. 
+                let newWqi = 100 - (simState.ind * 0.4) - (simState.agr * 0.35) - (simState.urb * 0.25);
+                simState.wqi = Math.max(0, Math.round(newWqi));
+
+                // DO Calculation (Base 8.5mg/L)
+                // Urban drops DO fast (BOD). Agri causes delayed drop (represented linearly here for simplicity). Ind drops via heat/chem.
+                let dropDO = (simState.urb * 0.05) + (simState.agr * 0.03) + (simState.ind * 0.01);
+                simState.do = Math.max(0, (8.5 - dropDO)).toFixed(1);
+
+                // Update UI Colors based on severity
+                outWQI.innerText = simState.wqi;
+                if(simState.wqi > 70) outWQI.style.color = 'var(--accent-green)';
+                else if (simState.wqi > 40) outWQI.style.color = 'var(--accent-orange)';
+                else outWQI.style.color = 'var(--accent-red)';
+
+                outDO.innerText = simState.do;
+                if(simState.do > 6.0) outDO.style.color = 'var(--accent-blue)';
+                else if (simState.do > 3.0) outDO.style.color = 'var(--accent-orange)';
+                else outDO.style.color = 'var(--accent-red)';
+            }
+
+            [sliderInd, sliderAgr, sliderUrb].forEach(el => {
+                el.addEventListener('input', updateSimState);
+                // Touch events implicitly handled by input range
+            });
+
+            // Main Render Loop
+            function animateCanvas() {
+                // Background color interpolation based on weights
+                let totalWeights = simState.ind + simState.agr + simState.urb;
+                
+                let r, g, b;
+                if (totalWeights === 0) {
+                    r = colorPure.r; g = colorPure.g; b = colorPure.b;
+                } else {
+                    // Blend factors
+                    let fInd = simState.ind / 100;
+                    let fAgr = simState.agr / 100;
+                    let fUrb = simState.urb / 100;
+                    let fPure = Math.max(0, 1 - (fInd + fAgr + fUrb)/1.5); // How much blue remains
+
+                    let totalDiv = fInd + fAgr + fUrb + fPure;
+
+                    r = (colorTox.r * fInd + colorAlg.r * fAgr + colorSew.r * fUrb + colorPure.r * fPure) / totalDiv;
+                    g = (colorTox.g * fInd + colorAlg.g * fAgr + colorSew.g * fUrb + colorPure.g * fPure) / totalDiv;
+                    b = (colorTox.b * fInd + colorAlg.b * fAgr + colorSew.b * fUrb + colorPure.b * fPure) / totalDiv;
+                }
+
+                ctx.fillStyle = `rgb(${r|0}, ${g|0}, ${b|0})`;
+                ctx.fillRect(0, 0, simState.width, simState.height);
+
+                // Add gradient overlay for depth
+                let grad = ctx.createLinearGradient(0, 0, 0, simState.height);
+                grad.addColorStop(0, 'rgba(255,255,255,0.1)');
+                grad.addColorStop(1, 'rgba(0,0,0,0.5)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, simState.width, simState.height);
+
+                // Spawn Particles based on sliders
+                if (simState.ind > 0 && Math.random() < simState.ind * 0.01) particles.push(new Particle('ind'));
+                if (simState.agr > 0 && Math.random() < simState.agr * 0.01) particles.push(new Particle('agr'));
+                if (simState.urb > 0 && Math.random() < simState.urb * 0.01) particles.push(new Particle('urb'));
+
+                // Update & Draw Particles
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    p.update();
+                    p.draw(ctx);
+                    if (p.life <= 0 || p.x > simState.width) {
+                        particles.splice(i, 1);
+                    }
+                }
+
+                // Submerged Algae visual effect if Ag is high
+                if (simState.agr > 30) {
+                    ctx.fillStyle = `rgba(45, 106, 79, ${simState.agr * 0.005})`;
+                    ctx.fillRect(0, 0, simState.width, simState.height * 0.2); // surface bloom
+                }
+
+                // Update & Draw Fishes
+                fishes.forEach(fish => {
+                    fish.update(simState.do, simState.ind);
+                    fish.draw(ctx);
+                });
+
+                // Request next frame
+                requestAnimationFrame(animateCanvas);
+            }
+
+            // Initialization
+            resizeCanvas(); // Set initial size
+            updateSimState(); // Initialize values
+            requestAnimationFrame(animateCanvas); // Start loop
+
+        });
+    </script>
+</body>
+</html>

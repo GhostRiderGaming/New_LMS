@@ -3,11 +3,12 @@ import { useEffect, useRef, useCallback } from 'react'
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
-export type EmotionState = 'neutral' | 'thinking' | 'happy'
+export type EmotionState = 'neutral' | 'thinking' | 'happy' | 'angry' | 'scared' | 'blush'
 
 export interface Live2DViewerProps {
   emotion: EmotionState
   isTalking: boolean
+  audioVolume?: number
   onLoaded: () => void
   modelPath: string
 }
@@ -170,7 +171,7 @@ class AnimationManager {
           this.isPlayingExpression = false
           this.expressionTimer = 8 + Math.random() * 6
         }
-      } else {
+      } else if (this.forcedEmotion === 'neutral' || this.forcedEmotion === 'thinking') {
         this.expressionTimer -= dt
         if (this.expressionTimer <= 0) {
           const name = this.expressions[Math.floor(Math.random() * this.expressions.length)]
@@ -182,6 +183,43 @@ class AnimationManager {
           } catch {}
         }
       }
+    }
+  }
+
+  private forcedEmotion: EmotionState = 'neutral'
+
+  setForcedEmotion(emotion: EmotionState) {
+    if (!this.model) return
+    this.forcedEmotion = emotion
+    try {
+      if (emotion === 'happy') {
+        this.model.expression('星星')
+      } else if (emotion === 'angry') {
+        this.model.expression('黑脸')
+      } else if (emotion === 'scared') {
+        this.model.expression('哭')
+      } else if (emotion === 'blush') {
+        this.model.expression('脸红')
+        this._playSpecificMotion('照相')
+      } else {
+        // Try to clear or fall back
+        this.model.expression('')
+      }
+    } catch {}
+  }
+
+  private async _playSpecificMotion(group: string) {
+    const list = this.modelSettings?.motions?.[group]
+    if (!list?.length) return
+    if (this.isPlayingMotion) return
+    this.isPlayingMotion = true
+    try {
+      const p = this.model.motion(group, 0, 3)
+      if (p instanceof Promise) await p
+    } catch (e) {
+      console.warn('[Live2D] Specific motion failed:', group, e)
+    } finally {
+      this.isPlayingMotion = false
     }
   }
 
@@ -231,7 +269,7 @@ class AnimationManager {
 
 // ─── COMPONENT ───────────────────────────────────────────────────────────────
 
-export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2DViewerProps) {
+export function Live2DViewer({ emotion, isTalking, audioVolume = 0, onLoaded, modelPath }: Live2DViewerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const appRef = useRef<any>(null)
   const modelRef = useRef<any>(null)
@@ -239,9 +277,16 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
 
   const emotionRef = useRef(emotion)
   const isTalkingRef = useRef(isTalking)
+  const audioVolumeRef = useRef(audioVolume)
 
-  useEffect(() => { emotionRef.current = emotion }, [emotion])
+  useEffect(() => { 
+    emotionRef.current = emotion 
+    if (appRef.current && (appRef.current as any).__animMgr) {
+      (appRef.current as any).__animMgr.setForcedEmotion(emotion)
+    }
+  }, [emotion])
   useEffect(() => { isTalkingRef.current = isTalking }, [isTalking])
+  useEffect(() => { audioVolumeRef.current = audioVolume }, [audioVolume])
 
   useEffect(() => {
     if (!canvasRef.current) return
@@ -303,6 +348,8 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
 
         // Instantiate the centralised animation manager
         const animMgr = new AnimationManager(model)
+        ;(pixiApp as any).__animMgr = animMgr
+        animMgr.setForcedEmotion(emotionRef.current)
 
         // ── P1: Always-on parameter state ──────────────────────────────
         let breathPhase = Math.random() * Math.PI * 2  // start at random phase
@@ -460,7 +507,11 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
           } catch {}
 
           // ── Lip sync ──
-          if (isTalkingRef.current) {
+          if (audioVolumeRef.current > 0.01) {
+            // Audio-driven lip sync
+            targetMouth = Math.min(1, audioVolumeRef.current * 2.0)
+          } else if (isTalkingRef.current) {
+            // Fallback random flap if talking but no volume data yet
             mouthToggleTimer -= dt
             if (mouthToggleTimer <= 0) {
               targetMouth = 0.3 + Math.random() * 0.7
@@ -469,7 +520,7 @@ export function Live2DViewer({ emotion, isTalking, onLoaded, modelPath }: Live2D
           } else {
             targetMouth = Math.min(1, actualYawn)
           }
-          mouthValue = expLerp(mouthValue, targetMouth, 0.25, dt)
+          mouthValue = expLerp(mouthValue, targetMouth, 0.4, dt)
           if (!blockManualFace) {
             try { coreModel.setParameterValueById('ParamMouthOpenY', mouthValue) } catch {}
           }

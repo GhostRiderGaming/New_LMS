@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Series & Parallel Circuits | Interactive Visualization</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-base: #05050A;
+            --bg-gradient: radial-gradient(circle at center, #11131c 0%, #05050A 100%);
+            
+            --glass-bg: rgba(20, 25, 40, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --neon-blue: #00E5FF;
+            --neon-blue-glow: rgba(0, 229, 255, 0.4);
+            --neon-orange: #FF9D00;
+            --neon-green: #00FF88;
+            --neon-red: #FF3366;
+            --neon-yellow: #FFE600;
+            
+            --text-main: #FFFFFF;
+            --text-dim: #9BA3B5;
+            
+            --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --spacing-section: clamp(40px, 8vw, 100px);
+            --spacing-content: clamp(16px, 3vw, 32px);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: var(--font-main);
+            background: var(--bg-base);
+            background-image: var(--bg-gradient);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Ambient animated background dots */
+        .ambient-bg {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none; z-index: -1;
+            background-image: 
+                radial-gradient(var(--glass-highlight) 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.1;
+            animation: drift 60s linear infinite;
+        }
+        @keyframes drift {
+            from { background-position: 0 0; }
+            to { background-position: 100px 100px; }
+        }
+
+        /* ==========================================================================
+           2. TYPOGRAPHY & UTILITIES
+           ========================================================================== */
+        h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+        h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); margin-bottom: 0.5rem; 
+             background: linear-gradient(135deg, #fff, #9BA3B5); 
+             -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.8rem, 4vw, 2.5rem); margin-bottom: var(--spacing-content); color: var(--neon-blue); }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); color: #fff; margin-bottom: 10px; }
+        p { font-size: clamp(0.95rem, 1.2vw, 1.1rem); color: var(--text-dim); margin-bottom: 1rem; }
+        
+        .container {
+            width: 100%; max-width: 1400px; margin: 0 auto;
+            padding: 0 clamp(16px, 5vw, 40px);
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-content);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .highlight-blue { color: var(--neon-blue); font-weight: 600; text-shadow: 0 0 8px var(--neon-blue-glow); }
+        .highlight-orange { color: var(--neon-orange); font-weight: 600; text-shadow: 0 0 8px rgba(255,157,0,0.4); }
+
+        /* ==========================================================================
+           3. LAYOUT SECTIONS
+           ========================================================================== */
+        section { padding: var(--spacing-section) 0; position: relative; }
+
+        /* Header / Intro */
+        .hero {
+            min-height: 80vh; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; text-align: center;
+            position: relative;
+        }
+        .hero p { max-width: 600px; margin: 0 auto 2rem auto; font-size: clamp(1.1rem, 1.5vw, 1.3rem); }
+
+        /* Grid Layouts */
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: var(--spacing-content); }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--spacing-content); }
+
+        /* ==========================================================================
+           4. MANDATORY RULE: NON-OVERLAPPING LABELS (Components Section)
+           ========================================================================== */
+        .components-section {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-content);
+        }
+        @media (min-width: 1024px) {
+            .components-section { grid-template-columns: 3fr 2fr; align-items: center; }
+        }
+
+        .diagram-container {
+            position: relative; width: 100%; aspect-ratio: 16/9; min-height: 250px;
+            background: rgba(0,0,0,0.3); border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border); display: flex;
+            justify-content: center; align-items: center; overflow: hidden;
+        }
+        
+        .premium-svg { width: 90%; height: 90%; drop-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+
+        /* Markers on Illustration */
+        .marker {
+            position: absolute; width: 28px; height: 28px;
+            background: var(--neon-blue); border: 2px solid #fff; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; color: #000; font-size: 14px; cursor: pointer;
+            box-shadow: 0 0 15px var(--neon-blue-glow);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+        }
+        .marker:hover, .marker.active { transform: scale(1.3); background: #fff; box-shadow: 0 0 25px var(--neon-blue); }
+        .marker::after {
+            content: ''; position: absolute; top: -5px; left: -5px; right: -5px; bottom: -5px;
+            border-radius: 50%; border: 1px solid var(--neon-blue);
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+
+        /* Legend List (Beside/Below) */
+        .legend-list { display: flex; flex-direction: column; gap: 12px; }
+        .legend-item {
+            display: flex; align-items: center; gap: 15px;
+            padding: 12px 16px; border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02); border: 1px solid transparent;
+            transition: all 0.3s ease; cursor: pointer;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 229, 255, 0.1); border-color: rgba(0, 229, 255, 0.3);
+            transform: translateX(5px);
+        }
+        .legend-badge {
+            width: 32px; height: 32px; flex-shrink: 0;
+            background: rgba(0, 229, 255, 0.2); border: 1px solid var(--neon-blue); border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            color: var(--neon-blue); font-weight: bold;
+        }
+        .legend-text { display: flex; flex-direction: column; }
+        .legend-title { color: #fff; font-weight: 600; font-size: 1rem; }
+        .legend-desc { color: var(--text-dim); font-size: 0.85rem; line-height: 1.3; }
+
+        /* ==========================================================================
+           5. MANDATORY RULE: WORKING MECHANISM SECTION
+           ========================================================================== */
+        .working-container {
+            display: flex; flex-direction: column; gap: 20px;
+        }
+        .working-visual {
+            width: 100%; aspect-ratio: 16/9; min-height: 300px;
+            background: #000; border-radius: var(--radius-lg);
+            position: relative; overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+        .working-canvas { width: 100%; height: 100%; display: block; }
+        
+        .working-controls {
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+            background: var(--glass-bg); padding: 15px 20px; border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border); gap: 15px;
+        }
+        .working-text { flex: 1 1 300px; }
+        .stage-title { color: var(--neon-orange); font-size: 1.2rem; margin-bottom: 5px; font-weight: 600; }
+        .stage-desc { color: #fff; font-size: 0.95rem; margin: 0; }
+        
+        .btn-group { display: flex; gap: 10px; align-items: center; }
+        button {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; padding: 10px 20px; border-radius: 20px; font-family: inherit; font-size: 0.9rem;
+            cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        button:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        button:active { transform: translateY(0); }
+        button.primary { background: rgba(0, 229, 255, 0.15); border-color: var(--neon-blue); color: var(--neon-blue); }
+        button.primary:hover { background: rgba(0, 229, 255, 0.3); box-shadow: 0 0 15px var(--neon-blue-glow); }
+        button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: 0.3s; }
+        .dot.active { background: var(--neon-orange); box-shadow: 0 0 10px var(--neon-orange); transform: scale(1.3); }
+
+        /* ==========================================================================
+           6. INTERACTIVE SIMULATION SECTION
+           ========================================================================== */
+        .sim-layout {
+            display: grid; grid-template-columns: 1fr; gap: var(--spacing-content);
+        }
+        @media (min-width: 1024px) {
+            .sim-layout { grid-template-columns: 280px 1fr; }
+        }
+
+        .sim-controls {
+            display: flex; flex-direction: column; gap: 20px;
+        }
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-header { display: flex; justify-content: space-between; font-size: 0.9rem; color: #fff; }
+        .val-badge { background: rgba(0,0,0,0.5); padding: 2px 8px; border-radius: 4px; font-family: monospace; color: var(--neon-blue); }
+        
+        /* Custom Sliders */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; margin: 10px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer;
+            background: rgba(255,255,255,0.1); border-radius: 3px; border: 1px solid rgba(255,255,255,0.05);
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px; width: 20px; border-radius: 50%;
+            background: var(--neon-blue); cursor: pointer; -webkit-appearance: none; margin-top: -8px;
+            box-shadow: 0 0 10px var(--neon-blue-glow); border: 2px solid #fff;
+        }
+        
+        /* Mode Toggle */
+        .mode-toggle {
+            display: flex; background: rgba(0,0,0,0.3); border-radius: 30px; padding: 4px; border: 1px solid var(--glass-border);
+        }
+        .toggle-btn {
+            flex: 1; padding: 8px; text-align: center; border-radius: 26px; cursor: pointer;
+            font-size: 0.9rem; font-weight: 600; color: var(--text-dim); transition: 0.3s;
+        }
+        .toggle-btn.active { background: var(--neon-blue); color: #000; box-shadow: 0 0 15px var(--neon-blue-glow); }
+
+        .sim-visual {
+            width: 100%; aspect-ratio: 4/3; background: #080A10;
+            border-radius: var(--radius-lg); border: 1px solid var(--glass-border);
+            position: relative; overflow: hidden; box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+        @media (min-width: 1024px) {
+            .sim-visual { aspect-ratio: 16/9; }
+        }
+
+        /* Meters */
+        .meters-panel {
+            display: flex; gap: 15px; margin-top: 15px; flex-wrap: wrap;
+        }
+        .meter {
+            flex: 1; min-width: 120px; background: rgba(0,0,0,0.5); border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md); padding: 10px; display: flex; flex-direction: column; align-items: center;
+        }
+        .meter-label { font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; }
+        .meter-value { font-size: 1.5rem; font-weight: bold; font-family: monospace; color: var(--neon-yellow); }
+        .meter-unit { font-size: 0.9rem; color: #fff; }
+
+        /* ==========================================================================
+           7. INFO CARDS (Facts, Apps)
+           ========================================================================== */
+        .info-card {
+            padding: var(--spacing-content);
+            background: linear-gradient(145deg, rgba(30,35,50,0.6) 0%, rgba(15,20,30,0.8) 100%);
+            border-radius: var(--radius-md); border: 1px solid var(--glass-highlight);
+            display: flex; flex-direction: column; gap: 15px; transition: transform 0.3s;
+        }
+        .info-card:hover { transform: translateY(-5px); border-color: var(--neon-blue); }
+        .icon-box {
+            width: 50px; height: 50px; border-radius: 12px; background: rgba(255,255,255,0.05);
+            display: flex; justify-content: center; align-items: center; font-size: 24px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* ==========================================================================
+           8. RESPONSIVE ADJUSTMENTS
+           ========================================================================== */
+        @media (max-width: 768px) {
+            .glass-panel { padding: 16px; backdrop-filter: blur(8px); } /* Reduce blur for performance */
+            .btn-group { width: 100%; justify-content: space-between; }
+            button { padding: 12px 16px; flex: 1; }
+            .working-controls { flex-direction: column; align-items: stretch; }
+            .progress-dots { justify-content: center; margin: 10px 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-bg"></div>
+
+    <div class="container">
+        <!-- HERO SECTION -->
+        <section class="hero">
+            <div style="width: 80px; height: 80px; margin-bottom: 20px;">
+                <svg viewBox="0 0 100 100" width="100%" height="100%">
+                    <defs>
+                        <linearGradient id="boltGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#00E5FF" />
+                            <stop offset="100%" stop-color="#0055FF" />
+                        </linearGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <path d="M55 10 L25 55 L50 55 L45 90 L85 40 L55 40 Z" fill="url(#boltGrad)" filter="url(#glow)"/>
+                </svg>
+            </div>
+            <h1>The Architecture of Electricity</h1>
+            <p>Explore how electrons flow, split, and power our world. Dive into the physical mechanics of <span class="highlight-blue">Series</span> and <span class="highlight-orange">Parallel</span> circuits.</p>
+            <button class="primary" onclick="document.getElementById('components').scrollIntoView({behavior: 'smooth'})">
+                Begin Exploration
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+            </button>
+        </section>
+
+        <!-- COMPONENTS SECTION (Labels Mandatory Rule) -->
+        <section id="components">
+            <h2>Anatomy of a Circuit</h2>
+            <p>Before understanding the flow, we must know the components. Interact with the markers below to identify each part.</p>
+            
+            <div class="components-section">
+                <!-- Visual Illustration area -->
+                <div class="diagram-container glass-panel">
+                    <!-- Premium SVG Illustration -->
+                    <svg class="premium-svg" viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="batBody" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#2a2a35"/>
+                                <stop offset="50%" stop-color="#15151a"/>
+                                <stop offset="100%" stop-color="#050508"/>
+                            </linearGradient>
+                            <linearGradient id="batCap" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#e0e0e0"/>
+                                <stop offset="50%" stop-color="#909090"/>
+                                <stop offset="100%" stop-color="#505050"/>
+                            </linearGradient>
+                            <linearGradient id="batLabel" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#FF3366"/>
+                                <stop offset="100%" stop-color="#990033"/>
+                            </linearGradient>
+                            <linearGradient id="wireGlow" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#00E5FF"/>
+                                <stop offset="100%" stop-color="#0077AA"/>
+                            </linearGradient>
+                            <radialGradient id="bulbGlass" cx="50%" cy="40%" r="50%">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.8)"/>
+                                <stop offset="70%" stop-color="rgba(200,220,255,0.3)"/>
+                                <stop offset="100%" stop-color="rgba(100,150,255,0.1)"/>
+                            </radialGradient>
+                            <radialGradient id="bulbGlow" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="rgba(255, 230, 0, 0.6)"/>
+                                <stop offset="100%" stop-color="rgba(255, 150, 0, 0)"/>
+                            </radialGradient>
+                            <!-- Filters -->
+                            <filter id="dropShadow" x="-20%" y="-20%" width="150%" height="150%">
+                                <feDropShadow dx="0" dy="15" stdDeviation="15" flood-color="#000" flood-opacity="0.6"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Circuit Wire (Background) -->
+                        <path d="M 200 300 L 200 150 L 600 150 L 600 300" fill="none" stroke="#222" stroke-width="12" stroke-linecap="round"/>
+                        <path d="M 200 300 L 200 150 L 600 150 L 600 300" fill="none" stroke="url(#wireGlow)" stroke-width="4" stroke-linecap="round"/>
+
+                        <!-- Switch (Open state) -->
+                        <g transform="translate(380, 150)">
+                            <circle cx="-30" cy="0" r="10" fill="url(#batCap)"/>
+                            <circle cx="30" cy="0" r="10" fill="url(#batCap)"/>
+                            <!-- Blade -->
+                            <line x1="-30" y1="0" x2="20" y2="-25" stroke="#ccc" stroke-width="8" stroke-linecap="round" filter="url(#dropShadow)"/>
+                            <circle cx="-30" cy="0" r="4" fill="#333"/>
+                        </g>
+
+                        <!-- Battery (Bottom Left) -->
+                        <g transform="translate(160, 240)" filter="url(#dropShadow)">
+                            <!-- Shadow -->
+                            <ellipse cx="40" cy="110" rx="45" ry="15" fill="rgba(0,0,0,0.5)"/>
+                            <!-- Cylinder -->
+                            <rect x="0" y="20" width="80" height="90" rx="10" fill="url(#batBody)"/>
+                            <!-- Label -->
+                            <rect x="0" y="40" width="80" height="50" fill="url(#batLabel)"/>
+                            <!-- Plus symbol -->
+                            <path d="M35 55 h10 v-10 h5 v10 h10 v5 h-10 v10 h-5 v-10 h-10 z" fill="#fff" opacity="0.8"/>
+                            <!-- Positive Terminal -->
+                            <rect x="25" y="5" width="30" height="15" rx="3" fill="url(#batCap)"/>
+                            <!-- Highights to make it 3D -->
+                            <rect x="5" y="20" width="10" height="90" rx="2" fill="#fff" opacity="0.15"/>
+                        </g>
+
+                        <!-- Light Bulb (Bottom Right) -->
+                        <g transform="translate(560, 240)" filter="url(#dropShadow)">
+                            <!-- Base -->
+                            <rect x="25" y="70" width="30" height="30" fill="url(#batCap)" rx="3"/>
+                            <path d="M 25 75 C 40 85, 55 75, 55 75" fill="none" stroke="#555" stroke-width="2"/>
+                            <path d="M 25 85 C 40 95, 55 85, 55 85" fill="none" stroke="#555" stroke-width="2"/>
+                            <rect x="30" y="100" width="20" height="10" fill="#333" rx="2"/>
+                            <!-- Filament Support -->
+                            <line x1="35" y1="70" x2="30" y2="40" stroke="#888" stroke-width="2"/>
+                            <line x1="45" y1="70" x2="50" y2="40" stroke="#888" stroke-width="2"/>
+                            <!-- Glowing Filament -->
+                            <path d="M 30 40 L 35 30 L 40 40 L 45 30 L 50 40" fill="none" stroke="#fff" stroke-width="2"/>
+                            <!-- Ambient Glow -->
+                            <circle cx="40" cy="40" r="60" fill="url(#bulbGlow)"/>
+                            <!-- Glass Bulb -->
+                            <path d="M 15 45 C -5 20, 20 -10, 40 -10 C 60 -10, 85 20, 65 45 C 55 60, 55 70, 55 70 L 25 70 C 25 70, 25 60, 15 45 Z" fill="url(#bulbGlass)"/>
+                            <path d="M 15 45 C -5 20, 20 -10, 40 -10" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+                        </g>
+                    </svg>
+
+                    <!-- Mandatory: Numbered glowing markers directly on illustration -->
+                    <div class="marker" style="top: 75%; left: 25%;" data-target="item-source">1</div>
+                    <div class="marker" style="top: 33%; left: 50%;" data-target="item-switch">2</div>
+                    <div class="marker" style="top: 33%; left: 25%;" data-target="item-wire">3</div>
+                    <div class="marker" style="top: 65%; left: 75%;" data-target="item-load">4</div>
+                </div>
+
+                <!-- Mandatory: Separate legend list -->
+                <div class="legend-list">
+                    <div class="legend-item" id="item-source">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Power Source (Battery)</span>
+                            <span class="legend-desc">Provides the electromotive force (Voltage) that pushes electrons.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-switch">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Control Switch</span>
+                            <span class="legend-desc">Opens or closes the loop. Electrons can only flow in a closed, continuous loop.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-wire">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Conductor (Wires)</span>
+                            <span class="legend-desc">Low-resistance pathways that allow electrons to travel freely between components.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-load">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Load (Light Bulb)</span>
+                            <span class="legend-desc">Converts electrical energy into light and heat. Resists the flow of current.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING MECHANISM SECTION (Mandatory Rule) -->
+        <section id="working">
+            <h2>The Mechanism of Flow</h2>
+            <p>How does current actually move? Watch the physical process step-by-step as we transition from a Series path to a Parallel path.</p>
+            
+            <div class="working-container glass-panel">
+                <div class="working-visual">
+                    <canvas id="workingCanvas" class="working-canvas"></canvas>
+                </div>
+                
+                <div class="working-controls">
+                    <div class="working-text">
+                        <div class="stage-title" id="stageTitle">Stage 1: Open Circuit</div>
+                        <p class="stage-desc" id="stageDesc">The switch is open. The pathway is broken, so electrons cannot leave the battery. Voltage exists, but Current is 0.</p>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+                        <div class="progress-dots" id="stageDots">
+                            <!-- Dots generated via JS -->
+                        </div>
+                        <div class="btn-group">
+                            <button id="btnPrev">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                            </button>
+                            <button id="btnAutoPlay" class="primary">
+                                Auto-Play
+                            </button>
+                            <button id="btnNext">
+                                Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION SECTION -->
+        <section id="simulation">
+            <h2>Interactive Physics Laboratory</h2>
+            <p>Adjust the physical properties of the circuit. Observe how <span class="highlight-blue">Voltage</span>, <span class="highlight-orange">Resistance</span>, and connection type affect the total <span class="highlight-green">Current</span> and bulb brightness.</p>
+            
+            <div class="sim-layout">
+                <!-- Controls Sidebar -->
+                <div class="glass-panel sim-controls">
+                    <div class="mode-toggle">
+                        <div class="toggle-btn active" id="modeSeries">Series</div>
+                        <div class="toggle-btn" id="modeParallel">Parallel</div>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Battery Voltage (V)</span>
+                            <span class="val-badge" id="valV">9 V</span>
+                        </div>
+                        <input type="range" id="sliderV" min="1" max="24" value="9" step="1">
+                    </div>
+                    
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Resistor 1 (R₁)</span>
+                            <span class="val-badge" id="valR1">10 Ω</span>
+                        </div>
+                        <input type="range" id="sliderR1" min="1" max="50" value="10" step="1">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Resistor 2 (R₂)</span>
+                            <span class="val-badge" id="valR2">10 Ω</span>
+                        </div>
+                        <input type="range" id="sliderR2" min="1" max="50" value="10" step="1">
+                    </div>
+
+                    <hr style="border: 0; border-top: 1px solid var(--glass-border); margin: 10px 0;">
+                    
+                    <div>
+                        <h4 style="color: var(--text-dim); font-size: 0.85rem; text-transform: uppercase;">Circuit Equations</h4>
+                        <div id="eqDisplay" style="font-family: monospace; font-size: 0.9rem; margin-top: 5px; color: var(--neon-blue);">
+                            Req = R₁ + R₂<br>I = V / Req
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Visual & Meters -->
+                <div>
+                    <div class="sim-visual">
+                        <canvas id="simCanvas" style="width: 100%; height: 100%;"></canvas>
+                    </div>
+                    
+                    <div class="meters-panel">
+                        <div class="meter">
+                            <span class="meter-label">Total Resistance</span>
+                            <span class="meter-value" id="meterR">20.0</span>
+                            <span class="meter-unit">Ohms (Ω)</span>
+                        </div>
+                        <div class="meter">
+                            <span class="meter-label">Total Current</span>
+                            <span class="meter-value" id="meterI">0.45</span>
+                            <span class="meter-unit">Amperes (A)</span>
+                        </div>
+                        <div class="meter">
+                            <span class="meter-label">Power Output</span>
+                            <span class="meter-value" id="meterP">4.05</span>
+                            <span class="meter-unit">Watts (W)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INFO GRID -->
+        <section class="grid-2">
+            <div class="info-card">
+                <div class="icon-box" style="color: var(--neon-orange);">⚠️</div>
+                <h3>The Christmas Light Problem</h3>
+                <p>Old string lights were wired in <strong>Series</strong>. If one bulb burned out, it broke the circuit path, and the entire string went dark. Modern homes are wired in <strong>Parallel</strong>, so if one appliance is turned off, the others keep receiving full voltage.</p>
+            </div>
+            
+            <div class="info-card">
+                <div class="icon-box" style="color: var(--neon-blue);">⚡</div>
+                <h3>The Path of Least Resistance</h3>
+                <p>In a Parallel circuit, current splits based on resistance. A path with lower resistance allows more electrons to flow through it. The total resistance of a parallel circuit is actually <em>less</em> than the resistance of its smallest resistor!</p>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        // ---------------------------------------------------------
+        // 1. COMPONENT LABELS INTERACTION (Mandatory Rule)
+        // ---------------------------------------------------------
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function handleHover(id) {
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            if (id) {
+                const targetMarker = Array.from(markers).find(m => m.dataset.target === id);
+                const targetLegend = document.getElementById(id);
+                if(targetMarker) targetMarker.classList.add('active');
+                if(targetLegend) targetLegend.classList.add('active');
+            }
+        }
+
+        markers.forEach(marker => {
+            const targetId = marker.dataset.target;
+            marker.addEventListener('mouseenter', () => handleHover(targetId));
+            marker.addEventListener('mouseleave', () => handleHover(null));
+            marker.addEventListener('touchstart', (e) => { e.preventDefault(); handleHover(targetId); });
+        });
+
+        legendItems.forEach(item => {
+            const id = item.id;
+            item.addEventListener('mouseenter', () => handleHover(id));
+            item.addEventListener('mouseleave', () => handleHover(null));
+            item.addEventListener('touchstart', (e) => { e.preventDefault(); handleHover(id); });
+        });
+
+
+        // ---------------------------------------------------------
+        // CANVAS UTILITIES & PHYSICS ENGINE
+        // ---------------------------------------------------------
+        class Particle {
+            constructor(pathSegments) {
+                this.segments = pathSegments;
+                this.currentSegment = 0;
+                this.progress = Math.random(); // 0 to 1 along current segment
+                this.x = 0;
+                this.y = 0;
+                this.baseSpeed = 0.005; // Base abstract speed
+            }
+
+            update(currentAmpere, deltaTime) {
+                if (currentAmpere <= 0) return;
+                
+                // Speed is proportional to current, modified by delta time for smooth frame rate
+                let speed = (this.baseSpeed + (currentAmpere * 0.005)) * (deltaTime / 16);
+                
+                // Adjust speed based on segment length to keep absolute speed constant
+                const seg = this.segments[this.currentSegment];
+                const dx = seg.x2 - seg.x1;
+                const dy = seg.y2 - seg.y1;
+                const length = Math.sqrt(dx*dx + dy*dy);
+                
+                this.progress += (speed * 100) / (length || 100);
+
+                if (this.progress >= 1) {
+                    this.progress = 0;
+                    this.currentSegment = (this.currentSegment + 1) % this.segments.length;
+                }
+            }
+
+            draw(ctx, w, h) {
+                const seg = this.segments[this.currentSegment];
+                this.x = seg.x1 + (seg.x2 - seg.x1) * this.progress;
+                this.y = seg.y1 + (seg.y2 - seg.y1) * this.progress;
+
+                ctx.beginPath();
+                ctx.arc(this.x * w, this.y * h, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#00E5FF';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#00E5FF';
+                ctx.fill();
+                ctx.shadowBlur = 0; // Reset
+            }
+        }
+
+        // Circuit Drawing Helper
+        const CircuitDraw = {
+            battery: (ctx, x, y, w) => {
+                ctx.fillStyle = '#FF3366';
+                ctx.fillRect(x - 20, y - 30, 40, 60);
+                ctx.fillStyle = '#333';
+                ctx.fillRect(x - 20, y + 30, 40, 10);
+                ctx.fillStyle = '#ccc';
+                ctx.fillRect(x - 10, y - 40, 20, 10); // positive terminal
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 16px sans-serif';
+                ctx.fillText('+', x - 5, y - 10);
+                ctx.fillText('-', x - 3, y + 25);
+            },
+            bulb: (ctx, x, y, w, powerRatio) => {
+                // Base
+                ctx.fillStyle = '#555';
+                ctx.fillRect(x - 10, y + 10, 20, 15);
+                
+                // Glow
+                let brightness = Math.min(powerRatio, 1); // 0 to 1
+                if (brightness > 0) {
+                    const gradient = ctx.createRadialGradient(x, y-10, 5, x, y-10, 40);
+                    gradient.addColorStop(0, `rgba(255, 230, 0, ${brightness * 0.8})`);
+                    gradient.addColorStop(1, 'rgba(255, 150, 0, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath(); ctx.arc(x, y-10, 40, 0, Math.PI*2); ctx.fill();
+                }
+                
+                // Glass
+                ctx.beginPath();
+                ctx.arc(x, y - 10, 15, 0, Math.PI * 2);
+                ctx.strokeStyle = `rgba(255,255,255, ${brightness > 0 ? 0.8 : 0.3})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Filament
+                ctx.beginPath();
+                ctx.moveTo(x - 5, y + 10);
+                ctx.lineTo(x - 3, y - 5);
+                ctx.lineTo(x + 3, y - 5);
+                ctx.lineTo(x + 5, y + 10);
+                ctx.strokeStyle = brightness > 0 ? '#fff' : '#444';
+                ctx.stroke();
+            },
+            switch: (ctx, x, y, w, closed) => {
+                ctx.fillStyle = '#fff';
+                ctx.beginPath(); ctx.arc(x - 15, y, 4, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x + 15, y, 4, 0, Math.PI*2); ctx.fill();
+                
+                ctx.beginPath();
+                ctx.moveTo(x - 15, y);
+                if(closed) {
+                    ctx.lineTo(x + 15, y);
+                } else {
+                    ctx.lineTo(x + 10, y - 15);
+                }
+                ctx.strokeStyle = '#ccc';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            },
+            wire: (ctx, paths, w, h) => {
+                ctx.beginPath();
+                paths.forEach(p => {
+                    ctx.moveTo(p.x1 * w, p.y1 * h);
+                    ctx.lineTo(p.x2 * w, p.y2 * h);
+                });
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+                
+                // Neon core
+                ctx.strokeStyle = '#00E5FF';
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.3;
+                ctx.stroke();
+                ctx.globalAlpha = 1.0;
+            }
+        };
+
+
+        // ---------------------------------------------------------
+        // 2. WORKING MECHANISM SECTION (Mandatory Logic)
+        // ---------------------------------------------------------
+        const workCanvas = document.getElementById('workingCanvas');
+        const workCtx = workCanvas.getContext('2d');
+        let workW, workH;
+        let workParticles = [];
+        let lastWorkTime = 0;
+
+        const stages = [
+            {
+                title: "Stage 1: Open Circuit",
+                desc: "The switch is open. The pathway is broken, so electrons cannot leave the negative terminal. Voltage exists, but Current is 0.",
+                state: { sw: false, mode: 'series', targetI: 0 }
+            },
+            {
+                title: "Stage 2: Series Flow",
+                desc: "Switch closed. Electrons flow in a single continuous loop. The current (flow rate) is exactly the same everywhere in the circuit.",
+                state: { sw: true, mode: 'series', targetI: 0.5 }
+            },
+            {
+                title: "Stage 3: Voltage Drop",
+                desc: "As electrons pass through each bulb (resistance), they lose energy (Voltage Drop) converted to light. Total energy is shared.",
+                state: { sw: true, mode: 'series', targetI: 0.5, highlightBulbs: true }
+            },
+            {
+                title: "Stage 4: Parallel Branches",
+                desc: "Circuit restructured into Parallel. Current now reaches a junction and splits into multiple paths. Total resistance drops.",
+                state: { sw: true, mode: 'parallel', targetI: 1.0 }
+            },
+            {
+                title: "Stage 5: Independent Paths",
+                desc: "Each branch receives full battery voltage independently. The bulbs burn brighter because they don't share the energy drop.",
+                state: { sw: true, mode: 'parallel', targetI: 1.0, highlightV: true }
+            }
+        ];
+
+        let currentStage = 0;
+        let workCurrent = 0; // Animated current value for smooth transitions
+        let isAutoPlay = false;
+        let autoPlayTimer;
+
+        // Path definitions (Normalized 0-1)
+        const pathSeries = [
+            {x1: 0.1, y1: 0.5, x2: 0.1, y2: 0.2},
+            {x1: 0.1, y1: 0.2, x2: 0.9, y2: 0.2},
+            {x1: 0.9, y1: 0.2, x2: 0.9, y2: 0.8},
+            {x1: 0.9, y1: 0.8, x2: 0.1, y2: 0.8},
+            {x1: 0.1, y1: 0.8, x2: 0.1, y2: 0.5}
+        ];
+
+        const pathParallel = [
+            {x1: 0.1, y1: 0.5, x2: 0.1, y2: 0.2},
+            {x1: 0.1, y1: 0.2, x2: 0.4, y2: 0.2}, // top main
+            {x1: 0.4, y1: 0.2, x2: 0.4, y2: 0.5}, // branch 1 down
+            {x1: 0.4, y1: 0.5, x2: 0.4, y2: 0.8}, // branch 1 continue down
+            {x1: 0.4, y1: 0.2, x2: 0.8, y2: 0.2}, // top main continue
+            {x1: 0.8, y1: 0.2, x2: 0.8, y2: 0.8}, // branch 2 down
+            {x1: 0.8, y1: 0.8, x2: 0.4, y2: 0.8}, // bottom main return
+            {x1: 0.4, y1: 0.8, x2: 0.1, y2: 0.8}, // bottom main return
+            {x1: 0.1, y1: 0.8, x2: 0.1, y2: 0.5}  // to battery
+        ];
+
+        // Create particles for working section
+        const pSeries = Array.from({length: 40}, () => new Particle(pathSeries));
+        
+        // Custom particle setup for parallel splitting
+        const pParallelBranch1 = Array.from({length: 20}, () => new Particle([
+            {x1: 0.1, y1: 0.5, x2: 0.1, y2: 0.2}, {x1: 0.1, y1: 0.2, x2: 0.4, y2: 0.2},
+            {x1: 0.4, y1: 0.2, x2: 0.4, y2: 0.8}, // down branch 1
+            {x1: 0.4, y1: 0.8, x2: 0.1, y2: 0.8}, {x1: 0.1, y1: 0.8, x2: 0.1, y2: 0.5}
+        ]));
+        const pParallelBranch2 = Array.from({length: 20}, () => new Particle([
+            {x1: 0.1, y1: 0.5, x2: 0.1, y2: 0.2}, {x1: 0.1, y1: 0.2, x2: 0.8, y2: 0.2},
+            {x1: 0.8, y1: 0.2, x2: 0.8, y2: 0.8}, // down branch 2
+            {x1: 0.8, y1: 0.8, x2: 0.1, y2: 0.8}, {x1: 0.1, y1: 0.8, x2: 0.1, y2: 0.5}
+        ]));
+        const pParallelTotal = [...pParallelBranch1, ...pParallelBranch2];
+
+        function resizeWorkCanvas() {
+            const rect = workCanvas.parentElement.getBoundingClientRect();
+            // Handle retina displays
+            const dpr = window.devicePixelRatio || 1;
+            workCanvas.width = rect.width * dpr;
+            workCanvas.height = rect.height * dpr;
+            workW = workCanvas.width;
+            workH = workCanvas.height;
+            workCtx.scale(dpr, dpr);
+            workW /= dpr;
+            workH /= dpr;
+        }
+
+        function updateStageUI() {
+            const stage = stages[currentStage];
+            document.getElementById('stageTitle').innerText = stage.title;
+            document.getElementById('stageDesc').innerText = stage.desc;
+            
+            // Update Dots
+            const dotsContainer = document.getElementById('stageDots');
+            dotsContainer.innerHTML = '';
+            stages.forEach((s, idx) => {
+                const dot = document.createElement('div');
+                dot.className = `dot ${idx === currentStage ? 'active' : ''}`;
+                dotsContainer.appendChild(dot);
+            });
+
+            // Btn state
+            document.getElementById('btnPrev').disabled = currentStage === 0;
+            document.getElementById('btnNext').disabled = currentStage === stages.length - 1;
+        }
+
+        function renderWorking(timestamp) {
+            const deltaTime = timestamp - lastWorkTime;
+            lastWorkTime = timestamp;
+
+            workCtx.clearRect(0, 0, workW, workH);
+            const stage = stages[currentStage];
+            
+            // Smoothly interpolate current for transitions
+            workCurrent += (stage.state.targetI - workCurrent) * 0.1;
+
+            const mode = stage.state.mode;
+            const isSwClosed = stage.state.sw;
+
+            // Draw Base wires
+            CircuitDraw.wire(workCtx, mode === 'series' ? pathSeries : pathParallel, workW, workH);
+
+            // Update & Draw Particles
+            let particles = mode === 'series' ? pSeries : pParallelTotal;
+            if (isSwClosed) {
+                particles.forEach(p => {
+                    p.update(workCurrent, deltaTime);
+                    p.draw(workCtx, workW, workH);
+                });
+            } else {
+                particles.forEach(p => p.draw(workCtx, workW, workH)); // static
+            }
+
+            // Draw Components
+            CircuitDraw.battery(workCtx, 0.1 * workW, 0.5 * workH);
+            CircuitDraw.switch(workCtx, 0.5 * workW, 0.8 * workH, 0, isSwClosed);
+
+            if (mode === 'series') {
+                // Two bulbs in series
+                CircuitDraw.bulb(workCtx, 0.5 * workW, 0.2 * workH, 0, isSwClosed ? 0.3 : 0);
+                CircuitDraw.bulb(workCtx, 0.9 * workW, 0.5 * workH, 0, isSwClosed ? 0.3 : 0);
+                
+                if (stage.state.highlightBulbs) {
+                    workCtx.fillStyle = 'rgba(255, 51, 102, 0.7)';
+                    workCtx.font = '14px sans-serif';
+                    workCtx.fillText('Voltage Drop 1', 0.5 * workW - 40, 0.2 * workH - 30);
+                    workCtx.fillText('Voltage Drop 2', 0.9 * workW - 40, 0.5 * workH - 30);
+                }
+            } else {
+                // Two bulbs in parallel
+                CircuitDraw.bulb(workCtx, 0.4 * workW, 0.5 * workH, 0, isSwClosed ? 0.8 : 0);
+                CircuitDraw.bulb(workCtx, 0.8 * workW, 0.5 * workH, 0, isSwClosed ? 0.8 : 0);
+                
+                if (stage.state.highlightV) {
+                    workCtx.fillStyle = '#00E5FF';
+                    workCtx.font = '14px sans-serif';
+                    workCtx.fillText('Full Source Voltage', 0.4 * workW - 50, 0.5 * workH - 30);
+                    workCtx.fillText('Full Source Voltage', 0.8 * workW - 50, 0.5 * workH - 30);
+                }
+            }
+
+            requestAnimationFrame(renderWorking);
+        }
+
+        // Controls Logic
+        document.getElementById('btnNext').addEventListener('click', () => {
+            if (currentStage < stages.length - 1) { currentStage++; updateStageUI(); stopAuto(); }
+        });
+        document.getElementById('btnPrev').addEventListener('click', () => {
+            if (currentStage > 0) { currentStage--; updateStageUI(); stopAuto(); }
+        });
+        const btnAuto = document.getElementById('btnAutoPlay');
+        btnAuto.addEventListener('click', () => {
+            if (isAutoPlay) stopAuto();
+            else startAuto();
+        });
+
+        function startAuto() {
+            isAutoPlay = true;
+            btnAuto.innerHTML = 'Stop Auto';
+            btnAuto.style.background = 'rgba(255, 51, 102, 0.2)';
+            btnAuto.style.borderColor = 'var(--neon-red)';
+            btnAuto.style.color = 'var(--neon-red)';
+            
+            autoPlayTimer = setInterval(() => {
+                currentStage = (currentStage + 1) % stages.length;
+                updateStageUI();
+            }, 3000);
+        }
+        function stopAuto() {
+            isAutoPlay = false;
+            btnAuto.innerHTML = 'Auto-Play';
+            btnAuto.style = ''; // reset to CSS default
+            clearInterval(autoPlayTimer);
+        }
+
+        // Init Working
+        window.addEventListener('resize', resizeWorkCanvas);
+        resizeWorkCanvas();
+        updateStageUI();
+        requestAnimationFrame((t) => { lastWorkTime = t; renderWorking(t); });
+
+
+        // ---------------------------------------------------------
+        // 3. INTERACTIVE SIMULATION SECTION
+        // ---------------------------------------------------------
+        const simCanvas = document.getElementById('simCanvas');
+        const simCtx = simCanvas.getContext('2d');
+        let simW, simH;
+        let lastSimTime = 0;
+
+        // State
+        let simMode = 'series'; // 'series' or 'parallel'
+        let valV = 9;
+        let valR1 = 10;
+        let valR2 = 10;
+        
+        // Derived Data
+        let calcReq = 0;
+        let calcI = 0;
+        let calcP1 = 0;
+        let calcP2 = 0;
+
+        // UI Elements
+        const modeSeriesBtn = document.getElementById('modeSeries');
+        const modeParallelBtn = document.getElementById('modeParallel');
+        const sliderV = document.getElementById('sliderV');
+        const sliderR1 = document.getElementById('sliderR1');
+        const sliderR2 = document.getElementById('sliderR2');
+        
+        const displayV = document.getElementById('valV');
+        const displayR1 = document.getElementById('valR1');
+        const displayR2 = document.getElementById('valR2');
+        
+        const meterR = document.getElementById('meterR');
+        const meterI = document.getElementById('meterI');
+        const meterP = document.getElementById('meterP');
+        const eqDisplay = document.getElementById('eqDisplay');
+
+        // Particles for simulation
+        const simPSeries = Array.from({length: 60}, () => new Particle(pathSeries));
+        const simPParallelBranch1 = Array.from({length: 30}, () => new Particle([
+            {x1: 0.1, y1: 0.5, x2: 0.1, y2: 0.2}, {x1: 0.1, y1: 0.2, x2: 0.4, y2: 0.2},
+            {x1: 0.4, y1: 0.2, x2: 0.4, y2: 0.8}, {x1: 0.4, y1: 0.8, x2: 0.1, y2: 0.8}, {x1: 0.1, y1: 0.8, x2: 0.1, y2: 0.5}
+        ]));
+        const simPParallelBranch2 = Array.from({length: 30}, () => new Particle([
+            {x1: 0.1, y1: 0.5, x2: 0.1, y2: 0.2}, {x1: 0.1, y1: 0.2, x2: 0.8, y2: 0.2},
+            {x1: 0.8, y1: 0.2, x2: 0.8, y2: 0.8}, {x1: 0.8, y1: 0.8, x2: 0.1, y2: 0.8}, {x1: 0.1, y1: 0.8, x2: 0.1, y2: 0.5}
+        ]));
+
+        function resizeSimCanvas() {
+            const rect = simCanvas.parentElement.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            simCanvas.width = rect.width * dpr;
+            simCanvas.height = rect.height * dpr;
+            simW = simCanvas.width;
+            simH = simCanvas.height;
+            simCtx.scale(dpr, dpr);
+            simW /= dpr;
+            simH /= dpr;
+        }
+
+        function updatePhysics() {
+            valV = parseFloat(sliderV.value);
+            valR1 = parseFloat(sliderR1.value);
+            valR2 = parseFloat(sliderR2.value);
+            
+            displayV.innerText = valV + ' V';
+            displayR1.innerText = valR1 + ' Ω';
+            displayR2.innerText = valR2 + ' Ω';
+
+            if (simMode === 'series') {
+                calcReq = valR1 + valR2;
+                calcI = valV / calcReq;
+                // P = I^2 * R
+                calcP1 = (calcI * calcI) * valR1;
+                calcP2 = (calcI * calcI) * valR2;
+                eqDisplay.innerHTML = `Req = R₁ + R₂ = ${calcReq.toFixed(1)}Ω<br>I = V / Req = ${calcI.toFixed(2)}A`;
+            } else {
+                calcReq = 1 / ((1 / valR1) + (1 / valR2));
+                calcI = valV / calcReq;
+                // P = V^2 / R (voltage is same across parallel branches)
+                calcP1 = (valV * valV) / valR1;
+                calcP2 = (valV * valV) / valR2;
+                eqDisplay.innerHTML = `1/Req = 1/R₁ + 1/R₂ → Req = ${calcReq.toFixed(1)}Ω<br>Itotal = V / Req = ${calcI.toFixed(2)}A`;
+            }
+
+            meterR.innerText = calcReq.toFixed(1);
+            meterI.innerText = calcI.toFixed(2);
+            meterP.innerText = (calcP1 + calcP2).toFixed(1);
+        }
+
+        // Event Listeners
+        sliderV.addEventListener('input', updatePhysics);
+        sliderR1.addEventListener('input', updatePhysics);
+        sliderR2.addEventListener('input', updatePhysics);
+
+        modeSeriesBtn.addEventListener('click', () => {
+            simMode = 'series';
+            modeSeriesBtn.classList.add('active');
+            modeParallelBtn.classList.remove('active');
+            updatePhysics();
+        });
+        modeParallelBtn.addEventListener('click', () => {
+            simMode = 'parallel';
+            modeParallelBtn.classList.add('active');
+            modeSeriesBtn.classList.remove('active');
+            updatePhysics();
+        });
+
+        function renderSim(timestamp) {
+            const deltaTime = timestamp - lastSimTime;
+            lastSimTime = timestamp;
+
+            simCtx.clearRect(0, 0, simW, simH);
+            
+            // Draw Wires
+            CircuitDraw.wire(simCtx, simMode === 'series' ? pathSeries : pathParallel, simW, simH);
+
+            // Normalization for visual brightness (Max reasonable power is around 24^2 / 1 = 576W, let's map 0-50W to 0-1)
+            const mapPower = (p) => Math.min(p / 50, 1.2); 
+
+            // Draw Particles based on calculated Current
+            if (simMode === 'series') {
+                simPSeries.forEach(p => { p.update(calcI, deltaTime); p.draw(simCtx, simW, simH); });
+                
+                CircuitDraw.battery(simCtx, 0.1 * simW, 0.5 * simH);
+                // Draw Resistors as Bulbs
+                CircuitDraw.bulb(simCtx, 0.5 * simW, 0.2 * simH, 0, mapPower(calcP1));
+                CircuitDraw.bulb(simCtx, 0.9 * simW, 0.5 * simH, 0, mapPower(calcP2));
+                
+                // Labels
+                simCtx.fillStyle = '#fff'; simCtx.font = '12px monospace';
+                simCtx.fillText(`R1: ${valR1}Ω`, 0.5 * simW - 20, 0.2 * simH + 35);
+                simCtx.fillText(`R2: ${valR2}Ω`, 0.9 * simW - 20, 0.5 * simH + 35);
+
+            } else {
+                // Parallel: Branches have different currents. I = V/R
+                const I1 = valV / valR1;
+                const I2 = valV / valR2;
+
+                simPParallelBranch1.forEach(p => { p.update(I1, deltaTime); p.draw(simCtx, simW, simH); });
+                simPParallelBranch2.forEach(p => { p.update(I2, deltaTime); p.draw(simCtx, simW, simH); });
+                
+                CircuitDraw.battery(simCtx, 0.1 * simW, 0.5 * simH);
+                CircuitDraw.bulb(simCtx, 0.4 * simW, 0.5 * simH, 0, mapPower(calcP1));
+                CircuitDraw.bulb(simCtx, 0.8 * simW, 0.5 * simH, 0, mapPower(calcP2));
+
+                simCtx.fillStyle = '#fff'; simCtx.font = '12px monospace';
+                simCtx.fillText(`R1: ${valR1}Ω`, 0.4 * simW - 20, 0.5 * simH + 35);
+                simCtx.fillText(`R2: ${valR2}Ω`, 0.8 * simW - 20, 0.5 * simH + 35);
+            }
+
+            requestAnimationFrame(renderSim);
+        }
+
+        // Init Sim
+        window.addEventListener('resize', resizeSimCanvas);
+        resizeSimCanvas();
+        updatePhysics();
+        requestAnimationFrame((t) => { lastSimTime = t; renderSim(t); });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Refraction - Interactive Physics Simulation</title>
+    <style>
+        /* ==========================================================================
+           ROOT & CSS VARIABLES
+           ========================================================================== */
+        :root {
+            --bg-color: #050914;
+            --surface-color: rgba(20, 25, 40, 0.6);
+            --surface-color-light: rgba(40, 50, 75, 0.5);
+            --text-primary: #ffffff;
+            --text-secondary: #94a3b8;
+            --accent-cyan: #00f0ff;
+            --accent-magenta: #ff0055;
+            --accent-blue: #3b82f6;
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            
+            /* Medium Colors */
+            --med-air: rgba(255, 255, 255, 0.0);
+            --med-water: rgba(0, 150, 255, 0.15);
+            --med-glass: rgba(200, 255, 255, 0.25);
+            --med-diamond: rgba(255, 200, 255, 0.3);
+        }
+
+        /* ==========================================================================
+           RESET & TYPOGRAPHY
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(255, 0, 85, 0.05), transparent 25%);
+            background-attachment: fixed;
+        }
+
+        h1, h2, h3 {
+            font-weight: 700;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
+        }
+
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); }
+        h2 { font-size: clamp(1.8rem, 4vw, 3rem); margin-bottom: 1rem; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); color: var(--accent-cyan); }
+        
+        p { font-size: clamp(1rem, 1.2vw, 1.125rem); color: var(--text-secondary); margin-bottom: 1rem; }
+
+        .gradient-text {
+            background: linear-gradient(90deg, var(--accent-cyan), #8a2be2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+        }
+
+        /* ==========================================================================
+           LAYOUT & CONTAINERS
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        section {
+            padding: clamp(60px, 10vh, 120px) 0;
+            position: relative;
+        }
+
+        .glass-panel {
+            background: var(--surface-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: clamp(20px, 4vw, 40px);
+            box-shadow: var(--glass-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+
+        @media (min-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr 1fr; }
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        #hero {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #hero canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            opacity: 0.6;
+        }
+
+        .hero-content {
+            z-index: 1;
+            max-width: 800px;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1.2rem, 2vw, 1.5rem);
+            color: var(--text-secondary);
+            margin-top: 1rem;
+            font-weight: 300;
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 50px;
+            border: 2px solid var(--text-secondary);
+            border-radius: 15px;
+        }
+
+        .scroll-indicator::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            animation: scroll 2s infinite cubic-bezier(0.15, 0.41, 0.69, 0.94);
+        }
+
+        @keyframes scroll {
+            0% { transform: translate(-50%, 0); opacity: 1; }
+            100% { transform: translate(-50%, 20px); opacity: 0; }
+        }
+
+        /* ==========================================================================
+           COMPONENTS SECTION (MARKER & LEGEND SYSTEM)
+           ========================================================================== */
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            min-height: 300px;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.02) 50%, rgba(0, 150, 255, 0.1) 50%);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        .diagram-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--surface-color-light);
+            border: 2px solid var(--accent-cyan);
+            color: var(--text-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--accent-cyan);
+            color: #000;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.8);
+        }
+
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.1);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(10px);
+        }
+
+        .legend-num {
+            width: 28px;
+            height: 28px;
+            background: var(--surface-color-light);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--accent-cyan);
+            flex-shrink: 0;
+        }
+
+        .legend-item.active .legend-num {
+            background: var(--accent-cyan);
+            color: #000;
+        }
+
+        .legend-text strong {
+            display: block;
+            font-size: 1.1rem;
+            color: #fff;
+        }
+        
+        .legend-text span {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* ==========================================================================
+           WORKING SECTION (STAGE BY STAGE)
+           ========================================================================== */
+        .working-display {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #0a0a0a;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        #workingCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .working-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding-top: 20px;
+        }
+
+        .stage-info {
+            min-height: 100px;
+        }
+
+        .stage-title {
+            color: var(--accent-cyan);
+            font-size: 1.2rem;
+            margin-bottom: 5px;
+        }
+
+        .controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 30px;
+        }
+
+        .btn-control {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-control:hover:not(:disabled) {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .btn-control:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .btn-play {
+            background: var(--accent-cyan);
+            color: #000;
+        }
+        .btn-play:hover {
+            background: #fff;
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+
+        .dot.active {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            transform: scale(1.3);
+        }
+
+        /* ==========================================================================
+           SIMULATION (SANDBOX)
+           ========================================================================== */
+        .simulation-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 30px;
+        }
+
+        @media (min-width: 1024px) {
+            .simulation-container {
+                grid-template-columns: 300px 1fr;
+            }
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+
+        .val-display {
+            color: var(--accent-cyan);
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        /* Custom Select */
+        select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white;
+            border-radius: 8px;
+            font-size: 1rem;
+            outline: none;
+            cursor: pointer;
+            appearance: none;
+        }
+        select option {
+            background: var(--bg-color);
+            color: white;
+        }
+
+        .sim-view {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            aspect-ratio: 1;
+            background: #050505;
+        }
+
+        @media (min-width: 1024px) {
+            .sim-view { aspect-ratio: 16/10; }
+        }
+
+        #simCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .data-overlay {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            font-family: monospace;
+            font-size: 14px;
+            pointer-events: none;
+        }
+        
+        .data-overlay div { margin-bottom: 5px; }
+        .data-overlay span { color: var(--accent-cyan); }
+        .tir-warning {
+            color: var(--accent-magenta) !important;
+            font-weight: bold;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            50% { opacity: 1; text-shadow: 0 0 10px var(--accent-magenta); }
+            100% { opacity: 0.7; }
+        }
+
+        /* ==========================================================================
+           APPLICATIONS & FACTS CARDS
+           ========================================================================== */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 40px;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 24px;
+            transition: transform 0.3s, background 0.3s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(0, 240, 255, 0.1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            color: var(--accent-cyan);
+        }
+
+        .card-icon svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+        
+        .fact-card { border-top: 3px solid var(--accent-magenta); }
+    </style>
+</head>
+<body>
+
+    <!-- HERO SECTION -->
+    <section id="hero">
+        <canvas id="heroCanvas"></canvas>
+        <div class="container hero-content">
+            <h1>The Physics of <span class="gradient-text">Refraction</span></h1>
+            <p class="hero-subtitle">Discover how light bends, slows down, and shapes our visual reality.</p>
+        </div>
+        <div class="scroll-indicator"></div>
+    </section>
+
+    <!-- INTRODUCTION -->
+    <section id="intro">
+        <div class="container grid-2">
+            <div class="glass-panel">
+                <h2>An Illusion of Light</h2>
+                <p>Have you ever noticed a straw looking broken in a glass of water? Or heat waves shimmering over a hot road? This isn't an optical trick of the brain—it's physics in action.</p>
+                <p><strong>Refraction</strong> is the bending of a wave when it enters a medium where its speed is different. When light passes from air (where it moves fast) into water or glass (where it moves slower), it changes direction.</p>
+            </div>
+            <div class="diagram-container" style="background: transparent; border: none; min-height: 400px; display: flex; justify-content: center; align-items: center;">
+                <!-- Premium SVG Illustration of Pencil in Water -->
+                <svg viewBox="0 0 400 400" width="100%" height="100%">
+                    <defs>
+                        <linearGradient id="glassGrad" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="rgba(255,255,255,0.1)"/>
+                            <stop offset="10%" stop-color="rgba(255,255,255,0.4)"/>
+                            <stop offset="90%" stop-color="rgba(255,255,255,0.05)"/>
+                            <stop offset="100%" stop-color="rgba(255,255,255,0.3)"/>
+                        </linearGradient>
+                        <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="rgba(0, 150, 255, 0.4)"/>
+                            <stop offset="100%" stop-color="rgba(0, 100, 255, 0.1)"/>
+                        </linearGradient>
+                        <linearGradient id="pencilWood" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="#d4a373"/>
+                            <stop offset="50%" stop-color="#faedcd"/>
+                            <stop offset="100%" stop-color="#d4a373"/>
+                        </linearGradient>
+                        <linearGradient id="pencilYellow" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="#e9c46a"/>
+                            <stop offset="50%" stop-color="#ffe6a7"/>
+                            <stop offset="100%" stop-color="#e9c46a"/>
+                        </linearGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    
+                    <!-- Back of Glass -->
+                    <ellipse cx="200" cy="120" rx="90" ry="20" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+                    <path d="M110 120 L130 320 A70 15 0 0 0 270 320 L290 120" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+                    
+                    <!-- Pencil Top (Air) -->
+                    <g transform="translate(240, 40) rotate(20)">
+                        <rect x="-10" y="0" width="20" height="120" fill="url(#pencilYellow)"/>
+                        <polygon points="-10,120 10,120 0,150" fill="url(#pencilWood)"/>
+                        <polygon points="-3,141 3,141 0,150" fill="#333"/>
+                    </g>
+
+                    <!-- Water Body -->
+                    <path d="M115 180 L130 320 A70 15 0 0 0 270 320 L285 180 A85 18 0 0 1 115 180 Z" fill="url(#waterGrad)"/>
+                    <ellipse cx="200" cy="180" rx="85" ry="18" fill="rgba(0, 150, 255, 0.3)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+
+                    <!-- Pencil Bottom (Refracted in Water) - Shifted and angled differently -->
+                    <g transform="translate(210, 185) rotate(30)" opacity="0.9">
+                        <rect x="-12" y="0" width="24" height="120" fill="url(#pencilYellow)"/>
+                        <polygon points="-12,120 12,120 0,150" fill="url(#pencilWood)"/>
+                        <polygon points="-4,138 4,138 0,150" fill="#333"/>
+                    </g>
+
+                    <!-- Front of Glass -->
+                    <path d="M110 120 L130 320 A70 15 0 0 0 270 320 L290 120" fill="url(#glassGrad)"/>
+                    <ellipse cx="200" cy="120" rx="90" ry="20" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="3"/>
+                    
+                    <!-- Highlights -->
+                    <path d="M120 140 L135 300" stroke="white" stroke-width="4" opacity="0.6" filter="blur(2px)"/>
+                    <path d="M280 140 L265 300" stroke="white" stroke-width="2" opacity="0.3" filter="blur(1px)"/>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <!-- COMPONENTS SECTION -->
+    <section id="components" class="container">
+        <h2>The Anatomy of <span class="gradient-text">Bending Light</span></h2>
+        <p>To understand refraction, we must identify its core geometrical components. Hover over the markers to explore.</p>
+        
+        <div class="glass-panel grid-2">
+            <div class="diagram-container" id="anatomy-diagram">
+                <!-- SVG Diagram Background -->
+                <svg class="diagram-svg" viewBox="0 0 800 450">
+                    <!-- Mediums -->
+                    <rect x="0" y="0" width="800" height="225" fill="#0B0C10" />
+                    <rect x="0" y="225" width="800" height="225" fill="rgba(0, 150, 255, 0.2)" />
+                    <line x1="0" y1="225" x2="800" y2="225" stroke="rgba(255,255,255,0.5)" stroke-width="2" />
+                    
+                    <text x="20" y="30" fill="rgba(255,255,255,0.5)" font-family="sans-serif">Medium 1 (Fast)</text>
+                    <text x="20" y="430" fill="rgba(255,255,255,0.5)" font-family="sans-serif">Medium 2 (Slow)</text>
+
+                    <!-- Normal Line -->
+                    <line x1="400" y1="50" x2="400" y2="400" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-dasharray="10,10" />
+                    
+                    <!-- Angles Arcs -->
+                    <path d="M400 150 A75 75 0 0 0 348 171" fill="none" stroke="rgba(255,0,85,0.6)" stroke-width="3" />
+                    <path d="M400 300 A75 75 0 0 0 435 291" fill="none" stroke="rgba(0,240,255,0.6)" stroke-width="3" />
+
+                    <!-- Rays -->
+                    <!-- Incident -->
+                    <line x1="200" y1="25" x2="400" y2="225" stroke="#ff0055" stroke-width="6" filter="drop-shadow(0 0 8px #ff0055)" />
+                    <!-- Arrow -->
+                    <polygon points="280,105 310,100 290,130" fill="#ff0055" transform="rotate(-45 295 115)"/>
+
+                    <!-- Refracted -->
+                    <line x1="400" y1="225" x2="500" y2="425" stroke="#00f0ff" stroke-width="6" filter="drop-shadow(0 0 8px #00f0ff)" />
+                    <!-- Arrow -->
+                    <polygon points="440,305 470,300 450,330" fill="#00f0ff" transform="rotate(25 455 315)"/>
+                </svg>
+
+                <!-- Absolute Positioned HTML Markers -->
+                <div class="marker" data-target="item-1" style="left: 28%; top: 20%;">1</div>
+                <div class="marker" data-target="item-2" style="left: 50%; top: 12%;">2</div>
+                <div class="marker" data-target="item-3" style="left: 50%; top: 50%;">3</div>
+                <div class="marker" data-target="item-4" style="left: 58%; top: 80%;">4</div>
+                <div class="marker" data-target="item-5" style="left: 45%; top: 35%;">5</div>
+                <div class="marker" data-target="item-6" style="left: 54%; top: 62%;">6</div>
+            </div>
+
+            <div class="legend-list">
+                <div class="legend-item" id="item-1">
+                    <div class="legend-num">1</div>
+                    <div class="legend-text">
+                        <strong>Incident Ray</strong>
+                        <span>The incoming beam of light approaching the boundary.</span>
+                    </div>
+                </div>
+                <div class="legend-item" id="item-2">
+                    <div class="legend-num">2</div>
+                    <div class="legend-text">
+                        <strong>Normal Line</strong>
+                        <span>An imaginary line perpendicular (90°) to the surface boundary. All angles are measured from here.</span>
+                    </div>
+                </div>
+                <div class="legend-item" id="item-3">
+                    <div class="legend-num">3</div>
+                    <div class="legend-text">
+                        <strong>Point of Incidence</strong>
+                        <span>The exact spot where the light hits the boundary between mediums.</span>
+                    </div>
+                </div>
+                <div class="legend-item" id="item-4">
+                    <div class="legend-num">4</div>
+                    <div class="legend-text">
+                        <strong>Refracted Ray</strong>
+                        <span>The light beam after it has crossed the boundary and changed direction.</span>
+                    </div>
+                </div>
+                <div class="legend-item" id="item-5">
+                    <div class="legend-num">5</div>
+                    <div class="legend-text">
+                        <strong>Angle of Incidence (&theta;₁)</strong>
+                        <span>Angle between the Incident Ray and the Normal.</span>
+                    </div>
+                </div>
+                <div class="legend-item" id="item-6">
+                    <div class="legend-num">6</div>
+                    <div class="legend-text">
+                        <strong>Angle of Refraction (&theta;₂)</strong>
+                        <span>Angle between the Refracted Ray and the Normal. Notice it is smaller than &theta;₁ here.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING SECTION (MECHANISM) -->
+    <section id="working" class="container">
+        <h2>How It <span class="gradient-text">Actually Works</span></h2>
+        <p>Why does light bend? Light travels as waves. Imagine a marching band walking from solid ground into thick mud at an angle. The mechanism below explains this speed-change effect.</p>
+        
+        <div class="glass-panel">
+            <div class="working-display">
+                <canvas id="workingCanvas"></canvas>
+            </div>
+            
+            <div class="working-controls">
+                <div class="stage-info">
+                    <h3 class="stage-title" id="stageTitle">Stage 1: Approaching the Boundary</h3>
+                    <p id="stageDesc">Wavefronts of light travel through a fast medium (like air) at a constant speed and angle.</p>
+                </div>
+                
+                <div class="controls-row">
+                    <button class="btn-control" id="btnPrev">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        Prev
+                    </button>
+                    
+                    <div class="progress-dots" id="stageDots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    
+                    <button class="btn-control" id="btnNext">
+                        Next
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                    
+                    <button class="btn-control btn-play" id="btnPlayAuto">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        Auto-Play
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION -->
+    <section id="simulation" class="container">
+        <h2>Snell's Law <span class="gradient-text">Laboratory</span></h2>
+        <p>Experiment with different materials and angles. The mathematical relationship governing this is Snell's Law: <strong>n₁ &times; sin(&theta;₁) = n₂ &times; sin(&theta;₂)</strong>.</p>
+        
+        <div class="glass-panel simulation-container">
+            <div class="control-panel">
+                
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Incident Angle (&theta;₁)</span>
+                        <span class="val-display" id="valAngle">45&deg;</span>
+                    </div>
+                    <input type="range" id="simAngle" min="0" max="89" value="45">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Top Medium (n₁)</span>
+                        <span class="val-display" id="valN1">1.00</span>
+                    </div>
+                    <select id="simN1">
+                        <option value="1.00">Vacuum / Air (1.00)</option>
+                        <option value="1.33">Water (1.33)</option>
+                        <option value="1.50">Glass (1.50)</option>
+                        <option value="2.42">Diamond (2.42)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-label">
+                        <span>Bottom Medium (n₂)</span>
+                        <span class="val-display" id="valN2">1.50</span>
+                    </div>
+                    <select id="simN2">
+                        <option value="1.00">Vacuum / Air (1.00)</option>
+                        <option value="1.33">Water (1.33)</option>
+                        <option value="1.50" selected>Glass (1.50)</option>
+                        <option value="2.42">Diamond (2.42)</option>
+                    </select>
+                </div>
+                
+                <div class="card fact-card" style="margin-top: auto;">
+                    <h4>What is Refractive Index (n)?</h4>
+                    <p style="font-size: 0.85rem; margin-top: 10px;">It is a dimensionless number describing how fast light travels through the material. Higher 'n' means slower light.</p>
+                </div>
+            </div>
+
+            <div class="sim-view">
+                <canvas id="simCanvas"></canvas>
+                <div class="data-overlay">
+                    <div>Math: <span id="mathOutput">1.00 &times; sin(45&deg;) = 1.50 &times; sin(&theta;₂)</span></div>
+                    <div>&theta;₂ = <span id="mathResult">28.1&deg;</span></div>
+                    <div id="mathStatus" style="margin-top: 10px;">Status: <span style="color: #00f0ff;">Refracting</span></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- APPLICATIONS & FACTS -->
+    <section class="container" style="padding-bottom: 100px;">
+        <h2>Real-World <span class="gradient-text">Applications</span></h2>
+        <div class="cards-grid">
+            <div class="card">
+                <div class="card-icon">
+                    <svg viewBox="0 0 24 24"><path d="M2.5 12a10.5 10.5 0 0 1 19 0 10.5 10.5 0 0 1-19 0zm10.5 0a3.5 3.5 0 1 0-7 0 3.5 3.5 0 0 0 7 0zm11 0a3.5 3.5 0 1 0-7 0 3.5 3.5 0 0 0 7 0z"/></svg>
+                </div>
+                <h3>Lenses & Vision</h3>
+                <p>Eyeglasses, microscopes, and cameras use curved glass to carefully refract light, focusing images precisely onto retinas or sensors.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">
+                    <svg viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2zm0 6l6 12H6l6-12z"/></svg>
+                </div>
+                <h3>Prisms & Dispersion</h3>
+                <p>Because different colors (wavelengths) of light slow down by slightly different amounts, a prism refracts them at different angles, creating a rainbow.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">
+                    <svg viewBox="0 0 24 24"><path d="M4 12h16M4 12c0 4.418 3.582 8 8 8s8-3.582 8-8-3.582-8-8-8-8 3.582-8 8zm4 0c0 2.209 1.791 4 4 4s4-1.791 4-4-1.791-4-4-4-4 1.791-4 4z"/></svg>
+                </div>
+                <h3>Fiber Optics</h3>
+                <p>Using "Total Internal Reflection" (when light tries to enter a faster medium at a steep angle and reflects completely), fiber cables bounce light across oceans instantly.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        /**
+         * Utility: Resize canvas with devicePixelRatio for sharp rendering
+         */
+        function setupCanvas(canvas) {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            return { ctx, width: rect.width, height: rect.height };
+        }
+
+        /* ==========================================================================
+           1. HERO BACKGROUND ANIMATION
+           ========================================================================== */
+        const initHeroCanvas = () => {
+            const canvas = document.getElementById('heroCanvas');
+            let { ctx, width, height } = setupCanvas(canvas);
+            let particles = [];
+
+            class Photon {
+                constructor() {
+                    this.reset();
+                }
+                reset() {
+                    this.x = Math.random() * width;
+                    this.y = -50;
+                    this.length = Math.random() * 100 + 50;
+                    this.speed = Math.random() * 5 + 2;
+                    this.color = Math.random() > 0.5 ? '#00f0ff' : '#ff0055';
+                    this.opacity = Math.random() * 0.5 + 0.1;
+                    this.angle = Math.PI / 4; // 45 degrees
+                }
+                update() {
+                    this.x -= Math.cos(this.angle) * this.speed;
+                    this.y += Math.sin(this.angle) * this.speed;
+                    if (this.y > height + 100 || this.x < -100) this.reset();
+                }
+                draw() {
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(this.x - Math.cos(this.angle) * this.length, this.y + Math.sin(this.angle) * this.length);
+                    ctx.strokeStyle = this.color;
+                    ctx.globalAlpha = this.opacity;
+                    ctx.lineWidth = 2;
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
+                }
+            }
+
+            for (let i = 0; i < 30; i++) particles.push(new Photon());
+
+            function animateHero() {
+                ctx.clearRect(0, 0, width, height);
+                particles.forEach(p => { p.update(); p.draw(); });
+                requestAnimationFrame(animateHero);
+            }
+            animateHero();
+
+            window.addEventListener('resize', () => {
+                const setup = setupCanvas(canvas);
+                ctx = setup.ctx; width = setup.width; height = setup.height;
+            });
+        };
+
+        /* ==========================================================================
+           2. MARKER / LEGEND INTERACTION
+           ========================================================================== */
+        const initMarkers = () => {
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            const clearActive = () => {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+            };
+
+            const setActive = (id) => {
+                clearActive();
+                document.querySelector(`.marker[data-target="${id}"]`).classList.add('active');
+                document.getElementById(id).classList.add('active');
+            };
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => setActive(marker.dataset.target));
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); setActive(marker.dataset.target); });
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => setActive(item.id));
+                item.addEventListener('touchstart', (e) => { e.preventDefault(); setActive(item.id); });
+            });
+
+            document.getElementById('anatomy-diagram').addEventListener('mouseleave', clearActive);
+            document.querySelector('.legend-list').addEventListener('mouseleave', clearActive);
+        };
+
+        /* ==========================================================================
+           3. WORKING SECTION (WAVEFRONT ANIMATION)
+           ========================================================================== */
+        const initWorkingSection = () => {
+            const canvas = document.getElementById('workingCanvas');
+            let { ctx, width, height } = setupCanvas(canvas);
+            
+            const stages = [
+                { title: "Stage 1: Approach", desc: "Wavefronts of light travel through the fast medium. All parts of the wave move at the same high speed." },
+                { title: "Stage 2: First Contact", desc: "One side of the wavefront hits the dense medium first. This side begins to slow down." },
+                { title: "Stage 3: The Bend", desc: "Because one side is moving slower than the other side (still in the fast medium), the wavefront pivots and bends." },
+                { title: "Stage 4: New Direction", desc: "The entire wave is now in the slow medium, traveling at a new, slower speed and a steeper angle." }
+            ];
+
+            let currentStage = 0;
+            let autoPlay = false;
+            let time = 0;
+            let animId;
+
+            const btnPrev = document.getElementById('btnPrev');
+            const btnNext = document.getElementById('btnNext');
+            const btnPlay = document.getElementById('btnPlayAuto');
+            const dots = document.querySelectorAll('#stageDots .dot');
+            const titleEl = document.getElementById('stageTitle');
+            const descEl = document.getElementById('stageDesc');
+
+            function updateUI() {
+                titleEl.textContent = stages[currentStage].title;
+                descEl.textContent = stages[currentStage].desc;
+                dots.forEach((dot, i) => dot.classList.toggle('active', i === currentStage));
+                btnPrev.disabled = currentStage === 0 && !autoPlay;
+                btnNext.disabled = currentStage === stages.length - 1 && !autoPlay;
+            }
+
+            function setStage(index) {
+                currentStage = Math.max(0, Math.min(index, stages.length - 1));
+                time = currentStage * 150; // Map stage to animation time directly for static view
+                updateUI();
+            }
+
+            btnPrev.addEventListener('click', () => { autoPlay = false; setStage(currentStage - 1); });
+            btnNext.addEventListener('click', () => { autoPlay = false; setStage(currentStage + 1); });
+            btnPlay.addEventListener('click', () => {
+                autoPlay = !autoPlay;
+                btnPlay.innerHTML = autoPlay ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg> Pause` : `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Auto-Play`;
+            });
+
+            function drawWavefronts() {
+                ctx.clearRect(0, 0, width, height);
+                
+                // Draw mediums
+                ctx.fillStyle = "#0B0C10";
+                ctx.fillRect(0, 0, width, height/2);
+                ctx.fillStyle = "rgba(0, 150, 255, 0.2)";
+                ctx.fillRect(0, height/2, width, height/2);
+                ctx.strokeStyle = "rgba(255,255,255,0.4)";
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(0, height/2); ctx.lineTo(width, height/2); ctx.stroke();
+
+                // Animation logic based on 'time'
+                const startX = width * 0.2;
+                const startY = height * 0.1;
+                const angle1 = Math.PI / 4; // 45 deg
+                const angle2 = Math.PI / 8; // 22.5 deg (refracted)
+                
+                const speed1 = 2;
+                const speed2 = 1;
+                const waveSpacing = 30;
+
+                ctx.strokeStyle = "rgba(0, 240, 255, 0.8)";
+                ctx.lineWidth = 3;
+
+                // Draw ray path (faint)
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                let hitX = startX + (height/2 - startY) / Math.tan(angle1);
+                ctx.lineTo(hitX, height/2);
+                ctx.lineTo(hitX + (height/2) / Math.tan(angle2), height);
+                ctx.strokeStyle = "rgba(255,255,255,0.1)";
+                ctx.stroke();
+
+                // Draw moving wavefronts
+                for(let i=0; i<15; i++) {
+                    let waveDist = (time * speed1) - (i * waveSpacing);
+                    
+                    if (waveDist > 0) {
+                        ctx.beginPath();
+                        
+                        // Calculate center point of wave
+                        let cx, cy;
+                        let distToHit = Math.sqrt(Math.pow(hitX-startX, 2) + Math.pow(height/2-startY, 2));
+                        
+                        // Wave width
+                        const wWidth = 80;
+
+                        if (waveDist < distToHit) {
+                            // In medium 1
+                            cx = startX + Math.sin(angle1) * waveDist;
+                            cy = startY + Math.cos(angle1) * waveDist;
+                            
+                            let dx = Math.cos(angle1) * wWidth/2;
+                            let dy = -Math.sin(angle1) * wWidth/2;
+                            
+                            // Check if right edge hit boundary
+                            let rightY = cy + dy;
+                            if(rightY > height/2) {
+                                // Complex morphing logic simplified for visual effect
+                                ctx.moveTo(cx - dx, cy - dy); // Left edge
+                                // Bend point
+                                let bendRatio = (height/2 - (cy - dy)) / (dy*2);
+                                let bendX = (cx - dx) + (dx*2)*bendRatio;
+                                ctx.lineTo(bendX, height/2);
+                                // Refracted part
+                                let remDist = (rightY - height/2) / speed1 * speed2;
+                                ctx.lineTo(bendX + Math.cos(angle2)*remDist, height/2 + Math.sin(angle2)*remDist);
+                            } else {
+                                ctx.moveTo(cx - dx, cy - dy);
+                                ctx.lineTo(cx + dx, cy + dy);
+                            }
+                        } else {
+                            // In medium 2
+                            let distInMed2 = (waveDist - distToHit) * (speed2/speed1);
+                            cx = hitX + Math.sin(angle2) * distInMed2;
+                            cy = height/2 + Math.cos(angle2) * distInMed2;
+                            
+                            let dx = Math.cos(angle2) * wWidth/2 * 0.8; // compressed width
+                            let dy = -Math.sin(angle2) * wWidth/2 * 0.8;
+                            
+                            ctx.moveTo(cx - dx, cy - dy);
+                            ctx.lineTo(cx + dx, cy + dy);
+                        }
+                        
+                        ctx.strokeStyle = `rgba(0, 240, 255, ${Math.max(0, 1 - (waveDist / 600))})`;
+                        ctx.stroke();
+                    }
+                }
+
+                // Highlight active stage areas visually
+                if (currentStage === 1 || currentStage === 2) {
+                    ctx.beginPath();
+                    ctx.arc(hitX, height/2, 40, 0, Math.PI*2);
+                    ctx.fillStyle = "rgba(255, 0, 85, 0.2)";
+                    ctx.fill();
+                    ctx.strokeStyle = "rgba(255, 0, 85, 0.8)";
+                    ctx.stroke();
+                }
+
+                if (autoPlay) {
+                    time += 0.5;
+                    // Sync auto-play with stages
+                    let loopTime = 600;
+                    if (time > loopTime) time = 0;
+                    
+                    let newStage = Math.floor((time / loopTime) * 4);
+                    if (newStage !== currentStage) {
+                        currentStage = newStage;
+                        updateUI();
+                    }
+                }
+                
+                animId = requestAnimationFrame(drawWavefronts);
+            }
+
+            drawWavefronts();
+
+            window.addEventListener('resize', () => {
+                const setup = setupCanvas(canvas);
+                ctx = setup.ctx; width = setup.width; height = setup.height;
+            });
+        };
+
+        /* ==========================================================================
+           4. SNELL'S LAW SIMULATION CORE
+           ========================================================================== */
+        const initSimulation = () => {
+            const canvas = document.getElementById('simCanvas');
+            let { ctx, width, height } = setupCanvas(canvas);
+
+            // Inputs
+            const sliderAngle = document.getElementById('simAngle');
+            const selN1 = document.getElementById('simN1');
+            const selN2 = document.getElementById('simN2');
+            
+            // Outputs
+            const valAngle = document.getElementById('valAngle');
+            const valN1 = document.getElementById('valN1');
+            const valN2 = document.getElementById('valN2');
+            const txtMath = document.getElementById('mathOutput');
+            const txtResult = document.getElementById('mathResult');
+            const txtStatus = document.getElementById('mathStatus');
+
+            // Colors mapping
+            const colorMap = {
+                "1.00": "var(--med-air)",
+                "1.33": "var(--med-water)",
+                "1.50": "var(--med-glass)",
+                "2.42": "var(--med-diamond)"
+            };
+
+            function toRad(deg) { return deg * Math.PI / 180; }
+            function toDeg(rad) { return rad * 180 / Math.PI; }
+
+            function updateSimulation() {
+                const angle1Deg = parseFloat(sliderAngle.value);
+                const n1 = parseFloat(selN1.value);
+                const n2 = parseFloat(selN2.value);
+
+                // Update UI Labels
+                valAngle.innerHTML = `${angle1Deg}&deg;`;
+                valN1.textContent = n1.toFixed(2);
+                valN2.textContent = n2.toFixed(2);
+
+                const angle1Rad = toRad(angle1Deg);
+                
+                // Snell's Law: n1 * sin(A1) = n2 * sin(A2)
+                // sin(A2) = (n1 / n2) * sin(A1)
+                const sinA2 = (n1 / n2) * Math.sin(angle1Rad);
+                let angle2Rad = 0;
+                let isTIR = false;
+
+                if (sinA2 > 1) {
+                    isTIR = true; // Total Internal Reflection
+                } else {
+                    angle2Rad = Math.asin(sinA2);
+                }
+
+                const angle2Deg = toDeg(angle2Rad);
+
+                // Update Math Overlay
+                txtMath.innerHTML = `${n1.toFixed(2)} &times; sin(${angle1Deg}&deg;) = ${n2.toFixed(2)} &times; sin(&theta;₂)`;
+                
+                if (isTIR) {
+                    txtResult.innerHTML = `<span class="tir-warning">Error: sin(&theta;₂) > 1</span>`;
+                    txtStatus.innerHTML = `Status: <span class="tir-warning">Total Internal Reflection!</span>`;
+                } else {
+                    txtResult.innerHTML = `${angle2Deg.toFixed(1)}&deg;`;
+                    txtStatus.innerHTML = `Status: <span style="color: var(--accent-cyan);">Refracting</span>`;
+                }
+
+                drawSimulation(angle1Rad, angle2Rad, n1, n2, isTIR, colorMap[n1.toFixed(2)], colorMap[n2.toFixed(2)]);
+            }
+
+            function drawSimulation(a1, a2, n1, n2, tir, color1, color2) {
+                ctx.clearRect(0, 0, width, height);
+
+                const cx = width / 2;
+                const cy = height / 2;
+                
+                // Draw Mediums
+                const style = getComputedStyle(document.body);
+                
+                // Top Medium
+                ctx.fillStyle = color1.startsWith('var') ? style.getPropertyValue(color1.slice(4,-1)) : color1;
+                ctx.fillRect(0, 0, width, cy);
+                
+                // Bottom Medium
+                ctx.fillStyle = color2.startsWith('var') ? style.getPropertyValue(color2.slice(4,-1)) : color2;
+                ctx.fillRect(0, cy, width, cy);
+
+                // Boundary Line
+                ctx.beginPath();
+                ctx.moveTo(0, cy);
+                ctx.lineTo(width, cy);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Normal Line
+                ctx.beginPath();
+                ctx.moveTo(cx, 20);
+                ctx.lineTo(cx, height - 20);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.setLineDash([5, 5]);
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Draw Angle Arcs
+                ctx.lineWidth = 2;
+                const arcRadius = Math.min(width, height) * 0.15;
+                
+                // Arc 1 (Incident)
+                ctx.beginPath();
+                ctx.arc(cx, cy, arcRadius, -Math.PI/2 - a1, -Math.PI/2, false);
+                ctx.strokeStyle = 'rgba(255, 0, 85, 0.7)';
+                ctx.stroke();
+
+                if (!tir && a2 > 0) {
+                    // Arc 2 (Refracted)
+                    ctx.beginPath();
+                    // Fix arc drawing direction for refraction
+                    if (n1 > n2) {
+                        ctx.arc(cx, cy, arcRadius, Math.PI/2 - a2, Math.PI/2, false);
+                    } else {
+                        ctx.arc(cx, cy, arcRadius, Math.PI/2 - a2, Math.PI/2, false);
+                    }
+                    ctx.strokeStyle = 'rgba(0, 240, 255, 0.7)';
+                    ctx.stroke();
+                }
+
+                // Laser Beam Styling
+                ctx.shadowBlur = 15;
+                ctx.lineCap = 'round';
+
+                const beamLength = Math.max(width, height);
+
+                // Incident Beam
+                ctx.beginPath();
+                const startX = cx - Math.sin(a1) * beamLength;
+                const startY = cy - Math.cos(a1) * beamLength;
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(cx, cy);
+                ctx.strokeStyle = '#ff0055';
+                ctx.shadowColor = '#ff0055';
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                // Draw Laser Pointer Body (Aesthetic)
+                const ptrLen = 60;
+                const ptrX = cx - Math.sin(a1) * (arcRadius*2);
+                const ptrY = cy - Math.cos(a1) * (arcRadius*2);
+                ctx.save();
+                ctx.translate(ptrX, ptrY);
+                ctx.rotate(-a1);
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#333';
+                ctx.fillRect(-10, -ptrLen, 20, ptrLen);
+                ctx.fillStyle = '#ff0055';
+                ctx.fillRect(-10, -ptrLen, 20, 5);
+                ctx.restore();
+
+
+                if (tir) {
+                    // Reflected Beam (TIR)
+                    ctx.beginPath();
+                    const endX = cx + Math.sin(a1) * beamLength;
+                    const endY = cy - Math.cos(a1) * beamLength;
+                    ctx.moveTo(cx, cy);
+                    ctx.lineTo(endX, endY);
+                    ctx.strokeStyle = '#ff0055';
+                    ctx.shadowColor = '#ff0055';
+                    ctx.stroke();
+                } else {
+                    // Refracted Beam
+                    ctx.beginPath();
+                    const endX = cx + Math.sin(a2) * beamLength;
+                    const endY = cy + Math.cos(a2) * beamLength;
+                    ctx.moveTo(cx, cy);
+                    ctx.lineTo(endX, endY);
+                    ctx.strokeStyle = '#00f0ff';
+                    ctx.shadowColor = '#00f0ff';
+                    ctx.stroke();
+
+                    // Weak Reflection (Partial Reflection is always present in reality)
+                    ctx.beginPath();
+                    const refX = cx + Math.sin(a1) * beamLength;
+                    const refY = cy - Math.cos(a1) * beamLength;
+                    ctx.moveTo(cx, cy);
+                    ctx.lineTo(refX, refY);
+                    ctx.strokeStyle = 'rgba(255, 0, 85, 0.2)';
+                    ctx.shadowColor = 'transparent';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+                
+                // Draw glow dot at incidence point
+                ctx.beginPath();
+                ctx.arc(cx, cy, 5, 0, Math.PI*2);
+                ctx.fillStyle = '#fff';
+                ctx.shadowColor = '#fff';
+                ctx.shadowBlur = 10;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // Event Listeners
+            sliderAngle.addEventListener('input', updateSimulation);
+            selN1.addEventListener('change', updateSimulation);
+            selN2.addEventListener('change', updateSimulation);
+
+            window.addEventListener('resize', () => {
+                const setup = setupCanvas(canvas);
+                ctx = setup.ctx; width = setup.width; height = setup.height;
+                updateSimulation();
+            });
+
+            // Initial render
+            updateSimulation();
+        };
+
+        /* ==========================================================================
+           INITIALIZATION
+           ========================================================================== */
+        window.addEventListener('DOMContentLoaded', () => {
+            initHeroCanvas();
+            initMarkers();
+            initWorkingSection();
+            initSimulation();
+        });
+
+    </script>
+</body>
+</html>

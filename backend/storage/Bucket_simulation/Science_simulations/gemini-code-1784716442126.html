@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Friction: The Invisible Force</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-color: #05050A;
+            --surface-color: rgba(20, 22, 35, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --primary: #00E5FF;
+            --primary-dim: rgba(0, 229, 255, 0.2);
+            --secondary: #FF2A6D;
+            --secondary-dim: rgba(255, 42, 109, 0.2);
+            --accent: #FFC000;
+            --text-main: #FFFFFF;
+            --text-muted: #9BA1B0;
+            --success: #05FFA1;
+
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            --spacing-sm: clamp(8px, 1.5vw, 12px);
+            --spacing-md: clamp(16px, 3vw, 24px);
+            --spacing-lg: clamp(32px, 5vw, 48px);
+            --spacing-xl: clamp(64px, 10vw, 96px);
+
+            --radius-md: 16px;
+            --radius-lg: 24px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            font-size: clamp(14px, 1.2vw, 16px);
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            background: radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.05), transparent 50%),
+                        radial-gradient(circle at 85% 30%, rgba(255, 42, 109, 0.05), transparent 50%);
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(2rem, 4vw, 3rem); font-weight: 700; margin-bottom: var(--spacing-md); }
+        h3 { font-size: clamp(1.3rem, 2.5vw, 1.8rem); font-weight: 600; margin-bottom: var(--spacing-sm); }
+        p { color: var(--text-muted); margin-bottom: var(--spacing-md); font-size: clamp(1rem, 1.2vw, 1.1rem); }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, var(--primary), #b388ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Glassmorphism Container */
+        .glass-panel {
+            background: var(--surface-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        /* Layout */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-md);
+        }
+
+        section { padding: var(--spacing-xl) 0; }
+
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: var(--spacing-lg); }
+        
+        /* ==========================================================================
+           DIAGRAM MARKER SYSTEM (MANDATORY PATTERN)
+           ========================================================================== */
+        .diagram-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        @media (min-width: 1024px) {
+            .diagram-container { flex-direction: row; align-items: center; }
+            .diagram-visual { flex: 2; }
+            .diagram-legend { flex: 1; }
+        }
+
+        .diagram-visual {
+            position: relative;
+            width: 100%;
+            min-height: 250px;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #0a0b10;
+            border: 1px solid var(--glass-border);
+        }
+
+        .marker {
+            position: absolute;
+            width: 28px; height: 28px;
+            background: var(--surface-color);
+            border: 2px solid var(--primary);
+            color: var(--primary);
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-size: 14px;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--primary-dim);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--primary);
+            color: var(--bg-color);
+            box-shadow: 0 0 25px var(--primary);
+        }
+
+        .diagram-legend {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .legend-item {
+            display: flex; align-items: flex-start; gap: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 229, 255, 0.05);
+            border-color: rgba(0, 229, 255, 0.3);
+            transform: translateX(4px);
+        }
+
+        .legend-badge {
+            width: 24px; height: 24px; flex-shrink: 0;
+            background: var(--primary-dim); border: 1px solid var(--primary); color: var(--primary);
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 12px; font-weight: bold;
+        }
+        
+        .legend-item.active .legend-badge { background: var(--primary); color: var(--bg-color); }
+
+        .legend-content h4 { color: var(--text-main); font-size: 0.95rem; margin-bottom: 2px; }
+        .legend-content p { color: var(--text-muted); font-size: 0.85rem; margin: 0; line-height: 1.4; }
+
+        /* ==========================================================================
+           SPECIFIC VISUALS & ANIMATIONS
+           ========================================================================== */
+        
+        /* Hero Section */
+        .hero { min-height: 80vh; display: flex; align-items: center; text-align: center; justify-content: center; }
+        .hero-content { max-width: 800px; }
+
+        /* SVG Microscopic Diagram */
+        #microscopic-svg { width: 100%; height: 100%; display: block; }
+        .svg-pulse { animation: pulseSvg 3s infinite alternate; }
+        @keyframes pulseSvg { 0% { filter: drop-shadow(0 0 5px rgba(255,42,109,0.3)); } 100% { filter: drop-shadow(0 0 15px rgba(255,42,109,0.8)); } }
+
+        /* Types Cards */
+        .type-card {
+            display: flex; flex-direction: column;
+            background: rgba(255,255,255,0.02);
+            border-radius: var(--radius-md); border: 1px solid var(--glass-border);
+            overflow: hidden;
+        }
+        .type-visual { height: 180px; position: relative; background: #08090d; display: flex; justify-content: center; align-items: center; }
+        .type-info { padding: var(--spacing-md); }
+        
+        /* CSS Mini Animations for Types */
+        .mini-block { width: 60px; height: 60px; background: linear-gradient(135deg, #444, #222); border-radius: 8px; position: relative; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .mini-surface { position: absolute; bottom: 30px; width: 80%; height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; }
+        .arrow { position: absolute; height: 4px; background: var(--primary); display: flex; align-items: center; }
+        .arrow::after { content: ''; position: absolute; right: -2px; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 10px solid var(--primary); }
+        
+        .anim-static .mini-block { animation: staticWiggle 2s infinite; }
+        .anim-static .push-arrow { width: 40px; right: 100%; top: 28px; background: var(--primary); }
+        .anim-static .push-arrow::after { border-left-color: var(--primary); }
+        .anim-static .fric-arrow { width: 40px; left: 100%; top: 56px; background: var(--secondary); flex-direction: row-reverse; }
+        .anim-static .fric-arrow::after { right: auto; left: -2px; border-left: none; border-right: 10px solid var(--secondary); }
+        @keyframes staticWiggle { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(2px); } }
+
+        .anim-kinetic .mini-block { animation: slideRight 3s linear infinite; }
+        .anim-kinetic .push-arrow { width: 60px; right: 100%; top: 28px; }
+        .anim-kinetic .fric-arrow { width: 30px; left: 100%; top: 56px; background: var(--secondary); flex-direction: row-reverse; }
+        .anim-kinetic .fric-arrow::after { right: auto; left: -2px; border-left: none; border-right: 10px solid var(--secondary); }
+        @keyframes slideRight { 0% { transform: translateX(-60px); } 100% { transform: translateX(60px); } }
+
+        .anim-rolling { display: flex; align-items: flex-end; padding-bottom: 30px;}
+        .mini-wheel { width: 60px; height: 60px; border-radius: 50%; border: 6px dashed #aaa; animation: rollWheel 3s linear infinite; }
+        @keyframes rollWheel { 0% { transform: translateX(-60px) rotate(0deg); } 100% { transform: translateX(60px) rotate(360deg); } }
+
+        .anim-fluid { position: relative; height: 100%; width: 100%; display: flex; justify-content: center; align-items: center; background: linear-gradient(to bottom, #0a0b10, #0a192f); }
+        .mini-drop { width: 30px; height: 30px; background: var(--primary); border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; transform: rotate(180deg); animation: fallFluid 2s ease-in infinite; }
+        .fluid-line { position: absolute; width: 2px; height: 20px; background: rgba(255,255,255,0.2); border-radius: 2px; animation: moveUp 2s linear infinite; }
+        @keyframes fallFluid { 0% { transform: translateY(-60px) scaleY(1.1); } 100% { transform: translateY(60px) scaleY(0.9); } }
+        @keyframes moveUp { 0% { transform: translateY(60px); opacity: 0; } 50% { opacity: 1; } 100% { transform: translateY(-60px); opacity: 0; } }
+
+        /* ==========================================================================
+           WORKING MECHANISM (Stage Viewer)
+           ========================================================================== */
+        .stage-viewer {
+            display: flex; flex-direction: column;
+            border-radius: var(--radius-md); overflow: hidden;
+            border: 1px solid var(--glass-border);
+            background: #08090C;
+        }
+        
+        .stage-visual { position: relative; width: 100%; height: 350px; }
+        #mech-canvas { width: 100%; height: 100%; display: block; }
+
+        .stage-controls {
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+            padding: var(--spacing-md); background: rgba(255,255,255,0.03); border-top: 1px solid var(--glass-border);
+            gap: 12px;
+        }
+
+        .stage-nav { display: flex; gap: 8px; align-items: center; }
+        
+        button {
+            background: rgba(255,255,255,0.1); border: 1px solid var(--glass-border);
+            color: var(--text-main); padding: 8px 16px; border-radius: 8px;
+            cursor: pointer; font-family: inherit; font-size: 0.9rem; font-weight: 600;
+            transition: all 0.2s;
+            display: flex; align-items: center; gap: 6px;
+        }
+        button:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        button.primary { background: var(--primary-dim); border-color: var(--primary); color: var(--primary); }
+        button.primary:hover { background: var(--primary); color: var(--bg-color); }
+
+        .stage-indicators { display: flex; gap: 6px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: all 0.3s; }
+        .dot.active { background: var(--primary); box-shadow: 0 0 8px var(--primary); transform: scale(1.2); }
+
+        .stage-info { padding: var(--spacing-md); background: rgba(0,0,0,0.2); }
+        .stage-info h4 { color: var(--primary); margin-bottom: 4px; font-size: 1.2rem;}
+        .stage-info p { margin: 0; font-size: 0.95rem; }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION LAB
+           ========================================================================== */
+        .lab-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+        }
+        
+        @media (min-width: 1024px) {
+            .lab-layout { grid-template-columns: 3fr 1fr; }
+        }
+
+        .lab-canvas-container {
+            width: 100%; height: 400px;
+            background: #08090C; border-radius: var(--radius-md); border: 1px solid var(--glass-border);
+            position: relative; overflow: hidden;
+        }
+        
+        #sim-canvas { width: 100%; height: 100%; display: block; }
+
+        .lab-controls {
+            display: flex; flex-direction: column; gap: var(--spacing-md);
+            padding: var(--spacing-md); background: rgba(255,255,255,0.02);
+            border-radius: var(--radius-md); border: 1px solid var(--glass-border);
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-header { display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: 600; color: var(--text-muted); }
+        .control-val { color: var(--primary); }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; height: 24px;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; border: 1px solid rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px; width: 20px; border-radius: 50%;
+            background: var(--primary); box-shadow: 0 0 10px var(--primary-dim);
+            -webkit-appearance: none; margin-top: -8px; cursor: pointer; transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(0.9); }
+
+        /* Material Selector */
+        .material-selector { display: flex; gap: 8px; }
+        .mat-btn { flex: 1; padding: 6px; font-size: 0.8rem; justify-content: center; background: rgba(255,255,255,0.05); }
+        .mat-btn.active { background: var(--primary-dim); border-color: var(--primary); color: var(--primary); }
+
+        .telemetry {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: var(--spacing-md);
+            border-top: 1px solid var(--glass-border); padding-top: var(--spacing-md);
+        }
+        .data-box { background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px; text-align: center; }
+        .data-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .data-value { font-size: 1.2rem; font-weight: bold; font-variant-numeric: tabular-nums; }
+        .val-push { color: var(--success); }
+        .val-fric { color: var(--secondary); }
+
+        /* ==========================================================================
+           MISC SECTIONS (Facts, Revisions)
+           ========================================================================== */
+        .fact-card {
+            background: linear-gradient(135deg, rgba(20,22,35,0.8), rgba(10,12,20,0.8));
+            border-left: 4px solid var(--accent); padding: var(--spacing-md);
+            border-radius: 0 var(--radius-md) var(--radius-md) 0; margin-bottom: var(--spacing-md);
+        }
+        
+        .revision-list { list-style: none; }
+        .revision-list li {
+            position: relative; padding-left: 24px; margin-bottom: 12px;
+            color: var(--text-muted);
+        }
+        .revision-list li::before {
+            content: '→'; position: absolute; left: 0; color: var(--primary); font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Animated Background -->
+    <div class="ambient-bg"></div>
+
+    <div class="container">
+        
+        <!-- HERO -->
+        <section id="intro" class="hero">
+            <div class="hero-content glass-panel">
+                <h1 class="gradient-text">Friction</h1>
+                <p style="font-size: clamp(1.2rem, 1.5vw, 1.5rem); margin-top: 16px; color: #fff;">The Invisible Force of Resistance</p>
+                <p>Why do moving things stop? Why can we walk without slipping? It all comes down to an invisible interaction occurring at the microscopic level between two surfaces.</p>
+            </div>
+        </section>
+
+        <!-- OVERVIEW: MICROSCOPIC VIEW -->
+        <section id="overview">
+            <div class="glass-panel">
+                <h2>The Root Cause: Microscopic Asperities</h2>
+                <p>To the naked eye, a surface might look perfectly smooth. But under a microscope, even glass looks like a rugged mountain range. Friction happens when these microscopic peaks and valleys interlock.</p>
+                
+                <div class="diagram-container">
+                    <div class="diagram-visual">
+                        <!-- SVG Illustration -->
+                        <svg id="microscopic-svg" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid slice">
+                            <defs>
+                                <linearGradient id="gradTop" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#4A5568" />
+                                    <stop offset="100%" stop-color="#2D3748" />
+                                </linearGradient>
+                                <linearGradient id="gradBottom" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#1A365D" />
+                                    <stop offset="100%" stop-color="#0F172A" />
+                                </linearGradient>
+                                <filter id="glowRed">
+                                    <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                                    <feMerge>
+                                        <feMergeNode in="coloredBlur"/>
+                                        <feMergeNode in="SourceGraphic"/>
+                                    </feMerge>
+                                </filter>
+                            </defs>
+                            
+                            <!-- Bottom Block -->
+                            <path d="M0,400 L800,400 L800,280 L720,290 L680,240 L600,285 L520,230 L450,290 L380,240 L300,300 L220,250 L150,295 L80,240 L0,280 Z" fill="url(#gradBottom)" />
+                            
+                            <!-- Top Block -->
+                            <path d="M0,0 L800,0 L800,260 L730,270 L690,225 L610,275 L530,215 L460,275 L390,225 L310,285 L230,235 L160,280 L90,225 L0,265 Z" fill="url(#gradTop)" opacity="0.9" />
+                            
+                            <!-- Adhesion Points (Cold Welds) -->
+                            <g class="svg-pulse" fill="#FF2A6D" filter="url(#glowRed)">
+                                <circle cx="160" cy="280" r="5" />
+                                <circle cx="310" cy="285" r="6" />
+                                <circle cx="460" cy="275" r="5" />
+                                <circle cx="610" cy="275" r="4" />
+                            </g>
+                        </svg>
+
+                        <!-- Markers over SVG -->
+                        <div class="marker" data-target="leg-top" style="left: 20%; top: 25%;">1</div>
+                        <div class="marker" data-target="leg-bot" style="left: 20%; top: 85%;">2</div>
+                        <div class="marker" data-target="leg-asp" style="left: 66%; top: 58%;">3</div>
+                        <div class="marker" data-target="leg-weld" style="left: 39%; top: 71%;">4</div>
+                    </div>
+
+                    <div class="diagram-legend">
+                        <div class="legend-item" id="leg-top" data-target="leg-top">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-content">
+                                <h4>Top Object</h4>
+                                <p>The sliding body applying downward force (Weight).</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="leg-bot" data-target="leg-bot">
+                            <div class="legend-badge">2</div>
+                            <div class="legend-content">
+                                <h4>Surface Floor</h4>
+                                <p>Provides equal upward reaction (Normal Force).</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="leg-asp" data-target="leg-asp">
+                            <div class="legend-badge">3</div>
+                            <div class="legend-content">
+                                <h4>Asperities (Roughness)</h4>
+                                <p>Microscopic jagged peaks that crash into each other.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="leg-weld" data-target="leg-weld">
+                            <div class="legend-badge">4</div>
+                            <div class="legend-content">
+                                <h4>Cold Welding</h4>
+                                <p>At contact points, immense pressure causes atoms to bond temporarily.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- COMPONENTS: TYPES OF FRICTION -->
+        <section id="types">
+            <h2>Types of Friction</h2>
+            <div class="grid-2">
+                <!-- Static -->
+                <div class="type-card">
+                    <div class="type-visual anim-static">
+                        <div class="mini-surface"></div>
+                        <div class="mini-block">
+                            <div class="arrow push-arrow"></div>
+                            <div class="arrow fric-arrow"></div>
+                        </div>
+                    </div>
+                    <div class="type-info">
+                        <h3>Static Friction</h3>
+                        <p>Prevents a resting object from moving. It adjusts to exactly match the pushing force, up to a maximum limit. It's the strongest type.</p>
+                    </div>
+                </div>
+
+                <!-- Kinetic -->
+                <div class="type-card">
+                    <div class="type-visual anim-kinetic">
+                        <div class="mini-surface"></div>
+                        <div class="mini-block">
+                            <div class="arrow push-arrow"></div>
+                            <div class="arrow fric-arrow"></div>
+                        </div>
+                    </div>
+                    <div class="type-info">
+                        <h3>Kinetic (Sliding) Friction</h3>
+                        <p>Acts on objects already in motion. It is always less than maximum static friction, which is why it's easier to keep an object moving than to start it.</p>
+                    </div>
+                </div>
+
+                <!-- Rolling -->
+                <div class="type-card">
+                    <div class="type-visual anim-rolling">
+                        <div class="mini-surface"></div>
+                        <div class="mini-wheel"></div>
+                        <div class="arrow fric-arrow" style="width:15px; top:auto; bottom:20px; left: 50%; background:var(--secondary); transform:translateX(-50%) rotate(180deg);"></div>
+                    </div>
+                    <div class="type-info">
+                        <h3>Rolling Friction</h3>
+                        <p>Occurs when an object rolls. Because the contact area is tiny and constantly changing, interlocking is minimal. Vastly weaker than sliding friction.</p>
+                    </div>
+                </div>
+
+                <!-- Fluid -->
+                <div class="type-card">
+                    <div class="type-visual anim-fluid">
+                        <div class="fluid-line" style="left: 30%; animation-delay: 0s;"></div>
+                        <div class="fluid-line" style="left: 50%; animation-delay: 1s;"></div>
+                        <div class="fluid-line" style="left: 70%; animation-delay: 0.5s;"></div>
+                        <div class="mini-drop"></div>
+                    </div>
+                    <div class="type-info">
+                        <h3>Fluid Friction (Drag)</h3>
+                        <p>Resistance encountered in liquids or gases (like air resistance). It increases exponentially with the speed of the object.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING MECHANISM (STAGE VIEWER) -->
+        <section id="mechanism">
+            <div class="glass-panel" style="padding: 0;">
+                <div style="padding: var(--spacing-md) var(--spacing-md) 0;">
+                    <h2>How It Works: Breaking Static Grip</h2>
+                    <p>Observe the transition from rest to motion at the microscopic boundary.</p>
+                </div>
+                
+                <div class="stage-viewer">
+                    <div class="stage-visual">
+                        <canvas id="mech-canvas"></canvas>
+                    </div>
+                    
+                    <div class="stage-info">
+                        <h4 id="stage-title">Stage 1: Rest</h4>
+                        <p id="stage-desc">Surfaces rest against each other. Gravity pulls down, normal force pushes up. Microscopic asperities interlock deeply.</p>
+                    </div>
+
+                    <div class="stage-controls">
+                        <div class="stage-nav">
+                            <button id="btn-prev" disabled>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                            </button>
+                            <button id="btn-next" class="primary">
+                                Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                            </button>
+                        </div>
+                        
+                        <div class="stage-indicators" id="stage-dots">
+                            <div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                        </div>
+
+                        <button id="btn-autoplay">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Auto
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION LAB -->
+        <section id="simulation">
+            <h2>Interactive Physics Lab</h2>
+            <div class="glass-panel lab-layout">
+                <div class="lab-canvas-container">
+                    <canvas id="sim-canvas"></canvas>
+                </div>
+                
+                <div class="lab-controls">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Pushing Force</span>
+                            <span class="control-val" id="val-push">0 N</span>
+                        </div>
+                        <input type="range" id="slider-push" min="0" max="200" value="0">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Mass (Weight)</span>
+                            <span class="control-val" id="val-mass">10 kg</span>
+                        </div>
+                        <input type="range" id="slider-mass" min="5" max="50" value="10">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header"><span>Surface Material</span></div>
+                        <div class="material-selector">
+                            <button class="mat-btn active" data-mat="wood">Wood (Avg)</button>
+                            <button class="mat-btn" data-mat="ice">Ice (Slick)</button>
+                            <button class="mat-btn" data-mat="rubber">Rubber (Grippy)</button>
+                        </div>
+                    </div>
+
+                    <div class="telemetry">
+                        <div class="data-box">
+                            <div class="data-label">State</div>
+                            <div class="data-value" id="data-state" style="color: var(--text-main)">Static</div>
+                        </div>
+                        <div class="data-box">
+                            <div class="data-label">Friction Force</div>
+                            <div class="data-value val-fric" id="data-fric">0 N</div>
+                        </div>
+                    </div>
+                    <p style="font-size: 0.8rem; margin-top: 8px; color: var(--text-muted); text-align: center;">
+                        Applied Force vs Friction forms a specific graph. Apply force gradually to see it.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- APPLICATIONS & FACTS -->
+        <section id="context" class="grid-2">
+            <div class="glass-panel">
+                <h2>Is Friction Good or Bad?</h2>
+                <p>It's entirely contextual. Engineers constantly battle to increase it in some places and eliminate it in others.</p>
+                <div style="display: flex; gap: 16px; margin-top: 16px;">
+                    <div style="flex: 1; background: rgba(5,255,161,0.05); padding: 12px; border-radius: 8px; border-left: 2px solid var(--success);">
+                        <h4 style="color: var(--success);">Necessary (Increase)</h4>
+                        <ul style="padding-left: 16px; font-size: 0.9rem; color: var(--text-muted); margin-top: 8px;">
+                            <li>Tires gripping roads</li>
+                            <li>Brake pads</li>
+                            <li>Walking without slipping</li>
+                            <li>Lighting a match</li>
+                        </ul>
+                    </div>
+                    <div style="flex: 1; background: rgba(255,42,109,0.05); padding: 12px; border-radius: 8px; border-left: 2px solid var(--secondary);">
+                        <h4 style="color: var(--secondary);">Hindrance (Decrease)</h4>
+                        <ul style="padding-left: 16px; font-size: 0.9rem; color: var(--text-muted); margin-top: 8px;">
+                            <li>Engine piston wear</li>
+                            <li>Air drag on planes</li>
+                            <li>Heat in machinery</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="glass-panel">
+                <h2>Interesting Facts</h2>
+                <div class="fact-card">
+                    <h4>The "Stick-Slip" Phenomenon</h4>
+                    <p style="font-size: 0.9rem;">Because static friction > kinetic friction, things sometimes alternate between sticking and sliding rapidly. This causes the squealing of brakes, the music of a violin bow, and earthquakes along fault lines.</p>
+                </div>
+                <div class="fact-card">
+                    <h4>Surface Area Doesn't Matter?</h4>
+                    <p style="font-size: 0.9rem;">Counter-intuitively, standard friction depends on mass and material, <strong>not</strong> contact area. A brick laid flat has the same sliding friction as a brick standing on its edge!</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- REVISION -->
+        <section id="revision">
+            <div class="glass-panel" style="background: linear-gradient(180deg, var(--surface-color), rgba(0, 229, 255, 0.05));">
+                <h2>Quick Revision</h2>
+                <ul class="revision-list">
+                    <li><strong>Cause:</strong> Microscopic irregularities (asperities) interlocking and atomic adhesion (cold welding).</li>
+                    <li><strong>Rule 1:</strong> Friction always acts in the <em>opposite</em> direction of intended or actual motion.</li>
+                    <li><strong>Rule 2:</strong> Static Friction (resting) is stronger than Kinetic Friction (moving).</li>
+                    <li><strong>Factors:</strong> Depends directly on Normal Force (weight on flat ground) and the roughness of the materials (Coefficient of friction, $\mu$).</li>
+                    <li><strong>Energy:</strong> Friction doesn't destroy energy; it converts kinetic energy into thermal energy (heat).</li>
+                </ul>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        // Utility: Resize Canvas ensuring crisp rendering on high DPI displays
+        function setupCanvas(canvas) {
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.parentElement.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            return { ctx, width: rect.width, height: rect.height };
+        }
+
+        // Utility: Draw Arrow
+        function drawArrow(ctx, fromX, fromY, toX, toY, color, width=3) {
+            const headlen = 10;
+            const dx = toX - fromX;
+            const dy = toY - fromY;
+            const angle = Math.atan2(dy, dx);
+            
+            ctx.beginPath();
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(toX, toY);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(toX, toY);
+            ctx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.lineTo(toX, toY);
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        // ==========================================
+        // Diagram Marker System Logic
+        // ==========================================
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function activateMarkerPair(targetId) {
+            markers.forEach(m => m.classList.toggle('active', m.dataset.target === targetId));
+            legendItems.forEach(l => l.classList.toggle('active', l.id === targetId));
+        }
+
+        markers.forEach(m => {
+            m.addEventListener('mouseenter', () => activateMarkerPair(m.dataset.target));
+            m.addEventListener('touchstart', (e) => { e.preventDefault(); activateMarkerPair(m.dataset.target); });
+        });
+        
+        legendItems.forEach(l => {
+            l.addEventListener('mouseenter', () => activateMarkerPair(l.id));
+            l.addEventListener('touchstart', (e) => { e.preventDefault(); activateMarkerPair(l.id); });
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.diagram-container')) {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+            }
+        });
+
+        // ==========================================
+        // Working Mechanism (Stage Viewer) Logic
+        // ==========================================
+        const mechCanvas = document.getElementById('mech-canvas');
+        let mechCtx, mechW, mechH;
+        
+        const stages = [
+            { title: "Stage 1: Rest", desc: "Forces are balanced. Gravity pulls down, floor pushes up. Microscopic asperities are deeply settled into each other." },
+            { title: "Stage 2: Gentle Push", desc: "A pushing force is applied. Static friction instantly matches it. Asperities stretch elastically but hold tight." },
+            { title: "Stage 3: Max Static limit", desc: "Pushing force reaches the absolute limit of the materials' grip. The cold welds are on the verge of breaking." },
+            { title: "Stage 4: Breakaway", desc: "Push exceeds max static friction. Asperities break and slide over peaks. Friction suddenly drops to Kinetic level." },
+            { title: "Stage 5: Motion & Heat", desc: "Object accelerates. Asperities constantly crash and scrape, converting kinetic energy into thermal energy (heat)." }
+        ];
+        
+        let currentStage = 0;
+        let mechAnimTime = 0;
+        let isMechAuto = false;
+        let mechFrameId;
+
+        // Visual state targets based on stage
+        let vState = { zoom: 1, offsetTop: 0, arrowPush: 0, arrowFric: 0, heat: 0 };
+        let tState = { zoom: 1, offsetTop: 0, arrowPush: 0, arrowFric: 0, heat: 0 };
+
+        function updateMechStateTargets() {
+            switch(currentStage) {
+                case 0: tState = { zoom: 1.0, offsetTop: 0, arrowPush: 0, arrowFric: 0, heat: 0 }; break;
+                case 1: tState = { zoom: 1.2, offsetTop: 2, arrowPush: 40, arrowFric: 40, heat: 0 }; break;
+                case 2: tState = { zoom: 1.5, offsetTop: 5, arrowPush: 80, arrowFric: 80, heat: 0.2 }; break;
+                case 3: tState = { zoom: 1.2, offsetTop: 8, arrowPush: 90, arrowFric: 50, heat: 0.5 }; break;
+                case 4: tState = { zoom: 1.0, offsetTop: 40, arrowPush: 90, arrowFric: 50, heat: 1.0 }; break;
+            }
+        }
+
+        function drawMechanism() {
+            if(!mechCtx) return;
+            mechCtx.clearRect(0, 0, mechW, mechH);
+            
+            // Lerp states for smooth transition
+            const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
+            vState.zoom = lerp(vState.zoom, tState.zoom, 0.05);
+            vState.offsetTop = lerp(vState.offsetTop, tState.offsetTop, 0.05);
+            vState.arrowPush = lerp(vState.arrowPush, tState.arrowPush, 0.1);
+            vState.arrowFric = lerp(vState.arrowFric, tState.arrowFric, 0.1);
+            vState.heat = lerp(vState.heat, tState.heat, 0.05);
+
+            mechCtx.save();
+            // Center & Zoom
+            mechCtx.translate(mechW/2, mechH/2);
+            mechCtx.scale(vState.zoom, vState.zoom);
+            
+            // Draw Bottom Surface
+            mechCtx.fillStyle = "#1A365D";
+            mechCtx.beginPath();
+            mechCtx.moveTo(-150, 0);
+            for(let i=-150; i<=150; i+=20) mechCtx.lineTo(i, Math.sin(i*0.2)*10 + 10);
+            mechCtx.lineTo(150, 100); mechCtx.lineTo(-150, 100);
+            mechCtx.fill();
+
+            // Draw Top Surface (Moving)
+            mechCtx.fillStyle = "#4A5568";
+            let topX = (currentStage === 4) ? (mechAnimTime*2 % 40) : vState.offsetTop; // continuous motion in stage 4
+            if(currentStage === 4) mechAnimTime++;
+            
+            mechCtx.beginPath();
+            mechCtx.moveTo(-150+topX, -100);
+            mechCtx.lineTo(150+topX, -100);
+            mechCtx.lineTo(150+topX, 0);
+            for(let i=150; i>=-150; i-=20) mechCtx.lineTo(i+topX, Math.sin((i+topX)*0.2)*10 - 5);
+            mechCtx.fill();
+
+            // Heat waves
+            if (vState.heat > 0.01) {
+                mechCtx.strokeStyle = `rgba(255, 42, 109, ${vState.heat * 0.5 * (Math.sin(Date.now()*0.01)*0.5+0.5)})`;
+                mechCtx.lineWidth = 2;
+                for(let i=0; i<5; i++) {
+                    mechCtx.beginPath();
+                    mechCtx.arc(topX, 0, 20 + i*15, 0, Math.PI, true);
+                    mechCtx.stroke();
+                }
+            }
+
+            mechCtx.restore();
+
+            // Draw Macro Vectors overlay
+            let cx = mechW/2;
+            let cy = mechH/2 - 80; // block center
+            
+            // Gravity & Normal
+            drawArrow(mechCtx, cx, cy, cx, cy+40, "rgba(255,255,255,0.3)"); // W
+            drawArrow(mechCtx, cx, cy, cx, cy-40, "rgba(255,255,255,0.3)"); // N
+
+            // Push & Fric
+            if (vState.arrowPush > 1) {
+                drawArrow(mechCtx, cx - 60, cy, cx - 60 + vState.arrowPush, cy, "#05FFA1", 4);
+                mechCtx.fillStyle="#05FFA1"; mechCtx.fillText("Push", cx - 60, cy-15);
+            }
+            if (vState.arrowFric > 1) {
+                drawArrow(mechCtx, cx + (currentStage>=4?topX:vState.offsetTop), cy+80, cx + (currentStage>=4?topX:vState.offsetTop) - vState.arrowFric, cy+80, "#FF2A6D", 4);
+                mechCtx.fillStyle="#FF2A6D"; mechCtx.fillText("Friction", cx-40, cy+70);
+            }
+
+            mechFrameId = requestAnimationFrame(drawMechanism);
+        }
+
+        function setStage(index) {
+            currentStage = index;
+            document.getElementById('stage-title').innerText = stages[index].title;
+            document.getElementById('stage-desc').innerText = stages[index].desc;
+            
+            document.querySelectorAll('#stage-dots .dot').forEach((d, i) => d.classList.toggle('active', i === index));
+            
+            document.getElementById('btn-prev').disabled = (index === 0);
+            document.getElementById('btn-next').disabled = (index === stages.length - 1);
+            
+            updateMechStateTargets();
+        }
+
+        document.getElementById('btn-next').onclick = () => { if(currentStage < 4) setStage(currentStage+1); };
+        document.getElementById('btn-prev').onclick = () => { if(currentStage > 0) setStage(currentStage-1); };
+        
+        document.getElementById('btn-autoplay').onclick = function() {
+            isMechAuto = !isMechAuto;
+            this.style.color = isMechAuto ? "var(--primary)" : "";
+            if(isMechAuto) {
+                let autoTimer = setInterval(() => {
+                    if(!isMechAuto) { clearInterval(autoTimer); return; }
+                    setStage((currentStage + 1) % 5);
+                }, 3000);
+            }
+        };
+
+        // ==========================================
+        // Interactive Simulation Lab
+        // ==========================================
+        const simCanvas = document.getElementById('sim-canvas');
+        let simCtx, simW, simH;
+        let simFrameId;
+
+        // Physics State
+        const g = 9.8;
+        const scale = 2; // px per meter
+        let pState = {
+            mass: 10,       // kg
+            pushRaw: 0,     // N (from slider)
+            mat: 'wood',
+            mu_s: 0.5,      // static coeff
+            mu_k: 0.3,      // kinetic coeff
+            x: 50,          // position px
+            v: 0,           // velocity px/s
+            isMoving: false,
+            history: []     // for graph
+        };
+
+        const materials = {
+            wood: { ms: 0.5, mk: 0.3, color: '#8B5A2B' },
+            ice: { ms: 0.1, mk: 0.05, color: '#A0E6FF' },
+            rubber: { ms: 0.9, mk: 0.7, color: '#333333' }
+        };
+
+        // UI Binding
+        const sliderPush = document.getElementById('slider-push');
+        const sliderMass = document.getElementById('slider-mass');
+        const valPush = document.getElementById('val-push');
+        const valMass = document.getElementById('val-mass');
+        const dataState = document.getElementById('data-state');
+        const dataFric = document.getElementById('data-fric');
+
+        sliderPush.oninput = (e) => { 
+            pState.pushRaw = parseFloat(e.target.value); 
+            valPush.innerText = pState.pushRaw + " N"; 
+        };
+        
+        sliderMass.oninput = (e) => { 
+            pState.mass = parseFloat(e.target.value); 
+            valMass.innerText = pState.mass + " kg"; 
+            
+            // Adjust box size visually
+            boxW = 40 + (pState.mass * 1.5);
+            boxH = 40 + (pState.mass * 1.5);
+        };
+
+        document.querySelectorAll('.mat-btn').forEach(btn => {
+            btn.onclick = (e) => {
+                document.querySelectorAll('.mat-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                let type = btn.dataset.mat;
+                pState.mu_s = materials[type].ms;
+                pState.mu_k = materials[type].mk;
+                pState.mat = type;
+                pState.history = []; // reset graph on material change
+            };
+        });
+
+        let boxW = 55;
+        let boxH = 55;
+        let lastTime = 0;
+
+        function updateSimPhysics(dt) {
+            // Normal force = m * g
+            let Fn = pState.mass * g;
+            
+            // Max limits
+            let maxStatic = pState.mu_s * Fn;
+            let kineticFric = pState.mu_k * Fn;
+            
+            let currentFric = 0;
+            let netForce = 0;
+
+            if (pState.v === 0) {
+                // Static Check
+                if (pState.pushRaw <= maxStatic) {
+                    currentFric = pState.pushRaw; // matches push
+                    netForce = 0;
+                    pState.isMoving = false;
+                } else {
+                    // Breakaway
+                    currentFric = kineticFric;
+                    netForce = pState.pushRaw - currentFric;
+                    pState.isMoving = true;
+                }
+            } else {
+                // Kinetic motion
+                currentFric = kineticFric;
+                // If push is removed, friction opposes velocity
+                if (pState.pushRaw === 0) {
+                     netForce = -currentFric;
+                } else {
+                     netForce = pState.pushRaw - currentFric;
+                }
+            }
+
+            // Apply acceleration (F=ma)
+            let acc = netForce / pState.mass;
+            pState.v += acc * (dt/1000) * 10; // *10 scaling factor for visuals
+            
+            // Stop logic if friction opposes velocity to 0
+            if (pState.pushRaw === 0 && pState.v < 0 && pState.isMoving) {
+                pState.v = 0;
+                pState.isMoving = false;
+            }
+
+            pState.x += pState.v * (dt/1000) * scale * 10;
+
+            // Screen wrap
+            if (pState.x > simW) pState.x = -boxW;
+
+            // UI Updates
+            dataFric.innerText = currentFric.toFixed(1) + " N";
+            dataState.innerText = pState.isMoving ? "Kinetic (Moving)" : "Static (Rest)";
+            dataState.style.color = pState.isMoving ? "var(--primary)" : "var(--text-main)";
+
+            // History for Graph (record points if pushing)
+            if(Math.random() < 0.1 && pState.pushRaw > 0) { // sample occasionally
+                pState.history.push({ push: pState.pushRaw, fric: currentFric, maxS: maxStatic });
+                if(pState.history.length > 50) pState.history.shift();
+            }
+
+            return { currentFric, maxStatic };
+        }
+
+        function drawSim(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+
+            if(!simCtx) return;
+            
+            // Physics Update
+            let {currentFric, maxStatic} = updateSimPhysics(dt);
+
+            simCtx.clearRect(0, 0, simW, simH);
+
+            // 1. Draw Floor
+            simCtx.fillStyle = materials[pState.mat].color;
+            let floorY = simH - 100;
+            simCtx.fillRect(0, floorY, simW, 100);
+            // Texture
+            simCtx.strokeStyle = 'rgba(255,255,255,0.1)';
+            simCtx.beginPath();
+            for(let i=0; i<simW; i+=20) { simCtx.moveTo(i, floorY); simCtx.lineTo(i-10, floorY+100); }
+            simCtx.stroke();
+
+            // 2. Draw Block
+            simCtx.fillStyle = '#444';
+            simCtx.strokeStyle = '#666';
+            simCtx.lineWidth = 2;
+            let bx = pState.x;
+            let by = floorY - boxH;
+            simCtx.fillRect(bx, by, boxW, boxH);
+            simCtx.strokeRect(bx, by, boxW, boxH);
+            
+            // Mass label
+            simCtx.fillStyle = '#fff';
+            simCtx.font = "12px sans-serif";
+            simCtx.textAlign = "center";
+            simCtx.fillText(pState.mass+"kg", bx + boxW/2, by + boxH/2 + 4);
+
+            // 3. Draw Vectors
+            let cx = bx + boxW/2;
+            let cy = by + boxH/2;
+
+            // Push (Green)
+            if (pState.pushRaw > 0) {
+                let pLen = Math.min(pState.pushRaw * 0.5, 100); // scale visual
+                drawArrow(simCtx, cx - boxW, cy, cx - boxW + pLen, cy, "#05FFA1", 3);
+            }
+
+            // Friction (Red)
+            if (currentFric > 0) {
+                let fLen = Math.min(currentFric * 0.5, 100);
+                drawArrow(simCtx, cx + boxW/2, cy + boxH/2, cx + boxW/2 - fLen, cy + boxH/2, "#FF2A6D", 3);
+            }
+
+            // 4. Mini Graph Overlay (Top Right)
+            drawGraph(currentFric, maxStatic);
+
+            simFrameId = requestAnimationFrame(drawSim);
+        }
+
+        function drawGraph(currFric, maxS) {
+            let gw = 150, gh = 100;
+            let gx = simW - gw - 20;
+            let gy = 20;
+
+            simCtx.fillStyle = 'rgba(0,0,0,0.5)';
+            simCtx.fillRect(gx, gy, gw, gh);
+            simCtx.strokeStyle = 'rgba(255,255,255,0.2)';
+            simCtx.strokeRect(gx, gy, gw, gh);
+
+            // Axes labels
+            simCtx.fillStyle = 'rgba(255,255,255,0.5)';
+            simCtx.font = "10px sans-serif";
+            simCtx.fillText("Applied Force", gx + gw/2, gy + gh - 5);
+            simCtx.save();
+            simCtx.translate(gx + 10, gy + gh/2);
+            simCtx.rotate(-Math.PI/2);
+            simCtx.fillText("Friction", 0, 0);
+            simCtx.restore();
+
+            // Plot ideal curve faintly
+            simCtx.beginPath();
+            simCtx.moveTo(gx+20, gy+gh-20); // origin
+            // static rise (1:1)
+            let pkX = gx+20 + (maxS*0.5); 
+            let pkY = gy+gh-20 - (maxS*0.5);
+            if(pkX < gx+gw && pkY > gy) {
+                simCtx.lineTo(pkX, pkY);
+                // kinetic drop
+                simCtx.lineTo(pkX+10, pkY + (pState.mu_s - pState.mu_k)*pState.mass*g*0.5);
+                simCtx.lineTo(gx+gw, pkY + (pState.mu_s - pState.mu_k)*pState.mass*g*0.5);
+            }
+            simCtx.strokeStyle = 'rgba(255,255,255,0.2)';
+            simCtx.stroke();
+
+            // Plot current point
+            let px = gx + 20 + Math.min(pState.pushRaw * 0.5, gw-20);
+            let py = gy + gh - 20 - Math.min(currFric * 0.5, gh-20);
+            
+            simCtx.fillStyle = pState.isMoving ? '#00E5FF' : '#FFC000';
+            simCtx.beginPath();
+            simCtx.arc(px, py, 4, 0, Math.PI*2);
+            simCtx.fill();
+        }
+
+        // ==========================================
+        // Initialization & Resize Handling
+        // ==========================================
+        function initCanvases() {
+            let mData = setupCanvas(mechCanvas);
+            mechCtx = mData.ctx; mechW = mData.width; mechH = mData.height;
+            
+            let sData = setupCanvas(simCanvas);
+            simCtx = sData.ctx; simW = sData.width; simH = sData.height;
+
+            // Start loops if not running
+            if(!mechFrameId) { updateMechStateTargets(); requestAnimationFrame(drawMechanism); }
+            if(!simFrameId) { lastTime = 0; requestAnimationFrame(drawSim); }
+        }
+
+        window.addEventListener('resize', () => {
+            cancelAnimationFrame(mechFrameId);
+            cancelAnimationFrame(simFrameId);
+            mechFrameId = null; simFrameId = null;
+            initCanvases();
+        });
+
+        // Start
+        initCanvases();
+        setStage(0);
+
+    </script>
+</body>
+</html>

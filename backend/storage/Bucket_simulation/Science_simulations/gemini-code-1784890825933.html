@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3R: Reduce, Reuse, Recycle - Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           GLOBAL VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-base: #060a0f;
+            --bg-surface: #0d1520;
+            --glass-bg: rgba(18, 30, 45, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-primary: #f0f4f8;
+            --text-secondary: #8b9bb4;
+            
+            /* Theme Accents */
+            --accent-green: #00ff88;
+            --accent-green-glow: rgba(0, 255, 136, 0.3);
+            --accent-blue: #00d4ff;
+            --accent-blue-glow: rgba(0, 212, 255, 0.3);
+            --accent-orange: #ffaa00;
+            
+            /* Typography */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --fs-h1: clamp(2.5rem, 5vw, 4.5rem);
+            --fs-h2: clamp(2rem, 4vw, 3rem);
+            --fs-h3: clamp(1.5rem, 3vw, 2rem);
+            --fs-body: clamp(1rem, 1.2vw, 1.125rem);
+            --fs-small: clamp(0.875rem, 1vw, 1rem);
+            
+            /* Spacing */
+            --space-xs: clamp(0.5rem, 1vw, 0.75rem);
+            --space-sm: clamp(1rem, 2vw, 1.5rem);
+            --space-md: clamp(2rem, 4vw, 3rem);
+            --space-lg: clamp(4rem, 8vw, 6rem);
+            
+            /* UI Elements */
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-pill: 999px;
+            --transition: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -2;
+            background: radial-gradient(circle at 15% 50%, rgba(0, 255, 136, 0.05), transparent 50%),
+                        radial-gradient(circle at 85% 30%, rgba(0, 212, 255, 0.05), transparent 50%);
+            pointer-events: none;
+        }
+
+        canvas#particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--space-sm);
+        }
+
+        /* ==========================================================================
+           UTILITIES & GLASSMORPHISM
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            position: relative;
+        }
+
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(10px); /* Performance optimization for mobile */
+                -webkit-backdrop-filter: blur(10px);
+            }
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: var(--space-md);
+        }
+
+        .section-header h2 {
+            font-size: var(--fs-h2);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .section-header p {
+            color: var(--text-secondary);
+            font-size: var(--fs-body);
+            max-width: 600px;
+            margin: var(--space-xs) auto 0;
+        }
+
+        /* ==========================================================================
+           NAVIGATION
+           ========================================================================== */
+        nav {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+            padding: 8px;
+            border-radius: var(--radius-pill);
+        }
+
+        nav a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: var(--fs-small);
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: var(--radius-pill);
+            transition: var(--transition);
+        }
+
+        nav a:hover, nav a.active {
+            color: var(--bg-base);
+            background: var(--text-primary);
+            box-shadow: 0 0 15px rgba(255,255,255,0.2);
+        }
+
+        @media (max-width: 768px) {
+            nav {
+                top: auto;
+                bottom: 20px;
+                width: 90%;
+                justify-content: space-between;
+                overflow-x: auto;
+            }
+            nav a { padding: 8px 12px; }
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-content {
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .hero-logo-container {
+            width: 150px;
+            height: 150px;
+            margin-bottom: var(--space-sm);
+            position: relative;
+        }
+
+        .hero h1 {
+            font-size: var(--fs-h1);
+            line-height: 1.1;
+            margin-bottom: var(--space-xs);
+        }
+
+        .hero p {
+            font-size: var(--fs-h3);
+            color: var(--text-secondary);
+            font-weight: 300;
+        }
+
+        .scroll-indicator {
+            position: absolute;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 50px;
+            border: 2px solid var(--text-secondary);
+            border-radius: 15px;
+            display: flex;
+            justify-content: center;
+            padding-top: 8px;
+            opacity: 0.6;
+        }
+
+        .scroll-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--accent-green);
+            border-radius: 50%;
+            animation: scrollDown 2s infinite;
+        }
+
+        @keyframes scrollDown {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(20px); opacity: 0; }
+        }
+
+        /* ==========================================================================
+           OVERVIEW: THE HIERARCHY
+           ========================================================================== */
+        .section-padding {
+            padding: var(--space-lg) 0;
+        }
+
+        .hierarchy-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-md);
+            align-items: center;
+        }
+
+        @media (max-width: 1024px) {
+            .hierarchy-grid { grid-template-columns: 1fr; }
+        }
+
+        .pyramid-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1/1;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        .pyramid-tier {
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .pyramid-tier:hover {
+            filter: brightness(1.2) drop-shadow(0 0 20px rgba(255,255,255,0.2));
+            transform: scale(1.02);
+        }
+
+        .hierarchy-info {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .info-card {
+            padding: var(--space-sm);
+            border-left: 4px solid transparent;
+            transition: var(--transition);
+            opacity: 0.5;
+            cursor: pointer;
+        }
+
+        .info-card.active {
+            opacity: 1;
+            background: rgba(255,255,255,0.03);
+            border-left-color: var(--accent-color);
+            transform: translateX(10px);
+        }
+
+        .info-card h3 {
+            font-size: var(--fs-h3);
+            margin-bottom: 8px;
+            color: var(--accent-color);
+        }
+
+        /* ==========================================================================
+           DIAGRAM MARKER & LEGEND SYSTEM (MANDATORY PATTERN)
+           ========================================================================== */
+        .diagram-layout {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: var(--space-md);
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .diagram-layout { grid-template-columns: 1fr; }
+        }
+
+        .diagram-visual {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.03) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--space-sm);
+        }
+
+        .diagram-visual svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+            overflow: visible;
+        }
+
+        /* Markers on the SVG */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--accent-color-glow);
+            transform: translate(-50%, -50%);
+            transition: var(--transition);
+            z-index: 10;
+        }
+
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid var(--accent-color);
+            animation: pulseMarker 2s infinite;
+        }
+
+        @keyframes pulseMarker {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: #fff;
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--accent-color-glow);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: var(--accent-color);
+            color: #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .legend-content h4 {
+            font-size: var(--fs-body);
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .legend-content p {
+            font-size: var(--fs-small);
+            color: var(--text-secondary);
+        }
+
+        /* ==========================================================================
+           COMPONENTS (Reduce, Reuse, Recycle)
+           ========================================================================== */
+        .component-section {
+            margin-bottom: var(--space-lg);
+            padding: var(--space-md);
+        }
+
+        .component-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: var(--space-md);
+        }
+        
+        .component-icon {
+            width: 48px;
+            height: 48px;
+            fill: var(--accent-color);
+        }
+
+        .component-header h3 {
+            font-size: var(--fs-h2);
+            color: var(--accent-color);
+        }
+
+        /* SVG Inner Animations */
+        .anim-flow {
+            stroke-dasharray: 10;
+            animation: flowDash 1s linear infinite;
+        }
+        @keyframes flowDash {
+            to { stroke-dashoffset: -20; }
+        }
+        
+        .anim-float {
+            animation: floatObj 4s ease-in-out infinite;
+        }
+        @keyframes floatObj {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .anim-pulse-opacity {
+            animation: pulseOp 3s ease-in-out infinite;
+        }
+        @keyframes pulseOp {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+
+        /* ==========================================================================
+           WORKING PROCESS (Mandatory Stage-by-Stage)
+           ========================================================================== */
+        .process-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-md);
+            margin-top: var(--space-md);
+        }
+
+        .process-visual {
+            width: 100%;
+            height: 400px;
+            background: #04070a;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .process-stage-graphics {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0; left: 0;
+            opacity: 0;
+            transition: opacity 0.8s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .process-stage-graphics.active {
+            opacity: 1;
+        }
+
+        /* Specific Process Animations */
+        .conveyor-belt {
+            width: 80%;
+            height: 10px;
+            background: #222;
+            position: absolute;
+            bottom: 20%;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .conveyor-lines {
+            width: 200%;
+            height: 100%;
+            background: repeating-linear-gradient(90deg, transparent, transparent 20px, #444 20px, #444 40px);
+            animation: beltMove 2s linear infinite forwards;
+        }
+        @keyframes beltMove {
+            to { transform: translateX(-50%); }
+        }
+
+        .process-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .stage-info {
+            min-height: 120px;
+        }
+
+        .stage-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--accent-blue);
+            border: 1px solid var(--accent-blue);
+            border-radius: var(--radius-pill);
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stage-title {
+            font-size: var(--fs-h3);
+            margin-bottom: 8px;
+        }
+
+        .stage-desc {
+            color: var(--text-secondary);
+            font-size: var(--fs-body);
+        }
+
+        .io-indicators {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .io-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        .io-icon { width: 24px; height: 24px; }
+        .io-arrow { color: var(--text-secondary); }
+
+        .control-buttons {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.3);
+            padding: 12px 24px;
+            border-radius: var(--radius-pill);
+        }
+
+        .btn {
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition);
+        }
+
+        .btn:hover:not(:disabled) {
+            color: var(--accent-blue);
+        }
+        
+        .btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .btn-icon {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .dot.active {
+            background: var(--accent-blue);
+            box-shadow: 0 0 10px var(--accent-blue-glow);
+            transform: scale(1.3);
+        }
+
+        /* ==========================================================================
+           SIMULATION (Interactive Sorter)
+           ========================================================================== */
+        .sim-container {
+            height: 600px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: #080c12;
+        }
+
+        .sim-header {
+            padding: var(--space-sm);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .score-board {
+            display: flex;
+            gap: 20px;
+        }
+
+        .score-item {
+            text-align: center;
+        }
+        .score-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent-green);
+            font-variant-numeric: tabular-nums;
+        }
+        .score-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+        }
+
+        .sim-area {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Belt */
+        .sim-belt-container {
+            position: absolute;
+            top: 20%;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            display: flex;
+            align-items: center;
+        }
+        .sim-belt {
+            width: 100%;
+            height: 10px;
+            background: #333;
+            position: relative;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        .sim-belt::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: repeating-linear-gradient(90deg, transparent, transparent 40px, #111 40px, #111 45px);
+            animation: beltMove 1s linear infinite;
+        }
+
+        /* Draggable Items */
+        .sim-item {
+            position: absolute;
+            width: 60px;
+            height: 60px;
+            top: 50%;
+            transform: translateY(-50%);
+            left: -80px; /* Start offscreen */
+            cursor: grab;
+            z-index: 10;
+            transition: transform 0.1s;
+            filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5));
+            touch-action: none; /* Crucial for custom touch drag */
+        }
+        
+        .sim-item:active { cursor: grabbing; transform: translateY(-50%) scale(1.1); }
+        .sim-item svg { width: 100%; height: 100%; pointer-events: none; }
+
+        /* Bins */
+        .bins-container {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            gap: 5%;
+            padding: 0 5%;
+        }
+
+        .bin {
+            width: 25%;
+            max-width: 150px;
+            aspect-ratio: 3/4;
+            border: 2px dashed rgba(255,255,255,0.2);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            padding-bottom: 20px;
+            position: relative;
+            transition: var(--transition);
+            background: linear-gradient(to top, rgba(255,255,255,0.05), transparent);
+        }
+
+        .bin.drag-over {
+            border-style: solid;
+            transform: scale(1.05);
+            background: linear-gradient(to top, rgba(255,255,255,0.1), transparent);
+        }
+
+        .bin[data-type="reduce"] { --bin-color: #ffaa00; }
+        .bin[data-type="reuse"] { --bin-color: #00d4ff; }
+        .bin[data-type="recycle"] { --bin-color: #00ff88; }
+
+        .bin.drag-over { border-color: var(--bin-color); box-shadow: 0 0 20px rgba(var(--bin-color), 0.3); }
+
+        .bin-icon-bg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50%;
+            opacity: 0.1;
+            fill: var(--bin-color);
+        }
+
+        .bin-label {
+            font-weight: bold;
+            color: var(--bin-color);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            z-index: 2;
+        }
+
+        /* Particle effect canvas */
+        canvas#fx-canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        /* ==========================================================================
+           FACTS & APPLICATIONS
+           ========================================================================== */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-sm);
+        }
+
+        .fact-card {
+            padding: var(--space-sm);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            transition: var(--transition);
+        }
+
+        .fact-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.08);
+        }
+
+        .fact-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .fact-card[data-color="green"] .fact-icon { background: rgba(0,255,136,0.1); color: var(--accent-green); }
+        .fact-card[data-color="blue"] .fact-icon { background: rgba(0,212,255,0.1); color: var(--accent-blue); }
+        .fact-card[data-color="orange"] .fact-icon { background: rgba(255,170,0,0.1); color: var(--accent-orange); }
+
+        .fact-card h4 { font-size: 18px; margin-bottom: 4px; }
+        .fact-card p { font-size: 14px; color: var(--text-secondary); }
+
+        footer {
+            text-align: center;
+            padding: var(--space-md);
+            border-top: 1px solid var(--glass-border);
+            margin-top: var(--space-lg);
+            color: var(--text-secondary);
+        }
+
+        /* Utility animations */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg"></div>
+    <canvas id="particle-canvas"></canvas>
+
+    <!-- Navigation -->
+    <nav class="glass-panel">
+        <a href="#intro" class="active">Intro</a>
+        <a href="#hierarchy">Hierarchy</a>
+        <a href="#components">The 3Rs</a>
+        <a href="#working">Working</a>
+        <a href="#simulation">Simulation</a>
+    </nav>
+
+    <!-- 1. INTRODUCTION (HERO) -->
+    <section id="intro" class="hero container">
+        <div class="hero-content">
+            <div class="hero-logo-container">
+                <!-- Premium Glowing 3R Logo SVG -->
+                <svg viewBox="0 0 100 100" style="width:100%; height:100%; overflow:visible;">
+                    <defs>
+                        <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#00ff88" />
+                            <stop offset="100%" stop-color="#00d4ff" />
+                        </linearGradient>
+                        <filter id="glowLogo" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="4" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+                    <g filter="url(#glowLogo)">
+                        <!-- Triangle Path animated -->
+                        <path d="M50 10 L90 80 L10 80 Z" fill="none" stroke="url(#logoGrad)" stroke-width="4" stroke-linejoin="round" class="anim-flow" style="stroke-dasharray: 200; stroke-dashoffset: 200; animation: drawTriangle 3s ease-in-out forwards infinite alternate;" />
+                        <!-- Inner details -->
+                        <circle cx="50" cy="55" r="15" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2" />
+                        <path d="M50 40 L50 70 M35 55 L65 55" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linecap="round" class="anim-float"/>
+                    </g>
+                    <style>
+                        @keyframes drawTriangle { to { stroke-dashoffset: 0; } }
+                    </style>
+                </svg>
+            </div>
+            <h1>The <span class="gradient-text">3R</span> Principle</h1>
+            <p>Reduce, Reuse, Recycle. A sustainable framework for resource management.</p>
+        </div>
+        <div class="scroll-indicator">
+            <div class="scroll-dot"></div>
+        </div>
+    </section>
+
+    <!-- 2. TOPIC OVERVIEW (HIERARCHY) -->
+    <section id="hierarchy" class="section-padding container">
+        <div class="section-header fade-in">
+            <h2>The Waste Management Hierarchy</h2>
+            <p>Not all Rs are created equal. The hierarchy prioritizes actions that have the highest environmental benefit.</p>
+        </div>
+
+        <div class="hierarchy-grid">
+            <!-- Visual Pyramid -->
+            <div class="pyramid-container fade-in">
+                <svg viewBox="0 0 200 200" width="100%" height="100%">
+                    <defs>
+                        <linearGradient id="gradRed" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#ffaa00"/><stop offset="100%" stop-color="#cc8800"/></linearGradient>
+                        <linearGradient id="gradReu" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#00d4ff"/><stop offset="100%" stop-color="#0099cc"/></linearGradient>
+                        <linearGradient id="gradRec" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#00ff88"/><stop offset="100%" stop-color="#00cc66"/></linearGradient>
+                        <filter id="shadow"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.5"/></filter>
+                    </defs>
+                    
+                    <!-- Reduce (Top, Widest) -->
+                    <g class="pyramid-tier" data-tier="reduce" transform="translate(0, 10)">
+                        <polygon points="10,20 190,20 160,70 40,70" fill="url(#gradRed)" filter="url(#shadow)"/>
+                        <text x="100" y="52" fill="#fff" font-size="16" font-weight="bold" text-anchor="middle" font-family="sans-serif">REDUCE</text>
+                        <text x="100" y="66" fill="rgba(0,0,0,0.5)" font-size="10" font-weight="bold" text-anchor="middle" font-family="sans-serif">MOST PREFERRED</text>
+                    </g>
+                    
+                    <!-- Reuse (Middle) -->
+                    <g class="pyramid-tier" data-tier="reuse" transform="translate(0, 15)">
+                        <polygon points="45,75 155,75 125,125 75,125" fill="url(#gradReu)" filter="url(#shadow)"/>
+                        <text x="100" y="106" fill="#fff" font-size="14" font-weight="bold" text-anchor="middle" font-family="sans-serif">REUSE</text>
+                    </g>
+
+                    <!-- Recycle (Bottom, Narrowest) -->
+                    <g class="pyramid-tier" data-tier="recycle" transform="translate(0, 20)">
+                        <polygon points="80,130 120,130 100,170" fill="url(#gradRec)" filter="url(#shadow)"/>
+                        <text x="100" y="152" fill="#000" font-size="10" font-weight="bold" text-anchor="middle" font-family="sans-serif">RECYCLE</text>
+                    </g>
+                    
+                    <!-- Downward Arrow overlay -->
+                    <path d="M 20 90 Q 5 90 5 110 L 5 150 L 15 150 L 0 170 L -15 150 L -5 150 L -5 110 Q -5 80 20 80" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2" marker-end="url(#arrowhead)"/>
+                     <defs>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                          <polygon points="0 0, 10 3.5, 0 7" fill="rgba(255,255,255,0.2)" />
+                        </marker>
+                      </defs>
+                </svg>
+            </div>
+
+            <!-- Interactive Details -->
+            <div class="hierarchy-info fade-in">
+                <div class="info-card glass-panel active" id="info-reduce">
+                    <h3 style="--accent-color: var(--accent-orange)">1. Reduce (Prevention)</h3>
+                    <p>The most effective strategy. It means preventing waste before it's created. Using less energy, buying items with less packaging, and avoiding single-use plastics.</p>
+                </div>
+                <div class="info-card glass-panel" id="info-reuse">
+                    <h3 style="--accent-color: var(--accent-blue)">2. Reuse (Repurposing)</h3>
+                    <p>Extending the lifecycle of a product. If you must consume, choose items that can be used multiple times for the same or a new purpose, delaying their entry into the waste stream.</p>
+                </div>
+                <div class="info-card glass-panel" id="info-recycle">
+                    <h3 style="--accent-color: var(--accent-green)">3. Recycle (Processing)</h3>
+                    <p>The last resort of the 3Rs. Breaking down a product into its raw materials to manufacture something new. It requires energy and infrastructure, hence it's lower on the hierarchy.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. MAIN COMPONENTS (Deep Dive) -->
+    <section id="components" class="section-padding container">
+        <div class="section-header fade-in">
+            <h2>Understanding the Components</h2>
+            <p>A visual breakdown of how each 'R' works in practice.</p>
+        </div>
+
+        <!-- Component 1: REDUCE -->
+        <article class="component-section glass-panel fade-in" style="--accent-color: var(--accent-orange); --accent-color-glow: rgba(255,170,0,0.3)">
+            <div class="component-header">
+                <svg class="component-icon" viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2zm0 3.8l7.1 14.2H4.9L12 5.8zM11 10v5h2v-5h-2zm0 7v2h2v-2h-2z"/></svg>
+                <h3>Reduce: Source Minimization</h3>
+            </div>
+            
+            <div class="diagram-layout">
+                <!-- Visual -->
+                <div class="diagram-visual" id="visual-reduce">
+                    <!-- Isometric Smart Home / Energy saving concept -->
+                    <svg viewBox="0 0 400 300">
+                        <defs>
+                            <linearGradient id="wallGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#2a3b4c"/><stop offset="100%" stop-color="#1a2530"/></linearGradient>
+                            <linearGradient id="floorGrad" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#141e28"/><stop offset="100%" stop-color="#0a0f14"/></linearGradient>
+                            <radialGradient id="lightGlow" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="rgba(255,170,0,0.4)"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+                        </defs>
+                        <!-- Background Room Isometric -->
+                        <path d="M200 50 L350 120 L350 250 L200 300 L50 250 L50 120 Z" fill="url(#wallGrad)" opacity="0.3"/>
+                        <path d="M200 180 L350 250 L200 300 L50 250 Z" fill="url(#floorGrad)"/>
+                        <path d="M50 120 L200 180 L200 300 L50 250 Z" fill="rgba(255,255,255,0.02)"/>
+                        
+                        <!-- Smart Thermostat -->
+                        <g transform="translate(130, 110)">
+                            <circle cx="0" cy="0" r="25" fill="#111" stroke="#333" stroke-width="2"/>
+                            <circle cx="0" cy="0" r="20" fill="#000"/>
+                            <text x="0" y="5" fill="#ffaa00" font-size="12" font-family="monospace" text-anchor="middle" class="anim-pulse-opacity">18°C</text>
+                            <path d="M -15 0 A 15 15 0 0 1 15 0" fill="none" stroke="#ffaa00" stroke-width="2" stroke-linecap="round"/>
+                        </g>
+
+                        <!-- LED Bulb -->
+                        <g transform="translate(250, 70)" class="anim-float">
+                            <circle cx="0" cy="0" r="40" fill="url(#lightGlow)"/>
+                            <path d="M-10 0 C-10 -15, 10 -15, 10 0 L5 15 L-5 15 Z" fill="#fff" opacity="0.8"/>
+                            <path d="M-6 16 L6 16 L4 22 L-4 22 Z" fill="#aaa"/>
+                            <path d="M-15 -10 L-25 -20 M15 -10 L25 -20 M0 -15 L0 -30" stroke="#ffaa00" stroke-width="2" stroke-linecap="round" class="anim-pulse-opacity"/>
+                        </g>
+
+                        <!-- Tap/Water -->
+                        <g transform="translate(260, 200)">
+                            <path d="M0 0 L20 0 L20 10 L5 10 L5 30 L0 30 Z" fill="#888"/>
+                            <circle cx="2" cy="-2" r="5" fill="#555"/>
+                            <path d="M12 12 L12 40" stroke="#00d4ff" stroke-width="3" stroke-dasharray="6,4" class="anim-flow"/>
+                            <ellipse cx="12" cy="45" rx="15" ry="4" fill="rgba(0,212,255,0.3)"/>
+                        </g>
+
+                        <!-- Markers placed programmatically or absolute via HTML overlay -->
+                    </svg>
+                    <!-- HTML Markers to avoid SVG scaling text issues -->
+                    <div class="marker" data-group="reduce" data-id="r1" style="top: 40%; left: 35%;">1</div>
+                    <div class="marker" data-group="reduce" data-id="r2" style="top: 25%; left: 65%;">2</div>
+                    <div class="marker" data-group="reduce" data-id="r3" style="top: 70%; left: 68%;">3</div>
+                </div>
+
+                <!-- Legend -->
+                <div class="legend-list">
+                    <div class="legend-item" data-group="reduce" data-id="r1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Climate Control</h4>
+                            <p>Lowering thermostat temp reduces massive heating energy waste.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-group="reduce" data-id="r2">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4>Efficiency</h4>
+                            <p>LEDs use 75% less energy than incandescent bulbs.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-group="reduce" data-id="r3">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4>Resource Conservation</h4>
+                            <p>Fixing leaks prevents source water depletion.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+        <!-- Component 2: REUSE -->
+        <article class="component-section glass-panel fade-in" style="--accent-color: var(--accent-blue); --accent-color-glow: rgba(0,212,255,0.3)">
+            <div class="component-header">
+                <svg class="component-icon" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+                <h3>Reuse: Lifecycle Extension</h3>
+            </div>
+            
+            <div class="diagram-layout">
+                <div class="diagram-visual" id="visual-reuse">
+                    <!-- Glass Jar Terrarium Illustration -->
+                    <svg viewBox="0 0 400 300">
+                        <!-- Table surface -->
+                        <ellipse cx="200" cy="250" rx="120" ry="30" fill="rgba(255,255,255,0.05)"/>
+                        
+                        <!-- The Jar -->
+                        <g transform="translate(200, 150)">
+                            <!-- Back glass -->
+                            <path d="M-50 -70 L50 -70 L60 80 L-60 80 Z" fill="rgba(0, 212, 255, 0.05)" stroke="rgba(0,212,255,0.2)" stroke-width="1"/>
+                            
+                            <!-- Soil -->
+                            <path d="M-58 40 L58 40 L60 80 L-60 80 Z" fill="#3a2a18"/>
+                            <circle cx="-30" cy="60" r="5" fill="#22150a"/>
+                            <circle cx="20" cy="70" r="8" fill="#22150a"/>
+                            
+                            <!-- Plant -->
+                            <path d="M0 40 Q -20 0 -40 -20 Q -10 -10 0 20 Z" fill="#00ff88" opacity="0.8"/>
+                            <path d="M0 40 Q 30 -10 40 -40 Q 10 -20 0 20 Z" fill="#00cc66" opacity="0.9"/>
+                            <path d="M0 40 Q -10 10 -15 -30 Q 5 -10 0 20 Z" fill="#00aa55"/>
+                            
+                            <!-- Front glass with reflection -->
+                            <path d="M-50 -70 L50 -70 L60 80 L-60 80 Z" fill="url(#glassGrad)" stroke="rgba(0,212,255,0.4)" stroke-width="2"/>
+                            <path d="M-40 -60 L-30 -60 L-35 70 L-45 70 Z" fill="rgba(255,255,255,0.1)"/>
+                            
+                            <!-- Lid (Next to it) -->
+                            <g transform="translate(90, 80) rotate(15)">
+                                <ellipse cx="0" cy="0" rx="40" ry="10" fill="#999"/>
+                                <path d="M-40 0 L-40 10 Q 0 20 40 10 L40 0 Z" fill="#666"/>
+                            </g>
+                        </g>
+                        
+                        <defs>
+                            <linearGradient id="glassGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.1)"/>
+                                <stop offset="50%" stop-color="rgba(0,212,255,0.05)"/>
+                                <stop offset="100%" stop-color="rgba(255,255,255,0.2)"/>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div class="marker" data-group="reuse" data-id="u1" style="top: 30%; left: 45%;">1</div>
+                    <div class="marker" data-group="reuse" data-id="u2" style="top: 75%; left: 50%;">2</div>
+                    <div class="marker" data-group="reuse" data-id="u3" style="top: 80%; left: 75%;">3</div>
+                </div>
+
+                <div class="legend-list">
+                    <div class="legend-item" data-group="reuse" data-id="u1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Durable Container</h4>
+                            <p>Glass doesn't degrade, making it perfect for infinite reuses.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-group="reuse" data-id="u2">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4>New Purpose</h4>
+                            <p>A former food jar becomes a micro-ecosystem planter.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-group="reuse" data-id="u3">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4>Zero Processing Energy</h4>
+                            <p>Unlike recycling, washing and reusing requires near-zero industrial energy.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </article>
+
+    </section>
+
+    <!-- 4. WORKING PROCESS (Mandatory Stage-by-Stage) -->
+    <section id="working" class="section-padding container">
+        <div class="section-header fade-in">
+            <h2>How It Works: The Recycling Plant</h2>
+            <p>A step-by-step continuous cycle of transforming plastic waste back into raw material.</p>
+        </div>
+
+        <div class="glass-panel process-container fade-in">
+            
+            <!-- Visualization Area -->
+            <div class="process-visual">
+                
+                <!-- Common Elements (Conveyor, Pipes) -->
+                <div class="conveyor-belt"><div class="conveyor-lines"></div></div>
+                
+                <!-- SVG Canvas for stages -->
+                <svg viewBox="0 0 800 400" style="position: absolute; width: 100%; height: 100%; z-index: 5;">
+                    <defs>
+                        <filter id="glowGreen"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                        <linearGradient id="pipeGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#333"/><stop offset="50%" stop-color="#666"/><stop offset="100%" stop-color="#222"/></linearGradient>
+                    </defs>
+
+                    <!-- Stage 1 Graphics (Collection) -->
+                    <g class="process-stage-graphics active" id="stage-1-gfx">
+                        <!-- Truck -->
+                        <g transform="translate(100, 200)" class="anim-float">
+                            <rect x="0" y="20" width="80" height="60" fill="#00ff88" rx="5"/>
+                            <rect x="85" y="40" width="30" height="40" fill="#ccc" rx="3"/>
+                            <circle cx="20" cy="85" r="15" fill="#333"/>
+                            <circle cx="95" cy="85" r="15" fill="#333"/>
+                            <path d="M 40 40 L 40 60 M 60 40 L 60 60" stroke="rgba(0,0,0,0.2)" stroke-width="4"/>
+                        </g>
+                        <!-- Falling bottles -->
+                        <g transform="translate(200, 200)">
+                            <path d="M0 0 L 0 50" stroke="#00ff88" stroke-width="4" stroke-dasharray="10,10" class="anim-flow"/>
+                        </g>
+                    </g>
+
+                    <!-- Stage 2 Graphics (Sorting) -->
+                    <g class="process-stage-graphics" id="stage-2-gfx">
+                        <!-- Laser Scanner -->
+                        <path d="M 350 150 L 450 150 L 420 180 L 380 180 Z" fill="#444"/>
+                        <path d="M 400 180 L 350 280 L 450 280 Z" fill="rgba(0,212,255,0.2)" class="anim-pulse-opacity"/>
+                        <line x1="400" y1="180" x2="400" y2="280" stroke="#00d4ff" stroke-width="2" filter="url(#glowGreen)"/>
+                        
+                        <!-- Bottles on belt -->
+                        <rect x="300" y="290" width="10" height="25" fill="rgba(255,255,255,0.5)" rx="3"/>
+                        <rect x="340" y="295" width="10" height="20" fill="rgba(0,255,136,0.5)" rx="3"/>
+                        <rect x="380" y="290" width="10" height="25" fill="rgba(255,255,255,0.5)" rx="3"/>
+                    </g>
+
+                    <!-- Stage 3 Graphics (Shredding) -->
+                    <g class="process-stage-graphics" id="stage-3-gfx">
+                        <!-- Shredder Machine -->
+                        <rect x="500" y="180" width="120" height="100" fill="#333" rx="10"/>
+                        <rect x="520" y="160" width="80" height="20" fill="#222"/>
+                        <!-- Rotating blades -->
+                        <g transform="translate(560, 230)">
+                            <circle cx="0" cy="0" r="30" fill="#111"/>
+                            <path d="M-25 -25 L25 25 M-25 25 L25 -25" stroke="#888" stroke-width="6" transform="rotate(0)">
+                                <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="1s" repeatCount="indefinite"/>
+                            </path>
+                        </g>
+                        <!-- Flakes coming out -->
+                        <circle cx="560" cy="300" r="3" fill="#fff" class="anim-float"/>
+                        <circle cx="550" cy="310" r="2" fill="#fff" class="anim-float" style="animation-delay: 0.2s"/>
+                        <circle cx="570" cy="305" r="4" fill="#fff" class="anim-float" style="animation-delay: 0.4s"/>
+                    </g>
+
+                    <!-- Stage 4 Graphics (Melting) -->
+                    <g class="process-stage-graphics" id="stage-4-gfx">
+                        <!-- Extruder / Heater -->
+                        <path d="M 600 250 L 750 250 L 750 290 L 600 290 Z" fill="url(#pipeGrad)"/>
+                        <!-- Heat coils -->
+                        <path d="M 620 240 Q 630 220 640 240 T 660 240 T 680 240" fill="none" stroke="#ffaa00" stroke-width="3" filter="url(#glowGreen)" class="anim-pulse-opacity"/>
+                        <!-- Melted plastic flow -->
+                        <path d="M 750 270 L 800 270" stroke="#ffaa00" stroke-width="8" stroke-linecap="round" class="anim-flow" style="stroke-dasharray: 20;"/>
+                    </g>
+
+                    <!-- Stage 5 Graphics (Pellets) -->
+                    <g class="process-stage-graphics" id="stage-5-gfx">
+                        <!-- Water bath cooling & cutting -->
+                        <rect x="650" y="300" width="100" height="40" fill="rgba(0,212,255,0.3)"/>
+                        <path d="M 680 340 L 750 340" stroke="#fff" stroke-width="2" stroke-dasharray="4,6" class="anim-flow"/>
+                        <!-- Output Pellets -->
+                        <rect x="760" y="335" width="5" height="5" fill="#fff"/>
+                        <rect x="770" y="338" width="5" height="5" fill="#fff"/>
+                        <rect x="780" y="335" width="5" height="5" fill="#fff"/>
+                    </g>
+                </svg>
+            </div>
+
+            <!-- Controls & Info -->
+            <div class="process-controls" style="padding: var(--space-sm);">
+                
+                <div class="stage-info">
+                    <span class="stage-badge" id="stage-badge">Stage 1 of 5</span>
+                    <h3 class="stage-title" id="stage-title">Collection & Transfer</h3>
+                    <p class="stage-desc" id="stage-desc">Mixed recyclables are collected from bins and transported to the Materials Recovery Facility (MRF).</p>
+                    
+                    <div class="io-indicators">
+                        <div class="io-box">
+                            <span class="io-icon">🗑️</span> <span id="io-in">Mixed Waste</span>
+                        </div>
+                        <span class="io-arrow">→</span>
+                        <div class="io-box">
+                            <span class="io-icon">🏭</span> <span id="io-out">Facility Intake</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-buttons">
+                    <button class="btn" id="btn-prev" disabled>
+                        <svg class="btn-icon" viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg> Prev
+                    </button>
+                    
+                    <div class="progress-dots" id="process-dots">
+                        <div class="dot active" data-index="0"></div>
+                        <div class="dot" data-index="1"></div>
+                        <div class="dot" data-index="2"></div>
+                        <div class="dot" data-index="3"></div>
+                        <div class="dot" data-index="4"></div>
+                    </div>
+
+                    <button class="btn" id="btn-next">
+                        Next <svg class="btn-icon" viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                    </button>
+                </div>
+                
+                <button class="btn" id="btn-autoplay" style="justify-content: center; margin-top: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px;">
+                    <svg class="btn-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg> Auto-Play Cycle
+                </button>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. INTERACTIVE SIMULATION -->
+    <section id="simulation" class="section-padding container">
+        <div class="section-header fade-in">
+            <h2>Simulation: The Sorting Challenge</h2>
+            <p>Drag the items dropping on the belt into their correct sustainable destination.</p>
+        </div>
+
+        <div class="glass-panel sim-container fade-in">
+            <div class="sim-header">
+                <div>Sort the waste efficiently to maximize energy savings.</div>
+                <div class="score-board">
+                    <div class="score-item">
+                        <div class="score-value" id="score-val">0</div>
+                        <div class="score-label">Impact Score</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sim-area" id="sim-area">
+                <!-- Conveyor Belt -->
+                <div class="sim-belt-container"><div class="sim-belt"></div></div>
+
+                <!-- Particle Canvas overlay -->
+                <canvas id="fx-canvas"></canvas>
+
+                <!-- Bins -->
+                <div class="bins-container">
+                    <div class="bin" data-type="reduce" id="bin-reduce">
+                        <svg class="bin-icon-bg" viewBox="0 0 24 24"><path d="M12 2L2 22h20L12 2z"/></svg>
+                        <div class="bin-label">Reduce<br>(Compost)</div>
+                    </div>
+                    <div class="bin" data-type="reuse" id="bin-reuse">
+                        <svg class="bin-icon-bg" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8z"/></svg>
+                        <div class="bin-label">Reuse</div>
+                    </div>
+                    <div class="bin" data-type="recycle" id="bin-recycle">
+                        <svg class="bin-icon-bg" viewBox="0 0 24 24"><path d="M12 20c4.42 0 8-3.58 8-8s-3.58-8-8-8-8 3.58-8 8 3.58 8 8 8zm0-14c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6 2.69-6 6-6z"/></svg>
+                        <div class="bin-label">Recycle</div>
+                    </div>
+                </div>
+                
+                <!-- Draggable Items will be injected here via JS -->
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. FACTS & QUICK REVISION -->
+    <section class="section-padding container">
+        <div class="section-header fade-in">
+            <h2>Real-World Impact</h2>
+            <p>Why this hierarchy matters scientifically and economically.</p>
+        </div>
+
+        <div class="cards-grid fade-in">
+            <div class="fact-card glass-panel" data-color="blue">
+                <div class="fact-icon">🌊</div>
+                <h4>The Plastic Sink</h4>
+                <p>Only ~9% of all plastic ever made has been recycled. Most ends up in landfills or oceans, taking up to 500 years to decompose. This makes <strong>Reduce</strong> critical.</p>
+            </div>
+            
+            <div class="fact-card glass-panel" data-color="orange">
+                <div class="fact-icon">⚡</div>
+                <h4>Energy Thermodynamics</h4>
+                <p>Recycling an aluminum can saves 95% of the energy required to make a new one from bauxite ore. However, <em>reusing</em> a glass bottle saves 100% of manufacturing energy.</p>
+            </div>
+
+            <div class="fact-card glass-panel" data-color="green">
+                <div class="fact-icon">🔄</div>
+                <h4>Material Degradation</h4>
+                <p>Paper can only be recycled 5-7 times before its cellulose fibers become too short to form paper again. Plastic polymers also degrade. Only glass and metal are infinitely recyclable.</p>
+            </div>
+            
+            <div class="fact-card glass-panel" data-color="blue">
+                <div class="fact-icon">❌</div>
+                <h4>Common Mistake: Wishcycling</h4>
+                <p>Tossing unrecyclable items (like greasy pizza boxes or plastic bags) into the recycle bin disrupts the mechanical sorting process and contaminates entire batches of good material.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>Interactive Educational Simulation • Built with HTML, CSS & Vanilla JS</p>
+    </footer>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 1. Ambient Canvas Particles ---
+            const canvas = document.getElementById('particle-canvas');
+            const ctx = canvas.getContext('2d');
+            let particles = [];
+            
+            function resizeCanvas() {
+                canvas.width = window.innerWidth * window.devicePixelRatio;
+                canvas.height = window.innerHeight * window.devicePixelRatio;
+                ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                canvas.style.width = window.innerWidth + 'px';
+                canvas.style.height = window.innerHeight + 'px';
+            }
+            
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            class Particle {
+                constructor() {
+                    this.x = Math.random() * window.innerWidth;
+                    this.y = Math.random() * window.innerHeight;
+                    this.size = Math.random() * 2 + 0.5;
+                    this.speedX = Math.random() * 0.5 - 0.25;
+                    this.speedY = Math.random() * 0.5 - 0.25;
+                    this.color = Math.random() > 0.5 ? 'rgba(0, 255, 136, 0.3)' : 'rgba(0, 212, 255, 0.3)';
+                }
+                update() {
+                    this.x += this.speedX;
+                    this.y += this.speedY;
+                    if(this.x < 0 || this.x > window.innerWidth) this.speedX *= -1;
+                    if(this.y < 0 || this.y > window.innerHeight) this.speedY *= -1;
+                }
+                draw() {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            for(let i=0; i<50; i++) particles.push(new Particle());
+
+            function animateParticles() {
+                ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+                particles.forEach(p => { p.update(); p.draw(); });
+                requestAnimationFrame(animateParticles);
+            }
+            animateParticles();
+
+            // --- 2. Scroll Interactions & Navigation ---
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('nav a');
+            const fadeElements = document.querySelectorAll('.fade-in');
+
+            const observerOptions = { root: null, rootMargin: '0px', threshold: 0.2 };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        // Update Nav
+                        if(entry.target.tagName === 'SECTION') {
+                            navLinks.forEach(link => {
+                                link.classList.remove('active');
+                                if(link.getAttribute('href').substring(1) === entry.target.id) {
+                                    link.classList.add('active');
+                                }
+                            });
+                        }
+                    }
+                });
+            }, observerOptions);
+
+            fadeElements.forEach(el => observer.observe(el));
+            sections.forEach(sec => observer.observe(sec));
+
+            // Hierarchy Interaction
+            const tiers = document.querySelectorAll('.pyramid-tier');
+            const infoCards = document.querySelectorAll('.info-card');
+
+            tiers.forEach(tier => {
+                tier.addEventListener('mouseenter', () => {
+                    const type = tier.getAttribute('data-tier');
+                    infoCards.forEach(card => card.classList.remove('active'));
+                    document.getElementById(`info-${type}`).classList.add('active');
+                });
+            });
+
+            // --- 3. Diagram Marker Logic (Mandatory) ---
+            const markers = document.querySelectorAll('.marker');
+            const legends = document.querySelectorAll('.legend-item');
+
+            function clearDiagramActiveStates(group) {
+                document.querySelectorAll(`.marker[data-group="${group}"]`).forEach(m => m.classList.remove('active'));
+                document.querySelectorAll(`.legend-item[data-group="${group}"]`).forEach(l => l.classList.remove('active'));
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => {
+                    const group = marker.getAttribute('data-group');
+                    const id = marker.getAttribute('data-id');
+                    clearDiagramActiveStates(group);
+                    marker.classList.add('active');
+                    document.querySelector(`.legend-item[data-id="${id}"]`).classList.add('active');
+                });
+            });
+
+            legends.forEach(legend => {
+                legend.addEventListener('mouseenter', () => {
+                    const group = legend.getAttribute('data-group');
+                    const id = legend.getAttribute('data-id');
+                    clearDiagramActiveStates(group);
+                    legend.classList.add('active');
+                    document.querySelector(`.marker[data-id="${id}"]`).classList.add('active');
+                });
+            });
+
+            // --- 4. Working Process Logic (Stage by Stage) ---
+            const processStages = [
+                {
+                    title: "Collection & Transfer",
+                    desc: "Mixed recyclables are collected from bins and transported to the Materials Recovery Facility (MRF).",
+                    in: "Mixed Waste", out: "Facility Intake",
+                    iconIn: "🗑️", iconOut: "🏭"
+                },
+                {
+                    title: "Optical Sorting",
+                    desc: "Near-infrared lasers scan items on rapid conveyors, identifying specific polymer types (like PET or HDPE) and using air jets to separate them.",
+                    in: "Mixed Plastics", out: "Sorted Bales",
+                    iconIn: "🔦", iconOut: "📦"
+                },
+                {
+                    title: "Shredding & Washing",
+                    desc: "Sorted plastics are ground into small flakes. A friction wash removes labels, adhesives, and organic contaminants.",
+                    in: "Bales", out: "Clean Flakes",
+                    iconIn: "⚙️", iconOut: "❄️"
+                },
+                {
+                    title: "Melting & Extrusion",
+                    desc: "Clean flakes are melted at ~260°C. The molten plastic is forced through screens to remove final impurities and extruded into noodle-like strands.",
+                    in: "Flakes", out: "Molten Polymer",
+                    iconIn: "🔥", iconOut: "💧"
+                },
+                {
+                    title: "Pelletizing",
+                    desc: "The strands are cooled in water and chopped into uniform raw pellets, ready to be sold to manufacturers to create new products.",
+                    in: "Strands", out: "Raw Pellets",
+                    iconIn: "🌊", iconOut: "⚪"
+                }
+            ];
+
+            let currentStage = 0;
+            let processInterval = null;
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnAuto = document.getElementById('btn-autoplay');
+            const pDots = document.querySelectorAll('.progress-dots .dot');
+            const pGraphics = document.querySelectorAll('.process-stage-graphics');
+
+            function updateProcessStage(index) {
+                currentStage = index;
+                
+                // Update UI Text
+                const data = processStages[index];
+                document.getElementById('stage-badge').textContent = `Stage ${index + 1} of 5`;
+                document.getElementById('stage-title').textContent = data.title;
+                document.getElementById('stage-desc').textContent = data.desc;
+                document.getElementById('io-in').textContent = data.in;
+                document.getElementById('io-out').textContent = data.out;
+                document.querySelector('.io-indicators .io-box:first-child .io-icon').textContent = data.iconIn;
+                document.querySelector('.io-indicators .io-box:last-child .io-icon').textContent = data.iconOut;
+
+                // Update Dots
+                pDots.forEach((dot, i) => {
+                    dot.classList.toggle('active', i === index);
+                });
+
+                // Update Graphics (Crossfade)
+                pGraphics.forEach((gfx, i) => {
+                    gfx.classList.toggle('active', i === index);
+                });
+
+                // Button states
+                btnPrev.disabled = index === 0;
+                btnNext.disabled = index === processStages.length - 1;
+            }
+
+            btnPrev.addEventListener('click', () => { if(currentStage > 0) updateProcessStage(currentStage - 1); stopAutoPlay(); });
+            btnNext.addEventListener('click', () => { if(currentStage < processStages.length - 1) updateProcessStage(currentStage + 1); stopAutoPlay(); });
+            pDots.forEach((dot, i) => {
+                dot.addEventListener('click', () => { updateProcessStage(i); stopAutoPlay(); });
+            });
+
+            function startAutoPlay() {
+                if(processInterval) return;
+                btnAuto.style.background = 'var(--accent-blue)';
+                btnAuto.style.color = '#000';
+                processInterval = setInterval(() => {
+                    let next = (currentStage + 1) % processStages.length;
+                    updateProcessStage(next);
+                }, 3000); // 3 seconds per stage
+            }
+
+            function stopAutoPlay() {
+                clearInterval(processInterval);
+                processInterval = null;
+                btnAuto.style.background = 'rgba(255,255,255,0.05)';
+                btnAuto.style.color = 'var(--text-primary)';
+            }
+
+            btnAuto.addEventListener('click', () => {
+                if(processInterval) stopAutoPlay(); else startAutoPlay();
+            });
+
+
+            // --- 5. Interactive Simulation (Drag & Drop Game) ---
+            const simArea = document.getElementById('sim-area');
+            const scoreEl = document.getElementById('score-val');
+            const bins = document.querySelectorAll('.bin');
+            let score = 0;
+
+            const items = [
+                { type: 'reduce', name: 'Apple Core', color: '#ffaa00', svg: '<circle cx="30" cy="30" r="20" fill="#aacc00"/><path d="M30 10 L30 -5 M25 0 Q 30 10 35 0" stroke="#553311" stroke-width="3" fill="none"/>' },
+                { type: 'reuse', name: 'Glass Jar', color: '#00d4ff', svg: '<rect x="15" y="20" width="30" height="35" rx="5" fill="rgba(0,212,255,0.4)" stroke="#00d4ff" stroke-width="2"/><rect x="12" y="10" width="36" height="10" fill="#aaa"/>' },
+                { type: 'recycle', name: 'Plastic Bottle', color: '#00ff88', svg: '<rect x="20" y="15" width="20" height="40" rx="5" fill="rgba(0,255,136,0.3)" stroke="#00ff88" stroke-width="2"/><rect x="25" y="5" width="10" height="10" fill="#00ff88"/>' }
+            ];
+
+            function spawnItem() {
+                const itemData = items[Math.floor(Math.random() * items.length)];
+                const el = document.createElement('div');
+                el.className = 'sim-item';
+                el.dataset.type = itemData.type;
+                el.innerHTML = `<svg viewBox="0 0 60 60">${itemData.svg}</svg>`;
+                simArea.appendChild(el);
+
+                // Belt animation (CSS handles the background line movement, JS moves the item)
+                let pos = -80;
+                let isDragging = false;
+                
+                const moveInterval = setInterval(() => {
+                    if(!isDragging) {
+                        pos += 1;
+                        el.style.left = pos + 'px';
+                        if(pos > simArea.clientWidth) {
+                            clearInterval(moveInterval);
+                            el.remove(); // Missed item
+                        }
+                    }
+                }, 16);
+
+                // Drag Logic (Touch & Mouse)
+                let startX, startY, initialLeft, initialTop;
+
+                function onDragStart(e) {
+                    isDragging = true;
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    startX = clientX;
+                    startY = clientY;
+                    const rect = el.getBoundingClientRect();
+                    const areaRect = simArea.getBoundingClientRect();
+                    
+                    // Switch to absolute positioning relative to simArea for dragging
+                    el.style.left = (rect.left - areaRect.left) + 'px';
+                    el.style.top = (rect.top - areaRect.top) + 'px';
+                    initialLeft = parseFloat(el.style.left);
+                    initialTop = parseFloat(el.style.top);
+                    
+                    el.style.transform = 'scale(1.2)';
+                    el.style.zIndex = '100';
+                    
+                    document.addEventListener('mousemove', onDragMove);
+                    document.addEventListener('mouseup', onDragEnd);
+                    document.addEventListener('touchmove', onDragMove, {passive: false});
+                    document.addEventListener('touchend', onDragEnd);
+                }
+
+                function onDragMove(e) {
+                    if(!isDragging) return;
+                    e.preventDefault(); // Prevent scrolling on touch
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    
+                    const dx = clientX - startX;
+                    const dy = clientY - startY;
+                    
+                    el.style.left = (initialLeft + dx) + 'px';
+                    el.style.top = (initialTop + dy) + 'px';
+
+                    // Hit testing bins visual feedback
+                    const elRect = el.getBoundingClientRect();
+                    bins.forEach(bin => {
+                        const binRect = bin.getBoundingClientRect();
+                        if (elRect.left < binRect.right && elRect.right > binRect.left &&
+                            elRect.top < binRect.bottom && elRect.bottom > binRect.top) {
+                            bin.classList.add('drag-over');
+                        } else {
+                            bin.classList.remove('drag-over');
+                        }
+                    });
+                }
+
+                function onDragEnd(e) {
+                    isDragging = false;
+                    document.removeEventListener('mousemove', onDragMove);
+                    document.removeEventListener('mouseup', onDragEnd);
+                    document.removeEventListener('touchmove', onDragMove);
+                    document.removeEventListener('touchend', onDragEnd);
+
+                    el.style.transform = 'scale(1)';
+                    el.style.zIndex = '10';
+
+                    // Collision check
+                    const elRect = el.getBoundingClientRect();
+                    let hitBin = null;
+
+                    bins.forEach(bin => {
+                        bin.classList.remove('drag-over');
+                        const binRect = bin.getBoundingClientRect();
+                        if (elRect.left < binRect.right && elRect.right > binRect.left &&
+                            elRect.top < binRect.bottom && elRect.bottom > binRect.top) {
+                            hitBin = bin;
+                        }
+                    });
+
+                    if (hitBin) {
+                        clearInterval(moveInterval);
+                        const expectedType = hitBin.dataset.type;
+                        if (expectedType === itemData.type) {
+                            // Correct
+                            score += 50;
+                            createFx(elRect.left + elRect.width/2, elRect.top + elRect.height/2, itemData.color);
+                        } else {
+                            // Wrong
+                            score -= 10;
+                            el.style.filter = 'grayscale(100%)';
+                        }
+                        scoreEl.textContent = score;
+                        el.style.opacity = 0;
+                        setTimeout(() => el.remove(), 200);
+                    } else {
+                        // Drop back to belt logic (simplified: snaps back to original Y)
+                        el.style.top = '50%';
+                        el.style.transform = 'translateY(-50%)';
+                    }
+                }
+
+                el.addEventListener('mousedown', onDragStart);
+                el.addEventListener('touchstart', onDragStart, {passive: false});
+            }
+
+            // Spawn loop
+            let spawnInterval;
+            const observerSim = new IntersectionObserver((entries) => {
+                if(entries[0].isIntersecting) {
+                    if(!spawnInterval) spawnInterval = setInterval(spawnItem, 2500);
+                } else {
+                    clearInterval(spawnInterval);
+                    spawnInterval = null;
+                }
+            });
+            observerSim.observe(simArea);
+
+            // FX Canvas for Simulation
+            const fxCanvas = document.getElementById('fx-canvas');
+            const fxCtx = fxCanvas.getContext('2d');
+            let fxParticles = [];
+            
+            function resizeFxCanvas() {
+                const rect = simArea.getBoundingClientRect();
+                fxCanvas.width = rect.width;
+                fxCanvas.height = rect.height;
+            }
+            window.addEventListener('resize', resizeFxCanvas);
+            resizeFxCanvas();
+
+            function createFx(x, y, color) {
+                const rect = simArea.getBoundingClientRect();
+                const localX = x - rect.left;
+                const localY = y - rect.top;
+                for(let i=0; i<15; i++) {
+                    fxParticles.push({
+                        x: localX, y: localY,
+                        vx: (Math.random() - 0.5) * 10,
+                        vy: (Math.random() - 0.5) * 10 - 2,
+                        life: 1,
+                        color: color
+                    });
+                }
+            }
+
+            function animateFx() {
+                fxCtx.clearRect(0, 0, fxCanvas.width, fxCanvas.height);
+                for(let i = fxParticles.length - 1; i >= 0; i--) {
+                    let p = fxParticles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.2; // gravity
+                    p.life -= 0.03;
+                    if(p.life <= 0) {
+                        fxParticles.splice(i, 1);
+                    } else {
+                        fxCtx.globalAlpha = p.life;
+                        fxCtx.fillStyle = p.color;
+                        fxCtx.beginPath();
+                        fxCtx.arc(p.x, p.y, 4, 0, Math.PI*2);
+                        fxCtx.fill();
+                    }
+                }
+                fxCtx.globalAlpha = 1;
+                requestAnimationFrame(animateFx);
+            }
+            animateFx();
+
+        });
+    </script>
+</body>
+</html>

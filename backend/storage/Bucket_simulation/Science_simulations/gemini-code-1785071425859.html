@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Energy Conservation: Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME DEFINITION
+           ========================================================================== */
+        :root {
+            /* Colors */
+            --bg-dark: #07090F;
+            --bg-panel: rgba(18, 22, 36, 0.6);
+            --bg-panel-hover: rgba(28, 34, 56, 0.8);
+            
+            /* Energy Types Colors */
+            --color-potential: #00E5FF; /* Cyan */
+            --color-kinetic: #FF007F;   /* Magenta */
+            --color-thermal: #FF5722;   /* Orange/Red */
+            --color-electrical: #FFEA00;/* Yellow */
+            --color-light: #B2FF59;     /* Light Green */
+            --color-total: #FFFFFF;     /* White */
+
+            /* Glassmorphism */
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            --glass-blur: blur(12px);
+
+            /* Typography */
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --text-primary: #FFFFFF;
+            --text-secondary: #9BA3B5;
+
+            /* Spacing & Sizes */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --space-xl: clamp(40px, 8vw, 100px);
+            --space-lg: clamp(24px, 4vw, 48px);
+            --space-md: 16px;
+        }
+
+        /* ==========================================================================
+           RESET & GLOBAL STYLES
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            line-height: 1.6;
+            font-size: clamp(14px, 1vw + 10px, 18px);
+        }
+
+        /* Animated Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            background: radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.05), transparent 40%),
+                        radial-gradient(circle at 85% 30%, rgba(255, 0, 127, 0.05), transparent 40%);
+            overflow: hidden;
+        }
+
+        .ambient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s infinite alternate ease-in-out;
+        }
+
+        .orb-1 { width: 40vw; height: 40vw; background: var(--color-potential); top: -10%; left: -10%; animation-delay: 0s; }
+        .orb-2 { width: 35vw; height: 35vw; background: var(--color-kinetic); bottom: -10%; right: -10%; animation-delay: -5s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(5vw, 5vh) scale(1.1); }
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2.5rem, 5vw, 5rem); line-height: 1.1; font-weight: 800; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.8rem, 3vw, 2.5rem); font-weight: 700; margin-bottom: var(--space-md); }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; }
+        p { color: var(--text-secondary); margin-bottom: var(--space-md); }
+
+        .text-gradient {
+            background: linear-gradient(90deg, var(--color-potential), var(--color-kinetic));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Layout */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--space-lg);
+        }
+
+        section {
+            padding: var(--space-xl) 0;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+
+        section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Glass Panel Reusable Class */
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+            padding: var(--space-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ==========================================================================
+           SPECIFIC SECTIONS
+           ========================================================================== */
+
+        /* 1. Hero Section */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero p {
+            font-size: clamp(1.1rem, 1.5vw, 1.5rem);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* 2. Concept / Equation */
+        .concept-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-lg);
+            margin-top: var(--space-lg);
+        }
+
+        .equation-box {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            font-weight: 800;
+            letter-spacing: 2px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        
+        .eq-e { color: var(--color-total); }
+        .eq-sub { font-size: 0.5em; vertical-align: sub; color: var(--text-secondary); }
+        .eq-op { color: var(--color-kinetic); margin: 0 15px; }
+
+        /* 3. Forms of Energy */
+        .energy-forms {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: var(--space-md);
+        }
+
+        .form-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: var(--space-lg);
+            transition: transform 0.3s ease, background 0.3s ease;
+            cursor: default;
+        }
+
+        .form-card:hover {
+            transform: translateY(-5px);
+            background: var(--bg-panel-hover);
+        }
+
+        .icon-container {
+            width: 80px;
+            height: 80px;
+            margin-bottom: var(--space-md);
+            position: relative;
+        }
+
+        /* Pure CSS Icons inside SVG viewBox */
+        .form-icon { width: 100%; height: 100%; }
+
+        /* 4. Working Mechanism (The Dam) */
+        .mechanism-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: var(--space-lg);
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .mechanism-container { grid-template-columns: 1fr; }
+        }
+
+        .illustration-wrapper {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* SVG Styles */
+        #dam-svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+            display: block;
+        }
+
+        /* Markers overlay */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--color-total);
+            color: #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            transition: all 0.3s ease;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+
+        .marker.active {
+            transform: translate(-50%, -50%) scale(1.3);
+            box-shadow: 0 0 20px var(--color-potential);
+            background: var(--color-potential);
+            color: #000;
+        }
+
+        /* Legend */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            list-style: none;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item.active {
+            background: rgba(0, 229, 255, 0.1);
+            border-color: rgba(0, 229, 255, 0.3);
+        }
+
+        .legend-badge {
+            width: 24px;
+            height: 24px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        
+        .legend-item.active .legend-badge {
+            background: var(--color-potential);
+            color: #000;
+        }
+
+        .legend-text { display: flex; flex-direction: column; }
+        .legend-title { font-weight: 600; color: var(--text-primary); }
+        .legend-desc { font-size: 0.85em; color: var(--text-secondary); }
+
+        /* Controls */
+        .controls-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: var(--space-md);
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-sm);
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover { background: rgba(255,255,255,0.2); }
+        .btn.primary { background: var(--color-potential); color: #000; border: none; }
+        .btn.primary:hover { box-shadow: 0 0 15px var(--color-potential); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: 0.3s; }
+        .dot.active { background: var(--color-potential); box-shadow: 0 0 8px var(--color-potential); }
+
+        /* 5. Interactive Simulation */
+        .sim-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: var(--space-lg);
+            background: #0B0F19; /* Darker for canvas */
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        @media (max-width: 1024px) { .sim-container { grid-template-columns: 1fr; } }
+
+        .canvas-area {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            background: linear-gradient(to bottom, #07090F, #151A2C);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Floating live values on canvas */
+        .live-stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-family: monospace;
+            font-size: 14px;
+            color: rgba(255,255,255,0.7);
+            pointer-events: none;
+        }
+
+        .sim-ui {
+            padding: var(--space-lg);
+            background: rgba(18, 22, 36, 0.8);
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+            border-left: 1px solid var(--glass-border);
+        }
+
+        /* Sliders */
+        .control-group { margin-bottom: 15px; }
+        .control-header { display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 5px; }
+        
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+
+        /* Energy Meters */
+        .meters {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: auto;
+            padding-top: var(--space-md);
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .meter-row { display: flex; align-items: center; gap: 10px; font-size: 12px; font-weight: bold; }
+        .meter-label { width: 40px; }
+        .meter-track {
+            flex-grow: 1;
+            height: 12px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+        .meter-fill {
+            height: 100%;
+            width: 0%;
+            border-radius: 6px;
+            transition: width 0.1s linear;
+        }
+        .meter-value { width: 50px; text-align: right; font-family: monospace; }
+
+        .fill-pe { background: var(--color-potential); box-shadow: 0 0 10px var(--color-potential); }
+        .fill-ke { background: var(--color-kinetic); box-shadow: 0 0 10px var(--color-kinetic); }
+        .fill-te { background: var(--color-thermal); box-shadow: 0 0 10px var(--color-thermal); }
+        .fill-tot { background: var(--color-total); box-shadow: 0 0 10px var(--color-total); }
+
+        /* Grid sections */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-lg);
+        }
+
+        ul.styled-list {
+            list-style: none;
+        }
+        
+        ul.styled-list li {
+            position: relative;
+            padding-left: 24px;
+            margin-bottom: 12px;
+            color: var(--text-secondary);
+        }
+        
+        ul.styled-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--color-potential);
+            font-weight: bold;
+        }
+
+        /* SVG Animations defined in CSS */
+        @keyframes flowWater {
+            0% { stroke-dashoffset: 200; }
+            100% { stroke-dashoffset: 0; }
+        }
+        
+        @keyframes spin {
+            100% { transform: rotate(360deg); }
+        }
+
+        .flow-path {
+            stroke-dasharray: 10 10;
+            animation: flowWater 2s linear infinite;
+            opacity: 0.2;
+            transition: opacity 0.5s;
+        }
+        
+        .flow-path.active { opacity: 1; }
+
+        .turbine-blade {
+            transform-origin: 300px 350px;
+            transition: transform 0.1s;
+        }
+
+        .energy-pulse {
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        .energy-pulse.active {
+            animation: pulse-glow 1.5s infinite alternate;
+        }
+
+        @keyframes pulse-glow {
+            0% { opacity: 0.3; filter: drop-shadow(0 0 2px var(--color-electrical)); }
+            100% { opacity: 1; filter: drop-shadow(0 0 15px var(--color-electrical)); }
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            body { font-size: 14px; }
+            section { padding: var(--space-lg) 0; }
+            .canvas-area { height: 300px; }
+            .marker { width: 24px; height: 24px; font-size: 12px; }
+            .glass-panel { padding: var(--space-md); }
+            /* Reduce blur for performance */
+            .glass-panel, .sim-ui { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-2"></div>
+    </div>
+
+    <div class="container">
+        
+        <!-- 1. Hero -->
+        <section class="hero" id="intro">
+            <h1 class="text-gradient">Energy Conservation</h1>
+            <p>The universe operates on a strict budget. Energy cannot be created or destroyed—it only transforms from one mesmerizing form to another. Experience the fundamental law of physics.</p>
+        </section>
+
+        <!-- 2. Overview -->
+        <section class="glass-panel" id="overview">
+            <h2>The First Law of Thermodynamics</h2>
+            <p>In a closed system, the total amount of energy remains exactly the same, no matter what happens inside it. It changes forms—like converting currency—but the total value never changes.</p>
+            
+            <div class="concept-grid">
+                <div class="glass-panel">
+                    <h3>The Rule</h3>
+                    <p>Energy cannot magically appear from nothing, nor can it vanish into nothingness.</p>
+                    <div class="equation-box">
+                        <span class="eq-e">E</span><span class="eq-sub">initial</span>
+                        <span class="eq-op">=</span>
+                        <span class="eq-e">E</span><span class="eq-sub">final</span>
+                    </div>
+                </div>
+                <div class="glass-panel">
+                    <h3>The Reality</h3>
+                    <p>When a machine seems to "lose" energy, it hasn't vanished. It has simply transformed into an unrecoverable form, usually <strong>Thermal Energy (Heat)</strong> due to friction.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Components (Forms) -->
+        <section id="components">
+            <h2>Forms of Energy</h2>
+            <p>Energy wears many masks. Here are the primary actors in physical systems.</p>
+            
+            <div class="energy-forms">
+                <!-- Potential -->
+                <div class="glass-panel form-card">
+                    <div class="icon-container">
+                        <svg class="form-icon" viewBox="0 0 100 100">
+                            <!-- Weight on a height -->
+                            <rect x="20" y="80" width="60" height="10" fill="var(--glass-border)"/>
+                            <rect x="45" y="40" width="10" height="40" fill="var(--glass-border)"/>
+                            <circle cx="50" cy="25" r="15" fill="var(--color-potential)" filter="drop-shadow(0 0 8px var(--color-potential))"/>
+                            <!-- Arrow up -->
+                            <path d="M70,50 L70,20 L65,25 M70,20 L75,25" stroke="var(--text-secondary)" stroke-width="2" fill="none"/>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--color-potential)">Potential (PE)</h3>
+                    <p>Stored energy based on position or height. The higher an object, the more potential it holds against gravity.</p>
+                </div>
+
+                <!-- Kinetic -->
+                <div class="glass-panel form-card">
+                    <div class="icon-container">
+                        <svg class="form-icon" viewBox="0 0 100 100">
+                            <!-- Moving ball with trails -->
+                            <circle cx="70" cy="50" r="15" fill="var(--color-kinetic)" filter="drop-shadow(0 0 8px var(--color-kinetic))"/>
+                            <path d="M10,50 L45,50 M20,40 L40,40 M20,60 L40,60" stroke="var(--color-kinetic)" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--color-kinetic)">Kinetic (KE)</h3>
+                    <p>The energy of motion. If an object has mass and is moving, it possesses kinetic energy.</p>
+                </div>
+
+                <!-- Thermal -->
+                <div class="glass-panel form-card">
+                    <div class="icon-container">
+                        <svg class="form-icon" viewBox="0 0 100 100">
+                            <!-- Heat waves / Particles -->
+                            <path d="M30,80 Q40,60 30,40 T30,10" stroke="var(--color-thermal)" stroke-width="4" fill="none" stroke-linecap="round"/>
+                            <path d="M50,90 Q60,70 50,50 T50,20" stroke="var(--color-thermal)" stroke-width="4" fill="none" stroke-linecap="round"/>
+                            <path d="M70,80 Q80,60 70,40 T70,10" stroke="var(--color-thermal)" stroke-width="4" fill="none" stroke-linecap="round"/>
+                            <circle cx="50" cy="50" r="2" fill="#fff" opacity="0.8"/>
+                            <circle cx="35" cy="30" r="3" fill="#fff" opacity="0.8"/>
+                            <circle cx="65" cy="70" r="2.5" fill="#fff" opacity="0.8"/>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--color-thermal)">Thermal (TE)</h3>
+                    <p>Internal energy of vibrating atoms. Usually considered "wasted" energy in mechanical systems due to friction.</p>
+                </div>
+
+                <!-- Electrical -->
+                <div class="glass-panel form-card">
+                    <div class="icon-container">
+                        <svg class="form-icon" viewBox="0 0 100 100">
+                            <!-- Lightning bolt -->
+                            <path d="M55,10 L30,55 L50,55 L45,90 L70,45 L50,45 Z" fill="var(--color-electrical)" filter="drop-shadow(0 0 8px var(--color-electrical))"/>
+                        </svg>
+                    </div>
+                    <h3 style="color: var(--color-electrical)">Electrical</h3>
+                    <p>Energy carried by moving electrons. Highly versatile and easily converted into other forms.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Working Process (The Cycle) -->
+        <section class="glass-panel" id="working">
+            <h2>Mechanism: Hydroelectric Conversion</h2>
+            <p>Watch how nature's Potential Energy is harvested and transformed step-by-step into Electrical Energy.</p>
+            
+            <div class="mechanism-container">
+                <!-- Visual Container -->
+                <div class="illustration-wrapper" id="svg-container">
+                    <!-- Absolute Markers placed via CSS percentages relative to SVG wrapper -->
+                    <div class="marker" id="mark-1" style="left: 20%; top: 25%;">1</div>
+                    <div class="marker" id="mark-2" style="left: 45%; top: 55%;">2</div>
+                    <div class="marker" id="mark-3" style="left: 60%; top: 70%;">3</div>
+                    <div class="marker" id="mark-4" style="left: 70%; top: 40%;">4</div>
+                    <div class="marker" id="mark-5" style="left: 85%; top: 20%;">5</div>
+
+                    <svg id="dam-svg" viewBox="0 0 500 500" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#0088ff" stop-opacity="0.8"/>
+                                <stop offset="100%" stop-color="#001144" stop-opacity="0.9"/>
+                            </linearGradient>
+                            <filter id="glowElectrical" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="5" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Background Mountains -->
+                        <path d="M0,300 L100,150 L200,280 L350,100 L500,250 L500,500 L0,500 Z" fill="#111522" />
+
+                        <!-- Stage 1: Reservoir -->
+                        <path id="svg-reservoir" d="M0,150 L150,150 L150,500 L0,500 Z" fill="url(#waterGrad)"/>
+                        
+                        <!-- Dam Structure -->
+                        <path d="M150,130 L180,130 L220,500 L150,500 Z" fill="#2A324A"/>
+                        
+                        <!-- Stage 2: Penstock (Pipe) -->
+                        <path d="M150,300 L250,300 L270,350 L300,350 L300,380 L250,380 L230,330 L150,330 Z" fill="#1A1F35" stroke="#3A4565" stroke-width="2"/>
+                        <!-- Water flow animation line -->
+                        <path id="svg-flow" class="flow-path" d="M150,315 L240,315 L260,365 L285,365" stroke="#00E5FF" stroke-width="8" fill="none"/>
+
+                        <!-- Stage 3: Turbine Area -->
+                        <circle cx="300" cy="350" r="40" fill="#1A1F35" stroke="#3A4565" stroke-width="4"/>
+                        <g id="svg-turbine">
+                            <!-- Blades -->
+                            <path d="M300,315 L310,350 L290,350 Z" fill="#FF007F" class="turbine-blade" id="b1"/>
+                            <path d="M300,385 L290,350 L310,350 Z" fill="#FF007F" class="turbine-blade" id="b2"/>
+                            <path d="M265,350 L300,340 L300,360 Z" fill="#FF007F" class="turbine-blade" id="b3"/>
+                            <path d="M335,350 L300,360 L300,340 Z" fill="#FF007F" class="turbine-blade" id="b4"/>
+                            <circle cx="300" cy="350" r="10" fill="#fff"/>
+                        </g>
+
+                        <!-- Shaft connecting turbine to generator -->
+                        <rect x="295" y="240" width="10" height="70" fill="#666"/>
+
+                        <!-- Stage 4: Generator -->
+                        <rect id="svg-generator" x="260" y="200" width="80" height="40" rx="5" fill="#FFEA00" opacity="0.5"/>
+                        <path d="M260,200 L340,200 L330,180 L270,180 Z" fill="#CCBB00"/>
+
+                        <!-- Stage 5: Power Lines -->
+                        <path d="M340,190 L420,130 L500,100" stroke="#444" stroke-width="2" fill="none"/>
+                        <!-- Electron pulses -->
+                        <circle id="svg-pulse1" cx="380" cy="160" r="4" fill="#FFEA00" class="energy-pulse" filter="url(#glowElectrical)"/>
+                        <circle id="svg-pulse2" cx="460" cy="115" r="4" fill="#FFEA00" class="energy-pulse" filter="url(#glowElectrical)"/>
+                        
+                        <!-- Transmission Tower -->
+                        <path d="M410,250 L420,130 L430,250 M415,190 L425,190" stroke="#666" stroke-width="3" fill="none"/>
+
+                    </svg>
+                </div>
+
+                <!-- Legend & Controls -->
+                <div class="legend-panel">
+                    <ul class="legend-list" id="working-legend">
+                        <li class="legend-item" data-stage="1">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Reservoir (Potential)</span>
+                                <span class="legend-desc">Water held high behind dam. Max PE.</span>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-stage="2">
+                            <div class="legend-badge">2</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Penstock Flow (Kinetic)</span>
+                                <span class="legend-desc">Water falls, PE converts to KE.</span>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-stage="3">
+                            <div class="legend-badge">3</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Turbine (Mechanical)</span>
+                                <span class="legend-desc">Water KE forces blades to spin.</span>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-stage="4">
+                            <div class="legend-badge">4</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Generator (Electrical)</span>
+                                <span class="legend-desc">Magnets spin in coils, creating current.</span>
+                            </div>
+                        </li>
+                        <li class="legend-item" data-stage="5">
+                            <div class="legend-badge">5</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Grid (Transmission)</span>
+                                <span class="legend-desc">Electrical energy travels to homes.</span>
+                            </div>
+                        </li>
+                    </ul>
+
+                    <div class="controls-bar">
+                        <button class="btn" id="btn-prev">← Prev</button>
+                        <div class="progress-dots" id="dots-container">
+                            <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                        </div>
+                        <button class="btn" id="btn-next">Next →</button>
+                        <button class="btn primary" id="btn-autoplay">Auto Play</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. Interactive Simulation (Pendulum/Skater) -->
+        <section id="simulation">
+            <h2>Interactive Lab: The Energy Ramp</h2>
+            <p>Release the mass on the frictionless (or friction-full) ramp. Watch how Potential (Height) trades perfectly with Kinetic (Speed) energy. <strong>Observe the Total Energy bar.</strong></p>
+            
+            <div class="sim-container">
+                <div class="canvas-area" id="canvas-wrapper">
+                    <div class="live-stats" id="sim-stats">v: 0.0 m/s<br>h: 5.0 m</div>
+                    <canvas id="sim-canvas"></canvas>
+                </div>
+                
+                <div class="sim-ui">
+                    <h3>Environment Controls</h3>
+                    
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Mass (m)</span>
+                            <span id="val-mass">10 kg</span>
+                        </div>
+                        <input type="range" id="sim-mass" min="1" max="20" value="10" step="1">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Friction (Loss to Thermal)</span>
+                            <span id="val-fric">None</span>
+                        </div>
+                        <input type="range" id="sim-fric" min="0" max="0.05" value="0" step="0.005">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Gravity (g)</span>
+                            <span id="val-grav">9.8 m/s² (Earth)</span>
+                        </div>
+                        <input type="range" id="sim-grav" min="1" max="20" value="9.8" step="0.1">
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button class="btn primary" id="btn-reset-sim" style="flex:1; justify-content: center;">Reset Mass to Top</button>
+                        <button class="btn" id="btn-pause-sim" style="flex:1; justify-content: center;">Pause</button>
+                    </div>
+
+                    <div class="meters">
+                        <div class="meter-row">
+                            <span class="meter-label" style="color: var(--color-potential)">PE</span>
+                            <div class="meter-track"><div class="meter-fill fill-pe" id="bar-pe"></div></div>
+                            <span class="meter-value" id="txt-pe">0 J</span>
+                        </div>
+                        <div class="meter-row">
+                            <span class="meter-label" style="color: var(--color-kinetic)">KE</span>
+                            <div class="meter-track"><div class="meter-fill fill-ke" id="bar-ke"></div></div>
+                            <span class="meter-value" id="txt-ke">0 J</span>
+                        </div>
+                        <div class="meter-row">
+                            <span class="meter-label" style="color: var(--color-thermal)">TE</span>
+                            <div class="meter-track"><div class="meter-fill fill-te" id="bar-te"></div></div>
+                            <span class="meter-value" id="txt-te">0 J</span>
+                        </div>
+                        <div class="meter-row" style="margin-top: 8px;">
+                            <span class="meter-label" style="color: var(--color-total)">TOT</span>
+                            <div class="meter-track"><div class="meter-fill fill-tot" id="bar-tot"></div></div>
+                            <span class="meter-value" id="txt-tot" style="color:var(--color-total)">0 J</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6 & 7. Applications & Facts Grid -->
+        <section>
+            <div class="info-grid">
+                <div class="glass-panel">
+                    <h2 style="color: var(--color-light)">Real-World Application</h2>
+                    <h3>Regenerative Braking in EVs</h3>
+                    <p>In standard cars, braking converts Kinetic Energy purely into wasted Thermal Energy (hot brake pads). Electric Vehicles reverse their electric motors when braking, acting as generators. This converts Kinetic Energy back into Electrical Energy, recharging the battery instead of wasting it as heat.</p>
+                </div>
+                
+                <div class="glass-panel">
+                    <h2 style="color: var(--color-potential)">Mind-Blowing Fact</h2>
+                    <h3>The Sun's Mass Loss</h3>
+                    <p>Thanks to Einstein's $E=mc^2$ (Mass-Energy Equivalence), we know mass is a form of concentrated energy. To produce its immense light and heat, the Sun converts 4.26 million metric tons of its own mass into pure energy <em>every single second</em>.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 8. Common Mistakes & Revision -->
+        <section class="glass-panel">
+            <h2>Common Misconceptions</h2>
+            <ul class="styled-list">
+                <li><strong>Mistake:</strong> "We are running out of energy." <br>
+                    <strong>Truth:</strong> The universe has the exact same amount of energy it had at the Big Bang. We are running out of <em>useful, concentrated</em> forms of energy (like fossil fuels), which are being converted into disorganized thermal energy (waste heat).</li>
+                <li><strong>Mistake:</strong> "Energy is lost due to friction." <br>
+                    <strong>Truth:</strong> Energy is never "lost" from existence. Friction simply transforms useful kinetic energy into thermal energy, which dissipates into the environment.</li>
+            </ul>
+        </section>
+
+        <section style="text-align: center; padding-bottom: var(--space-xl)">
+            <p style="color: var(--text-secondary); font-size: 0.9em;">Simulation Engine v1.0 • Designed for modern educational standards</p>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        // --- Utility: Intersection Observer for Fade In ---
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('section').forEach(sec => observer.observe(sec));
+
+        // --- SECTION 4: Working Mechanism (Dam Animation Logic) ---
+        const workingLogic = (() => {
+            let currentStage = 1;
+            const totalStages = 5;
+            let autoPlayInterval = null;
+            let isAutoPlaying = false;
+
+            // DOM Elements
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+            const dots = document.querySelectorAll('.dot');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnAuto = document.getElementById('btn-autoplay');
+
+            // SVG Animation Elements
+            const svgReservoir = document.getElementById('svg-reservoir');
+            const svgFlow = document.getElementById('svg-flow');
+            const svgTurbine = document.getElementById('svg-turbine');
+            const svgGen = document.getElementById('svg-generator');
+            const svgPulse1 = document.getElementById('svg-pulse1');
+            const svgPulse2 = document.getElementById('svg-pulse2');
+
+            // Turbine rotation state
+            let turbineAngle = 0;
+            let turbineAnimId = null;
+
+            function animateTurbine(speed) {
+                if(speed > 0) {
+                    turbineAngle += speed;
+                    const b1 = document.getElementById('b1');
+                    const b2 = document.getElementById('b2');
+                    const b3 = document.getElementById('b3');
+                    const b4 = document.getElementById('b4');
+                    // Simple rotation around center cx=300, cy=350
+                    b1.style.transform = `rotate(${turbineAngle}deg)`;
+                    b2.style.transform = `rotate(${turbineAngle}deg)`;
+                    b3.style.transform = `rotate(${turbineAngle}deg)`;
+                    b4.style.transform = `rotate(${turbineAngle}deg)`;
+                    turbineAnimId = requestAnimationFrame(() => animateTurbine(speed));
+                }
+            }
+
+            function updateStage(stage) {
+                currentStage = stage;
+                
+                // Reset UI
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                dots.forEach(d => d.classList.remove('active'));
+                
+                // Activate current
+                document.getElementById(`mark-${stage}`).classList.add('active');
+                document.querySelector(`.legend-item[data-stage="${stage}"]`).classList.add('active');
+                dots[stage-1].classList.add('active');
+
+                // Reset SVG Animations
+                cancelAnimationFrame(turbineAnimId);
+                svgFlow.classList.remove('active');
+                svgGen.style.opacity = "0.5";
+                svgPulse1.classList.remove('active');
+                svgPulse2.classList.remove('active');
+                svgReservoir.style.opacity = "0.8";
+
+                // Apply Stage Specific Visuals
+                switch(stage) {
+                    case 1: // Reservoir
+                        svgReservoir.style.opacity = "1";
+                        svgReservoir.style.filter = "brightness(1.5)";
+                        break;
+                    case 2: // Flow
+                        svgReservoir.style.filter = "none";
+                        svgFlow.classList.add('active');
+                        break;
+                    case 3: // Turbine
+                        svgFlow.classList.add('active');
+                        animateTurbine(5); // spin fast
+                        break;
+                    case 4: // Generator
+                        svgFlow.classList.add('active');
+                        animateTurbine(2);
+                        svgGen.style.opacity = "1";
+                        svgGen.style.filter = "drop-shadow(0 0 10px var(--color-electrical))";
+                        break;
+                    case 5: // Lines
+                        svgFlow.classList.add('active');
+                        animateTurbine(2);
+                        svgGen.style.opacity = "1";
+                        svgPulse1.classList.add('active');
+                        svgPulse2.classList.add('active');
+                        break;
+                }
+
+                // Button states
+                btnPrev.disabled = (stage === 1 && !isAutoPlaying);
+                btnNext.disabled = (stage === totalStages && !isAutoPlaying);
+            }
+
+            function nextStage() {
+                let next = currentStage + 1;
+                if(next > totalStages) next = 1; // loop
+                updateStage(next);
+            }
+
+            function prevStage() {
+                let prev = currentStage - 1;
+                if(prev < 1) prev = 1;
+                updateStage(prev);
+            }
+
+            function toggleAutoPlay() {
+                isAutoPlaying = !isAutoPlaying;
+                if(isAutoPlaying) {
+                    btnAuto.textContent = "Stop Auto";
+                    btnAuto.style.background = "#FF007F"; // Magenta to indicate stop
+                    nextStage(); // force start
+                    autoPlayInterval = setInterval(nextStage, 2500);
+                } else {
+                    btnAuto.textContent = "Auto Play";
+                    btnAuto.style.background = "var(--color-potential)";
+                    clearInterval(autoPlayInterval);
+                    updateStage(currentStage); // refresh button states
+                }
+            }
+
+            // Listeners
+            btnNext.addEventListener('click', () => { if(isAutoPlaying) toggleAutoPlay(); nextStage(); });
+            btnPrev.addEventListener('click', () => { if(isAutoPlaying) toggleAutoPlay(); prevStage(); });
+            btnAuto.addEventListener('click', toggleAutoPlay);
+            
+            legendItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    if(isAutoPlaying) toggleAutoPlay();
+                    updateStage(parseInt(item.getAttribute('data-stage')));
+                });
+            });
+
+            markers.forEach((marker, index) => {
+                marker.addEventListener('click', () => {
+                    if(isAutoPlaying) toggleAutoPlay();
+                    updateStage(index + 1);
+                });
+            });
+
+            // Initialize
+            updateStage(1);
+        })();
+
+
+        // --- SECTION 5: Physics Simulation (Half-pipe Canvas) ---
+        const simLogic = (() => {
+            const canvas = document.getElementById('sim-canvas');
+            const ctx = canvas.getContext('2d');
+            const wrapper = document.getElementById('canvas-wrapper');
+
+            // Inputs
+            const inputMass = document.getElementById('sim-mass');
+            const inputFric = document.getElementById('sim-fric');
+            const inputGrav = document.getElementById('sim-grav');
+            
+            // Displays
+            const valMass = document.getElementById('val-mass');
+            const valFric = document.getElementById('val-fric');
+            const valGrav = document.getElementById('val-grav');
+            const simStats = document.getElementById('sim-stats');
+
+            // Meters
+            const barPe = document.getElementById('bar-pe');
+            const barKe = document.getElementById('bar-ke');
+            const barTe = document.getElementById('bar-te');
+            const barTot = document.getElementById('bar-tot');
+            const txtPe = document.getElementById('txt-pe');
+            const txtKe = document.getElementById('txt-ke');
+            const txtTe = document.getElementById('txt-te');
+            const txtTot = document.getElementById('txt-tot');
+
+            // Buttons
+            const btnReset = document.getElementById('btn-reset-sim');
+            const btnPause = document.getElementById('btn-pause-sim');
+
+            // Simulation State
+            let isRunning = true;
+            let width, height;
+            let pixelRatio = window.devicePixelRatio || 1;
+
+            // Physics Model: Object on a circular track (Pendulum mathematically)
+            // Track geometry
+            let trackRadius, trackCx, trackCy;
+            let maxAngle = Math.PI / 2.5; // ~72 degrees max swing
+
+            const state = {
+                angle: maxAngle,     // Current angle from bottom (0 is bottom)
+                velocity: 0,         // Angular velocity
+                mass: parseFloat(inputMass.value),
+                gravity: parseFloat(inputGrav.value),
+                friction: parseFloat(inputFric.value),
+                thermalEnergy: 0,    // Accumulated lost energy
+                initialTotalEnergy: 0,
+                // Scale factor to convert pixels to meters for physics maths
+                pixelsPerMeter: 50
+            };
+
+            function initCanvas() {
+                const rect = wrapper.getBoundingClientRect();
+                width = rect.width;
+                height = rect.height;
+                
+                canvas.width = width * pixelRatio;
+                canvas.height = height * pixelRatio;
+                canvas.style.width = width + 'px';
+                canvas.style.height = height + 'px';
+                
+                ctx.scale(pixelRatio, pixelRatio);
+
+                // Setup track geometry
+                trackRadius = Math.min(width * 0.4, height * 0.7);
+                trackCx = width / 2;
+                trackCy = height * 0.1 + trackRadius; // Pivot point is above
+
+                calculateInitialEnergy();
+            }
+
+            function calculateInitialEnergy() {
+                // H_max = r - r*cos(maxAngle)
+                const rMeters = trackRadius / state.pixelsPerMeter;
+                const hMax = rMeters - (rMeters * Math.cos(maxAngle));
+                state.initialTotalEnergy = state.mass * state.gravity * hMax;
+                state.thermalEnergy = 0; // Reset thermal on reset
+            }
+
+            function updatePhysics() {
+                if (!isRunning) return;
+
+                const dt = 1/60; // Assume 60fps for simplicity in education sim
+                const rMeters = trackRadius / state.pixelsPerMeter;
+
+                // Pendulum equation: alpha = -(g/R) * sin(theta)
+                let acceleration = -(state.gravity / rMeters) * Math.sin(state.angle);
+                
+                // Update velocity
+                state.velocity += acceleration * dt;
+                
+                // Apply friction (damping proportional to velocity)
+                if (state.friction > 0) {
+                    // Kinetic energy loss = Force * distance. 
+                    // To keep it simple and stable, we reduce velocity and add to Thermal Energy.
+                    const keBefore = 0.5 * state.mass * Math.pow(state.velocity * rMeters, 2);
+                    state.velocity *= (1 - state.friction * dt);
+                    const keAfter = 0.5 * state.mass * Math.pow(state.velocity * rMeters, 2);
+                    
+                    const loss = keBefore - keAfter;
+                    if(loss > 0) state.thermalEnergy += loss;
+                }
+
+                // Update position
+                state.angle += state.velocity * dt;
+
+                // Stop completely if energy is very low to avoid infinite micro-swinging
+                if (Math.abs(state.angle) < 0.01 && Math.abs(state.velocity) < 0.05 && state.friction > 0) {
+                    state.angle = 0;
+                    state.velocity = 0;
+                    // Force remaining PE/KE into TE to perfectly balance equation at rest
+                    state.thermalEnergy = state.initialTotalEnergy; 
+                }
+            }
+
+            function draw() {
+                ctx.clearRect(0, 0, width, height);
+
+                // 1. Draw Grid/Background
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                for(let i=0; i<width; i+=50) { ctx.moveTo(i,0); ctx.lineTo(i,height); }
+                for(let i=0; i<height; i+=50) { ctx.moveTo(0,i); ctx.lineTo(width,i); }
+                ctx.stroke();
+
+                // 2. Draw Track (Arc)
+                ctx.beginPath();
+                // Arc from -maxAngle to +maxAngle (0 is straight down, so + PI/2 for arc drawing)
+                ctx.arc(trackCx, trackCy, trackRadius, Math.PI/2 - maxAngle, Math.PI/2 + maxAngle);
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.lineWidth = 10;
+                ctx.lineCap = 'round';
+                ctx.stroke();
+
+                // Add gradient to track based on thermal energy
+                if(state.thermalEnergy > 0) {
+                    ctx.beginPath();
+                    ctx.arc(trackCx, trackCy, trackRadius, Math.PI/2 - maxAngle, Math.PI/2 + maxAngle);
+                    ctx.strokeStyle = `rgba(255, 87, 34, ${Math.min(0.8, state.thermalEnergy / state.initialTotalEnergy)})`;
+                    ctx.lineWidth = 10;
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
+                }
+
+                // 3. Draw Object (Ball)
+                const ballX = trackCx + trackRadius * Math.sin(state.angle);
+                const ballY = trackCy + trackRadius * Math.cos(state.angle);
+                
+                // Ball size based on mass (visually)
+                const ballRadius = 10 + (state.mass * 0.8);
+
+                ctx.beginPath();
+                ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+                
+                // Color ball based on dominating energy
+                // Mix Cyan (PE) and Magenta (KE)
+                const rMeters = trackRadius / state.pixelsPerMeter;
+                const h = rMeters - (rMeters * Math.cos(state.angle));
+                const pe = state.mass * state.gravity * h;
+                const peRatio = pe / (state.initialTotalEnergy || 1);
+                
+                // Base colors: Cyan (0, 229, 255), Magenta (255, 0, 127)
+                const r = Math.round(255 - (255 * peRatio)); // Magenta has high Red, Cyan has 0 Red.
+                const g = Math.round(229 * peRatio);         // Cyan has G, Magenta 0.
+                const b = Math.round(127 + (128 * peRatio)); // Mix
+
+                ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = ctx.fillStyle;
+                ctx.fill();
+                ctx.shadowBlur = 0; // reset
+
+                // Draw velocity vector line
+                if (Math.abs(state.velocity) > 0.1) {
+                    const linearVelX = Math.cos(state.angle) * state.velocity * trackRadius * 0.5;
+                    const linearVelY = -Math.sin(state.angle) * state.velocity * trackRadius * 0.5;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(ballX, ballY);
+                    ctx.lineTo(ballX + linearVelX, ballY + linearVelY);
+                    ctx.strokeStyle = '#FF007F';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+
+                // 4. Update UI Meters & Stats
+                updateMeters(h, rMeters);
+            }
+
+            function updateMeters(h, rMeters) {
+                // Math
+                const pe = Math.max(0, state.mass * state.gravity * h);
+                const linearVelocity = Math.abs(state.velocity * rMeters);
+                let ke = 0.5 * state.mass * Math.pow(linearVelocity, 2);
+                
+                // Because of numerical integration drift in Euler method, ensure strict conservation visually
+                // Total MUST equal Initial Total.
+                const currentTotal = pe + ke + state.thermalEnergy;
+                // Correct KE to perfectly balance if there's minor drift, except when fully stopped
+                if (Math.abs(state.velocity) > 0) {
+                     ke = Math.max(0, state.initialTotalEnergy - pe - state.thermalEnergy);
+                }
+
+                const total = state.initialTotalEnergy;
+
+                // Update text
+                simStats.innerHTML = `v: ${linearVelocity.toFixed(1)} m/s<br>h: ${h.toFixed(1)} m`;
+                
+                txtPe.textContent = Math.round(pe) + 'J';
+                txtKe.textContent = Math.round(ke) + 'J';
+                txtTe.textContent = Math.round(state.thermalEnergy) + 'J';
+                txtTot.textContent = Math.round(total) + 'J';
+
+                // Update Bars
+                if(total > 0) {
+                    barPe.style.width = (pe / total * 100) + '%';
+                    barKe.style.width = (ke / total * 100) + '%';
+                    barTe.style.width = (state.thermalEnergy / total * 100) + '%';
+                    barTot.style.width = '100%';
+                } else {
+                    barPe.style.width = barKe.style.width = barTe.style.width = barTot.style.width = '0%';
+                }
+            }
+
+            function loop() {
+                updatePhysics();
+                draw();
+                requestAnimationFrame(loop);
+            }
+
+            // --- Event Listeners ---
+            window.addEventListener('resize', () => {
+                initCanvas();
+                // Reset pos on resize to avoid jumping out of bounds
+                state.angle = maxAngle;
+                state.velocity = 0;
+            });
+
+            // UI Listeners
+            function updateStateFromInputs() {
+                const oldMass = state.mass;
+                const oldGrav = state.gravity;
+                
+                state.mass = parseFloat(inputMass.value);
+                state.friction = parseFloat(inputFric.value);
+                state.gravity = parseFloat(inputGrav.value);
+
+                valMass.textContent = state.mass + ' kg';
+                
+                if(state.friction === 0) valFric.textContent = "None (Ideal)";
+                else if(state.friction < 0.02) valFric.textContent = "Low";
+                else valFric.textContent = "High";
+
+                valGrav.textContent = state.gravity + (state.gravity === 9.8 ? " m/s² (Earth)" : state.gravity === 1.6 ? " m/s² (Moon)" : " m/s²");
+
+                // If mass or gravity changes mid-swing, mathematically the total energy capacity changes.
+                // We must recalculate total energy based on current state to prevent bar overflow.
+                const rMeters = trackRadius / state.pixelsPerMeter;
+                const currentH = rMeters - (rMeters * Math.cos(state.angle));
+                const currentPe = state.mass * state.gravity * currentH;
+                const currentKe = 0.5 * state.mass * Math.pow(state.velocity * rMeters, 2);
+                
+                // Scale thermal energy proportionally so it doesn't look weird
+                const ratio = (state.mass * state.gravity) / (oldMass * oldGrav);
+                state.thermalEnergy *= ratio;
+                
+                state.initialTotalEnergy = currentPe + currentKe + state.thermalEnergy;
+            }
+
+            // Use 'input' event for real-time slider updates (supports touch)
+            [inputMass, inputFric, inputGrav].forEach(el => {
+                el.addEventListener('input', updateStateFromInputs);
+            });
+
+            btnReset.addEventListener('click', () => {
+                state.angle = maxAngle;
+                state.velocity = 0;
+                calculateInitialEnergy();
+                isRunning = true;
+                btnPause.textContent = "Pause";
+            });
+
+            btnPause.addEventListener('click', () => {
+                isRunning = !isRunning;
+                btnPause.textContent = isRunning ? "Pause" : "Play";
+            });
+
+            // Init
+            initCanvas();
+            loop();
+
+        })();
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ecosystem Balance | Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-base: #060b10;
+            --bg-surface: rgba(16, 26, 38, 0.6);
+            --bg-glass: rgba(20, 32, 48, 0.45);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            
+            --text-main: #f0f4f8;
+            --text-muted: #94a3b8;
+            
+            --color-sun: #ffd166;
+            --color-producer: #06d6a0;
+            --color-consumer-1: #118ab2;
+            --color-consumer-2: #ef476f;
+            --color-decomposer: #a78a7f;
+            
+            --glow-sun: rgba(255, 209, 102, 0.5);
+            --glow-producer: rgba(6, 214, 160, 0.4);
+            
+            --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(6, 214, 160, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(17, 138, 178, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        /* ==========================================================================
+           TYPOGRAPHY (Fluid)
+           ========================================================================== */
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); line-height: 1.1; margin-bottom: 1rem; }
+        h2 { font-size: clamp(1.8rem, 3.5vw, 2.8rem); margin-bottom: 1.5rem; color: #fff; }
+        h3 { font-size: clamp(1.3rem, 2.5vw, 1.8rem); margin-bottom: 1rem; }
+        p { font-size: clamp(1rem, 1.2vw, 1.125rem); color: var(--text-muted); margin-bottom: 1.5rem; }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #fff 0%, #a0b0c0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            display: inline-block;
+        }
+
+        /* ==========================================================================
+           UTILITIES & GLASSMORPHISM
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 clamp(16px, 4vw, 48px);
+        }
+
+        section {
+            padding: clamp(60px, 10vh, 120px) 0;
+            position: relative;
+        }
+
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-glass);
+            border-radius: 30px;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--color-producer);
+            margin-bottom: 1.5rem;
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-bg-canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            opacity: 0.6;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            z-index: 1;
+            padding-top: 80px;
+        }
+
+        /* ==========================================================================
+           COMPONENTS SECTION (Strict Marker/Legend Implementation)
+           ========================================================================== */
+        .components-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 32px;
+            align-items: start;
+        }
+
+        @media (min-width: 1024px) {
+            .components-grid { grid-template-columns: 1.5fr 1fr; }
+        }
+
+        .visual-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: radial-gradient(circle at center, rgba(16,26,38,0.8) 0%, rgba(6,11,16,1) 100%);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-glass);
+            overflow: hidden;
+            min-height: 300px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
+        .visual-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* The SVG Illustration Styling */
+        .svg-layer { transition: opacity 0.4s ease; }
+        .svg-element { transition: transform 0.4s ease, filter 0.4s ease; transform-origin: center; }
+        .dimmed .svg-element { filter: grayscale(50%) brightness(0.5); }
+        .highlighted.svg-element { filter: drop-shadow(0 0 15px currentColor) brightness(1.2) !important; transform: scale(1.02); }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(4px);
+            border: 2px solid;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: var(--transition-smooth);
+            z-index: 10;
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: currentColor;
+            color: #000;
+        }
+
+        /* Legend */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            transform: translateX(8px);
+            border-color: currentColor;
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            background: currentColor;
+            color: #000;
+            flex-shrink: 0;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .legend-content h4 { font-size: 1.1rem; margin-bottom: 4px; color: #fff;}
+        .legend-content p { font-size: 0.9rem; margin: 0; color: var(--text-muted); }
+
+        /* ==========================================================================
+           WORKING PROCESS (Dedicated Cycle Section)
+           ========================================================================== */
+        .working-section {
+            background: linear-gradient(to bottom, var(--bg-base), rgba(6, 214, 160, 0.05), var(--bg-base));
+        }
+
+        .cycle-container {
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            align-items: center;
+        }
+
+        @media (min-width: 1024px) {
+            .cycle-container { flex-direction: row; justify-content: space-between; }
+        }
+
+        .cycle-visual {
+            flex: 1;
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 1;
+            position: relative;
+        }
+
+        .cycle-ui {
+            flex: 1;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .cycle-stage-info {
+            min-height: 180px;
+            margin-bottom: 32px;
+            position: relative;
+        }
+
+        .stage-details {
+            position: absolute;
+            top: 0; left: 0; width: 100%;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease;
+            pointer-events: none;
+        }
+
+        .stage-details.active {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .stage-details h3 { display: flex; align-items: center; gap: 12px; }
+        .stage-details h3 span.stage-num { 
+            color: var(--color-producer); font-size: 1rem; opacity: 0.8;
+            background: rgba(6,214,160,0.1); padding: 4px 10px; border-radius: 12px;
+        }
+        
+        .io-badges { display: flex; gap: 12px; margin-top: 16px; }
+        .io-badge {
+            display: flex; align-items: center; gap: 8px;
+            padding: 8px 16px; border-radius: 20px;
+            background: rgba(255,255,255,0.05); font-size: 0.85rem;
+            border: 1px solid var(--border-glass);
+        }
+        .io-badge.in { color: #fff; }
+        .io-badge.out { color: var(--color-producer); border-color: rgba(6,214,160,0.3); }
+
+        .cycle-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-glass);
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--border-glass);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+
+        .btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        .btn-primary { background: var(--color-producer); color: #000; border: none; font-weight: 600; }
+        .btn-primary:hover { background: #05b586; box-shadow: 0 0 20px rgba(6,214,160,0.4); }
+
+        .progress-dots { display: flex; gap: 8px; flex: 1; justify-content: center; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: 0.3s; }
+        .dot.active { background: var(--color-producer); transform: scale(1.5); box-shadow: 0 0 10px var(--color-producer); }
+
+        /* Cycle SVG internal styling */
+        .flow-path { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 2; stroke-dasharray: 6 6; }
+        .flow-particle { fill: var(--color-producer); filter: drop-shadow(0 0 5px var(--color-producer)); }
+        .cycle-node { transition: var(--transition-smooth); transform-origin: center; }
+        .cycle-node.active { transform: scale(1.1); filter: drop-shadow(0 0 20px currentColor); }
+        .cycle-node text { font-family: var(--font-display); font-size: 14px; fill: #fff; text-anchor: middle; font-weight: bold; }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (Balance Scale)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .sim-layout { grid-template-columns: 300px 1fr; height: 600px;}
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            padding: 24px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-header { display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: bold; }
+        
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%;
+            background: currentColor; cursor: pointer; margin-top: -8px; box-shadow: 0 0 10px currentColor;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer; background: rgba(255,255,255,0.1); border-radius: 2px;
+        }
+
+        .sim-view {
+            position: relative;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #000;
+            border: 1px solid var(--border-glass);
+            min-height: 400px;
+        }
+
+        #ecosystemCanvas { width: 100%; height: 100%; display: block; }
+        
+        .sim-overlay {
+            position: absolute;
+            bottom: 16px; left: 16px; right: 16px;
+            display: flex; justify-content: space-between;
+            pointer-events: none;
+        }
+        
+        .stat-box {
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(10px);
+            padding: 8px 16px; border-radius: 8px; font-family: monospace; font-size: 1.1rem;
+            border: 1px solid var(--border-glass);
+        }
+
+        /* ==========================================================================
+           GRID CARDS (Facts, Mistakes, Apps)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .info-card {
+            padding: 24px;
+            border-radius: var(--radius-md);
+            background: linear-gradient(145deg, rgba(255,255,255,0.03), rgba(0,0,0,0.2));
+            border: 1px solid var(--border-glass);
+            transition: var(--transition-smooth);
+        }
+        .info-card:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.2); }
+        .info-card h4 { margin-bottom: 12px; display: flex; align-items: center; gap: 12px;}
+        .info-card h4 svg { width: 24px; height: 24px; fill: currentColor; }
+
+        /* Fact colors */
+        .card-fact h4 { color: #f39c12; }
+        .card-mistake h4 { color: #e74c3c; }
+        .card-app h4 { color: #3498db; }
+
+        /* ==========================================================================
+           RESPONSIVE TWEAKS (Mobile specific constraints)
+           ========================================================================== */
+        @media (max-width: 767px) {
+            .glass-panel { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+            section { padding: 60px 0; }
+            .container { padding: 0 16px; }
+            .components-grid { gap: 16px; }
+            .sim-layout { grid-template-columns: 1fr; }
+            .sim-view { min-height: 300px; }
+            .sim-controls { padding: 16px; }
+            .btn { padding: 10px 20px; font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HERO BACKGROUND -->
+    <canvas class="hero-bg-canvas" id="heroBg"></canvas>
+
+    <!-- 1. INTRODUCTION & OVERVIEW -->
+    <section class="hero">
+        <div class="container hero-content">
+            <div class="tag">Interactive Simulation</div>
+            <h1>The Delicate Architecture of <br><span class="gradient-text">Ecosystem Balance</span></h1>
+            <p style="font-size: clamp(1.1rem, 1.5vw, 1.3rem); max-width: 600px; margin: 0 auto 32px;">
+                An ecosystem is not just a collection of plants and animals; it is a complex, dynamic engine driven by the continuous flow of energy and the recycling of vital nutrients.
+            </p>
+            <button class="btn btn-primary" onclick="document.getElementById('components').scrollIntoView({behavior: 'smooth'})">
+                Explore the System
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+            </button>
+        </div>
+    </section>
+
+    <!-- 2. MAIN COMPONENTS (Strict Visual + Legend) -->
+    <section id="components">
+        <div class="container">
+            <h2 style="text-align: center;">System Components</h2>
+            <p style="text-align: center; max-width: 600px; margin: 0 auto 48px;">
+                Every ecosystem relies on specific biological roles. Hover over the markers to identify the vital cogs in this natural machine.
+            </p>
+
+            <div class="glass-panel" style="padding: clamp(16px, 3vw, 32px);">
+                <div class="components-grid">
+                    
+                    <!-- THE VISUAL -->
+                    <div class="visual-container">
+                        <svg class="visual-svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice">
+                            <defs>
+                                <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="#ffd166" stop-opacity="1"/>
+                                    <stop offset="100%" stop-color="#ffd166" stop-opacity="0"/>
+                                </radialGradient>
+                                <linearGradient id="skyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#0a1a2f"/>
+                                    <stop offset="100%" stop-color="#05101a"/>
+                                </linearGradient>
+                                <linearGradient id="soilGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                    <stop offset="0%" stop-color="#2a1e17"/>
+                                    <stop offset="100%" stop-color="#0d0907"/>
+                                </linearGradient>
+                                <filter id="glowLight">
+                                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                    <feMerge>
+                                        <feMergeNode in="coloredBlur"/>
+                                        <feMergeNode in="SourceGraphic"/>
+                                    </feMerge>
+                                </filter>
+                            </defs>
+
+                            <!-- Background Setup -->
+                            <rect width="100%" height="60%" fill="url(#skyGrad)"/>
+                            <rect y="60%" width="100%" height="40%" fill="url(#soilGrad)"/>
+
+                            <!-- 1. ABIOTIC (Sun) -->
+                            <g class="svg-element" id="svg-comp-1" style="color: var(--color-sun);">
+                                <circle cx="700" cy="100" r="150" fill="url(#sunGlow)" opacity="0.3"/>
+                                <circle cx="700" cy="100" r="40" fill="#ffd166" filter="url(#glowLight)"/>
+                                <!-- Sun Rays -->
+                                <path d="M700 40 L700 10 M760 100 L810 100 M700 160 L700 210 M640 100 L590 100 M742 58 L777 23 M742 142 L777 177 M658 142 L623 177 M658 58 L623 23" stroke="#ffd166" stroke-width="4" stroke-linecap="round" opacity="0.6"/>
+                            </g>
+
+                            <!-- 2. PRODUCERS (Trees/Plants) -->
+                            <g class="svg-element" id="svg-comp-2" style="color: var(--color-producer);">
+                                <!-- Background Trees -->
+                                <path d="M150 360 L120 180 L180 180 Z" fill="#048c67" opacity="0.5"/>
+                                <path d="M250 360 L200 120 L300 120 Z" fill="#048c67" opacity="0.4"/>
+                                <!-- Main Tree -->
+                                <path d="M400 360 C380 360, 390 200, 400 200 C410 200, 420 360, 400 360 Z" fill="#4a3b32"/> <!-- Trunk -->
+                                <path d="M400 100 C320 100, 280 200, 320 280 C360 360, 440 360, 480 280 C520 200, 480 100, 400 100 Z" fill="#06d6a0" filter="url(#glowLight)" opacity="0.9"/> <!-- Canopy -->
+                                <!-- Ground Flora -->
+                                <path d="M50 360 Q100 280 150 360 Z" fill="#05b586"/>
+                                <path d="M550 360 Q600 300 650 360 Z" fill="#05b586"/>
+                            </g>
+
+                            <!-- 3. CONSUMERS (Herbivore/Carnivore represented conceptually) -->
+                            <g class="svg-element" id="svg-comp-3" style="color: var(--color-consumer-1);">
+                                <!-- Herbivore (Deer silhouette) -->
+                                <path d="M220 360 L220 300 L240 280 L260 280 L250 320 L240 360 Z M220 300 L200 290 L210 270 L230 280 Z" fill="#118ab2" filter="url(#glowLight)"/>
+                                <!-- Carnivore (Wolf silhouette) -->
+                                <path d="M600 360 L580 320 L540 320 L520 330 L550 360 Z M540 320 L530 300 L550 300 Z" fill="#ef476f" filter="url(#glowLight)"/>
+                            </g>
+
+                            <!-- 4. DECOMPOSERS (Mycelium network in soil) -->
+                            <g class="svg-element" id="svg-comp-4" style="color: var(--color-decomposer);">
+                                <!-- Roots/Mycelium -->
+                                <path d="M400 360 Q350 420 300 450 M400 360 Q420 450 480 480 M400 360 Q450 400 550 420 M300 450 Q250 480 200 500 M480 480 Q520 520 600 550" stroke="#a78a7f" stroke-width="3" fill="none" opacity="0.6" filter="url(#glowLight)"/>
+                                <!-- Mushrooms -->
+                                <path d="M350 360 Q350 340 340 340 Q330 340 330 360 Z" fill="#a78a7f"/>
+                                <path d="M360 360 Q360 330 350 330 Q340 330 340 360 Z" fill="#a78a7f"/>
+                            </g>
+                        </svg>
+
+                        <!-- Absolute placed Markers -->
+                        <div class="marker" style="top: 15%; left: 85%; color: var(--color-sun);" data-id="1">1</div>
+                        <div class="marker" style="top: 40%; left: 50%; color: var(--color-producer);" data-id="2">2</div>
+                        <div class="marker" style="top: 55%; left: 30%; color: var(--color-consumer-1);" data-id="3">3</div>
+                        <div class="marker" style="top: 80%; left: 50%; color: var(--color-decomposer);" data-id="4">4</div>
+                    </div>
+
+                    <!-- THE LEGEND (Standard Flow) -->
+                    <div class="legend-list">
+                        <div class="legend-item" data-target="1" style="color: var(--color-sun);">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-content">
+                                <h4>Abiotic Energy (The Sun)</h4>
+                                <p>The ultimate source of energy. Provides solar radiation necessary for photosynthesis.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-target="2" style="color: var(--color-producer);">
+                            <div class="legend-badge">2</div>
+                            <div class="legend-content">
+                                <h4>Producers (Autotrophs)</h4>
+                                <p>Plants and algae. They convert solar energy and CO2 into chemical energy (glucose).</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-target="3" style="color: var(--color-consumer-1);">
+                            <div class="legend-badge">3</div>
+                            <div class="legend-content">
+                                <h4>Consumers (Heterotrophs)</h4>
+                                <p>Herbivores eat plants; carnivores eat herbivores, transferring energy up the trophic levels.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-target="4" style="color: var(--color-decomposer);">
+                            <div class="legend-badge">4</div>
+                            <div class="legend-content">
+                                <h4>Decomposers (Detritivores)</h4>
+                                <p>Fungi and bacteria. They break down dead matter, returning essential nutrients to the soil.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. WORKING PROCESS (Cycle Mechanism) -->
+    <section id="working" class="working-section">
+        <div class="container">
+            <h2 style="text-align: center;">How the Cycle Works</h2>
+            <p style="text-align: center; max-width: 600px; margin: 0 auto 48px;">
+                Energy flows linearly and is eventually lost as heat, while nutrients are continuously recycled in a closed loop.
+            </p>
+
+            <div class="glass-panel" style="padding: clamp(24px, 4vw, 48px);">
+                <div class="cycle-container">
+                    
+                    <!-- Animated Cycle Visual -->
+                    <div class="cycle-visual">
+                        <svg width="100%" height="100%" viewBox="0 0 400 400">
+                            <!-- Paths -->
+                            <path id="path-1" class="flow-path" d="M 200 40 Q 340 40 340 180" />
+                            <path id="path-2" class="flow-path" d="M 340 220 Q 340 360 200 360" />
+                            <path id="path-3" class="flow-path" d="M 160 360 Q 40 360 40 220" />
+                            <path id="path-4" class="flow-path" d="M 40 180 Q 40 40 160 40" />
+                            
+                            <!-- Connecting to center -->
+                            <path id="path-center-1" class="flow-path" d="M 320 200 L 220 200" opacity="0.3"/>
+                            
+                            <!-- Nodes -->
+                            <g class="cycle-node" id="node-0" style="color: var(--color-sun); transform: translate(200px, 40px);">
+                                <circle r="30" fill="rgba(255,209,102,0.2)" stroke="currentColor" stroke-width="2"/>
+                                <text y="5">SUN</text>
+                            </g>
+                            <g class="cycle-node" id="node-1" style="color: var(--color-producer); transform: translate(340px, 200px);">
+                                <circle r="35" fill="rgba(6,214,160,0.2)" stroke="currentColor" stroke-width="2"/>
+                                <text y="5">PLANT</text>
+                            </g>
+                            <g class="cycle-node" id="node-2" style="color: var(--color-consumer-1); transform: translate(200px, 360px);">
+                                <circle r="30" fill="rgba(17,138,178,0.2)" stroke="currentColor" stroke-width="2"/>
+                                <text y="5">ANIMAL</text>
+                            </g>
+                            <g class="cycle-node" id="node-3" style="color: var(--color-decomposer); transform: translate(40px, 200px);">
+                                <circle r="35" fill="rgba(167,138,127,0.2)" stroke="currentColor" stroke-width="2"/>
+                                <text y="5">SOIL/FUNGI</text>
+                            </g>
+
+                            <!-- Animated Particle (Controlled by JS) -->
+                            <circle id="cycle-particle" r="6" class="flow-particle" opacity="0" />
+                        </svg>
+                    </div>
+
+                    <!-- UI Controls & Explanation -->
+                    <div class="cycle-ui">
+                        <div class="cycle-stage-info" id="stage-info-container">
+                            <!-- Content injected via JS -->
+                        </div>
+
+                        <div class="cycle-controls">
+                            <button class="btn" id="btn-prev">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                            </button>
+                            <button class="btn btn-primary" id="btn-play">Auto-Play</button>
+                            <div class="progress-dots" id="cycle-dots">
+                                <!-- Dots injected via JS -->
+                            </div>
+                            <button class="btn" id="btn-next">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. INTERACTIVE SIMULATION (Predator/Prey) -->
+    <section id="simulation">
+        <div class="container">
+            <h2 style="text-align: center;">Population Dynamics Simulator</h2>
+            <p style="text-align: center; max-width: 600px; margin: 0 auto 48px;">
+                Adjust starting populations to see how predators, prey, and resources interact. Notice how a change in one species ripples through the entire ecosystem.
+            </p>
+
+            <div class="glass-panel" style="padding: 0;">
+                <div class="sim-layout">
+                    
+                    <!-- Controls Panel -->
+                    <div class="sim-controls">
+                        <h3>Ecosystem Variables</h3>
+                        <p style="font-size: 0.9rem; margin-bottom: 24px;">Based on a simplified Lotka-Volterra interaction model.</p>
+                        
+                        <div class="control-group" style="color: var(--color-producer);">
+                            <div class="control-header">
+                                <span>Vegetation (Producers)</span>
+                                <span id="val-plants">100</span>
+                            </div>
+                            <input type="range" id="slider-plants" min="10" max="300" value="150">
+                        </div>
+
+                        <div class="control-group" style="color: var(--color-consumer-1);">
+                            <div class="control-header">
+                                <span>Herbivores (Prey)</span>
+                                <span id="val-prey">40</span>
+                            </div>
+                            <input type="range" id="slider-prey" min="0" max="100" value="40">
+                        </div>
+
+                        <div class="control-group" style="color: var(--color-consumer-2);">
+                            <div class="control-header">
+                                <span>Carnivores (Predators)</span>
+                                <span id="val-preds">10</span>
+                            </div>
+                            <input type="range" id="slider-preds" min="0" max="50" value="10">
+                        </div>
+                        
+                        <div style="flex:1"></div>
+                        <button class="btn btn-primary" id="btn-reset-sim" style="justify-content: center; width: 100%;">Restart Simulation</button>
+                    </div>
+
+                    <!-- Visual Canvas -->
+                    <div class="sim-view">
+                        <canvas id="ecosystemCanvas"></canvas>
+                        <div class="sim-overlay">
+                            <div class="stat-box" style="color: var(--color-producer);" id="stat-plants">Plants: 0</div>
+                            <div class="stat-box" style="color: var(--color-consumer-1);" id="stat-prey">Prey: 0</div>
+                            <div class="stat-box" style="color: var(--color-consumer-2);" id="stat-preds">Preds: 0</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. GRID INFO (Facts, Mistakes, Apps) -->
+    <section>
+        <div class="container">
+            <h2 style="text-align: center; margin-bottom: 48px;">Understanding the Impact</h2>
+            
+            <div class="info-grid">
+                <!-- Interesting Fact -->
+                <div class="info-card card-fact">
+                    <h4>
+                        <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        Trophic Cascade
+                    </h4>
+                    <p>When wolves were reintroduced to Yellowstone National Park in 1995, they didn't just reduce the elk population. By changing elk behavior, willow and aspen trees recovered, which brought back beavers, which created ponds for fish and amphibians. The rivers actually changed course!</p>
+                </div>
+
+                <!-- Common Mistake -->
+                <div class="info-card card-mistake">
+                    <h4>
+                        <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12" stroke-width="2" stroke-linecap="round"/></svg>
+                        Common Misconception
+                    </h4>
+                    <p><strong>"Energy is recycled in an ecosystem."</strong><br>False. Nutrients (like carbon and nitrogen) are continuously recycled. Energy, however, flows strictly linearly. It enters as sunlight and exits continuously as heat (10% rule). If the sun disappeared, the energy flow would stop.</p>
+                </div>
+
+                <!-- Application -->
+                <div class="info-card card-app">
+                    <h4>
+                        <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                        Agricultural Application
+                    </h4>
+                    <p>Modern sustainable farming mimics natural ecosystem balance through <strong>Crop Rotation</strong> and <strong>Polyculture</strong>. By planting different crops together, they naturally deter pests (without chemicals) and replenish soil nutrients naturally, mimicking a wild meadow.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- JS Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* ==========================================================================
+               HERO BACKGROUND ANIMATION
+               ========================================================================== */
+            const heroCanvas = document.getElementById('heroBg');
+            const hCtx = heroCanvas.getContext('2d');
+            let hWidth, hHeight;
+            let particles = [];
+
+            function initHeroCanvas() {
+                hWidth = window.innerWidth;
+                hHeight = window.innerHeight;
+                heroCanvas.width = hWidth * window.devicePixelRatio;
+                heroCanvas.height = hHeight * window.devicePixelRatio;
+                hCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                
+                particles = [];
+                for(let i=0; i<50; i++) {
+                    particles.push({
+                        x: Math.random() * hWidth,
+                        y: Math.random() * hHeight,
+                        r: Math.random() * 2 + 1,
+                        dx: (Math.random() - 0.5) * 0.5,
+                        dy: (Math.random() - 0.5) * 0.5,
+                        c: Math.random() > 0.5 ? 'rgba(6, 214, 160, 0.3)' : 'rgba(17, 138, 178, 0.3)'
+                    });
+                }
+            }
+
+            function animateHero() {
+                hCtx.clearRect(0, 0, hWidth, hHeight);
+                particles.forEach(p => {
+                    p.x += p.dx;
+                    p.y += p.dy;
+                    if(p.x < 0 || p.x > hWidth) p.dx *= -1;
+                    if(p.y < 0 || p.y > hHeight) p.dy *= -1;
+                    
+                    hCtx.beginPath();
+                    hCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                    hCtx.fillStyle = p.c;
+                    hCtx.fill();
+                });
+                
+                // Draw connections
+                hCtx.strokeStyle = 'rgba(255,255,255,0.02)';
+                hCtx.lineWidth = 1;
+                for(let i=0; i<particles.length; i++) {
+                    for(let j=i+1; j<particles.length; j++) {
+                        let dist = Math.hypot(particles[i].x - particles[j].x, particles[i].y - particles[j].y);
+                        if(dist < 150) {
+                            hCtx.beginPath();
+                            hCtx.moveTo(particles[i].x, particles[i].y);
+                            hCtx.lineTo(particles[j].x, particles[j].y);
+                            hCtx.stroke();
+                        }
+                    }
+                }
+                requestAnimationFrame(animateHero);
+            }
+            initHeroCanvas();
+            animateHero();
+
+
+            /* ==========================================================================
+               COMPONENTS LOGIC (Markers & Legend Sync)
+               ========================================================================== */
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+            const svgElements = document.querySelectorAll('.svg-element');
+
+            function activateComponent(id) {
+                // Reset all
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                svgElements.forEach(s => s.classList.remove('highlighted'));
+                document.querySelector('.visual-svg').classList.add('dimmed');
+
+                // Activate specific
+                if(id) {
+                    document.querySelector(`.marker[data-id="${id}"]`).classList.add('active');
+                    document.querySelector(`.legend-item[data-target="${id}"]`).classList.add('active');
+                    document.getElementById(`svg-comp-${id}`).classList.add('highlighted');
+                } else {
+                    document.querySelector('.visual-svg').classList.remove('dimmed');
+                }
+            }
+
+            markers.forEach(m => {
+                m.addEventListener('mouseenter', () => activateComponent(m.dataset.id));
+                m.addEventListener('mouseleave', () => activateComponent(null));
+                m.addEventListener('touchstart', (e) => { e.preventDefault(); activateComponent(m.dataset.id); });
+            });
+
+            legendItems.forEach(l => {
+                l.addEventListener('mouseenter', () => activateComponent(l.dataset.target));
+                l.addEventListener('mouseleave', () => activateComponent(null));
+            });
+
+
+            /* ==========================================================================
+               WORKING PROCESS LOGIC (Cycle Steps)
+               ========================================================================== */
+            const stages = [
+                {
+                    id: 0,
+                    title: "Energy Capture",
+                    desc: "Solar radiation is captured by plants (producers). Only about 1% of solar energy reaching the earth is captured.",
+                    in: "Sunlight & CO₂",
+                    out: "Glucose (Energy)",
+                    path: "path-1",
+                    startNode: 0,
+                    endNode: 1,
+                    color: "var(--color-sun)"
+                },
+                {
+                    id: 1,
+                    title: "Primary Consumption",
+                    desc: "Herbivores eat the plants. About 90% of energy is lost as heat; only 10% transfers to the animal's biomass.",
+                    in: "Plant Matter",
+                    out: "Animal Biomass",
+                    path: "path-2",
+                    startNode: 1,
+                    endNode: 2,
+                    color: "var(--color-producer)"
+                },
+                {
+                    id: 2,
+                    title: "Decomposition",
+                    desc: "When animals and plants die, fungi and bacteria break down complex organic molecules into simple inorganic nutrients.",
+                    in: "Dead Matter",
+                    out: "Basic Nutrients",
+                    path: "path-3",
+                    startNode: 2,
+                    endNode: 3,
+                    color: "var(--color-consumer-1)"
+                },
+                {
+                    id: 3,
+                    title: "Nutrient Recycling",
+                    desc: "The basic nutrients in the soil are absorbed by plant roots, closing the chemical loop, ready to combine with solar energy again.",
+                    in: "Soil Nutrients",
+                    out: "Plant Growth",
+                    path: "path-4",
+                    startNode: 3,
+                    endNode: 0,
+                    color: "var(--color-decomposer)"
+                }
+            ];
+
+            let currentStage = 0;
+            let cyclePlaying = false;
+            let cycleTimer;
+            let animReq;
+
+            const containerInfo = document.getElementById('stage-info-container');
+            const containerDots = document.getElementById('cycle-dots');
+            const cycleParticle = document.getElementById('cycle-particle');
+
+            // Initialize UI
+            stages.forEach((s, i) => {
+                // HTML for details
+                const div = document.createElement('div');
+                div.className = `stage-details ${i === 0 ? 'active' : ''}`;
+                div.id = `stage-detail-${i}`;
+                div.innerHTML = `
+                    <h3><span class="stage-num">Stage ${i+1}</span> ${s.title}</h3>
+                    <p>${s.desc}</p>
+                    <div class="io-badges">
+                        <div class="io-badge in"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg> ${s.in}</div>
+                        <div class="io-badge out">${s.out} <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg></div>
+                    </div>
+                `;
+                containerInfo.appendChild(div);
+
+                // Dots
+                const dot = document.createElement('div');
+                dot.className = `dot ${i === 0 ? 'active' : ''}`;
+                dot.onclick = () => goToStage(i);
+                containerDots.appendChild(dot);
+            });
+
+            function animateParticleOnPath(pathId, color, duration = 1500) {
+                cancelAnimationFrame(animReq);
+                const path = document.getElementById(pathId);
+                const pathLength = path.getTotalLength();
+                let startTime = null;
+
+                cycleParticle.setAttribute('fill', color);
+                cycleParticle.setAttribute('opacity', '1');
+
+                function step(timestamp) {
+                    if (!startTime) startTime = timestamp;
+                    const progress = (timestamp - startTime) / duration;
+
+                    if (progress < 1) {
+                        const pt = path.getPointAtLength(progress * pathLength);
+                        cycleParticle.setAttribute('cx', pt.x);
+                        cycleParticle.setAttribute('cy', pt.y);
+                        animReq = requestAnimationFrame(step);
+                    } else {
+                        // Keep it at end or hide
+                        cycleParticle.setAttribute('opacity', '0');
+                    }
+                }
+                animReq = requestAnimationFrame(step);
+            }
+
+            function goToStage(index) {
+                if(index < 0) index = stages.length - 1;
+                if(index >= stages.length) index = 0;
+                currentStage = index;
+
+                // Update text UI
+                document.querySelectorAll('.stage-details').forEach((el, i) => {
+                    el.classList.toggle('active', i === currentStage);
+                });
+                
+                // Update dots
+                document.querySelectorAll('.dot').forEach((el, i) => {
+                    el.classList.toggle('active', i === currentStage);
+                });
+
+                // Update SVG nodes
+                const stageData = stages[currentStage];
+                document.querySelectorAll('.cycle-node').forEach((el, i) => {
+                    el.classList.remove('active');
+                    if(i === stageData.startNode || i === stageData.endNode) {
+                        el.classList.add('active');
+                    }
+                });
+
+                // Trigger path animation
+                animateParticleOnPath(stageData.path, stageData.color, cyclePlaying ? 2800 : 1500);
+            }
+
+            document.getElementById('btn-prev').onclick = () => { stopCycle(); goToStage(currentStage - 1); };
+            document.getElementById('btn-next').onclick = () => { stopCycle(); goToStage(currentStage + 1); };
+            
+            const btnPlay = document.getElementById('btn-play');
+            btnPlay.onclick = () => {
+                if(cyclePlaying) stopCycle();
+                else startCycle();
+            };
+
+            function startCycle() {
+                cyclePlaying = true;
+                btnPlay.textContent = "Pause";
+                btnPlay.classList.add('btn-primary');
+                // Run immediately, then interval
+                goToStage(currentStage);
+                cycleTimer = setInterval(() => {
+                    goToStage(currentStage + 1);
+                }, 3000);
+            }
+
+            function stopCycle() {
+                cyclePlaying = false;
+                btnPlay.textContent = "Auto-Play";
+                btnPlay.classList.remove('btn-primary');
+                clearInterval(cycleTimer);
+            }
+
+            // Init first state visually without animating particle immediately
+            goToStage(0);
+
+
+            /* ==========================================================================
+               INTERACTIVE SIMULATION CANVAS (Predator/Prey logic)
+               ========================================================================== */
+            const simCanvas = document.getElementById('ecosystemCanvas');
+            const sCtx = simCanvas.getContext('2d');
+            let sWidth, sHeight;
+            let entities = [];
+            let simReq;
+            
+            // Sliders
+            const slPlants = document.getElementById('slider-plants');
+            const slPrey = document.getElementById('slider-prey');
+            const slPreds = document.getElementById('slider-preds');
+            
+            // Stats
+            const stPlants = document.getElementById('stat-plants');
+            const stPrey = document.getElementById('stat-prey');
+            const stPreds = document.getElementById('stat-preds');
+
+            class Entity {
+                constructor(type, x, y) {
+                    this.type = type; // 0: plant, 1: prey, 2: pred
+                    this.x = x || Math.random() * sWidth;
+                    this.y = y || Math.random() * sHeight;
+                    this.vx = (Math.random() - 0.5) * (type === 0 ? 0 : type === 1 ? 2 : 2.5);
+                    this.vy = (Math.random() - 0.5) * (type === 0 ? 0 : type === 1 ? 2 : 2.5);
+                    this.radius = type === 0 ? 3 : type === 1 ? 5 : 7;
+                    this.color = type === 0 ? '#06d6a0' : type === 1 ? '#118ab2' : '#ef476f';
+                    this.energy = type === 0 ? 100 : type === 1 ? 200 : 300;
+                    this.age = 0;
+                }
+
+                update() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+
+                    // Bounce off walls
+                    if (this.x < 0 || this.x > sWidth) this.vx *= -1;
+                    if (this.y < 0 || this.y > sHeight) this.vy *= -1;
+
+                    // Jitter movement for animals
+                    if(this.type > 0 && Math.random() < 0.05) {
+                        this.vx += (Math.random() - 0.5) * 0.5;
+                        this.vy += (Math.random() - 0.5) * 0.5;
+                        // Limit speed
+                        const speed = Math.hypot(this.vx, this.vy);
+                        const maxSpeed = this.type === 1 ? 2 : 2.5;
+                        if(speed > maxSpeed) {
+                            this.vx = (this.vx/speed) * maxSpeed;
+                            this.vy = (this.vy/speed) * maxSpeed;
+                        }
+                    }
+
+                    this.age++;
+                    if(this.type > 0) this.energy -= 0.5; // Starvation over time for animals
+                }
+
+                draw(ctx) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = this.color;
+                    if(this.type > 0) {
+                        ctx.shadowBlur = 5;
+                        ctx.shadowColor = this.color;
+                    } else {
+                        ctx.shadowBlur = 0;
+                    }
+                    ctx.fill();
+                }
+            }
+
+            function initSimulation() {
+                const rect = simCanvas.parentElement.getBoundingClientRect();
+                sWidth = rect.width;
+                sHeight = rect.height;
+                simCanvas.width = sWidth * window.devicePixelRatio;
+                simCanvas.height = sHeight * window.devicePixelRatio;
+                sCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                
+                resetEntities();
+            }
+
+            function resetEntities() {
+                entities = [];
+                let p = parseInt(slPlants.value);
+                let h = parseInt(slPrey.value);
+                let c = parseInt(slPreds.value);
+                
+                for(let i=0; i<p; i++) entities.push(new Entity(0));
+                for(let i=0; i<h; i++) entities.push(new Entity(1));
+                for(let i=0; i<c; i++) entities.push(new Entity(2));
+                
+                updateStatsUI();
+            }
+
+            function updateStatsUI() {
+                let counts = [0,0,0];
+                entities.forEach(e => counts[e.type]++);
+                
+                document.getElementById('val-plants').textContent = counts[0];
+                document.getElementById('val-prey').textContent = counts[1];
+                document.getElementById('val-preds').textContent = counts[2];
+
+                stPlants.textContent = `Plants: ${counts[0]}`;
+                stPrey.textContent = `Prey: ${counts[1]}`;
+                stPreds.textContent = `Preds: ${counts[2]}`;
+            }
+
+            function resolveInteractions() {
+                for (let i = entities.length - 1; i >= 0; i--) {
+                    let a = entities[i];
+                    if(a.energy <= 0 && a.type > 0) {
+                        entities.splice(i, 1); // Died of starvation
+                        continue;
+                    }
+
+                    // Reproduction
+                    if(a.type === 0 && Math.random() < 0.005 && entities.length < 500) {
+                        entities.push(new Entity(0, a.x + (Math.random()-0.5)*20, a.y + (Math.random()-0.5)*20));
+                    }
+                    if(a.type === 1 && a.energy > 300 && Math.random() < 0.01) {
+                        a.energy -= 100;
+                        entities.push(new Entity(1, a.x, a.y));
+                    }
+                    if(a.type === 2 && a.energy > 400 && Math.random() < 0.005) {
+                        a.energy -= 200;
+                        entities.push(new Entity(2, a.x, a.y));
+                    }
+
+                    // Collisions / Eating
+                    for (let j = i - 1; j >= 0; j--) {
+                        let b = entities[j];
+                        
+                        let dx = a.x - b.x;
+                        let dy = a.y - b.y;
+                        let dist = Math.hypot(dx, dy);
+
+                        if (dist < (a.radius + b.radius + 2)) {
+                            // Prey eats Plant
+                            if (a.type === 1 && b.type === 0) {
+                                a.energy += 50;
+                                entities.splice(j, 1);
+                                i--; // Adjust index since we removed a lower index
+                                break;
+                            } else if (b.type === 1 && a.type === 0) {
+                                b.energy += 50;
+                                entities.splice(i, 1);
+                                break;
+                            }
+                            // Predator eats Prey
+                            else if (a.type === 2 && b.type === 1) {
+                                a.energy += 150;
+                                entities.splice(j, 1);
+                                i--;
+                                break;
+                            } else if (b.type === 2 && a.type === 1) {
+                                b.energy += 150;
+                                entities.splice(i, 1);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            function animateSimulation() {
+                // Clear with slight trail
+                sCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                sCtx.fillRect(0, 0, sWidth, sHeight);
+
+                entities.forEach(e => {
+                    e.update();
+                    e.draw(sCtx);
+                });
+
+                resolveInteractions();
+                
+                // Throttle UI updates slightly
+                if(Math.random() < 0.1) updateStatsUI();
+
+                simReq = requestAnimationFrame(animateSimulation);
+            }
+
+            // Event Listeners for Simulation
+            window.addEventListener('resize', () => {
+                initHeroCanvas();
+                initSimulation();
+            });
+
+            document.getElementById('btn-reset-sim').addEventListener('click', resetEntities);
+            
+            // Allow sliders to adjust *current* population dynamically
+            slPlants.addEventListener('input', (e) => {
+                let target = parseInt(e.target.value);
+                let current = entities.filter(en => en.type === 0).length;
+                if(target > current) {
+                    for(let i=0; i<(target-current); i++) entities.push(new Entity(0));
+                } else if(target < current) {
+                    let removed = 0;
+                    for(let i=entities.length-1; i>=0 && removed < (current-target); i--) {
+                        if(entities[i].type === 0) { entities.splice(i, 1); removed++; }
+                    }
+                }
+                updateStatsUI();
+            });
+
+            // Init
+            initSimulation();
+            animateSimulation();
+        });
+    </script>
+</body>
+</html>

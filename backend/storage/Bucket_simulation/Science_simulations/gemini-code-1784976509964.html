@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hydroelectric Plant Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & THEME SETUP (Premium Dark Glassmorphism)
+           ========================================================================== */
+        :root {
+            /* Colors */
+            --bg-color: #050a15;
+            --accent-blue: #00e5ff;
+            --accent-green: #00ffaa;
+            --accent-orange: #ffb300;
+            --accent-danger: #ff4757;
+            --text-main: #f0f4f8;
+            --text-muted: #8b9bb4;
+            --glass-bg: rgba(15, 23, 42, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-highlight: rgba(255, 255, 255, 0.05);
+            
+            /* Typography (Fluid) */
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --step--1: clamp(0.83rem, calc(0.78rem + 0.23vw), 0.96rem);
+            --step-0: clamp(1.00rem, calc(0.91rem + 0.43vw), 1.25rem);
+            --step-1: clamp(1.20rem, calc(1.07rem + 0.63vw), 1.56rem);
+            --step-2: clamp(1.44rem, calc(1.26rem + 0.89vw), 1.95rem);
+            --step-3: clamp(1.73rem, calc(1.48rem + 1.24vw), 2.44rem);
+            --step-4: clamp(2.07rem, calc(1.73rem + 1.70vw), 3.05rem);
+            --step-5: clamp(2.49rem, calc(2.03rem + 2.31vw), 3.82rem);
+
+            /* Spacing */
+            --space-xs: clamp(0.5rem, 1vw, 0.75rem);
+            --space-sm: clamp(1rem, 2vw, 1.5rem);
+            --space-md: clamp(1.5rem, 3vw, 2.5rem);
+            --space-lg: clamp(2rem, 4vw, 4rem);
+            
+            /* Layout */
+            --container-width: 1400px;
+            --border-radius: 20px;
+            
+            /* Animation Variables */
+            --turbine-speed: 0s;
+            --water-flow-speed: 0s;
+            --power-glow: 0;
+        }
+
+        /* ==========================================================================
+           2. GLOBAL RESETS & TYPOGRAPHY
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(0, 255, 170, 0.05), transparent 25%);
+            background-attachment: fixed;
+        }
+
+        h1, h2, h3, h4 {
+            line-height: 1.2;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        p { color: var(--text-muted); font-size: var(--step-0); }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-green));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ==========================================================================
+           3. UI COMPONENTS (Glassmorphism)
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            padding: var(--space-md);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Reduce blur on smaller screens for performance */
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                padding: var(--space-sm);
+            }
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: var(--step--1);
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        .btn:hover {
+            background: var(--accent-blue);
+            color: var(--bg-color);
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+        }
+        .btn.active {
+            background: var(--accent-blue);
+            color: var(--bg-color);
+        }
+
+        /* ==========================================================================
+           4. LAYOUT STRUCTURE
+           ========================================================================== */
+        .container {
+            max-width: var(--container-width);
+            margin: 0 auto;
+            padding: 0 var(--space-sm);
+        }
+
+        section {
+            padding: var(--space-lg) 0;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+        section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        header {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-title { font-size: var(--step-5); margin-bottom: var(--space-xs); }
+        .hero-subtitle { font-size: var(--step-2); max-width: 800px; margin: 0 auto; }
+
+        /* ==========================================================================
+           5. VISUALIZATION & DIAGRAM CORE
+           ========================================================================== */
+        .viz-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-md);
+        }
+        
+        @media (min-width: 1024px) {
+            .viz-container { grid-template-columns: 3fr 1fr; }
+        }
+
+        .diagram-wrapper {
+            position: relative;
+            width: 100%;
+            min-height: 240px;
+            background: radial-gradient(circle at center, rgba(15,23,42,0.8), #020617);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            aspect-ratio: 16 / 9;
+        }
+
+        @media (max-width: 768px) {
+            .diagram-wrapper { aspect-ratio: 4 / 3; }
+        }
+
+        /* SVG Styles */
+        svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .svg-component {
+            transition: filter 0.3s ease, opacity 0.3s ease;
+        }
+        .svg-component.dimmed { opacity: 0.3; filter: grayscale(50%); }
+        .svg-component.highlight {
+            filter: drop-shadow(0 0 15px var(--accent-blue)) brightness(1.2);
+        }
+
+        /* Animations within SVG */
+        .turbine-rotor {
+            transform-origin: 600px 580px;
+            animation: spin linear infinite;
+            animation-duration: var(--turbine-speed, 0s);
+        }
+        
+        .generator-rotor {
+            transform-origin: 600px 350px;
+            animation: spin linear infinite;
+            animation-duration: var(--turbine-speed, 0s);
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .electric-flow {
+            stroke-dasharray: 10, 10;
+            animation: flowDash linear infinite;
+            animation-duration: max(0.5s, calc(var(--turbine-speed) * 0.5));
+            opacity: var(--power-glow);
+        }
+        @keyframes flowDash { to { stroke-dashoffset: -20; } }
+
+        /* Canvas overlay for water particles */
+        #waterCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            mix-blend-mode: screen;
+        }
+
+        /* ==========================================================================
+           6. MARKERS & LEGEND (Mandatory Pattern)
+           ========================================================================== */
+        .markers-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; /* Let clicks pass through empty space */
+        }
+
+        .marker {
+            position: absolute;
+            width: 28px; height: 28px;
+            background: var(--bg-color);
+            border: 2px solid var(--accent-blue);
+            color: var(--accent-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            pointer-events: auto;
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+            transition: all 0.2s ease;
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            background: var(--accent-blue);
+            color: var(--bg-color);
+            transform: translate(-50%, -50%) scale(1.2);
+            box-shadow: 0 0 20px var(--accent-blue);
+        }
+
+        /* Marker Positions (Percentages to stay responsive) */
+        .m-res { top: 40%; left: 15%; }
+        .m-int { top: 25%; left: 36%; }
+        .m-pen { top: 60%; left: 45%; }
+        .m-tur { top: 75%; left: 60%; }
+        .m-gen { top: 35%; left: 60%; }
+        .m-trans { top: 25%; left: 80%; }
+        .m-tail { top: 85%; left: 85%; }
+
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            list-style: none;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 229, 255, 0.1);
+            border-color: rgba(0, 229, 255, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-num {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px; height: 24px;
+            background: var(--accent-blue);
+            color: var(--bg-color);
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .legend-text h4 { margin: 0; font-size: var(--step--1); color: var(--text-main); }
+        .legend-text p { margin: 0; font-size: 0.85rem; color: var(--text-muted); line-height: 1.3;}
+
+        /* ==========================================================================
+           7. WORKING PROCESS (State Machine UI)
+           ========================================================================== */
+        .working-layout {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .working-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-top: var(--space-sm);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            position: relative;
+            margin: var(--space-sm) 0;
+        }
+        .progress-fill {
+            position: absolute;
+            top: 0; left: 0; height: 100%;
+            background: var(--accent-blue);
+            border-radius: 2px;
+            transition: width 0.4s ease;
+        }
+        .progress-dots {
+            position: absolute;
+            top: 50%; left: 0; width: 100%;
+            transform: translateY(-50%);
+            display: flex;
+            justify-content: space-between;
+        }
+        .dot {
+            width: 12px; height: 12px;
+            background: var(--bg-color);
+            border: 2px solid var(--text-muted);
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+        .dot.active { border-color: var(--accent-blue); background: var(--accent-blue); box-shadow: 0 0 10px var(--accent-blue); }
+
+        .stage-caption {
+            text-align: center;
+            min-height: 80px;
+        }
+        .stage-caption h3 { color: var(--accent-blue); font-size: var(--step-1); margin-bottom: 0.5rem;}
+
+        /* ==========================================================================
+           8. INTERACTIVE SIMULATION (Controls)
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-md);
+        }
+        @media (min-width: 1024px) {
+            .sim-grid { grid-template-columns: 1fr 2fr; }
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 600;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px; width: 24px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: var(--glass-border);
+            border-radius: 2px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        .readouts {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        
+        .readout-card {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            padding: 1rem;
+            border-radius: 12px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .r-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;}
+        .r-value { font-size: var(--step-2); font-weight: 700; font-variant-numeric: tabular-nums; }
+        
+        .r-power .r-value { color: var(--accent-green); text-shadow: 0 0 10px rgba(0,255,170,0.4); }
+        .r-rpm .r-value { color: var(--accent-orange); }
+
+        /* ==========================================================================
+           9. INFO GRIDS (Facts, Mistakes, etc.)
+           ========================================================================== */
+        .bento-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-sm);
+        }
+        @media (min-width: 768px) {
+            .bento-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            .bento-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+
+        .info-card {
+            padding: var(--space-sm);
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .info-icon {
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem;
+            background: rgba(255,255,255,0.05);
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Utility */
+        .mb-2 { margin-bottom: var(--space-sm); }
+        .text-center { text-align: center; }
+    </style>
+</head>
+<body>
+
+    <!-- ==========================================================================
+         HEADER / INTRO
+         ========================================================================== -->
+    <header class="container">
+        <h1 class="hero-title">Power from Water</h1>
+        <p class="hero-subtitle">Interactive exploration of a <span class="gradient-text">Hydroelectric Power Plant</span>. Discover how potential energy is transformed into the electricity that powers our modern world.</p>
+        <div style="margin-top: 2rem; animation: bounce 2s infinite;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+        </div>
+    </header>
+
+    <style>@keyframes bounce { 0%, 20%, 50%, 80%, 100% {transform: translateY(0);} 40% {transform: translateY(-20px);} 60% {transform: translateY(-10px);} }</style>
+
+    <!-- ==========================================================================
+         COMPONENTS SECTION
+         ========================================================================== -->
+    <section id="components" class="container">
+        <h2 class="text-center mb-2">Anatomy of a Plant</h2>
+        
+        <div class="viz-container glass-panel">
+            
+            <!-- MAIN VISUALIZATION (SVG + Canvas) -->
+            <div class="diagram-wrapper" id="main-diagram">
+                <!-- Canvas for water particles (behind some SVG elements, over others via CSS z-index handling conceptually, but here we place it over SVG, and SVG has transparent parts) -->
+                <canvas id="waterCanvas"></canvas>
+                
+                <svg viewBox="0 0 1000 800" preserveAspectRatio="xMidYMid slice" id="plant-svg">
+                    <defs>
+                        <!-- Gradients -->
+                        <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#0077ff" stop-opacity="0.8"/>
+                            <stop offset="100%" stop-color="#001144" stop-opacity="0.9"/>
+                        </linearGradient>
+                        <linearGradient id="concreteGrad" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="#4a5568"/>
+                            <stop offset="30%" stop-color="#718096"/>
+                            <stop offset="100%" stop-color="#2d3748"/>
+                        </linearGradient>
+                        <linearGradient id="pipeGrad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#1a202c"/>
+                            <stop offset="50%" stop-color="#4a5568"/>
+                            <stop offset="100%" stop-color="#1a202c"/>
+                        </linearGradient>
+                        <linearGradient id="copperGrad" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="#b87333"/>
+                            <stop offset="50%" stop-color="#f4a460"/>
+                            <stop offset="100%" stop-color="#8b4513"/>
+                        </linearGradient>
+                        
+                        <!-- Glow Filter -->
+                        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="5" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+
+                    <!-- Background Terrain -->
+                    <path d="M0,800 L1000,800 L1000,650 Q800,650 750,700 L500,700 L400,200 L0,200 Z" fill="#0f172a" />
+
+                    <!-- 1. Reservoir (Stored Water) -->
+                    <g id="comp-res" class="svg-component">
+                        <path id="water-body" d="M0,250 L350,250 L350,700 L0,700 Z" fill="url(#waterGrad)"/>
+                        <path d="M0,250 Q175,260 350,250" stroke="#00e5ff" stroke-width="2" fill="none" opacity="0.5"/>
+                    </g>
+
+                    <!-- 2. Dam & Intake -->
+                    <g id="comp-int" class="svg-component">
+                        <!-- Dam structure -->
+                        <path d="M350,200 L420,200 L550,750 L350,750 Z" fill="url(#concreteGrad)" stroke="#1a202c" stroke-width="2"/>
+                        <!-- Intake Opening -->
+                        <rect x="350" y="300" width="20" height="60" fill="#020617" />
+                        <!-- Control Gate (moves in simulation) -->
+                        <rect id="gate" x="350" y="270" width="10" height="90" fill="#a0aec0" rx="3" />
+                    </g>
+
+                    <!-- 3. Penstock -->
+                    <g id="comp-pen" class="svg-component">
+                        <!-- Outer Pipe -->
+                        <path d="M370,330 C450,330 500,550 550,550 L630,550" fill="none" stroke="url(#pipeGrad)" stroke-width="50" stroke-linecap="round"/>
+                        <!-- Inner Pipe (Darkness) -->
+                        <path id="penstock-path" d="M370,330 C450,330 500,550 550,550 L630,550" fill="none" stroke="#020617" stroke-width="40" stroke-linecap="round"/>
+                    </g>
+
+                    <!-- 4. Turbine -->
+                    <g id="comp-tur" class="svg-component">
+                        <!-- Housing -->
+                        <path d="M570,510 L650,510 L680,630 L550,630 Z" fill="url(#concreteGrad)"/>
+                        <circle cx="600" cy="580" r="45" fill="#1a202c" />
+                        <!-- Rotor (Spins) -->
+                        <g class="turbine-rotor">
+                            <circle cx="600" cy="580" r="15" fill="#a0aec0"/>
+                            <path d="M600,580 L600,540 M600,580 L600,620 M600,580 L560,580 M600,580 L640,580" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round"/>
+                            <path d="M600,580 L572,552 M600,580 L628,608 M600,580 L572,608 M600,580 L628,552" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round"/>
+                        </g>
+                    </g>
+
+                    <!-- 5. Generator & Shaft -->
+                    <g id="comp-gen" class="svg-component">
+                        <!-- Shaft connecting turbine to generator -->
+                        <rect x="592" y="380" width="16" height="200" fill="#a0aec0" />
+                        <!-- Generator Base -->
+                        <rect x="530" y="380" width="140" height="20" fill="#4a5568" rx="5"/>
+                        <!-- Stator (Outer casing) -->
+                        <rect x="540" y="250" width="120" height="130" fill="url(#pipeGrad)" rx="10"/>
+                        <path d="M540,260 Q600,240 660,260" fill="none" stroke="#718096" stroke-width="5"/>
+                        <!-- Rotor (Inner coils - Spins) -->
+                        <g class="generator-rotor">
+                            <circle cx="600" cy="315" r="40" fill="url(#copperGrad)"/>
+                            <!-- Coil details -->
+                            <rect x="595" y="275" width="10" height="80" fill="#2d3748"/>
+                            <rect x="560" y="310" width="80" height="10" fill="#2d3748"/>
+                        </g>
+                        <!-- Spark / Energy indication -->
+                        <circle cx="600" cy="315" r="50" fill="none" stroke="#00ffaa" stroke-width="2" class="electric-flow" opacity="0"/>
+                    </g>
+
+                    <!-- 6. Transformer & Power Lines -->
+                    <g id="comp-trans" class="svg-component">
+                        <!-- Transformer Box -->
+                        <rect x="750" y="300" width="60" height="80" fill="#4a5568" rx="5"/>
+                        <rect x="740" y="320" width="10" height="40" fill="#718096"/>
+                        <rect x="810" y="320" width="10" height="40" fill="#718096"/>
+                        
+                        <!-- Wires Generator to Transformer -->
+                        <path d="M660,280 L750,310" fill="none" stroke="#a0aec0" stroke-width="4"/>
+                        <path d="M660,350 L750,370" fill="none" stroke="#a0aec0" stroke-width="4"/>
+                        
+                        <!-- Flowing Electricity Lines -->
+                        <path d="M660,280 L750,310" fill="none" stroke="#00ffaa" stroke-width="2" class="electric-flow"/>
+                        <path d="M660,350 L750,370" fill="none" stroke="#00ffaa" stroke-width="2" class="electric-flow"/>
+
+                        <!-- Transmission Tower -->
+                        <path d="M900,400 L920,150 L940,400 M910,250 L930,250 M915,180 L925,180" stroke="#718096" stroke-width="4" fill="none"/>
+                        <!-- High Voltage Lines -->
+                        <path d="M780,300 Q850,220 920,150 Q960,140 1000,120" fill="none" stroke="#a0aec0" stroke-width="2"/>
+                        <path d="M780,300 Q850,220 920,150 Q960,140 1000,120" fill="none" stroke="#00ffaa" stroke-width="3" class="electric-flow"/>
+                    </g>
+
+                    <!-- 7. Tailrace (River exit) -->
+                    <g id="comp-tail" class="svg-component">
+                        <path d="M640,630 L640,750 L1000,750 L1000,680 Q800,680 700,630 Z" fill="url(#waterGrad)"/>
+                        <!-- Draft tube exit shape -->
+                        <path d="M640,550 Q700,550 720,650" fill="none" stroke="#4a5568" stroke-width="10"/>
+                    </g>
+                </svg>
+
+                <!-- Markers Overlay (Mandatory Pattern) -->
+                <div class="markers-layer">
+                    <div class="marker m-res" data-target="comp-res">1</div>
+                    <div class="marker m-int" data-target="comp-int">2</div>
+                    <div class="marker m-pen" data-target="comp-pen">3</div>
+                    <div class="marker m-tur" data-target="comp-tur">4</div>
+                    <div class="marker m-gen" data-target="comp-gen">5</div>
+                    <div class="marker m-trans" data-target="comp-trans">6</div>
+                    <div class="marker m-tail" data-target="comp-tail">7</div>
+                </div>
+            </div>
+
+            <!-- LEGEND LIST -->
+            <div class="legend-list">
+                <div class="legend-item" data-target="comp-res">
+                    <div class="legend-num">1</div>
+                    <div class="legend-text">
+                        <h4>Reservoir</h4>
+                        <p>Stores water at elevation, creating massive potential energy.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="comp-int">
+                    <div class="legend-num">2</div>
+                    <div class="legend-text">
+                        <h4>Intake Gate</h4>
+                        <p>Controls the flow of water entering the dam structure.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="comp-pen">
+                    <div class="legend-num">3</div>
+                    <div class="legend-text">
+                        <h4>Penstock</h4>
+                        <p>Steep pipe directing water downward to build kinetic energy.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="comp-tur">
+                    <div class="legend-num">4</div>
+                    <div class="legend-text">
+                        <h4>Turbine</h4>
+                        <p>Water pressure forces blades to spin, converting kinetic to mechanical energy.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="comp-gen">
+                    <div class="legend-num">5</div>
+                    <div class="legend-text">
+                        <h4>Generator</h4>
+                        <p>Magnets rotate past copper coils, inducing electrical current via induction.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="comp-trans">
+                    <div class="legend-num">6</div>
+                    <div class="legend-text">
+                        <h4>Transformer</h4>
+                        <p>Steps up voltage for efficient long-distance transmission.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-target="comp-tail">
+                    <div class="legend-num">7</div>
+                    <div class="legend-text">
+                        <h4>Tailrace</h4>
+                        <p>Channel returning water safely back to the natural river system.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         WORKING PROCESS SECTION (Mandatory Pattern)
+         ========================================================================== -->
+    <section id="working" class="container">
+        <h2 class="text-center mb-2">Mechanism of Operation</h2>
+        <div class="glass-panel working-layout">
+            
+            <div class="stage-caption" id="stage-caption">
+                <h3 id="stage-title">1. Water Storage</h3>
+                <p id="stage-desc">Water is held behind the dam. High elevation equates to high gravitational potential energy. <br><em>Input: Rain/River | Output: Potential Energy</em></p>
+            </div>
+
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill" style="width: 0%;"></div>
+                <div class="progress-dots" id="progress-dots">
+                    <!-- JS will populate dots -->
+                </div>
+            </div>
+
+            <div class="working-controls">
+                <button class="btn" id="btn-prev">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                </button>
+                <button class="btn active" id="btn-play">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg> Auto-Play
+                </button>
+                <button class="btn" id="btn-next">
+                    Next <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         INTERACTIVE SIMULATION SECTION
+         ========================================================================== -->
+    <section id="simulation" class="container">
+        <h2 class="text-center mb-2">Plant Control Room</h2>
+        <div class="glass-panel sim-grid">
+            
+            <div class="control-panel">
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Intake Gate Opening</span>
+                        <span id="valve-val" style="color: var(--accent-blue);">0%</span>
+                    </div>
+                    <!-- Range slider mapping 0 to 100 -->
+                    <input type="range" id="valve-slider" min="0" max="100" value="0">
+                </div>
+                
+                <p style="font-size: 0.9rem; margin-top: 1rem;">
+                    Experiment with the gate opening. Observe how flow rate directly dictates mechanical rotational speed, which in turn determines the electrical power generated.
+                </p>
+            </div>
+
+            <div class="readouts">
+                <div class="readout-card">
+                    <span class="r-label">Water Flow Rate</span>
+                    <span class="r-value" id="ro-flow">0 <span style="font-size: 1rem;">m³/s</span></span>
+                </div>
+                <div class="readout-card r-rpm">
+                    <span class="r-label">Turbine Speed</span>
+                    <span class="r-value" id="ro-rpm">0 <span style="font-size: 1rem;">RPM</span></span>
+                </div>
+                <div class="readout-card r-power" style="grid-column: span 2; background: rgba(0, 255, 170, 0.05); border-color: rgba(0, 255, 170, 0.2);">
+                    <span class="r-label">Active Power Output</span>
+                    <span class="r-value" id="ro-power" style="font-size: var(--step-4);">0.0 <span style="font-size: 1.5rem;">MW</span></span>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         INFORMATION GRIDS
+         ========================================================================== -->
+    <section id="info" class="container">
+        <h2 class="text-center mb-2">Key Insights</h2>
+        <div class="bento-grid">
+            
+            <div class="glass-panel info-card">
+                <div class="info-icon" style="color: var(--accent-blue);">💧</div>
+                <h4>Energy Conversion</h4>
+                <p>It takes 3 steps: <strong>Potential</strong> (stored water) → <strong>Kinetic</strong> (flowing water) → <strong>Mechanical</strong> (spinning turbine) → <strong>Electrical</strong> (generator).</p>
+            </div>
+
+            <div class="glass-panel info-card">
+                <div class="info-icon" style="color: var(--accent-green);">⚖️</div>
+                <h4>Efficiency</h4>
+                <p>Hydropower is incredibly efficient. Modern plants can convert over <strong>90%</strong> of available energy into electricity, compared to ~50% for fossil fuel plants.</p>
+            </div>
+
+            <div class="glass-panel info-card">
+                <div class="info-icon" style="color: var(--accent-orange);">⚡</div>
+                <h4>Base Load Power</h4>
+                <p>Unlike solar or wind, hydro plants can adjust output instantly to meet demand by simply opening or closing the intake gate.</p>
+            </div>
+
+            <div class="glass-panel info-card" style="border-color: rgba(255, 71, 87, 0.3);">
+                <div class="info-icon" style="color: var(--accent-danger);">❌</div>
+                <h4>Common Mistake</h4>
+                <p>Thinking the water <em>enters</em> the electrical grid. The water simply spins magnets; it remains isolated and exits safely downriver.</p>
+            </div>
+
+        </div>
+    </section>
+
+    <footer style="text-align: center; padding: 3rem; color: var(--text-muted); font-size: 0.9rem;">
+        <p>Interactive Educational Simulation • Built for absolute clarity.</p>
+    </footer>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            /* --- 1. Scroll Animations --- */
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, { threshold: 0.1 });
+            
+            document.querySelectorAll('section').forEach(sec => observer.observe(sec));
+
+            /* --- 2. Interactive Diagram & Legend Logic --- */
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+            const svgComponents = document.querySelectorAll('.svg-component');
+
+            function resetDiagramHighlights() {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                svgComponents.forEach(c => {
+                    c.classList.remove('highlight');
+                    c.classList.add('dimmed');
+                });
+            }
+
+            function activateComponent(targetId) {
+                resetDiagramHighlights();
+                
+                // Highlight Specific marker & legend
+                const activeMarker = document.querySelector(`.marker[data-target="${targetId}"]`);
+                const activeLegend = document.querySelector(`.legend-item[data-target="${targetId}"]`);
+                const activeSvg = document.getElementById(targetId);
+
+                if (activeMarker) activeMarker.classList.add('active');
+                if (activeLegend) activeLegend.classList.add('active');
+                
+                // Highlight SVG
+                if (activeSvg) {
+                    activeSvg.classList.remove('dimmed');
+                    activeSvg.classList.add('highlight');
+                }
+                
+                // Keep context around it slightly visible (remove dim from others if needed, but dimming helps focus)
+            }
+
+            function clearDiagramHighlights() {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                svgComponents.forEach(c => {
+                    c.classList.remove('highlight');
+                    c.classList.remove('dimmed'); // return to normal state
+                });
+            }
+
+            // Bind Events
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => activateComponent(marker.dataset.target));
+                marker.addEventListener('mouseleave', clearDiagramHighlights);
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); activateComponent(marker.dataset.target); });
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => activateComponent(item.dataset.target));
+                item.addEventListener('mouseleave', clearDiagramHighlights);
+            });
+
+            /* --- 3. Working Process (State Machine) --- */
+            const stages = [
+                { id: 'comp-res', title: '1. Storage', desc: 'Water is held behind the dam. High elevation provides immense potential energy.<br><em>Flowing In: River Water | Storing: Potential Energy</em>' },
+                { id: 'comp-int', title: '2. Intake Control', desc: 'Gates open to allow gravity to pull water into the penstock. Flow volume controls power output.<br><em>Input: Stored Water | Output: Regulated Flow</em>' },
+                { id: 'comp-pen', title: '3. Penstock Drop', desc: 'Water accelerates down the steep pipe. Potential energy transforms rapidly into kinetic energy.<br><em>Input: Low velocity water | Output: High velocity water</em>' },
+                { id: 'comp-tur', title: '4. Turbine Rotation', desc: 'High-pressure water strikes the turbine blades, forcing them to spin. Kinetic becomes mechanical energy.<br><em>Input: Water Pressure | Output: Mechanical Shaft Rotation</em>' },
+                { id: 'comp-gen', title: '5. Power Generation', desc: 'The shaft spins huge electromagnets inside copper wire coils, inducing electron flow (electricity).<br><em>Input: Mechanical Rotation | Output: Alternating Current (AC)</em>' },
+                { id: 'comp-trans', title: '6. Transmission', desc: 'Transformers step up the voltage to push electricity over long distances with minimal loss.<br><em>Input: Low Voltage AC | Output: High Voltage AC to Grid</em>' },
+                { id: 'comp-tail', title: '7. Discharge', desc: 'Water exits via the tailrace back into the river, largely unchanged except for lost energy.<br><em>Input: Low energy water | Output: Natural River Flow</em>' }
+            ];
+
+            let currentStage = -1;
+            let autoPlayInterval;
+            let isPlaying = true; // Start true to auto-start when scrolled into view
+
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnPlay = document.getElementById('btn-play');
+            const stageTitle = document.getElementById('stage-title');
+            const stageDesc = document.getElementById('stage-desc');
+            const progressFill = document.getElementById('progress-fill');
+            const progressDotsContainer = document.getElementById('progress-dots');
+
+            // Setup UI
+            stages.forEach((_, i) => {
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                progressDotsContainer.appendChild(dot);
+            });
+            const dots = document.querySelectorAll('.dot');
+
+            function setStage(index) {
+                if (index < 0) index = stages.length - 1;
+                if (index >= stages.length) index = 0;
+                currentStage = index;
+
+                const stage = stages[currentStage];
+                
+                // Update Text
+                stageTitle.textContent = stage.title;
+                stageDesc.innerHTML = stage.desc;
+                
+                // Update UI
+                progressFill.style.width = `${(currentStage / (stages.length - 1)) * 100}%`;
+                dots.forEach((dot, i) => {
+                    dot.classList.toggle('active', i <= currentStage);
+                });
+
+                // Highlight Diagram
+                activateComponent(stage.id);
+            }
+
+            function nextStage() { setStage(currentStage + 1); }
+            function prevStage() { setStage(currentStage - 1); }
+
+            function togglePlay() {
+                isPlaying = !isPlaying;
+                btnPlay.classList.toggle('active', isPlaying);
+                if (isPlaying) {
+                    btnPlay.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause';
+                    autoPlayInterval = setInterval(nextStage, 3000);
+                    nextStage(); // Immediate step
+                } else {
+                    btnPlay.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg> Auto-Play';
+                    clearInterval(autoPlayInterval);
+                    clearDiagramHighlights();
+                }
+            }
+
+            btnNext.addEventListener('click', () => { isPlaying = false; togglePlay(); nextStage(); });
+            btnPrev.addEventListener('click', () => { isPlaying = false; togglePlay(); prevStage(); });
+            btnPlay.addEventListener('click', () => { togglePlay(); togglePlay(); }); // Hack to refresh state cleanly
+
+            // Start Autoplay when section is visible
+            const workObserver = new IntersectionObserver((entries) => {
+                if(entries[0].isIntersecting && currentStage === -1) {
+                    togglePlay(); togglePlay(); // init
+                }
+            });
+            workObserver.observe(document.getElementById('working'));
+
+
+            /* --- 4. Simulation & Canvas Animation Logic --- */
+            const slider = document.getElementById('valve-slider');
+            const valGate = document.getElementById('valve-val');
+            const roFlow = document.getElementById('ro-flow');
+            const roRpm = document.getElementById('ro-rpm');
+            const roPower = document.getElementById('ro-power');
+            
+            const gateSvg = document.getElementById('gate');
+            const root = document.documentElement;
+
+            // Canvas Setup for Particles
+            const canvas = document.getElementById('waterCanvas');
+            const ctx = canvas.getContext('2d');
+            let particles = [];
+            
+            // Penstock Path definition for particles to follow (approximate coordinates relative to SVG viewBox)
+            // Original SVG path: M370,330 C450,330 500,550 550,550 L630,550
+            const pathSegments = [
+                {x0: 370, y0: 330, x1: 450, y1: 330, x2: 500, y2: 550, x3: 550, y3: 550, type: 'bezier'},
+                {x0: 550, y0: 550, x1: 630, y1: 550, type: 'line'}
+            ];
+
+            function resizeCanvas() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                // Match device pixel ratio for sharpness
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                // Also need to know scale factor from SVG viewBox (1000x800) to actual pixels
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            class Particle {
+                constructor() {
+                    this.reset();
+                }
+                reset() {
+                    this.t = Math.random() * -0.5; // Start slightly before curve
+                    this.speed = 0; // Controlled by slider
+                    this.offsetY = (Math.random() - 0.5) * 20; // Spread within pipe
+                    this.radius = Math.random() * 2 + 1;
+                    this.alpha = Math.random() * 0.5 + 0.3;
+                }
+                update(flowSpeed) {
+                    this.speed = flowSpeed * 0.005; 
+                    this.t += this.speed;
+                    
+                    if (this.t > 1.5) this.reset(); // Reached end
+                }
+                draw(ctx, scaleX, scaleY) {
+                    if (this.t < 0 || this.speed === 0) return;
+
+                    let px, py;
+                    // Segment 1: Bezier
+                    if (this.t <= 1) {
+                        const s = pathSegments[0];
+                        const u = 1 - this.t;
+                        const tt = this.t * this.t;
+                        const uu = u * u;
+                        const uuu = uu * u;
+                        const ttt = tt * this.t;
+                        
+                        px = uuu * s.x0 + 3 * uu * this.t * s.x1 + 3 * u * tt * s.x2 + ttt * s.x3;
+                        py = uuu * s.y0 + 3 * uu * this.t * s.y1 + 3 * u * tt * s.y2 + ttt * s.y3;
+                    } 
+                    // Segment 2: Line
+                    else {
+                        const t2 = (this.t - 1) / 0.5; // normalize to 0-1 over remaining 0.5 logical t
+                        const s = pathSegments[1];
+                        if (t2 > 1) return; // out of bounds
+                        px = s.x0 + (s.x1 - s.x0) * t2;
+                        py = s.y0 + (s.y1 - s.y0) * t2;
+                    }
+
+                    // Apply offset perpendicular to flow (rough approx)
+                    py += this.offsetY;
+
+                    // Map SVG coordinates to Canvas pixel coordinates
+                    const drawX = (px / 1000) * (canvas.width / window.devicePixelRatio);
+                    const drawY = (py / 800) * (canvas.height / window.devicePixelRatio);
+
+                    ctx.beginPath();
+                    ctx.arc(drawX, drawY, this.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(0, 229, 255, ${this.alpha})`;
+                    ctx.fill();
+                }
+            }
+
+            // Init particles
+            for(let i=0; i<150; i++) particles.push(new Particle());
+
+            let currentFlowPct = 0; // Smoothing target
+
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Get physical dimensions to map SVG to Canvas correctly
+                const rect = canvas.parentElement.getBoundingClientRect();
+                
+                particles.forEach(p => {
+                    p.update(currentFlowPct);
+                    p.draw(ctx, rect.width, rect.height);
+                });
+
+                requestAnimationFrame(animate);
+            }
+            animate();
+
+            // Main Simulation Calculation
+            function updateSimulation(val) {
+                const percent = parseInt(val);
+                valGate.textContent = percent + '%';
+                
+                // Physical Constants (simplified)
+                const maxFlow = 500; // m3/s
+                const maxRpm = 300;
+                const head = 100; // m
+                const gravity = 9.81;
+                const density = 1000;
+                const efficiency = 0.9;
+                
+                // Calculations
+                const q = (percent / 100) * maxFlow;
+                // Power (Watts) = n * p * g * Q * H
+                const powerW = efficiency * density * gravity * q * head;
+                const powerMW = powerW / 1000000;
+                
+                const rpm = (percent / 100) * maxRpm;
+
+                // Update DOM readouts
+                roFlow.innerHTML = `${q.toFixed(0)} <span style="font-size: 1rem;">m³/s</span>`;
+                roRpm.innerHTML = `${rpm.toFixed(0)} <span style="font-size: 1rem;">RPM</span>`;
+                roPower.innerHTML = `${powerMW.toFixed(1)} <span style="font-size: 1.5rem;">MW</span>`;
+
+                // Visual Updates
+                // 1. Gate Opening Animation (SVG Y position)
+                // Gate is at y=270, height=90. Move up by max 60px.
+                gateSvg.setAttribute('y', 270 - (percent / 100) * 60);
+
+                // 2. CSS Variables for SVG animations
+                if (percent === 0) {
+                    root.style.setProperty('--turbine-speed', `0s`);
+                    root.style.setProperty('--power-glow', `0`);
+                } else {
+                    // Map 1-100% to a rotation duration (e.g. 2s down to 0.2s)
+                    const speed = 2 - (percent / 100) * 1.8;
+                    root.style.setProperty('--turbine-speed', `${speed}s`);
+                    root.style.setProperty('--power-glow', percent / 100);
+                }
+
+                // 3. Canvas Particle Speed
+                currentFlowPct = percent;
+            }
+
+            // Bind slider
+            slider.addEventListener('input', (e) => updateSimulation(e.target.value));
+            slider.addEventListener('change', (e) => {
+                // If user touches slider, pause the working cycle if it's running
+                if (isPlaying) togglePlay(); 
+                clearDiagramHighlights();
+            });
+
+            // Initial state
+            updateSimulation(0);
+
+            // Give it a little bump start for demonstration
+            setTimeout(() => {
+                slider.value = 30;
+                updateSimulation(30);
+            }, 1000);
+
+        });
+    </script>
+</body>
+</html>

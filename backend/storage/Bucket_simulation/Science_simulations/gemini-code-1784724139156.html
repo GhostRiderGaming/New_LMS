@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Climate Dynamics Explorer</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & GLOBAL RESET
+           ========================================================================== */
+        :root {
+            /* Palette - Deep Space/Dark Mode */
+            --bg-base: #07090f;
+            --bg-surface: rgba(20, 24, 39, 0.6);
+            --bg-panel: rgba(30, 36, 56, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            /* Typography */
+            --text-main: #f0f4ff;
+            --text-muted: #9ba3b5;
+            --text-accent: #60a5fa;
+            
+            /* Climate Accents */
+            --c-tropics: #10b981;
+            --c-desert: #f59e0b;
+            --c-temperate: #3b82f6;
+            --c-polar: #e0e7ff;
+            
+            /* Sizing */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --spacing-section: clamp(40px, 8vh, 100px);
+            --spacing-content: clamp(16px, 3vw, 32px);
+            
+            /* Typography Fluid */
+            --fs-display: clamp(2.5rem, 5vw, 4.5rem);
+            --fs-h1: clamp(2rem, 4vw, 3rem);
+            --fs-h2: clamp(1.5rem, 3vw, 2.25rem);
+            --fs-h3: clamp(1.25rem, 2vw, 1.75rem);
+            --fs-body: clamp(14px, 1vw, 18px);
+            --fs-small: clamp(12px, 0.8vw, 14px);
+            
+            /* Effects */
+            --shadow-glow: 0 0 30px rgba(96, 165, 250, 0.15);
+            --transition-smooth: 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            font-size: var(--fs-body);
+        }
+
+        /* Ambient Background Glow */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, #0c1220 0%, var(--bg-base) 100%);
+        }
+        .ambient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(120px);
+            opacity: 0.4;
+            animation: floatOrb 20s infinite alternate ease-in-out;
+        }
+        .orb-1 { width: 60vw; height: 60vw; background: rgba(59, 130, 246, 0.1); top: -10%; left: -10%; }
+        .orb-2 { width: 50vw; height: 50vw; background: rgba(16, 185, 129, 0.05); bottom: -10%; right: -10%; animation-delay: -5s; }
+        .orb-3 { width: 40vw; height: 40vw; background: rgba(245, 158, 11, 0.05); top: 40%; left: 60%; animation-delay: -10s; }
+
+        @keyframes floatOrb {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(5%, 5%) scale(1.1); }
+        }
+
+        /* ==========================================================================
+           LAYOUT & COMPONENTS
+           ========================================================================== */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-content);
+        }
+
+        section {
+            padding: var(--spacing-section) 0;
+            position: relative;
+        }
+
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+            overflow: hidden;
+        }
+
+        .flex-row { display: flex; gap: var(--spacing-content); flex-wrap: wrap; }
+        .flex-col { display: flex; flex-direction: column; gap: var(--spacing-content); }
+        
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: var(--spacing-content); }
+        .grid-4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: var(--spacing-content); }
+
+        h1, h2, h3 { line-height: 1.2; letter-spacing: -0.02em; font-weight: 600; }
+        h1 { font-size: var(--fs-display); background: linear-gradient(135deg, #fff, #9ba3b5); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--fs-h2); margin-bottom: 0.5em; }
+        h3 { font-size: var(--fs-h3); color: var(--text-accent); }
+        p { color: var(--text-muted); margin-bottom: 1em; }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--glass-highlight);
+            color: var(--text-main);
+            padding: 12px 24px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: var(--fs-body);
+            transition: var(--transition-smooth);
+            backdrop-filter: blur(4px);
+        }
+        .btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); box-shadow: var(--shadow-glow); }
+        .btn.active { background: var(--text-accent); color: #000; font-weight: bold; border-color: transparent; }
+
+        /* ==========================================================================
+           SECTION SPECIFICS
+           ========================================================================== */
+        
+        /* Intro */
+        .hero { text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 70vh; }
+        .hero-graphics { width: 100%; max-width: 600px; height: 400px; position: relative; margin: 2rem 0; }
+        
+        /* Global SVG Styles */
+        svg { width: 100%; height: 100%; display: block; }
+        .svg-glow { filter: drop-shadow(0 0 15px rgba(255,255,255,0.3)); }
+
+        /* Zones (Components) */
+        .zone-selector { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+        .zone-btn { flex: 1; min-width: 120px; text-align: center; }
+        
+        .zone-display {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: var(--spacing-content);
+            align-items: center;
+        }
+        @media (max-width: 1024px) { .zone-display { grid-template-columns: 1fr; } }
+        
+        .zone-visual {
+            position: relative;
+            aspect-ratio: 16/9;
+            background: linear-gradient(to bottom, #1a2035, #0c1220);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            min-height: 240px;
+        }
+
+        /* Strict Labeling System */
+        .marker {
+            position: absolute;
+            width: 28px; height: 28px;
+            background: var(--bg-surface);
+            border: 2px solid var(--text-accent);
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-size: 14px; color: #fff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: var(--transition-smooth);
+            z-index: 10;
+            transform: translate(-50%, -50%);
+        }
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--text-accent); color: #000;
+            box-shadow: 0 0 20px var(--text-accent);
+        }
+
+        .legend-list {
+            display: flex; flex-direction: column; gap: 12px;
+            background: var(--bg-panel); padding: var(--spacing-content);
+            border-radius: var(--radius-md); border: 1px solid var(--glass-border);
+        }
+        .legend-item {
+            display: flex; gap: 16px; align-items: flex-start;
+            padding: 10px; border-radius: var(--radius-sm);
+            transition: var(--transition-smooth);
+            cursor: pointer;
+            background: rgba(255,255,255,0.02);
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(96, 165, 250, 0.15);
+            border-left: 3px solid var(--text-accent);
+        }
+        .legend-badge {
+            width: 24px; height: 24px; flex-shrink: 0;
+            background: var(--text-accent); color: #000;
+            border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-size: 12px;
+        }
+        .legend-text strong { display: block; color: var(--text-main); font-size: var(--fs-body); }
+        .legend-text span { color: var(--text-muted); font-size: var(--fs-small); }
+
+        /* Mechanism Section (Working) */
+        .mechanism-container {
+            display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-content);
+            background: var(--bg-panel); border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border); overflow: hidden;
+        }
+        @media (max-width: 900px) { .mechanism-container { grid-template-columns: 1fr; } }
+        
+        .mech-visual {
+            position: relative; min-height: 400px;
+            background: radial-gradient(circle at center, #1e293b, #0f172a);
+            display: flex; justify-content: center; align-items: center;
+            padding: 20px;
+        }
+        
+        .mech-controls {
+            padding: var(--spacing-content);
+            display: flex; flex-direction: column; justify-content: center;
+        }
+        
+        .step-indicator { display: flex; gap: 8px; margin-bottom: 20px; }
+        .step-dot {
+            height: 6px; flex: 1; background: rgba(255,255,255,0.1);
+            border-radius: 3px; transition: var(--transition-smooth);
+        }
+        .step-dot.active { background: var(--text-accent); box-shadow: 0 0 10px var(--text-accent); }
+        
+        .mech-content { min-height: 150px; }
+        .mech-content h3 { font-size: 2rem; color: #fff; margin-bottom: 10px; }
+        
+        .controls-row { display: flex; gap: 10px; margin-top: 20px; align-items: center;}
+        
+        /* Simulation Section */
+        .sim-layout {
+            display: grid; grid-template-columns: 300px 1fr; gap: var(--spacing-content);
+        }
+        @media (max-width: 900px) { .sim-layout { grid-template-columns: 1fr; } }
+        
+        .sim-controls {
+            background: var(--bg-panel); padding: var(--spacing-content);
+            border-radius: var(--radius-md); border: 1px solid var(--glass-border);
+            display: flex; flex-direction: column; gap: 20px;
+        }
+        
+        .slider-group { display: flex; flex-direction: column; gap: 8px; }
+        .slider-header { display: flex; justify-content: space-between; font-size: var(--fs-small); color: var(--text-muted); }
+        .slider-header span.val { color: var(--text-main); font-weight: bold; }
+        
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 20px; width: 20px;
+            border-radius: 50%; background: var(--text-accent);
+            cursor: pointer; margin-top: -8px; box-shadow: 0 0 10px var(--text-accent);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer;
+            background: rgba(255,255,255,0.1); border-radius: 2px;
+        }
+
+        .sim-output {
+            position: relative; border-radius: var(--radius-md);
+            overflow: hidden; border: 1px solid var(--glass-border);
+            min-height: 400px;
+        }
+        #sim-canvas { width: 100%; height: 100%; display: block; }
+        
+        .sim-stats {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+            padding: 15px; border-radius: var(--radius-sm); border: 1px solid var(--glass-border);
+            display: grid; grid-template-columns: 1fr 1fr; gap: 15px; pointer-events: none;
+        }
+        .stat-box { display: flex; flex-direction: column; }
+        .stat-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+        .stat-val { font-size: 24px; font-weight: bold; color: #fff; }
+
+        /* Info Cards */
+        .info-card {
+            background: var(--bg-panel); padding: var(--spacing-content);
+            border-radius: var(--radius-md); border: 1px solid var(--glass-border);
+            transition: var(--transition-smooth);
+        }
+        .info-card:hover { transform: translateY(-5px); border-color: var(--glass-highlight); }
+        .info-icon {
+            width: 40px; height: 40px; border-radius: 10px;
+            background: rgba(96, 165, 250, 0.1); color: var(--text-accent);
+            display: flex; justify-content: center; align-items: center;
+            margin-bottom: 15px; font-size: 20px;
+        }
+        
+        /* Utilities */
+        .hidden { display: none !important; }
+        .fade-in { animation: fadeIn 0.5s forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Custom SVG animations inside styles */
+        @keyframes spinSlow { 100% { transform: rotate(360deg); } }
+        @keyframes pulseGlow { 0%, 100% { filter: drop-shadow(0 0 10px rgba(255,200,0,0.4)); } 50% { filter: drop-shadow(0 0 25px rgba(255,200,0,0.8)); } }
+        @keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 0.8; } 100% { transform: translateY(-50px) scale(1.5); opacity: 0; } }
+        @keyframes dashMove { to { stroke-dashoffset: -40; } }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-2"></div>
+        <div class="ambient-orb orb-3"></div>
+    </div>
+
+    <div class="container">
+        
+        <!-- 1. Introduction -->
+        <section id="intro" class="hero">
+            <h1>The Global Climate Engine</h1>
+            <p style="max-width: 600px; font-size: var(--fs-h3);">Discover how latitude, sunlight, and atmospheric dynamics create the diverse environments of our planet.</p>
+            
+            <div class="hero-graphics glass-panel">
+                <!-- High-quality SVG Globe Representation -->
+                <svg viewBox="0 0 400 400" id="intro-globe">
+                    <defs>
+                        <radialGradient id="globe-grad" cx="30%" cy="30%" r="70%">
+                            <stop offset="0%" stop-color="#4ea1ff" />
+                            <stop offset="80%" stop-color="#0f2b5a" />
+                            <stop offset="100%" stop-color="#040b17" />
+                        </radialGradient>
+                        <linearGradient id="atm-grad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="rgba(255,255,255,0.4)" />
+                            <stop offset="100%" stop-color="rgba(255,255,255,0)" />
+                        </linearGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    
+                    <!-- Atmosphere Glow -->
+                    <circle cx="200" cy="200" r="165" fill="none" stroke="url(#atm-grad)" stroke-width="8" filter="url(#glow)"/>
+                    
+                    <!-- Base Globe -->
+                    <circle cx="200" cy="200" r="160" fill="url(#globe-grad)"/>
+                    
+                    <!-- Latitude Lines (Climate Bands) -->
+                    <g stroke="rgba(255,255,255,0.1)" stroke-width="1.5" fill="none">
+                        <ellipse cx="200" cy="200" rx="160" ry="20" /> <!-- Equator -->
+                        <ellipse cx="200" cy="140" rx="148" ry="18" stroke-dasharray="4,4" /> <!-- Tropic Cancer -->
+                        <ellipse cx="200" cy="260" rx="148" ry="18" stroke-dasharray="4,4" /> <!-- Tropic Capricorn -->
+                        <ellipse cx="200" cy="80"  rx="105" ry="12" /> <!-- Arctic Circle -->
+                        <ellipse cx="200" cy="320" rx="105" ry="12" /> <!-- Antarctic Circle -->
+                    </g>
+                    
+                    <!-- Continents (Abstracted smooth vectors) -->
+                    <path d="M 120 100 Q 180 80 220 120 T 260 200 T 200 280 Q 150 250 140 180 Z" fill="#2d6a4f" opacity="0.8"/>
+                    <path d="M 280 140 Q 320 120 350 160 T 320 250 Q 290 220 280 180 Z" fill="#9c6644" opacity="0.8"/>
+                    <path d="M 80 180 Q 110 160 130 200 T 90 280 Z" fill="#2d6a4f" opacity="0.8"/>
+                    
+                    <!-- Ice Caps -->
+                    <path d="M 100 55 Q 200 30 300 55 Q 200 80 100 55 Z" fill="#ffffff" opacity="0.9"/>
+                    <path d="M 120 350 Q 200 375 280 350 Q 200 330 120 350 Z" fill="#ffffff" opacity="0.9"/>
+
+                    <!-- Sun Rays -->
+                    <g stroke="#ffd166" stroke-width="3" opacity="0.6" stroke-linecap="round">
+                        <line x1="-50" y1="200" x2="30" y2="200" />
+                        <line x1="-30" y1="120" x2="40" y2="135" />
+                        <line x1="-30" y1="280" x2="40" y2="265" />
+                    </g>
+                </svg>
+            </div>
+        </section>
+
+        <!-- 2. & 3. Overview & Components (Climate Zones) -->
+        <section id="zones">
+            <h2>Primary Climate Zones</h2>
+            <p>Select a biome to explore its defining characteristics through strict visual association.</p>
+            
+            <div class="zone-selector">
+                <button class="btn zone-btn active" data-zone="tropical">Tropical</button>
+                <button class="btn zone-btn" data-zone="desert">Arid / Desert</button>
+                <button class="btn zone-btn" data-zone="temperate">Temperate</button>
+                <button class="btn zone-btn" data-zone="polar">Polar / Tundra</button>
+            </div>
+            
+            <div class="glass-panel zone-display">
+                <!-- Visual Area -->
+                <div class="zone-visual" id="zone-visual-container">
+                    <!-- Dynamic SVG injected via JS -->
+                    
+                    <!-- Markers for Strict Labeling -->
+                    <div class="marker m1" style="top: 20%; left: 80%;" data-idx="0">1</div>
+                    <div class="marker m2" style="top: 50%; left: 50%;" data-idx="1">2</div>
+                    <div class="marker m3" style="top: 85%; left: 30%;" data-idx="2">3</div>
+                    <div class="marker m4" style="top: 90%; left: 70%;" data-idx="3">4</div>
+                </div>
+                
+                <!-- Legend List Area -->
+                <div class="legend-list" id="zone-legend">
+                    <!-- Dynamic content injected via JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Working Process (The Mechanism) -->
+        <section id="mechanism">
+            <h2>The Global Heat Engine</h2>
+            <p>How solar energy transforms into atmospheric circulation and climate patterns.</p>
+            
+            <div class="mechanism-container">
+                <!-- Visual Area -->
+                <div class="mech-visual" id="mech-svg-container">
+                    <!-- Core illustration containing all layers -->
+                    <svg viewBox="0 0 500 500">
+                        <defs>
+                            <linearGradient id="earth-surf" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#38b000" />
+                                <stop offset="100%" stop-color="#006400" />
+                            </linearGradient>
+                            <filter id="glow-sun">
+                                <feGaussianBlur stdDeviation="15" result="blur"/>
+                                <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+                            </filter>
+                        </defs>
+                        
+                        <!-- Static Earth Curve -->
+                        <path d="M 0 450 Q 250 350 500 450 L 500 500 L 0 500 Z" fill="url(#earth-surf)"/>
+                        <text x="250" y="475" fill="#fff" opacity="0.5" font-size="14" text-anchor="middle">Equator (0°)</text>
+                        <text x="50" y="485" fill="#fff" opacity="0.5" font-size="12" text-anchor="middle">Pole (90°)</text>
+                        
+                        <!-- Layers controlled by JS -->
+                        <!-- Step 1: Solar Insolation -->
+                        <g id="layer-solar" opacity="1" style="transition: opacity 0.5s;">
+                            <circle cx="80" cy="80" r="40" fill="#ffd166" filter="url(#glow-sun)"/>
+                            <!-- Direct Rays -->
+                            <path d="M 110 110 L 250 350" stroke="#ffd166" stroke-width="6" opacity="0.8"/>
+                            <path d="M 90 120 L 150 420" stroke="#ffd166" stroke-width="3" opacity="0.4"/>
+                            <path d="M 120 90 L 400 400" stroke="#ffd166" stroke-width="3" opacity="0.4"/>
+                        </g>
+
+                        <!-- Step 2: Surface Heating & Evaporation -->
+                        <g id="layer-heat" opacity="0" style="transition: opacity 0.5s;">
+                            <!-- Surface Heat Glow -->
+                            <ellipse cx="250" cy="350" rx="80" ry="20" fill="#ef233c" opacity="0.6" filter="blur(15px)"/>
+                            <!-- Evaporation Particles (CSS animated via inline styles later) -->
+                            <g stroke="#48cae4" stroke-width="3" stroke-linecap="round" stroke-dasharray="10, 10">
+                                <line x1="220" y1="340" x2="220" y2="200" opacity="0.8">
+                                    <animate attributeName="y2" values="200; 150" dur="2s" repeatCount="indefinite"/>
+                                    <animate attributeName="opacity" values="0.8; 0" dur="2s" repeatCount="indefinite"/>
+                                </line>
+                                <line x1="250" y1="330" x2="250" y2="180" opacity="0.8">
+                                    <animate attributeName="y2" values="180; 120" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+                                    <animate attributeName="opacity" values="0.8; 0" dur="2s" begin="0.5s" repeatCount="indefinite"/>
+                                </line>
+                                <line x1="280" y1="340" x2="280" y2="200" opacity="0.8">
+                                    <animate attributeName="y2" values="200; 160" dur="2s" begin="1s" repeatCount="indefinite"/>
+                                    <animate attributeName="opacity" values="0.8; 0" dur="2s" begin="1s" repeatCount="indefinite"/>
+                                </line>
+                            </g>
+                        </g>
+
+                        <!-- Step 3: Convection & Cloud Formation -->
+                        <g id="layer-clouds" opacity="0" style="transition: opacity 0.5s;">
+                            <!-- Rising Warm Air Arrow -->
+                            <path d="M 250 280 L 250 150" stroke="#ef233c" stroke-width="8" stroke-dasharray="20" style="animation: dashMove 1s linear infinite;"/>
+                            <polygon points="250,130 230,160 270,160" fill="#ef233c"/>
+                            
+                            <!-- Large Cloud -->
+                            <path d="M 180 140 Q 180 110 220 110 Q 240 80 270 100 Q 310 90 320 130 Q 350 140 330 170 L 190 170 Q 160 160 180 140 Z" fill="#ffffff" opacity="0.9" filter="drop-shadow(0 10px 10px rgba(0,0,0,0.3))"/>
+                        </g>
+
+                        <!-- Step 4: Precipitation & Circulation -->
+                        <g id="layer-rain" opacity="0" style="transition: opacity 0.5s;">
+                            <!-- Cloud darkens -->
+                            <path d="M 180 140 Q 180 110 220 110 Q 240 80 270 100 Q 310 90 320 130 Q 350 140 330 170 L 190 170 Q 160 160 180 140 Z" fill="#64748b" opacity="0.9"/>
+                            
+                            <!-- Rain lines -->
+                            <path d="M 200 180 L 190 280 M 230 180 L 220 300 M 260 180 L 250 310 M 290 180 L 280 290 M 320 180 L 310 270" stroke="#00b4d8" stroke-width="2" stroke-dasharray="10, 5">
+                                <animate attributeName="stroke-dashoffset" from="0" to="-30" dur="0.5s" repeatCount="indefinite" linear/>
+                            </path>
+
+                            <!-- Descending Cold Air (Hadley Cell representation) -->
+                            <path d="M 330 150 Q 450 150 450 350" stroke="#3a86ff" stroke-width="6" fill="none" stroke-dasharray="15" style="animation: dashMove 1.5s linear infinite;"/>
+                            <polygon points="450,370 435,340 465,340" fill="#3a86ff"/>
+                            <text x="450" y="400" fill="#fff" font-size="12" text-anchor="middle">Dry Air Descent (30° Lat)</text>
+                        </g>
+                    </svg>
+                </div>
+                
+                <!-- Controls & Text -->
+                <div class="mech-controls">
+                    <div class="step-indicator" id="mech-steps">
+                        <div class="step-dot active"></div>
+                        <div class="step-dot"></div>
+                        <div class="step-dot"></div>
+                        <div class="step-dot"></div>
+                    </div>
+                    
+                    <div class="mech-content">
+                        <h3 id="mech-title">1. Solar Insolation</h3>
+                        <p id="mech-desc">Sunlight strikes the equator directly, delivering highly concentrated energy. At the poles, the same energy spreads over a larger curved area, resulting in cooler temperatures.</p>
+                    </div>
+                    
+                    <div class="controls-row">
+                        <button class="btn" id="btn-prev">Previous</button>
+                        <button class="btn" id="btn-next">Next Stage</button>
+                        <button class="btn" id="btn-play" style="margin-left: auto; background: var(--text-accent); color: #000;">Auto-Play</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. Interactive Simulation -->
+        <section id="simulation">
+            <h2>Climate Constructor</h2>
+            <p>Adjust geographical parameters to generate the resulting climate biome in real-time.</p>
+            
+            <div class="sim-layout glass-panel">
+                <div class="sim-controls">
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Latitude</span>
+                            <span class="val" id="val-lat">0° (Equator)</span>
+                        </div>
+                        <input type="range" id="sim-lat" min="0" max="90" value="0" step="1">
+                        <span style="font-size: 11px; color: var(--text-muted); display:flex; justify-content:space-between;"><span>Equator</span><span>Pole</span></span>
+                    </div>
+                    
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Altitude</span>
+                            <span class="val" id="val-alt">Sea Level</span>
+                        </div>
+                        <input type="range" id="sim-alt" min="0" max="5000" value="0" step="100">
+                        <span style="font-size: 11px; color: var(--text-muted); display:flex; justify-content:space-between;"><span>0m</span><span>5000m</span></span>
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Ocean Proximity</span>
+                            <span class="val" id="val-ocean">Coastal</span>
+                        </div>
+                        <input type="range" id="sim-ocean" min="0" max="100" value="0" step="1">
+                        <span style="font-size: 11px; color: var(--text-muted); display:flex; justify-content:space-between;"><span>Coast</span><span>Inland</span></span>
+                    </div>
+                    
+                    <div style="margin-top: 20px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 8px; font-size: var(--fs-small);">
+                        <strong>Rule of Thumb:</strong><br>
+                        • +1° Lat ≈ -0.5°C<br>
+                        • +100m Alt ≈ -0.65°C<br>
+                        • Inland = Extreme Temps, Less Rain
+                    </div>
+                </div>
+                
+                <div class="sim-output">
+                    <!-- Canvas for high-performance procedural rendering -->
+                    <canvas id="sim-canvas"></canvas>
+                    
+                    <!-- HUD overlay -->
+                    <div class="sim-stats">
+                        <div class="stat-box">
+                            <span class="stat-lbl">Avg Temp</span>
+                            <span class="stat-val" id="out-temp">30°C</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-lbl">Precipitation</span>
+                            <span class="stat-val" id="out-precip">High</span>
+                        </div>
+                        <div class="stat-box" style="grid-column: span 2;">
+                            <span class="stat-lbl">Classification</span>
+                            <span class="stat-val" style="color: var(--text-accent);" id="out-biome">Tropical Rainforest</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6-9. Info Grid -->
+        <section id="info">
+            <div class="grid-2">
+                
+                <div class="info-card glass-panel">
+                    <div class="info-icon">🌍</div>
+                    <h3>Applications</h3>
+                    <ul style="margin-left: 20px; color: var(--text-muted);">
+                        <li><strong>Agriculture:</strong> Determining crop suitability based on growing degree days and rainfall patterns.</li>
+                        <li><strong>Architecture:</strong> Designing buildings for passive cooling in tropics vs insulation in polar regions.</li>
+                        <li><strong>Urban Planning:</strong> Managing water resources in arid zones.</li>
+                    </ul>
+                </div>
+
+                <div class="info-card glass-panel">
+                    <div class="info-icon">✨</div>
+                    <h3>Interesting Facts</h3>
+                    <ul style="margin-left: 20px; color: var(--text-muted);">
+                        <li>Antarctica is technically a desert. It receives less than 50mm of precipitation annually.</li>
+                        <li>The Atacama Desert in Chile is so dry that some weather stations have never recorded a single drop of rain.</li>
+                        <li>Ocean currents can drastically alter climate; the Gulf Stream keeps Northern Europe much warmer than similar latitudes in Canada.</li>
+                    </ul>
+                </div>
+                
+                <div class="info-card glass-panel">
+                    <div class="info-icon">❌</div>
+                    <h3>Common Mistakes</h3>
+                    <ul style="margin-left: 20px; color: var(--text-muted);">
+                        <li><strong>Weather vs. Climate:</strong> Weather is short-term (rain today). Climate is long-term averages (30+ years).</li>
+                        <li><strong>Equator = Hottest?</strong> Not always. The hottest temperatures on Earth are actually recorded in subtropical deserts (around 30° latitude), not the equator, due to lack of cloud cover.</li>
+                    </ul>
+                </div>
+
+                <div class="info-card glass-panel">
+                    <div class="info-icon">📝</div>
+                    <h3>Quick Revision</h3>
+                    <ul style="margin-left: 20px; color: var(--text-muted);">
+                        <li><strong>Latitude:</strong> Dictates solar intensity angle.</li>
+                        <li><strong>Altitude:</strong> Temperature drops ~6.5°C per 1km rise (Lapse Rate).</li>
+                        <li><strong>Continentality:</strong> Oceans moderate temperatures and provide moisture; deep inland areas have extreme seasons.</li>
+                    </ul>
+                </div>
+
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        /**
+         * ==========================================================================
+         * CLIMATE DATA & DEFINITIONS
+         * ==========================================================================
+         */
+        const zoneData = {
+            tropical: {
+                color: "#10b981",
+                bgGradient: ["#004d40", "#00251a"],
+                svgElements: `
+                    <!-- Tropical Scene -->
+                    <circle cx="50" cy="50" r="30" fill="#ffd166" filter="blur(5px)" />
+                    <path d="M0,100 Q150,80 300,150 T600,100 L600,300 L0,300 Z" fill="#2d6a4f"/>
+                    <path d="M0,150 Q100,120 250,180 T600,160 L600,300 L0,300 Z" fill="#1b4332"/>
+                    <!-- Large Palm/Monstera Leaves abstract -->
+                    <path d="M50,300 Q40,200 100,150 Q70,220 50,300 Z" fill="#40916c"/>
+                    <path d="M100,150 Q120,130 160,170 Q130,160 100,150 Z" fill="#40916c"/>
+                    <path d="M550,300 Q560,180 480,120 Q520,200 550,300 Z" fill="#2d6a4f"/>
+                `,
+                legend: [
+                    { id: 0, name: "Intense Solar Input", desc: "Direct sunlight drives high temperatures and evaporation." },
+                    { id: 1, name: "Convection Clouds", desc: "Rapidly rising moist air forms heavy thunderstorm clouds." },
+                    { id: 2, name: "Lush Flora", desc: "High heat and rain support dense, broadleaf evergreen forests." },
+                    { id: 3, name: "Low Albedo", desc: "Dark green canopies absorb maximum solar radiation." }
+                ]
+            },
+            desert: {
+                color: "#f59e0b",
+                bgGradient: ["#9c6644", "#5c3a21"],
+                svgElements: `
+                    <!-- Desert Scene -->
+                    <circle cx="300" cy="80" r="45" fill="#fff" filter="drop-shadow(0 0 20px #f59e0b) blur(2px)" />
+                    <!-- Heat waves filter definition -->
+                    <filter id="heatwave">
+                        <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" result="noise">
+                            <animate attributeName="baseFrequency" values="0.05; 0.08; 0.05" dur="4s" repeatCount="indefinite" />
+                        </feTurbulence>
+                        <feDisplacementMap in="SourceGraphic" in2="noise" scale="5" xChannelSelector="R" yChannelSelector="G"/>
+                    </filter>
+                    <g filter="url(#heatwave)">
+                        <path d="M0,200 Q150,150 300,220 T600,180 L600,300 L0,300 Z" fill="#e29578"/>
+                        <path d="M-50,250 Q100,200 250,280 T650,250 L650,300 L-50,300 Z" fill="#ffb703"/>
+                    </g>
+                    <!-- Cactus -->
+                    <rect x="150" y="160" width="12" height="60" rx="6" fill="#386641"/>
+                    <rect x="135" y="180" width="15" height="8" rx="4" fill="#386641"/>
+                    <rect x="135" y="150" width="8" height="35" rx="4" fill="#386641"/>
+                `,
+                legend: [
+                    { id: 0, name: "Cloudless Sky", desc: "Descending dry air prevents cloud formation." },
+                    { id: 1, name: "Extreme Radiation", desc: "Unfiltered sunlight causes intense daytime surface heating." },
+                    { id: 2, name: "Xerophytic Plants", desc: "Sparse vegetation adapted to store water and minimize loss." },
+                    { id: 3, name: "High Albedo", desc: "Light-colored sand reflects a significant portion of sunlight." }
+                ]
+            },
+            temperate: {
+                color: "#3b82f6",
+                bgGradient: ["#48cae4", "#023e8a"],
+                svgElements: `
+                    <!-- Temperate Scene -->
+                    <circle cx="450" cy="100" r="25" fill="#fcf6bd" />
+                    <!-- Soft Clouds -->
+                    <path d="M100,80 Q120,60 150,80 Q180,70 190,100 L90,100 Z" fill="rgba(255,255,255,0.8)"/>
+                    <path d="M400,120 Q420,100 450,120 Q480,110 490,140 L390,140 Z" fill="rgba(255,255,255,0.5)"/>
+                    
+                    <path d="M0,180 Q200,130 400,200 T600,150 L600,300 L0,300 Z" fill="#52796f"/>
+                    <!-- Deciduous Trees -->
+                    <circle cx="200" cy="150" r="30" fill="#386641"/>
+                    <rect x="195" y="170" width="10" height="30" fill="#582f0e"/>
+                    <circle cx="250" cy="170" r="25" fill="#6a994e"/>
+                    <rect x="246" y="185" width="8" height="20" fill="#582f0e"/>
+                `,
+                legend: [
+                    { id: 0, name: "Variable Sun Angle", desc: "Distinct seasons driven by changing solar inclination." },
+                    { id: 1, name: "Frontal Systems", desc: "Meeting of cold polar and warm tropical air causes regular rain." },
+                    { id: 2, name: "Deciduous Forests", desc: "Trees shed leaves in winter to conserve energy and water." },
+                    { id: 3, name: "Moderate Soils", desc: "Rich soils formed by regular decay of seasonal foliage." }
+                ]
+            },
+            polar: {
+                color: "#e0e7ff",
+                bgGradient: ["#caf0f8", "#0077b6"],
+                svgElements: `
+                    <!-- Polar Scene -->
+                    <circle cx="100" cy="150" r="20" fill="#fff" filter="blur(2px)" opacity="0.8"/> <!-- Low sun -->
+                    <path d="M0,180 L150,100 L250,190 L400,80 L550,200 L600,150 L600,300 L0,300 Z" fill="#e0e7ff"/>
+                    <path d="M0,220 L200,160 L350,240 L500,180 L600,250 L600,300 L0,300 Z" fill="#ffffff" opacity="0.7"/>
+                    <!-- Water/Ice break -->
+                    <path d="M0,280 Q300,260 600,280 L600,300 L0,300 Z" fill="#00b4d8"/>
+                    <!-- Iceberg -->
+                    <path d="M400,270 L430,200 L480,220 L520,280 Z" fill="#ffffff"/>
+                    <path d="M430,200 L450,240 L480,220 Z" fill="#caf0f8"/>
+                `,
+                legend: [
+                    { id: 0, name: "Low Angle Insolation", desc: "Sunlight is scattered through more atmosphere, reducing heat." },
+                    { id: 1, name: "Polar High Pressure", desc: "Sinking dense cold air makes this region a 'cold desert'." },
+                    { id: 2, name: "Permafrost / Tundra", desc: "Frozen ground prevents deep roots; mosses and lichens dominate." },
+                    { id: 3, name: "Extreme Albedo", desc: "White ice reflects up to 90% of incoming solar energy." }
+                ]
+            }
+        };
+
+        const mechSteps = [
+            {
+                title: "1. Solar Insolation",
+                desc: "Sunlight strikes the equator directly, delivering highly concentrated energy. At the poles, the same energy spreads over a larger curved area, resulting in cooler temperatures.",
+                layers: ['layer-solar']
+            },
+            {
+                title: "2. Surface Heating",
+                desc: "The concentrated energy at the equator warms the surface and the oceans. This heat transfer powers massive amounts of water evaporation into the lower atmosphere.",
+                layers: ['layer-solar', 'layer-heat']
+            },
+            {
+                title: "3. Convection",
+                desc: "Warm, moisture-rich air is less dense and rises rapidly. As it reaches higher, cooler altitudes, the water vapor condenses to form massive cumulonimbus clouds.",
+                layers: ['layer-solar', 'layer-heat', 'layer-clouds']
+            },
+            {
+                title: "4. Global Circulation",
+                desc: "The rising air drops its moisture as heavy tropical rain. The now dry, cooler air is pushed towards 30° latitude where it descends, creating the world's major arid deserts.",
+                layers: ['layer-solar', 'layer-clouds', 'layer-rain']
+            }
+        ];
+
+
+        /**
+         * ==========================================================================
+         * UI CONTROLLER LOGIC
+         * ==========================================================================
+         */
+        
+        // --- 1. ZONE SELECTOR (Strict Labeling) ---
+        function initZoneSelector() {
+            const btns = document.querySelectorAll('.zone-btn');
+            const visualContainer = document.getElementById('zone-visual-container');
+            const legendContainer = document.getElementById('zone-legend');
+            const markers = document.querySelectorAll('.marker');
+
+            function renderZone(zoneId) {
+                const data = zoneData[zoneId];
+                
+                // Update SVG Visual
+                const existingSvg = visualContainer.querySelector('svg');
+                if(existingSvg) existingSvg.remove();
+
+                const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                svg.setAttribute('viewBox', '0 0 600 300');
+                svg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+                svg.style.background = `linear-gradient(to bottom, ${data.bgGradient[0]}, ${data.bgGradient[1]})`;
+                svg.innerHTML = data.svgElements;
+                visualContainer.insertBefore(svg, visualContainer.firstChild);
+
+                // Update Legend
+                legendContainer.innerHTML = '';
+                data.legend.forEach((item, index) => {
+                    const el = document.createElement('div');
+                    el.className = 'legend-item';
+                    el.dataset.idx = index;
+                    el.innerHTML = `
+                        <div class="legend-badge">${index + 1}</div>
+                        <div class="legend-text">
+                            <strong>${item.name}</strong>
+                            <span>${item.desc}</span>
+                        </div>
+                    `;
+                    legendContainer.appendChild(el);
+                    
+                    // Hover interactions to link Marker <-> Legend
+                    const marker = visualContainer.querySelector(`.marker[data-idx="${index}"]`);
+                    
+                    const highlight = () => { el.classList.add('active'); marker.classList.add('active'); };
+                    const unhighlight = () => { el.classList.remove('active'); marker.classList.remove('active'); };
+
+                    el.addEventListener('mouseenter', highlight);
+                    el.addEventListener('mouseleave', unhighlight);
+                    marker.addEventListener('mouseenter', highlight);
+                    marker.addEventListener('mouseleave', unhighlight);
+                });
+            }
+
+            btns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    btns.forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    renderZone(e.target.dataset.zone);
+                });
+            });
+
+            // Init default
+            renderZone('tropical');
+        }
+
+        // --- 2. MECHANISM (Working Process) ---
+        function initMechanism() {
+            let currentStep = 0;
+            let isAutoPlaying = false;
+            let autoPlayInterval;
+
+            const titleEl = document.getElementById('mech-title');
+            const descEl = document.getElementById('mech-desc');
+            const dots = document.querySelectorAll('.step-dot');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnPlay = document.getElementById('btn-play');
+
+            function updateStep(index) {
+                if (index < 0) index = 0;
+                if (index >= mechSteps.length) index = mechSteps.length - 1;
+                currentStep = index;
+
+                const stepData = mechSteps[currentStep];
+
+                // Update Text
+                titleEl.textContent = stepData.title;
+                descEl.textContent = stepData.desc;
+
+                // Update UI Dots
+                dots.forEach((dot, i) => {
+                    dot.classList.toggle('active', i === currentStep);
+                });
+
+                // Update SVG Layers (Transition handled by CSS)
+                const allLayers = ['layer-solar', 'layer-heat', 'layer-clouds', 'layer-rain'];
+                allLayers.forEach(layerId => {
+                    const el = document.getElementById(layerId);
+                    if (stepData.layers.includes(layerId)) {
+                        el.style.opacity = "1";
+                    } else {
+                        el.style.opacity = "0";
+                    }
+                });
+
+                // Button states
+                btnPrev.style.opacity = currentStep === 0 ? "0.5" : "1";
+                btnPrev.style.pointerEvents = currentStep === 0 ? "none" : "auto";
+                
+                btnNext.style.opacity = currentStep === mechSteps.length - 1 ? "0.5" : "1";
+                btnNext.style.pointerEvents = currentStep === mechSteps.length - 1 ? "none" : "auto";
+            }
+
+            btnPrev.addEventListener('click', () => { stopAutoPlay(); updateStep(currentStep - 1); });
+            btnNext.addEventListener('click', () => { stopAutoPlay(); updateStep(currentStep + 1); });
+            
+            btnPlay.addEventListener('click', () => {
+                if (isAutoPlaying) stopAutoPlay();
+                else startAutoPlay();
+            });
+
+            function startAutoPlay() {
+                isAutoPlaying = true;
+                btnPlay.textContent = "Stop Auto-Play";
+                btnPlay.classList.add('active');
+                if(currentStep === mechSteps.length -1) updateStep(0);
+                autoPlayInterval = setInterval(() => {
+                    if (currentStep < mechSteps.length - 1) {
+                        updateStep(currentStep + 1);
+                    } else {
+                        updateStep(0); // Loop
+                    }
+                }, 3000);
+            }
+
+            function stopAutoPlay() {
+                isAutoPlaying = false;
+                btnPlay.textContent = "Auto-Play";
+                btnPlay.classList.remove('active');
+                clearInterval(autoPlayInterval);
+            }
+
+            // Init
+            updateStep(0);
+        }
+
+        /**
+         * ==========================================================================
+         * SIMULATION ENGINE (CANVAS)
+         * ==========================================================================
+         */
+        function initSimulation() {
+            const canvas = document.getElementById('sim-canvas');
+            const ctx = canvas.getContext('2d', { alpha: false });
+            
+            const latSlider = document.getElementById('sim-lat');
+            const altSlider = document.getElementById('sim-alt');
+            const oceanSlider = document.getElementById('sim-ocean');
+            
+            const valLat = document.getElementById('val-lat');
+            const valAlt = document.getElementById('val-alt');
+            const valOcean = document.getElementById('val-ocean');
+            
+            const outTemp = document.getElementById('out-temp');
+            const outPrecip = document.getElementById('out-precip');
+            const outBiome = document.getElementById('out-biome');
+
+            let width, height;
+            let particles = [];
+            let currentParams = { temp: 0, precip: 0, biome: 'temperate' };
+            let animationId;
+
+            // Fluid resize handler
+            function resize() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                width = rect.width;
+                height = rect.height;
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                ctx.scale(dpr, dpr);
+            }
+            window.addEventListener('resize', resize);
+            resize();
+
+            // --- Math Model ---
+            function calculateClimate() {
+                const lat = parseInt(latSlider.value);
+                const alt = parseInt(altSlider.value);
+                const ocean = parseInt(oceanSlider.value); // 0 (Coast) to 100 (Inland)
+
+                // 1. Base Temp based on Latitude (Cosine curve approximation)
+                // Equator (0) -> ~35C, Pole (90) -> ~ -25C
+                let temp = (Math.cos(lat * Math.PI / 180) * 60) - 25; 
+                
+                // 2. Altitude Lapse Rate (-6.5C per 1000m)
+                temp -= (alt / 1000) * 6.5;
+
+                // 3. Continentality (Inland = more extreme temp, less rain)
+                // If it's hot, inland makes it hotter. If cold, inland makes it colder.
+                const tempMod = (temp > 10) ? (ocean / 100) * 10 : -(ocean / 100) * 10;
+                temp += tempMod;
+
+                // 4. Precipitation Logic
+                let precip = 100; // Base max
+                // Equator (0-15) high rain, Subtropics (15-35) low rain, Temperate (35-60) med rain, Polar (60-90) low rain
+                if (lat > 15 && lat < 35) precip -= 60; 
+                if (lat >= 60) precip -= 70;
+                
+                // Altitude generally increases precip up to a point, then decreases (simplified here to slight increase)
+                if (alt > 500 && alt < 3000) precip += 10;
+                
+                // Inland significantly reduces precipitation
+                precip -= (ocean / 100) * 50;
+                
+                // Clamp limits
+                precip = Math.max(0, Math.min(100, precip));
+
+                // Classify Biome visually
+                let biome = 'temperate';
+                let precipLevel = "Medium";
+                
+                if (precip > 60) precipLevel = "High";
+                else if (precip < 30) precipLevel = "Low";
+
+                if (temp > 22 && precip > 50) biome = 'tropical';
+                else if (temp > 15 && precip < 30) biome = 'desert';
+                else if (temp < 0) biome = 'polar';
+                else biome = 'temperate';
+
+                currentParams = { temp, precip, biome };
+
+                // Update UI
+                valLat.textContent = `${lat}°`;
+                valAlt.textContent = `${alt}m`;
+                valOcean.textContent = ocean < 30 ? "Coastal" : ocean > 70 ? "Inland" : "Midland";
+                
+                outTemp.textContent = `${Math.round(temp)}°C`;
+                outPrecip.textContent = precipLevel;
+                outTemp.style.color = temp > 25 ? '#ef233c' : temp < 5 ? '#48cae4' : '#fff';
+                
+                const biomeNames = { tropical: "Tropical Rainforest", desert: "Arid Desert", temperate: "Temperate Zone", polar: "Tundra / Ice Cap" };
+                outBiome.textContent = biomeNames[biome];
+
+                adjustParticleSystem();
+            }
+
+            // --- Particle System (Weather) ---
+            class Particle {
+                constructor(type) {
+                    this.reset(type);
+                }
+                reset(type) {
+                    this.type = type;
+                    this.x = Math.random() * width;
+                    this.y = Math.random() * height - height; // Start above screen
+                    this.speedY = type === 'rain' ? 10 + Math.random() * 10 : 1 + Math.random() * 2;
+                    this.speedX = type === 'snow' ? -1 + Math.random() * 2 : (type === 'rain' ? 1 : 0);
+                    this.size = type === 'snow' ? 2 + Math.random() * 3 : 1 + Math.random() * 2;
+                    this.alpha = 0.5 + Math.random() * 0.5;
+                }
+                update() {
+                    this.y += this.speedY;
+                    this.x += this.speedX;
+                    if (this.type === 'snow') this.x += Math.sin(Date.now() / 1000 + this.y) * 0.5; // Drift
+
+                    if (this.y > height) this.reset(this.type);
+                }
+                draw(ctx) {
+                    ctx.globalAlpha = this.alpha;
+                    if (this.type === 'rain') {
+                        ctx.strokeStyle = '#a2d2ff';
+                        ctx.lineWidth = this.size;
+                        ctx.beginPath();
+                        ctx.moveTo(this.x, this.y);
+                        ctx.lineTo(this.x + this.speedX * 2, this.y + this.speedY * 1.5);
+                        ctx.stroke();
+                    } else if (this.type === 'snow') {
+                        ctx.fillStyle = '#ffffff';
+                        ctx.beginPath();
+                        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                    ctx.globalAlpha = 1.0;
+                }
+            }
+
+            function adjustParticleSystem() {
+                const p = currentParams;
+                let targetCount = 0;
+                let type = 'rain';
+
+                if (p.precip > 30) {
+                    if (p.temp < 2) {
+                        type = 'snow';
+                        targetCount = Math.floor(p.precip * 2); // More visible particles for snow
+                    } else {
+                        type = 'rain';
+                        targetCount = Math.floor(p.precip * 3);
+                    }
+                }
+
+                // Smooth transition of particle count
+                if (particles.length < targetCount) {
+                    for (let i = 0; i < (targetCount - particles.length); i++) {
+                        particles.push(new Particle(type));
+                    }
+                } else if (particles.length > targetCount) {
+                    particles.splice(0, particles.length - targetCount);
+                }
+                
+                // Ensure correct type if temp changed
+                particles.forEach(pt => {
+                    if (pt.type !== type && pt.y < 0) pt.reset(type);
+                });
+            }
+
+            // --- Render Loop ---
+            function drawScene() {
+                const b = currentParams.biome;
+                
+                // 1. Sky Background
+                let topCol, botCol;
+                if(b === 'tropical') { topCol = '#1a3a3a'; botCol = '#2d6a4f'; }
+                else if(b === 'desert') { topCol = '#ffb703'; botCol = '#fb8500'; }
+                else if(b === 'polar') { topCol = '#03045e'; botCol = '#0077b6'; }
+                else { topCol = '#48cae4'; botCol = '#72efdd'; }
+
+                const skyGrad = ctx.createLinearGradient(0, 0, 0, height * 0.7);
+                skyGrad.addColorStop(0, topCol);
+                skyGrad.addColorStop(1, botCol);
+                ctx.fillStyle = skyGrad;
+                ctx.fillRect(0, 0, width, height);
+
+                // 2. Sun / Ambient Light
+                if (b === 'desert' || b === 'tropical') {
+                    ctx.beginPath();
+                    ctx.arc(width * 0.8, height * 0.2, b === 'desert' ? 60 : 40, 0, Math.PI * 2);
+                    const sunGrad = ctx.createRadialGradient(width*0.8, height*0.2, 0, width*0.8, height*0.2, 80);
+                    sunGrad.addColorStop(0, 'rgba(255, 230, 150, 1)');
+                    sunGrad.addColorStop(1, 'rgba(255, 230, 150, 0)');
+                    ctx.fillStyle = sunGrad;
+                    ctx.fill();
+                }
+
+                // 3. Terrain Base
+                let terrCol;
+                if(b === 'tropical') terrCol = '#1b4332';
+                else if(b === 'desert') terrCol = '#e29578';
+                else if(b === 'polar') terrCol = '#caf0f8';
+                else terrCol = '#52796f';
+
+                ctx.fillStyle = terrCol;
+                ctx.beginPath();
+                ctx.moveTo(0, height * 0.6);
+                // Procedural wavy ground
+                for (let x = 0; x <= width; x += 50) {
+                    ctx.lineTo(x, height * 0.65 + Math.sin(x * 0.01) * 20);
+                }
+                ctx.lineTo(width, height);
+                ctx.lineTo(0, height);
+                ctx.fill();
+
+                // 4. Specific Elements (Simplified for performance, drawn algorithmically)
+                ctx.lineWidth = 2;
+                if (b === 'desert') {
+                    // Cacti
+                    ctx.fillStyle = '#386641';
+                    ctx.fillRect(width*0.3, height*0.5, 10, 60);
+                    ctx.fillRect(width*0.7, height*0.55, 8, 40);
+                    // Heat haze effect (conceptual via alpha overlay)
+                    ctx.fillStyle = 'rgba(255,150,0,0.1)';
+                    ctx.fillRect(0, height*0.5, width, height*0.5);
+                } else if (b === 'tropical') {
+                    // Dense foliage hints
+                    ctx.fillStyle = '#081c15';
+                    ctx.beginPath(); ctx.arc(width*0.2, height*0.6, 40, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(width*0.5, height*0.55, 60, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(width*0.8, height*0.65, 50, 0, Math.PI*2); ctx.fill();
+                } else if (b === 'polar') {
+                    // Ice chunks
+                    ctx.fillStyle = '#ffffff';
+                    ctx.beginPath(); ctx.moveTo(width*0.4, height*0.65); ctx.lineTo(width*0.5, height*0.5); ctx.lineTo(width*0.6, height*0.65); ctx.fill();
+                } else {
+                    // Deciduous trees
+                    ctx.fillStyle = '#582f0e'; // Trunk
+                    ctx.fillRect(width*0.4, height*0.55, 10, 30);
+                    ctx.fillStyle = '#6a994e'; // Leaves
+                    ctx.beginPath(); ctx.arc(width*0.4+5, height*0.5, 25, 0, Math.PI*2); ctx.fill();
+                }
+
+                // 5. Particles (Weather)
+                particles.forEach(p => {
+                    p.update();
+                    p.draw(ctx);
+                });
+
+                animationId = requestAnimationFrame(drawScene);
+            }
+
+            // Bind listeners
+            [latSlider, altSlider, oceanSlider].forEach(slider => {
+                slider.addEventListener('input', calculateClimate);
+            });
+
+            // Init
+            calculateClimate();
+            drawScene();
+        }
+
+        /**
+         * ==========================================================================
+         * INITIALIZATION
+         * ==========================================================================
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            initZoneSelector();
+            initMechanism();
+            initSimulation();
+        });
+
+    </script>
+</body>
+</html>

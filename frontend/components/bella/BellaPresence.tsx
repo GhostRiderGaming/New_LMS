@@ -2,12 +2,15 @@
 
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useBellaStore } from "@/lib/bellaStore";
+import { api } from "@/lib/api";
 import dynamic from "next/dynamic";
 
 const Live2DViewer = dynamic(
   () => import("./Live2DViewer").then(mod => ({ default: mod.Live2DViewer as any })),
   { ssr: false }
 ) as any;
+
+export type EmotionState = 'neutral' | 'thinking' | 'happy' | 'angry' | 'scared' | 'blush';
 
 declare global {
   interface Window {
@@ -20,14 +23,18 @@ const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "dev-api-key";
 
 export function BellaPresence() {
   const [mounted, setMounted] = useState(false);
-  const { isVisible, show, hide, addMessage, appearance, pendingExplanation, clearExplanation, setIsExplaining, stopSpeakingRequested, clearStopRequest } = useBellaStore();
+  const { isVisible, show, hide, addMessage, appearance, pendingExplanation, clearExplanation, setIsExplaining, stopSpeakingRequested, clearStopRequest, language } = useBellaStore();
 
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isTalking, setIsTalking] = useState(false);
-  const [isThinking, setIsThinking] = useState(false);
-  const [isHappy, setIsHappy] = useState(false);
+  const [currentEmotion, setCurrentEmotion] = useState<EmotionState>('neutral');
+  const previousQuestionsRef = useRef<Set<string>>(new Set());
   const [lastReply, setLastReply] = useState<string | null>(null);
   const [userActivated, setUserActivated] = useState(false);
+  const [textInput, setTextInput] = useState("");
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
+  const [isReplyExpanded, setIsReplyExpanded] = useState(false);
+  const [audioVolume, setAudioVolume] = useState(0);
 
   const recognitionRef = useRef<any>(null);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -74,6 +81,14 @@ export function BellaPresence() {
     };
   }, []);
 
+  useEffect(() => {
+    if (textInput.trim().length > 0 && !isTalking && currentEmotion !== 'blush' && currentEmotion !== 'thinking') {
+      setCurrentEmotion('blush');
+    } else if (textInput.trim().length === 0 && currentEmotion === 'blush') {
+      setCurrentEmotion('neutral');
+    }
+  }, [textInput, isTalking]);
+
   // Stop Bella completely — fully deactivates until user clicks Activate again
   const stopAll = useCallback(() => {
     if (currentAudioRef.current) {
@@ -82,8 +97,8 @@ export function BellaPresence() {
     }
     window.speechSynthesis?.cancel();
     setIsTalking(false);
-    setIsThinking(false);
-    setIsHappy(false);
+    setAudioVolume(0);
+    setCurrentEmotion('neutral');
     setLastReply("Okay, I'll be quiet! Click 'Activate Bella' when you need me again.");
     processingRef.current = false;
     intentionalStopRef.current = true;
@@ -109,8 +124,8 @@ export function BellaPresence() {
       msg.onstart = () => setIsTalking(true);
       msg.onend = () => {
         setIsTalking(false);
-        setIsHappy(true);
-        setTimeout(() => setIsHappy(false), 3000);
+        setCurrentEmotion('happy');
+        setTimeout(() => setCurrentEmotion(prev => prev === 'happy' ? 'neutral' : prev), 3000);
         processingRef.current = false;
         intentionalStopRef.current = false;
         try { recognition.start(); } catch (e) {}
@@ -125,23 +140,69 @@ export function BellaPresence() {
     }
   }, []);
 
-  // Play edge-tts audio via HTMLAudioElement
+  // Play edge-tts audio via HTMLAudioElement with real-time lip sync
   const playEdgeTTS = useCallback((audioB64: string, text: string, recognition: any) => {
     const audio = new Audio("data:audio/mp3;base64," + audioB64);
     currentAudioRef.current = audio;
 
+    // Web Audio API for real-time lip sync
+    let audioCtx: AudioContext | null = null;
+    let reqId = 0;
+
+    const setupLipSync = () => {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContextClass) return;
+        audioCtx = new AudioContextClass();
+        const source = audioCtx.createMediaElementSource(audio);
+        const analyser = audioCtx.createAnalyser();
+        analyser.smoothingTimeConstant = 0.5;
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        analyser.connect(audioCtx.destination);
+        
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const updateLipSync = () => {
+          if (!currentAudioRef.current) return;
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          const average = sum / dataArray.length;
+          const volume = Math.min(1, average / 60); 
+          setAudioVolume(volume);
+          reqId = requestAnimationFrame(updateLipSync);
+        };
+        updateLipSync();
+      } catch (e) {
+        console.warn("[Bella] Lip sync setup failed:", e);
+      }
+    };
+
+    audio.onplay = () => {
+      if (!audioCtx) setupLipSync();
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    };
+
     audio.onended = () => {
       setIsTalking(false);
-      setIsHappy(true);
-      setTimeout(() => setIsHappy(false), 3000);
+      setAudioVolume(0);
+      setCurrentEmotion('happy');
+      setTimeout(() => setCurrentEmotion(prev => prev === 'happy' ? 'neutral' : prev), 3000);
       currentAudioRef.current = null;
       processingRef.current = false;
       intentionalStopRef.current = false;
+      if (reqId) cancelAnimationFrame(reqId);
+      if (audioCtx) {
+        audioCtx.close().catch(() => {});
+      }
       try { recognition.start(); } catch (e) {}
     };
 
     audio.play().catch(() => {
       console.warn("[Bella] Edge-TTS playback blocked. Falling back to native.");
+      if (reqId) cancelAnimationFrame(reqId);
       speakNative(text, recognition);
     });
   }, [speakNative]);
@@ -156,35 +217,27 @@ export function BellaPresence() {
     intentionalStopRef.current = true;
 
     show();
-    setIsThinking(true);
     setIsTalking(false);
-    setIsHappy(false);
     setLastReply(null);
+
+    const q = transcript.trim().toLowerCase();
+    let nextEmotion: EmotionState = 'thinking';
+    if (previousQuestionsRef.current.has(q)) {
+      nextEmotion = Math.random() > 0.5 ? 'angry' : 'scared';
+    } else {
+      previousQuestionsRef.current.add(q);
+    }
+    setCurrentEmotion(nextEmotion);
 
     addMessage({ role: "user", text: transcript });
 
     try {
-      const response = await fetch("http://localhost:8000/api/v1/bella/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-API-Key": API_KEY,
-        },
-        body: JSON.stringify({ message: transcript, session_id: "voice-session-1" }),
-      });
-
-      if (!response.ok) {
-        const errBody = await response.text();
-        console.error("[Bella] Chat API error:", response.status, errBody);
-        throw new Error(`Chat failed: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await api.bellaChat(transcript, "voice-session-1", language);
       console.log("[Bella] Got reply:", data.reply?.substring(0, 80) + "...");
 
       addMessage({ role: "bella", text: data.reply });
       setLastReply(data.reply);
-      setIsThinking(false);
+      setIsReplyExpanded(false);
       setIsTalking(true);
 
       // Try edge-tts audio first, then native fallback
@@ -195,13 +248,27 @@ export function BellaPresence() {
       }
     } catch (error) {
       console.error("[Bella] Chat failed:", error);
-      setIsThinking(false);
+      setCurrentEmotion('neutral');
       setLastReply("Sorry, I couldn't process that. Please try again!");
       
       // Speak the error message so user knows
       speakNative("Sorry, I couldn't process that. Please try again!", recognition);
     }
   }, [show, addMessage, playEdgeTTS, speakNative]);
+
+  const handleTextSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!textInput.trim() || processingRef.current) return;
+    const text = textInput.trim();
+    setTextInput("");
+    setIsChatExpanded(false);
+    
+    // Stop any ongoing speech
+    stopAll();
+    // processTranscript expects a recognition object with start/stop, we can mock it if needed
+    const dummyRecognition = recognitionRef.current || { start: () => {}, stop: () => {} };
+    processTranscript(text, dummyRecognition);
+  };
 
   // --- WAKE WORD LOOP ---
   useEffect(() => {
@@ -308,8 +375,8 @@ export function BellaPresence() {
     // Show Bella and set talking state
     show();
     setLastReply(text);
+    setIsReplyExpanded(false);
     addMessage({ role: 'bella', text });
-    setIsThinking(false);
     setIsTalking(true);
     setIsExplaining(true);
 
@@ -321,8 +388,8 @@ export function BellaPresence() {
       audio.onended = () => {
         setIsTalking(false);
         setIsExplaining(false);
-        setIsHappy(true);
-        setTimeout(() => setIsHappy(false), 3000);
+        setCurrentEmotion('happy');
+        setTimeout(() => setCurrentEmotion(prev => prev === 'happy' ? 'neutral' : prev), 3000);
         currentAudioRef.current = null;
         processingRef.current = false;
         intentionalStopRef.current = false;
@@ -359,7 +426,7 @@ export function BellaPresence() {
     // Reset state
     setIsTalking(false);
     setIsExplaining(false);
-    setIsThinking(false);
+    setCurrentEmotion('neutral');
     processingRef.current = false;
     intentionalStopRef.current = false;
 
@@ -386,8 +453,9 @@ export function BellaPresence() {
           <Live2DViewer
             key={appearance}
             modelPath={appearance}
-            emotion={isHappy ? 'happy' : (isThinking ? 'thinking' : 'neutral')}
+            emotion={currentEmotion}
             isTalking={isTalking}
+            audioVolume={audioVolume}
             onLoaded={() => console.log('Bella Live2D Loaded:', appearance)}
           />
         </div>
@@ -410,7 +478,7 @@ export function BellaPresence() {
           <button
             onClick={stopAll}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium transition-all backdrop-blur-md border ${
-              isThinking
+              currentEmotion === 'thinking' || currentEmotion === 'angry' || currentEmotion === 'scared'
                 ? "bg-yellow-500/20 border-yellow-500/40 text-yellow-300"
                 : isTalking
                 ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-300"
@@ -420,23 +488,77 @@ export function BellaPresence() {
             }`}
           >
             <span className={`w-2 h-2 rounded-full ${
-              isThinking ? "bg-yellow-400 animate-pulse" :
+              currentEmotion === 'thinking' || currentEmotion === 'angry' || currentEmotion === 'scared' ? "bg-yellow-400 animate-pulse" :
               isTalking ? "bg-cyan-400 animate-pulse" :
               isVoiceActive ? "bg-green-400 animate-pulse" :
               "bg-slate-500"
             }`} />
-            {isThinking ? "Thinking..." : isTalking ? "Speaking..." : isVoiceActive ? "Listening..." : "Offline"}
+            {currentEmotion === 'thinking' || currentEmotion === 'angry' || currentEmotion === 'scared' ? "Processing..." : isTalking ? "Speaking..." : isVoiceActive ? "Listening..." : "Offline"}
           </button>
+        </div>
+      )}
+
+      {/* Text Chat Input */}
+      {userActivated && (
+        <div className="fixed bottom-20 right-6 z-[10000] pointer-events-auto flex flex-col items-end gap-2">
+          {isChatExpanded ? (
+            <form 
+              onSubmit={handleTextSubmit}
+              className="bg-slate-900/95 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-2 shadow-2xl flex items-center gap-2 animate-fadeInUp min-w-[300px]"
+            >
+              <input 
+                type="text" 
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder="Ask Bella a question..."
+                className="bg-transparent border-none outline-none text-sm text-white px-3 py-1 flex-1 min-w-0"
+                autoFocus
+              />
+              <button 
+                type="submit"
+                disabled={!textInput.trim() || processingRef.current}
+                className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-300 flex items-center justify-center hover:bg-purple-500/40 disabled:opacity-50 transition-colors shrink-0"
+              >
+                ↗
+              </button>
+              <button 
+                type="button"
+                onClick={() => setIsChatExpanded(false)}
+                className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 flex items-center justify-center hover:text-white transition-colors shrink-0"
+              >
+                ✕
+              </button>
+            </form>
+          ) : (
+            <button
+              onClick={() => setIsChatExpanded(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium bg-purple-500/20 border border-purple-500/40 text-purple-300 backdrop-blur-md hover:bg-purple-500/30 transition-all shadow-lg shadow-purple-900/20"
+            >
+              <span>⌨️</span> Type to Bella
+            </button>
+          )}
         </div>
       )}
 
       {/* Chat Bubble */}
       {lastReply && (
         <div className="fixed bottom-[420px] right-6 z-[10000] max-w-sm pointer-events-auto animate-fadeInUp">
-          <div className="bg-slate-900/90 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-4 shadow-2xl shadow-purple-900/30">
-            <div className="flex items-start gap-2">
+          <div className="bg-slate-900/90 backdrop-blur-xl border border-purple-500/30 rounded-2xl p-4 shadow-2xl shadow-purple-900/30 relative">
+            <div className={`flex items-start gap-2 ${isReplyExpanded ? 'max-h-64 overflow-y-auto custom-scrollbar' : ''} pr-2`}>
               <span className="text-lg shrink-0">💬</span>
-              <p className="text-sm text-slate-200 leading-relaxed">{lastReply}</p>
+              <div className="flex-1 min-w-0">
+                <p className={`text-sm text-slate-200 leading-relaxed ${!isReplyExpanded ? 'line-clamp-3' : ''}`}>
+                  {lastReply}
+                </p>
+                {lastReply.length > 100 && (
+                  <button
+                    onClick={() => setIsReplyExpanded(!isReplyExpanded)}
+                    className="text-purple-400 text-xs hover:text-purple-300 mt-1"
+                  >
+                    {isReplyExpanded ? "Show less" : "Read more"}
+                  </button>
+                )}
+              </div>
             </div>
             <button
               onClick={() => setLastReply(null)}

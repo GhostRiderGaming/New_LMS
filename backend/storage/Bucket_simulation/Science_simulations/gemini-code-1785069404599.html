@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Plant Tissue Explorer - Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & THEME (Glassmorphism, Dark Nature)
+           ========================================================================== */
+        :root {
+            /* Colors */
+            --bg-base: #040d08;
+            --bg-glass: rgba(10, 30, 20, 0.6);
+            --bg-glass-light: rgba(20, 50, 35, 0.5);
+            --border-glass: rgba(80, 200, 120, 0.2);
+            --text-main: #e8f5e9;
+            --text-muted: #a5d6a7;
+            
+            /* Accents */
+            --accent-xylem: #00e5ff;
+            --accent-xylem-glow: rgba(0, 229, 255, 0.6);
+            --accent-phloem: #ffb300;
+            --accent-phloem-glow: rgba(255, 179, 0, 0.6);
+            --accent-meristem: #ff4081;
+            --accent-ground: #64dd17;
+            
+            /* Typography (Fluid) */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --h1: clamp(2rem, 5vw, 4rem);
+            --h2: clamp(1.5rem, 3vw, 2.5rem);
+            --h3: clamp(1.2rem, 2vw, 1.8rem);
+            --body: clamp(0.9rem, 1.2vw, 1.1rem);
+            --small: clamp(0.8rem, 1vw, 0.95rem);
+            
+            /* Spacing & Radii */
+            --gap-sm: clamp(8px, 1vw, 12px);
+            --gap-md: clamp(16px, 2vw, 24px);
+            --gap-lg: clamp(32px, 4vw, 48px);
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-pill: 999px;
+            
+            /* Layout */
+            --container-width: 1400px;
+        }
+
+        /* ==========================================================================
+           2. RESET & BASE
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(100, 221, 23, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Animated Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+        }
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s infinite ease-in-out alternate;
+        }
+        .blob-1 { top: -10%; left: -10%; width: 40vw; height: 40vw; background: rgba(0, 229, 255, 0.1); animation-delay: 0s; }
+        .blob-2 { bottom: -10%; right: -10%; width: 50vw; height: 50vw; background: rgba(100, 221, 23, 0.1); animation-delay: -5s; }
+        .blob-3 { top: 40%; left: 60%; width: 30vw; height: 30vw; background: rgba(255, 179, 0, 0.08); animation-delay: -10s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(5%, 10%) scale(1.1); }
+        }
+
+        .container {
+            max-width: var(--container-width);
+            margin: 0 auto;
+            padding: var(--gap-md);
+        }
+
+        h1, h2, h3 { font-weight: 300; letter-spacing: -0.5px; }
+        h1 { font-size: var(--h1); background: linear-gradient(90deg, #fff, var(--text-muted)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--h2); margin-bottom: var(--gap-md); border-bottom: 1px solid var(--border-glass); padding-bottom: 10px; }
+        h3 { font-size: var(--h3); color: #fff; }
+        p { font-size: var(--body); color: var(--text-muted); }
+
+        /* ==========================================================================
+           3. UI COMPONENTS (Glassmorphism)
+           ========================================================================== */
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: var(--gap-md);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .glass-card {
+            background: var(--bg-glass-light);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-md);
+            padding: var(--gap-md);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: var(--small);
+            color: #000;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            z-index: 10;
+        }
+
+        /* ==========================================================================
+           4. SECTIONS LAYOUT
+           ========================================================================== */
+        section {
+            margin-bottom: var(--gap-lg);
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeUp 0.8s forwards ease-out;
+        }
+        
+        @keyframes fadeUp {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        header {
+            text-align: center;
+            margin: var(--gap-lg) 0;
+            animation-delay: 0.1s;
+        }
+        header p { max-width: 600px; margin: 10px auto; }
+
+        /* Section 1: Explorer (SVG + Legend) */
+        .explorer-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--gap-md);
+        }
+
+        @media (min-width: 1024px) {
+            .explorer-grid { grid-template-columns: 3fr 2fr; }
+        }
+
+        /* SVG Diagram Area */
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            min-height: clamp(280px, 40vh, 500px);
+            background: radial-gradient(circle at center, rgba(100, 221, 23, 0.1), transparent 70%);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .diagram-svg {
+            width: 90%;
+            height: 90%;
+            max-height: 500px;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
+            transition: all 0.5s ease;
+        }
+
+        /* Interactive Markers */
+        .marker {
+            position: absolute;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .marker .badge {
+            background: rgba(255,255,255,0.8);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        /* Marker Specific Colors & Positioning (Based on 100%x100% container) */
+        .marker[data-id="epidermis"] { top: 15%; left: 50%; }
+        .marker[data-id="cortex"] { top: 30%; left: 35%; }
+        .marker[data-id="phloem"] { top: 45%; left: 65%; }
+        .marker[data-id="xylem"] { top: 60%; left: 45%; }
+        .marker[data-id="pith"] { top: 75%; left: 50%; }
+        .marker[data-id="meristem"] { top: 10%; left: 80%; }
+
+        .marker.active { transform: translate(-50%, -50%) scale(1.2); }
+        
+        .marker.active[data-id="epidermis"] .badge { background: #fff; box-shadow: 0 0 20px #fff; border-color: #fff;}
+        .marker.active[data-id="cortex"] .badge { background: var(--accent-ground); box-shadow: 0 0 20px var(--accent-ground); border-color: #fff;}
+        .marker.active[data-id="phloem"] .badge { background: var(--accent-phloem); box-shadow: 0 0 20px var(--accent-phloem); border-color: #fff;}
+        .marker.active[data-id="xylem"] .badge { background: var(--accent-xylem); box-shadow: 0 0 20px var(--accent-xylem); border-color: #fff;}
+        .marker.active[data-id="pith"] .badge { background: #ccc; box-shadow: 0 0 20px #ccc; border-color: #fff;}
+        .marker.active[data-id="meristem"] .badge { background: var(--accent-meristem); box-shadow: 0 0 20px var(--accent-meristem); border-color: #fff;}
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 12px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.1);
+            transform: translateX(5px);
+        }
+        .legend-item.active { border-color: rgba(255,255,255,0.3); }
+        .legend-info { display: flex; flex-direction: column; }
+        .legend-title { font-weight: 600; font-size: var(--body); color: #fff;}
+        .legend-desc { font-size: var(--small); color: var(--text-muted); }
+
+        /* Dynamic Detail Panel */
+        .detail-panel {
+            margin-top: var(--gap-md);
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--gap-md);
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }
+        .detail-panel.active-state { opacity: 1; }
+        
+        @media (min-width: 768px) {
+            .detail-panel { grid-template-columns: 1fr 1fr; align-items: center; }
+        }
+
+        .detail-visual {
+            width: 100%;
+            aspect-ratio: 1;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            padding: var(--gap-md);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .detail-visual svg { width: 100%; height: 100%; filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5)); }
+        
+        .detail-text h3 { color: var(--text-main); margin-bottom: 10px; display: flex; align-items: center; gap: 10px;}
+        .detail-text p { margin-bottom: 15px; }
+        .feature-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+        .tag { 
+            font-size: var(--small); padding: 4px 12px; 
+            border-radius: var(--radius-pill); 
+            background: rgba(255,255,255,0.1); 
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        /* ==========================================================================
+           5. WORKING MECHANISM (Step-by-Step Cycle)
+           ========================================================================== */
+        .mechanism-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--gap-md);
+        }
+        @media (min-width: 1024px) {
+            .mechanism-container { grid-template-columns: 2fr 1fr; }
+        }
+
+        .mech-visual {
+            position: relative;
+            background: #020604;
+            border-radius: var(--radius-md);
+            min-height: 400px;
+            overflow: hidden;
+            border: 1px solid var(--border-glass);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mech-svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+        }
+
+        /* Mechanism Animations */
+        .flow-path {
+            fill: none;
+            stroke-width: 4;
+            stroke-linecap: round;
+            stroke-dasharray: 10 10;
+            opacity: 0.2;
+            transition: all 0.5s ease;
+        }
+        .flow-water { stroke: var(--accent-xylem); }
+        .flow-sugar { stroke: var(--accent-phloem); }
+
+        .stage-active .flow-path.active {
+            opacity: 1;
+            animation: flowDash 1s linear infinite;
+            filter: drop-shadow(0 0 5px currentColor);
+        }
+
+        @keyframes flowDash {
+            to { stroke-dashoffset: -20; }
+        }
+
+        .particle {
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .stage-active .particle.active {
+            opacity: 1;
+            animation: pulseFade 1.5s infinite alternate;
+        }
+        @keyframes pulseFade {
+            from { opacity: 0.5; transform: scale(0.8); }
+            to { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* Controls */
+        .mech-controls {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        .stage-info {
+            background: rgba(255,255,255,0.02);
+            padding: var(--gap-md);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--gap-md);
+            min-height: 180px;
+            border-left: 4px solid var(--text-muted);
+            transition: border-color 0.3s ease;
+        }
+        .stage-info h3 { margin-bottom: 10px; font-size: var(--h3); }
+        .stage-io { display: flex; gap: 15px; margin-top: 15px; font-size: var(--small); }
+        .io-box { 
+            background: rgba(0,0,0,0.3); padding: 5px 10px; border-radius: 4px;
+            display: flex; align-items: center; gap: 5px;
+        }
+        .io-icon { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+        .io-icon.in { background: #00e5ff; box-shadow: 0 0 8px #00e5ff; }
+        .io-icon.out { background: #ffb300; box-shadow: 0 0 8px #ffb300; }
+
+        .control-buttons {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: var(--radius-pill);
+        }
+        button {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: var(--radius-pill);
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        button:hover { background: rgba(255,255,255,0.2); }
+        button:active { transform: scale(0.95); }
+        button.primary { background: var(--text-main); color: #000; }
+        
+        .progress-dots { display: flex; gap: 6px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: 0.3s; }
+        .dot.active { background: #fff; transform: scale(1.5); }
+
+        /* ==========================================================================
+           6. INTERACTIVE SIMULATION (Canvas + Sliders)
+           ========================================================================== */
+        .sim-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--gap-md);
+        }
+        @media (min-width: 768px) {
+            .sim-container { grid-template-columns: 1fr 300px; }
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: clamp(300px, 50vh, 500px);
+            background: #020503;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid rgba(0, 229, 255, 0.2);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        /* Overlays for Canvas to indicate tubes */
+        .tube-label {
+            position: absolute;
+            top: 10px;
+            font-size: var(--small);
+            font-weight: bold;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            border-radius: var(--radius-pill);
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+        }
+        .tube-label.left { left: 20%; color: var(--accent-xylem); border: 1px solid var(--accent-xylem); transform: translateX(-50%);}
+        .tube-label.right { right: 20%; color: var(--accent-phloem); border: 1px solid var(--accent-phloem); transform: translateX(50%);}
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--gap-md);
+        }
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: var(--radius-sm);
+        }
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: var(--small);
+            color: #fff;
+        }
+        
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        input[type=range].slider-water::-webkit-slider-runnable-track { background: linear-gradient(90deg, rgba(255,255,255,0.1), var(--accent-xylem-glow)); }
+        input[type=range].slider-sugar::-webkit-slider-runnable-track { background: linear-gradient(90deg, rgba(255,255,255,0.1), var(--accent-phloem-glow)); }
+
+
+        /* ==========================================================================
+           7. EXTRA KNOWLEDGE (Grid)
+           ========================================================================== */
+        .knowledge-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--gap-md);
+        }
+        .info-card {
+            border-top: 3px solid;
+            transition: transform 0.3s;
+        }
+        .info-card:hover { transform: translateY(-5px); }
+        .info-card.fact { border-color: #e040fb; }
+        .info-card.mistake { border-color: #ff5252; }
+        .info-card.app { border-color: #64dd17; }
+        
+        .info-card h3 { font-size: var(--body); margin-bottom: 8px; color: #fff;}
+        .info-card p { font-size: var(--small); }
+
+        /* ==========================================================================
+           8. MEDIA QUERIES (Mobile Adjustments per rules)
+           ========================================================================== */
+        @media (max-width: 767px) {
+            .glass-panel { padding: 16px; backdrop-filter: blur(8px); } /* Reduce blur for perf */
+            .glass-card { padding: 12px; }
+            .legend-item { padding: 8px; }
+            .badge { font-size: 0.7rem; }
+            .mech-visual { min-height: 250px; }
+            .stage-info { min-height: auto; }
+            .tube-label { font-size: 0.6rem; padding: 2px 6px;}
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        
+        <!-- INTRO -->
+        <header>
+            <h1>Plant Tissue Explorer</h1>
+            <p>Journey inside a plant stem. Discover the microscopic structures that provide support, drive growth, and transport resources against gravity.</p>
+        </header>
+
+        <!-- SECTION 1: MAIN EXPLORER -->
+        <section id="overview" class="glass-panel">
+            <h2>1. Anatomy of a Stem</h2>
+            <p style="margin-bottom: var(--gap-md);">Select a marker to explore the specialized tissues forming the plant's architecture.</p>
+            
+            <div class="explorer-grid">
+                
+                <!-- Diagram Area -->
+                <div class="diagram-container">
+                    <!-- Isometric stylized stem cross-section -->
+                    <svg class="diagram-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="grad-epi" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#4caf50"/><stop offset="100%" stop-color="#1b5e20"/></linearGradient>
+                            <radialGradient id="grad-cortex" cx="50%" cy="50%" r="50%"><stop offset="60%" stop-color="#8bc34a"/><stop offset="100%" stop-color="#33691e"/></radialGradient>
+                            <linearGradient id="grad-phloem" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#ffb300"/><stop offset="100%" stop-color="#e65100"/></linearGradient>
+                            <linearGradient id="grad-xylem" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#00e5ff"/><stop offset="100%" stop-color="#006064"/></linearGradient>
+                            <radialGradient id="grad-pith" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#dcedc8"/><stop offset="100%" stop-color="#7cb342"/></radialGradient>
+                            
+                            <!-- Filters -->
+                            <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#000" flood-opacity="0.6"/>
+                            </filter>
+                            <filter id="glow-fx">
+                                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                            </filter>
+                        </defs>
+
+                        <!-- Base Shape / Epidermis -->
+                        <circle cx="200" cy="200" r="180" fill="url(#grad-epi)" filter="url(#drop-shadow)" />
+                        <!-- Cortex -->
+                        <circle cx="200" cy="200" r="165" fill="url(#grad-cortex)" />
+                        
+                        <!-- Vascular Bundles Ring -->
+                        <g id="vascular-bundles">
+                            <!-- Generate via JS or duplicate manually for layout. Doing manual for specific precise placement -->
+                            <!-- Bundle 1 (Top) -->
+                            <g transform="translate(200, 70)">
+                                <path d="M-25,0 Q0,40 25,0 Q15,-30 -15,-30 Z" fill="url(#grad-phloem)" /> <!-- Phloem outer -->
+                                <path d="M-20,5 Q0,45 20,5 Q10,15 -10,15 Z" fill="#fff" opacity="0.5" /> <!-- Cambium -->
+                                <path d="M-15,10 Q0,50 15,10 Q10,30 -10,30 Z" fill="url(#grad-xylem)" /> <!-- Xylem inner -->
+                            </g>
+                            <!-- Bundle 2 (Right) -->
+                            <g transform="translate(330, 200) rotate(90)">
+                                <path d="M-25,0 Q0,40 25,0 Q15,-30 -15,-30 Z" fill="url(#grad-phloem)" />
+                                <path d="M-20,5 Q0,45 20,5 Q10,15 -10,15 Z" fill="#fff" opacity="0.5" />
+                                <path d="M-15,10 Q0,50 15,10 Q10,30 -10,30 Z" fill="url(#grad-xylem)" />
+                            </g>
+                            <!-- Bundle 3 (Bottom) -->
+                            <g transform="translate(200, 330) rotate(180)">
+                                <path d="M-25,0 Q0,40 25,0 Q15,-30 -15,-30 Z" fill="url(#grad-phloem)" />
+                                <path d="M-20,5 Q0,45 20,5 Q10,15 -10,15 Z" fill="#fff" opacity="0.5" />
+                                <path d="M-15,10 Q0,50 15,10 Q10,30 -10,30 Z" fill="url(#grad-xylem)" />
+                            </g>
+                             <!-- Bundle 4 (Left) -->
+                             <g transform="translate(70, 200) rotate(270)">
+                                <path d="M-25,0 Q0,40 25,0 Q15,-30 -15,-30 Z" fill="url(#grad-phloem)" />
+                                <path d="M-20,5 Q0,45 20,5 Q10,15 -10,15 Z" fill="#fff" opacity="0.5" />
+                                <path d="M-15,10 Q0,50 15,10 Q10,30 -10,30 Z" fill="url(#grad-xylem)" />
+                            </g>
+                            <!-- Angled bundles -->
+                            <g transform="translate(290, 110) rotate(45)"><path d="M-25,0 Q0,40 25,0 Q15,-30 -15,-30 Z" fill="url(#grad-phloem)" /><path d="M-15,10 Q0,50 15,10 Q10,30 -10,30 Z" fill="url(#grad-xylem)" /></g>
+                            <g transform="translate(290, 290) rotate(135)"><path d="M-25,0 Q0,40 25,0 Q15,-30 -15,-30 Z" fill="url(#grad-phloem)" /><path d="M-15,10 Q0,50 15,10 Q10,30 -10,30 Z" fill="url(#grad-xylem)" /></g>
+                            <g transform="translate(110, 290) rotate(225)"><path d="M-25,0 Q0,40 25,0 Q15,-30 -15,-30 Z" fill="url(#grad-phloem)" /><path d="M-15,10 Q0,50 15,10 Q10,30 -10,30 Z" fill="url(#grad-xylem)" /></g>
+                            <g transform="translate(110, 110) rotate(315)"><path d="M-25,0 Q0,40 25,0 Q15,-30 -15,-30 Z" fill="url(#grad-phloem)" /><path d="M-15,10 Q0,50 15,10 Q10,30 -10,30 Z" fill="url(#grad-xylem)" /></g>
+                        </g>
+
+                        <!-- Pith -->
+                        <circle cx="200" cy="200" r="100" fill="url(#grad-pith)" opacity="0.8"/>
+                        
+                        <!-- Shoot Tip / Meristem hint (floating top right to indicate apical) -->
+                        <g transform="translate(350, 50)" opacity="0.9">
+                            <path d="M0,20 Q20,0 40,20 Q20,40 0,20 Z" fill="#ff4081" filter="url(#glow-fx)"/>
+                            <circle cx="20" cy="20" r="5" fill="#fff"/>
+                        </g>
+                    </svg>
+
+                    <!-- Markers Overlay -->
+                    <div class="marker" data-id="epidermis"><span class="badge">1</span></div>
+                    <div class="marker" data-id="cortex"><span class="badge">2</span></div>
+                    <div class="marker" data-id="phloem"><span class="badge">3</span></div>
+                    <div class="marker" data-id="xylem"><span class="badge">4</span></div>
+                    <div class="marker" data-id="pith"><span class="badge">5</span></div>
+                    <div class="marker" data-id="meristem"><span class="badge">6</span></div>
+                </div>
+
+                <!-- Legend Area -->
+                <div class="legend-list" id="tissue-legend">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Detail Panel -->
+            <div class="detail-panel glass-card" id="detail-panel">
+                <div class="detail-visual" id="detail-svg-container">
+                    <!-- SVG injected by JS -->
+                </div>
+                <div class="detail-text">
+                    <h3 id="dt-title">Select a tissue</h3>
+                    <div class="feature-tags" id="dt-tags" style="margin-bottom: 10px;"></div>
+                    <p id="dt-desc">Hover or tap on the markers in the diagram to reveal the microscopic structure and function of each plant tissue.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: WORKING MECHANISM -->
+        <section id="working" class="glass-panel">
+            <h2>2. The Transport Mechanism</h2>
+            <p style="margin-bottom: var(--gap-md);">How plants move water UP against gravity and transport food to all cells.</p>
+
+            <div class="mechanism-container">
+                <!-- Visual -->
+                <div class="mech-visual">
+                    <svg class="mech-svg" viewBox="0 0 300 500" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="leaf-grad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#76ff03"/><stop offset="100%" stop-color="#33691e"/></linearGradient>
+                            <linearGradient id="stem-grad" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#33691e"/><stop offset="50%" stop-color="#558b2f"/><stop offset="100%" stop-color="#1b5e20"/></linearGradient>
+                            <radialGradient id="sun-grad"><stop offset="0%" stop-color="#fff"/><stop offset="50%" stop-color="#ffeb3b"/><stop offset="100%" stop-color="transparent"/></radialGradient>
+                        </defs>
+                        
+                        <!-- Environment -->
+                        <rect x="0" y="400" width="300" height="100" fill="#3e2723" opacity="0.6"/> <!-- Soil -->
+                        <circle cx="250" cy="50" r="40" fill="url(#sun-grad)" id="mech-sun" opacity="0.2"/>
+                        
+                        <!-- Plant Structure -->
+                        <!-- Root -->
+                        <path d="M140,400 Q130,450 100,480 M160,400 Q170,440 200,470 M150,400 L150,490" stroke="#795548" stroke-width="8" stroke-linecap="round" fill="none"/>
+                        <!-- Stem -->
+                        <rect x="140" y="200" width="20" height="200" fill="url(#stem-grad)"/>
+                        <!-- Leaf Left -->
+                        <path d="M140,280 Q80,240 40,280 Q100,320 140,280 Z" fill="url(#leaf-grad)"/>
+                        <!-- Leaf Right -->
+                        <path d="M160,220 Q220,180 260,220 Q200,260 160,220 Z" fill="url(#leaf-grad)"/>
+
+                        <!-- Transport Lines (Paths for animation) -->
+                        <!-- Water Path (Xylem - Up) -->
+                        <path id="path-water" class="flow-path flow-water" d="M150,480 L150,220 Q210,195 240,220" />
+                        <!-- Sugar Path (Phloem - Down) -->
+                        <path id="path-sugar" class="flow-path flow-sugar" d="M60,280 Q110,295 145,280 L145,450" />
+                        
+                        <!-- Dynamic Particles/Icons injected via JS classes -->
+                        <g id="mech-particles">
+                            <!-- Stage 1: Water enters root -->
+                            <circle cx="120" cy="460" r="6" fill="#00e5ff" class="particle s1" filter="url(#glow-fx)"/>
+                            <circle cx="180" cy="440" r="6" fill="#00e5ff" class="particle s1" filter="url(#glow-fx)"/>
+                            <!-- Stage 2: Cohesion up stem -->
+                            <path d="M145,350 L150,330 L155,350 Z" fill="#00e5ff" class="particle s2"/>
+                            <!-- Stage 3: Transpiration (Leaf out) -->
+                            <circle cx="250" cy="210" r="4" fill="rgba(255,255,255,0.8)" class="particle s3"/>
+                            <circle cx="260" cy="200" r="3" fill="rgba(255,255,255,0.8)" class="particle s3"/>
+                            <!-- Stage 4: Photosynthesis (Sun to Leaf) -->
+                            <path d="M220,90 L190,180" stroke="#ffeb3b" stroke-width="2" stroke-dasharray="5,5" class="particle s4"/>
+                            <!-- Stage 5: Sugar moves down -->
+                            <circle cx="90" cy="285" r="5" fill="#ffb300" class="particle s5" filter="url(#glow-fx)"/>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Controls & Info -->
+                <div class="mech-controls">
+                    <div class="stage-info" id="stage-info-box">
+                        <h3 id="stage-title">Mechanism Stage</h3>
+                        <p id="stage-desc">Description of what is happening.</p>
+                        <div class="stage-io" id="stage-io">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="progress-dots" id="mech-dots" style="margin-bottom: 15px; justify-content: center;">
+                            <!-- Dots JS -->
+                        </div>
+                        <div class="control-buttons">
+                            <button id="btn-prev">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                            </button>
+                            <button id="btn-play" class="primary">
+                                Auto-Play <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                            </button>
+                            <button id="btn-next">
+                                Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: SIMULATION -->
+        <section id="simulation" class="glass-panel">
+            <h2>3. Flow Dynamics Simulation</h2>
+            <p style="margin-bottom: var(--gap-md);">Observe how environmental factors affect the flow rate in vascular tissues.</p>
+
+            <div class="sim-container">
+                <!-- Canvas Area -->
+                <div class="canvas-wrapper">
+                    <div class="tube-label left">XYLEM TUBE</div>
+                    <div class="tube-label right">PHLOEM TUBE</div>
+                    <canvas id="flow-canvas"></canvas>
+                </div>
+
+                <!-- Controls -->
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Transpiration Rate (Heat/Wind)</span>
+                            <span id="val-water" style="color: var(--accent-xylem);">Normal</span>
+                        </div>
+                        <input type="range" id="slider-water" class="slider-water" min="0.5" max="3" step="0.1" value="1">
+                        <p style="font-size: 0.75rem; margin-top: 8px; opacity: 0.7;">Pulls water <strong style="color:var(--accent-xylem)">UP</strong> through dead Xylem cells.</p>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Photosynthesis Rate (Sunlight)</span>
+                            <span id="val-sugar" style="color: var(--accent-phloem);">Normal</span>
+                        </div>
+                        <input type="range" id="slider-sugar" class="slider-sugar" min="0" max="3" step="0.1" value="1">
+                        <p style="font-size: 0.75rem; margin-top: 8px; opacity: 0.7;">Pushes sap <strong style="color:var(--accent-phloem)">UP & DOWN</strong> through living Phloem cells.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: KNOWLEDGE BASE -->
+        <section id="extra-info">
+            <h2 style="border:none;">4. Key Insights</h2>
+            <div class="knowledge-grid">
+                <div class="glass-card info-card fact">
+                    <h3>Girth Growth (Secondary)</h3>
+                    <p>Trees grow wider because of the <strong>Vascular Cambium</strong>, a thin layer of meristematic tissue between xylem and phloem that constantly produces new cells, creating tree rings.</p>
+                </div>
+                <div class="glass-card info-card mistake">
+                    <h3>Common Misconception</h3>
+                    <p>People think plants "drink" water using energy. In reality, water evaporates from leaves (transpiration), creating a physical vacuum that pulls water up the xylem passively.</p>
+                </div>
+                <div class="glass-card info-card app">
+                    <h3>Wood vs. Bark</h3>
+                    <p>What we call "Wood" is actually just years of accumulated, dead <strong>Secondary Xylem</strong>. The inner bark contains the living Phloem. Girdling (cutting bark around a tree) kills it by severing the phloem.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        // ---------------------------------------------------------
+        // DATA: Tissue Definitions & SVGs
+        // ---------------------------------------------------------
+        const tissueData = {
+            epidermis: {
+                id: 'epidermis', title: 'Epidermis', color: '#4caf50',
+                desc: 'The outermost single layer of cells. It acts like the plant\'s skin, protecting against water loss and mechanical injury. Often covered by a waxy cuticle.',
+                tags: ['Protection', 'Living', 'Outer Layer'],
+                svg: `<svg viewBox="0 0 100 100"><rect x="10" y="40" width="80" height="20" fill="rgba(76, 175, 80, 0.2)" stroke="#4caf50" stroke-width="2"/><path d="M10,40 Q50,30 90,40" stroke="rgba(255,255,255,0.8)" stroke-width="4" fill="none"/> <!-- Cuticle --><circle cx="50" cy="50" r="3" fill="#8bc34a"/></svg>`
+            },
+            cortex: {
+                id: 'cortex', title: 'Parenchyma (Cortex)', color: '#64dd17',
+                desc: 'The most common tissue type. These living cells have thin walls and large central vacuoles. They store food, water, and perform photosynthesis (mesophyll in leaves).',
+                tags: ['Storage', 'Thin-walled', 'Living'],
+                svg: `<svg viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="40" fill="rgba(100, 221, 23, 0.1)" stroke="#64dd17" stroke-width="2"/>
+                    <!-- Large Vacuole --> <circle cx="50" cy="50" r="25" fill="rgba(0, 229, 255, 0.2)" stroke="rgba(0, 229, 255, 0.5)" stroke-width="1"/>
+                    <!-- Nucleus --> <circle cx="20" cy="40" r="5" fill="#fff"/>
+                </svg>`
+            },
+            phloem: {
+                id: 'phloem', title: 'Phloem', color: '#ffb300',
+                desc: 'Living vascular tissue that transports organic nutrients (sucrose) from the leaves to all other parts of the plant. Uses active transport.',
+                tags: ['Transport', 'Food/Sugar', 'Bidirectional'],
+                svg: `<svg viewBox="0 0 100 100">
+                    <!-- Sieve Tube Element -->
+                    <rect x="30" y="10" width="40" height="80" fill="rgba(255, 179, 0, 0.1)" stroke="#ffb300" stroke-width="2"/>
+                    <!-- Sieve Plate -->
+                    <line x1="30" y1="50" x2="70" y2="50" stroke="#ffb300" stroke-width="4" stroke-dasharray="4 2"/>
+                    <!-- Companion Cell -->
+                    <rect x="70" y="20" width="15" height="60" fill="rgba(255, 87, 34, 0.2)" stroke="#ff5722" stroke-width="1"/>
+                    <circle cx="77" cy="50" r="3" fill="#fff"/>
+                </svg>`
+            },
+            xylem: {
+                id: 'xylem', title: 'Xylem', color: '#00e5ff',
+                desc: 'Dead, hollow vascular tubes with thick lignified walls. They transport water and dissolved minerals upwards from roots to leaves and provide structural support.',
+                tags: ['Transport', 'Water', 'Dead Cells', 'Unidirectional'],
+                svg: `<svg viewBox="0 0 100 100">
+                    <!-- Tracheid/Vessel -->
+                    <rect x="25" y="10" width="50" height="80" fill="rgba(0, 229, 255, 0.05)" stroke="#00e5ff" stroke-width="6"/>
+                    <!-- Lignin rings -->
+                    <path d="M25,30 Q50,20 75,30 M25,50 Q50,40 75,50 M25,70 Q50,60 75,70" stroke="#006064" stroke-width="3" fill="none"/>
+                </svg>`
+            },
+            pith: {
+                id: 'pith', title: 'Pith (Central Ground)', color: '#ccc',
+                desc: 'Spongy parenchyma cells found in the center of stems. In younger plants, it stores nutrients. In older trees, it often degrades and is replaced by heartwood.',
+                tags: ['Center', 'Storage', 'Spongy'],
+                svg: `<svg viewBox="0 0 100 100">
+                    <!-- Cluster of cells -->
+                    <circle cx="35" cy="35" r="25" fill="none" stroke="#ccc" stroke-width="2"/>
+                    <circle cx="65" cy="45" r="25" fill="none" stroke="#ccc" stroke-width="2"/>
+                    <circle cx="45" cy="70" r="25" fill="none" stroke="#ccc" stroke-width="2"/>
+                </svg>`
+            },
+            meristem: {
+                id: 'meristem', title: 'Meristematic Tissue', color: '#ff4081',
+                desc: 'Regions of active cell division (mitosis). Apical meristems cause primary growth (length) at root/shoot tips. Lateral meristems cause secondary growth (width).',
+                tags: ['Growth', 'Cell Division', 'Undifferentiated'],
+                svg: `<svg viewBox="0 0 100 100">
+                    <!-- Dividing cell -->
+                    <rect x="20" y="25" width="60" height="50" rx="10" fill="rgba(255, 64, 129, 0.1)" stroke="#ff4081" stroke-width="2"/>
+                    <!-- Chromosomes pulling apart -->
+                    <path d="M40,40 L35,50 L40,60 M60,40 L65,50 L60,60" stroke="#fff" stroke-width="2" fill="none" filter="url(#glow-fx)"/>
+                    <!-- Cell plate forming -->
+                    <line x1="50" y1="25" x2="50" y2="75" stroke="#ff4081" stroke-width="2" stroke-dasharray="3 3"/>
+                </svg>`
+            }
+        };
+
+        // ---------------------------------------------------------
+        // SECTION 1: Explorer Logic
+        // ---------------------------------------------------------
+        const legendContainer = document.getElementById('tissue-legend');
+        const markers = document.querySelectorAll('.marker');
+        const detailPanel = document.getElementById('detail-panel');
+
+        // Build Legend dynamically to match order
+        const tissueOrder = ['epidermis', 'cortex', 'phloem', 'xylem', 'pith', 'meristem'];
+        
+        tissueOrder.forEach((id, index) => {
+            const data = tissueData[id];
+            const legendItem = document.createElement('div');
+            legendItem.className = 'legend-item';
+            legendItem.dataset.id = id;
+            legendItem.innerHTML = `
+                <div class="badge" style="border-color:${data.color}">${index + 1}</div>
+                <div class="legend-info">
+                    <span class="legend-title" style="color:${data.color}">${data.title}</span>
+                    <span class="legend-desc">${data.tags.join(' • ')}</span>
+                </div>
+            `;
+            legendContainer.appendChild(legendItem);
+
+            // Bind events
+            legendItem.addEventListener('click', () => selectTissue(id));
+            legendItem.addEventListener('mouseenter', () => highlightMarker(id, true));
+            legendItem.addEventListener('mouseleave', () => highlightMarker(id, false));
+        });
+
+        markers.forEach(marker => {
+            marker.addEventListener('click', () => selectTissue(marker.dataset.id));
+            marker.addEventListener('mouseenter', () => highlightLegend(marker.dataset.id, true));
+            marker.addEventListener('mouseleave', () => highlightLegend(marker.dataset.id, false));
+        });
+
+        function highlightMarker(id, active) {
+            const marker = document.querySelector(`.marker[data-id="${id}"]`);
+            if(active) marker.classList.add('active');
+            else if(!marker.classList.contains('selected')) marker.classList.remove('active');
+        }
+
+        function highlightLegend(id, active) {
+            const item = document.querySelector(`.legend-item[data-id="${id}"]`);
+            if(active) item.classList.add('active');
+            else if(!item.classList.contains('selected')) item.classList.remove('active');
+        }
+
+        function selectTissue(id) {
+            // Remove previous selections
+            document.querySelectorAll('.marker, .legend-item').forEach(el => {
+                el.classList.remove('active', 'selected');
+            });
+
+            // Add new selections
+            document.querySelector(`.marker[data-id="${id}"]`).classList.add('active', 'selected');
+            document.querySelector(`.legend-item[data-id="${id}"]`).classList.add('active', 'selected');
+
+            // Update Panel
+            const data = tissueData[id];
+            detailPanel.classList.remove('active-state');
+            
+            setTimeout(() => {
+                document.getElementById('dt-title').innerHTML = `<span style="color:${data.color}">■</span> ${data.title}`;
+                document.getElementById('dt-desc').innerText = data.desc;
+                document.getElementById('dt-tags').innerHTML = data.tags.map(t => `<span class="tag">${t}</span>`).join('');
+                document.getElementById('dt-svg-container').innerHTML = data.svg;
+                detailPanel.classList.add('active-state');
+            }, 150);
+        }
+
+        // Initialize first
+        selectTissue('xylem');
+
+        // ---------------------------------------------------------
+        // SECTION 2: Working Mechanism Logic
+        // ---------------------------------------------------------
+        const mechanismStages = [
+            {
+                title: "1. Root Absorption",
+                desc: "Water and dissolved minerals enter the root hairs from the soil via osmosis, moving towards the center of the root.",
+                io: { in: "Soil Water (Osmosis)", out: "Root Cortex" },
+                activePaths: [],
+                activeParticles: ['.s1']
+            },
+            {
+                title: "2. Xylem Loading",
+                desc: "Water enters the dead, hollow xylem tubes. Due to water's cohesive properties, it forms an unbroken column.",
+                io: { in: "Root Water", out: "Xylem Column" },
+                activePaths: ['#path-water'],
+                activeParticles: ['.s2']
+            },
+            {
+                title: "3. Transpiration Pull",
+                desc: "As water evaporates from the leaf pores (stomata), it creates a negative pressure that physically pulls the entire water column upwards.",
+                io: { in: "Xylem Water", out: "Evaporates to Air" },
+                activePaths: ['#path-water'],
+                activeParticles: ['.s3'],
+                extraFx: () => { document.getElementById('mech-sun').style.opacity = "0.6"; }
+            },
+            {
+                title: "4. Photosynthesis",
+                desc: "Leaves capture sunlight. Chloroplasts inside mesophyll parenchyma cells use light, CO2, and water to synthesize sugar (glucose).",
+                io: { in: "Light + CO2 + H2O", out: "Sugar (Glucose)" },
+                activePaths: [],
+                activeParticles: ['.s4'],
+                extraFx: () => { document.getElementById('mech-sun').style.opacity = "0.8"; }
+            },
+            {
+                title: "5. Phloem Translocation",
+                desc: "Sugar is actively loaded into living phloem cells. Water follows by osmosis, creating pressure that pushes the sap down (or up) to roots/fruits.",
+                io: { in: "Leaf Sugar", out: "Root/Fruit Storage" },
+                activePaths: ['#path-sugar'],
+                activeParticles: ['.s5'],
+                extraFx: () => { document.getElementById('mech-sun').style.opacity = "0.2"; }
+            }
+        ];
+
+        let currentStage = 0;
+        let mechInterval;
+        let isAutoPlaying = false;
+
+        const stageTitle = document.getElementById('stage-title');
+        const stageDesc = document.getElementById('stage-desc');
+        const stageIO = document.getElementById('stage-io');
+        const mechVisual = document.querySelector('.mech-visual');
+        const dotsContainer = document.getElementById('mech-dots');
+        
+        // Build dots
+        mechanismStages.forEach((_, i) => {
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            dotsContainer.appendChild(dot);
+        });
+        const dots = document.querySelectorAll('.dot');
+
+        function updateMechanism(index) {
+            currentStage = index;
+            const stage = mechanismStages[index];
+
+            // Update Text
+            stageTitle.innerText = stage.title;
+            stageDesc.innerText = stage.desc;
+            stageIO.innerHTML = `
+                <div class="io-box"><span class="io-icon in"></span> In: ${stage.io.in}</div>
+                <div class="io-box"><span class="io-icon out"></span> Out: ${stage.io.out}</div>
+            `;
+
+            // Update Dots
+            dots.forEach((d, i) => d.classList.toggle('active', i === index));
+
+            // Reset Visuals
+            document.querySelectorAll('.flow-path').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.particle').forEach(p => p.classList.remove('active'));
+            document.getElementById('mech-sun').style.opacity = "0.2";
+            mechVisual.classList.remove('stage-active');
+
+            // Force reflow for animation restart
+            void mechVisual.offsetWidth;
+            mechVisual.classList.add('stage-active');
+
+            // Apply specific stage visuals
+            stage.activePaths.forEach(sel => document.querySelector(sel).classList.add('active'));
+            stage.activeParticles.forEach(sel => {
+                document.querySelectorAll(sel).forEach(p => p.classList.add('active'));
+            });
+            if(stage.extraFx) stage.extraFx();
+        }
+
+        // Controls Binding
+        document.getElementById('btn-prev').addEventListener('click', () => {
+            stopAutoPlay();
+            updateMechanism((currentStage - 1 + mechanismStages.length) % mechanismStages.length);
+        });
+        document.getElementById('btn-next').addEventListener('click', () => {
+            stopAutoPlay();
+            updateMechanism((currentStage + 1) % mechanismStages.length);
+        });
+        
+        const btnPlay = document.getElementById('btn-play');
+        btnPlay.addEventListener('click', () => {
+            if(isAutoPlaying) stopAutoPlay();
+            else startAutoPlay();
+        });
+
+        function startAutoPlay() {
+            isAutoPlaying = true;
+            btnPlay.classList.add('active');
+            btnPlay.innerHTML = 'Pause <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+            updateMechanism(currentStage); // restart current
+            mechInterval = setInterval(() => {
+                updateMechanism((currentStage + 1) % mechanismStages.length);
+            }, 3000);
+        }
+
+        function stopAutoPlay() {
+            isAutoPlaying = false;
+            clearInterval(mechInterval);
+            btnPlay.classList.remove('active');
+            btnPlay.innerHTML = 'Auto-Play <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        }
+
+        // Init Stage 0
+        updateMechanism(0);
+
+
+        // ---------------------------------------------------------
+        // SECTION 3: Canvas Flow Simulation
+        // ---------------------------------------------------------
+        const canvas = document.getElementById('flow-canvas');
+        const ctx = canvas.getContext('2d');
+        const wrapper = document.querySelector('.canvas-wrapper');
+        
+        let width, height;
+        let particles = [];
+        
+        // Settings mapped to sliders
+        const config = {
+            xylemSpeedMult: 1, // Controlled by Transpiration
+            phloemSpeedMult: 1, // Controlled by Photosynthesis
+            particleCount: 150
+        };
+
+        const sliderWater = document.getElementById('slider-water');
+        const sliderSugar = document.getElementById('slider-sugar');
+        const valWater = document.getElementById('val-water');
+        const valSugar = document.getElementById('val-sugar');
+
+        sliderWater.addEventListener('input', (e) => {
+            config.xylemSpeedMult = parseFloat(e.target.value);
+            valWater.innerText = config.xylemSpeedMult > 2 ? 'High' : (config.xylemSpeedMult < 1 ? 'Low' : 'Normal');
+        });
+
+        sliderSugar.addEventListener('input', (e) => {
+            config.phloemSpeedMult = parseFloat(e.target.value);
+            valSugar.innerText = config.phloemSpeedMult > 2 ? 'High' : (config.phloemSpeedMult === 0 ? 'Stopped' : 'Normal');
+        });
+
+        function resizeCanvas() {
+            // Handle high DPI displays
+            const rect = wrapper.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            
+            width = rect.width;
+            height = rect.height;
+            
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${width}px`;
+            canvas.style.height = `${height}px`;
+
+            initParticles();
+        }
+
+        class Particle {
+            constructor(type) {
+                this.type = type; // 'xylem' or 'phloem'
+                this.reset();
+                // Randomize initial Y so they don't all start at bottom
+                this.y = Math.random() * height; 
+            }
+
+            reset() {
+                if (this.type === 'xylem') {
+                    // Xylem: Left side, moving UP strictly
+                    this.x = (width * 0.2) + (Math.random() * 40 - 20); // Center around 20% width
+                    this.y = height + 10;
+                    this.size = Math.random() * 2 + 1.5;
+                    this.baseSpeed = Math.random() * 2 + 1;
+                    this.color = `rgba(0, 229, 255, ${Math.random() * 0.5 + 0.3})`;
+                } else {
+                    // Phloem: Right side, moving UP or DOWN
+                    this.x = (width * 0.8) + (Math.random() * 40 - 20); // Center around 80% width
+                    this.y = Math.random() > 0.5 ? height + 10 : -10;
+                    this.direction = this.y > 0 ? -1 : 1; // 1 = down, -1 = up
+                    this.size = Math.random() * 3 + 2;
+                    this.baseSpeed = Math.random() * 1.5 + 0.5;
+                    this.color = `rgba(255, 179, 0, ${Math.random() * 0.6 + 0.4})`;
+                }
+            }
+
+            update() {
+                if (this.type === 'xylem') {
+                    this.y -= this.baseSpeed * config.xylemSpeedMult;
+                    // Slight wiggle
+                    this.x += Math.sin(this.y * 0.05) * 0.5; 
+                    if (this.y < -10) this.reset();
+                } else {
+                    this.y += this.baseSpeed * this.direction * config.phloemSpeedMult;
+                    if ((this.direction === -1 && this.y < -10) || (this.direction === 1 && this.y > height + 10)) {
+                        this.reset();
+                    }
+                }
+            }
+
+            draw() {
+                // If speed is 0, fade them out slightly
+                const fade = (this.type === 'phloem' && config.phloemSpeedMult === 0) ? 0.3 : 1;
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.globalAlpha = fade;
+                ctx.fill();
+                
+                // Glow effect
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0; // reset
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < config.particleCount; i++) {
+                particles.push(new Particle(i % 2 === 0 ? 'xylem' : 'phloem'));
+            }
+        }
+
+        function drawTubes() {
+            // Draw background structural tubes
+            const tubeWidth = 60;
+            
+            // Xylem Tube bg
+            ctx.fillStyle = 'rgba(0, 229, 255, 0.03)';
+            ctx.fillRect(width*0.2 - tubeWidth/2, 0, tubeWidth, height);
+            // Xylem walls (thick)
+            ctx.strokeStyle = 'rgba(0, 229, 255, 0.2)';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(width*0.2 - tubeWidth/2, 0); ctx.lineTo(width*0.2 - tubeWidth/2, height);
+            ctx.moveTo(width*0.2 + tubeWidth/2, 0); ctx.lineTo(width*0.2 + tubeWidth/2, height);
+            ctx.stroke();
+
+            // Phloem Tube bg
+            ctx.fillStyle = 'rgba(255, 179, 0, 0.03)';
+            ctx.fillRect(width*0.8 - tubeWidth/2, 0, tubeWidth, height);
+            // Phloem walls (thin)
+            ctx.strokeStyle = 'rgba(255, 179, 0, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(width*0.8 - tubeWidth/2, 0); ctx.lineTo(width*0.8 - tubeWidth/2, height);
+            ctx.moveTo(width*0.8 + tubeWidth/2, 0); ctx.lineTo(width*0.8 + tubeWidth/2, height);
+            // Sieve plates
+            for(let y=50; y<height; y+=100) {
+                ctx.moveTo(width*0.8 - tubeWidth/2, y); 
+                ctx.lineTo(width*0.8 + tubeWidth/2, y);
+            }
+            ctx.stroke();
+        }
+
+        function animateCanvas() {
+            ctx.clearRect(0, 0, width, height);
+            
+            drawTubes();
+            
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+
+            requestAnimationFrame(animateCanvas);
+        }
+
+        // Setup resize listener and initialize
+        window.addEventListener('resize', resizeCanvas);
+        // Also handle orientation change for mobile
+        window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+        
+        // Initial setup
+        resizeCanvas();
+        animateCanvas();
+
+    </script>
+</body>
+</html>

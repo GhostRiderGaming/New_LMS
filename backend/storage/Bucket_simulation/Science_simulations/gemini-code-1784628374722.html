@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Food Spoilage Simulator | Premium Educational Visualization</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-base: #090a0f;
+            --bg-surface: rgba(20, 22, 35, 0.6);
+            --bg-surface-highlight: rgba(40, 45, 65, 0.8);
+            
+            --accent-primary: #00f0ff; /* Neon Cyan (Bacteria/Tech) */
+            --accent-secondary: #39ff14; /* Neon Green (Mold) */
+            --accent-tertiary: #ffaa00; /* Orange (Enzymes/Heat) */
+            --accent-danger: #ff3366; /* Red (Spoilage/Warning) */
+            
+            --text-main: #f0f4f8;
+            --text-muted: #94a3b8;
+            
+            /* Glassmorphism */
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            /* Typography */
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --spacing-sm: clamp(8px, 1vw, 12px);
+            --spacing-md: clamp(16px, 2vw, 24px);
+            --spacing-lg: clamp(24px, 4vw, 40px);
+            --radius-md: 16px;
+            --radius-lg: 24px;
+        }
+
+        /* ==========================================================================
+           RESET & BASE
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            font-size: clamp(14px, 1.5vw, 16px);
+        }
+
+        /* Animated Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            background: radial-gradient(circle at 20% 30%, rgba(0, 240, 255, 0.03) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 70%, rgba(57, 255, 20, 0.03) 0%, transparent 50%);
+            animation: pulse-bg 15s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulse-bg {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+        /* Layout Container */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 80px);
+        }
+
+        /* Typography Scaling */
+        h1 { font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; margin-bottom: var(--spacing-sm); }
+        h2 { font-size: clamp(1.8rem, 3.5vw, 2.5rem); font-weight: 700; color: var(--accent-primary); margin-bottom: var(--spacing-md); }
+        h3 { font-size: clamp(1.3rem, 2vw, 1.8rem); font-weight: 600; margin-bottom: var(--spacing-sm); }
+        p { margin-bottom: var(--spacing-md); color: var(--text-muted); }
+
+        .gradient-text {
+            background: linear-gradient(90deg, var(--accent-primary), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ==========================================================================
+           UI COMPONENTS (GLASSMORPHISM)
+           ========================================================================== */
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            box-shadow: var(--glass-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Mobile Optimization for Blur */
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                padding: var(--spacing-md);
+            }
+            .container { padding: var(--spacing-md); }
+        }
+
+        /* ==========================================================================
+           SECTION 2: TOPIC OVERVIEW (CSS Clip-Path Comparison)
+           ========================================================================== */
+        .comparison-container {
+            position: relative;
+            width: 100%;
+            height: clamp(250px, 40vw, 400px);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #111;
+            cursor: ew-resize;
+        }
+        
+        .comparison-img {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .fresh-state { background: linear-gradient(135deg, #1e3a8a, #064e3b); color: var(--accent-secondary); }
+        .spoiled-state { background: linear-gradient(135deg, #451a03, #171717); color: var(--accent-danger); clip-path: inset(0 0 0 50%); }
+
+        .comparison-slider {
+            position: absolute;
+            top: 0; left: 50%;
+            width: 4px; height: 100%;
+            background: var(--text-main);
+            transform: translateX(-50%);
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            pointer-events: none;
+        }
+        .comparison-slider::after {
+            content: '↔';
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 32px; height: 32px;
+            background: var(--text-main);
+            color: var(--bg-base);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+        }
+
+        /* ==========================================================================
+           SECTION 3: MAIN COMPONENTS (Marker + Legend System)
+           ========================================================================== */
+        .components-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+            align-items: center;
+        }
+
+        @media (max-width: 1024px) {
+            .components-layout { grid-template-columns: 1fr; }
+        }
+
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            aspect-ratio: 1;
+            background: radial-gradient(circle, #1a2035 0%, #0a0c14 100%);
+            border-radius: 50%;
+            border: 2px solid rgba(0, 240, 255, 0.2);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8), 0 0 20px rgba(0,240,255,0.1);
+        }
+
+        /* The SVG Illustration */
+        .micro-svg { width: 100%; height: 100%; }
+
+        /* Markers on Illustration */
+        .marker {
+            position: absolute;
+            width: 28px; height: 28px;
+            background: rgba(20, 22, 35, 0.9);
+            border: 2px solid;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 14px;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 10px currentColor;
+            z-index: 10;
+        }
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.3);
+            background: currentColor;
+            color: var(--bg-base);
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            list-style: none;
+        }
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            transform: translateX(10px);
+        }
+        
+        .legend-badge {
+            flex-shrink: 0;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 14px;
+            border: 2px solid;
+        }
+
+        .legend-content h4 { margin: 0; font-size: 1.1rem; color: var(--text-main); }
+        .legend-content p { margin: 0; font-size: 0.9rem; color: var(--text-muted); }
+
+        /* Component Colors */
+        .comp-1 { color: var(--accent-primary); border-color: var(--accent-primary); } /* Bacteria */
+        .comp-2 { color: var(--accent-secondary); border-color: var(--accent-secondary); } /* Mold */
+        .comp-3 { color: var(--accent-tertiary); border-color: var(--accent-tertiary); } /* Enzymes */
+        .comp-4 { color: #a78bfa; border-color: #a78bfa; } /* Substrate/Food */
+
+        /* ==========================================================================
+           SECTION 4: WORKING PROCESS (Mechanism)
+           ========================================================================== */
+        .process-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .process-visual {
+            width: 100%;
+            height: clamp(300px, 40vw, 450px);
+            background: #0f111a;
+            border-radius: var(--radius-md);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        .stage-view {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            transition: opacity 0.8s ease, transform 0.8s ease;
+            transform: scale(0.95);
+            display: flex; align-items: center; justify-content: center;
+            pointer-events: none;
+        }
+        .stage-view.active {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+
+        /* SVG Inner Styling for Process */
+        .proc-cell { transition: fill 1s, stroke 1s; }
+        .proc-microbe { opacity: 0; transform-origin: center; transition: all 1s; }
+        
+        /* Particles */
+        .particle {
+            position: absolute;
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--accent-tertiary);
+            opacity: 0;
+            box-shadow: 0 0 8px var(--accent-tertiary);
+        }
+
+        /* Controls */
+        .process-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.3);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: 30px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 8px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .btn:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: rgba(0, 240, 255, 0.2); border-color: var(--accent-primary); color: var(--accent-primary); }
+
+        .progress-dots {
+            display: flex; gap: 8px;
+        }
+        .dot {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: 0.3s;
+        }
+        .dot.active { background: var(--accent-primary); box-shadow: 0 0 10px var(--accent-primary); transform: scale(1.2); }
+
+        .stage-info {
+            text-align: center;
+            min-height: 80px;
+        }
+        .stage-info h4 { color: var(--accent-primary); margin-bottom: 4px; font-size: 1.2rem; }
+        .stage-info p { margin: 0; font-size: 0.95rem; }
+
+        /* ==========================================================================
+           SECTION 5: INTERACTIVE SIMULATOR (Canvas)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: var(--spacing-md);
+        }
+        @media (max-width: 900px) {
+            .sim-layout { grid-template-columns: 1fr; }
+        }
+
+        .canvas-container {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            position: relative;
+            box-shadow: inset 0 0 50px rgba(0,0,0,1);
+        }
+        @media (max-width: 768px) {
+            .canvas-container { aspect-ratio: 1; }
+        }
+        
+        canvas { width: 100%; height: 100%; display: block; }
+
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            background: rgba(0,0,0,0.2);
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-header { display: flex; justify-content: space-between; font-weight: 600; font-size: 0.9rem; }
+        .val-display { color: var(--accent-primary); font-variant-numeric: tabular-nums; }
+        
+        /* Custom Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: var(--text-main);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); }
+
+        /* Custom Track Colors via JS CSS vars */
+        #temp-slider::-webkit-slider-thumb { background: var(--accent-tertiary); }
+        #humid-slider::-webkit-slider-thumb { background: #3b82f6; }
+        #time-slider::-webkit-slider-thumb { background: var(--accent-primary); }
+
+        .sim-metrics {
+            margin-top: auto;
+            padding-top: var(--spacing-md);
+            border-top: 1px solid var(--glass-border);
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+        }
+        .metric {
+            background: rgba(0,0,0,0.3);
+            padding: 10px; border-radius: 8px;
+            text-align: center;
+        }
+        .metric-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;}
+        .metric-val { font-size: 1.2rem; font-weight: bold; color: var(--accent-danger); }
+
+        /* ==========================================================================
+           SECTION 6, 7, 8: CARDS & GRIDS
+           ========================================================================== */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            transition: transform 0.3s, background 0.3s;
+        }
+        .info-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.05);
+        }
+        
+        .icon-circle {
+            width: 48px; height: 48px;
+            border-radius: 50%;
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--accent-primary);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 16px;
+            font-size: 24px;
+        }
+
+        .fact-card {
+            border-left: 4px solid var(--accent-secondary);
+            background: linear-gradient(90deg, rgba(57, 255, 20, 0.05) 0%, transparent 100%);
+        }
+
+        .mistake-card {
+            border-left: 4px solid var(--accent-danger);
+            background: linear-gradient(90deg, rgba(255, 51, 102, 0.05) 0%, transparent 100%);
+        }
+
+        ul.styled-list {
+            list-style: none;
+        }
+        ul.styled-list li {
+            position: relative;
+            padding-left: 24px;
+            margin-bottom: 8px;
+        }
+        ul.styled-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0; color: var(--accent-primary);
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="ambient-bg"></div>
+
+    <main class="container">
+        
+        <!-- 1. INTRODUCTION -->
+        <header class="glass-panel" style="text-align: center; padding: clamp(40px, 6vw, 80px) 20px;">
+            <h1>The Science of <br><span class="gradient-text">Food Spoilage</span></h1>
+            <p style="max-width: 600px; margin: 0 auto; font-size: clamp(1.1rem, 1.5vw, 1.3rem);">
+                An interactive visualization exploring the microscopic battles, chemical reactions, and environmental factors that turn fresh food into decay.
+            </p>
+        </header>
+
+        <!-- 2. TOPIC OVERVIEW -->
+        <section class="glass-panel">
+            <h2>The Inevitable Transformation</h2>
+            <p>Spoilage isn't just "going bad." It is a complex ecosystem of microscopic life and chemical breakdown. Drag the slider to reveal the physical degradation caused over time.</p>
+            
+            <div class="comparison-container" id="comp-container">
+                <div class="comparison-img fresh-state">
+                    <!-- Pure CSS visualization of fresh food concept -->
+                    <div style="width: 150px; height: 150px; background: radial-gradient(circle at 30% 30%, #4ade80, #166534); border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; box-shadow: inset -10px -10px 20px rgba(0,0,0,0.5);"></div>
+                </div>
+                <div class="comparison-img spoiled-state" id="spoiled-img">
+                     <!-- Pure CSS visualization of spoiled food concept -->
+                    <div style="width: 150px; height: 150px; background: radial-gradient(circle at 30% 30%, #78716c, #292524); border-radius: 45% 55% 65% 35% / 45% 45% 55% 55%; box-shadow: inset -10px -10px 20px rgba(0,0,0,0.8); position: relative;">
+                        <!-- Mold spots -->
+                        <div style="position: absolute; top: 20%; left: 30%; width: 40px; height: 40px; background: radial-gradient(#d9f99d, transparent); border-radius: 50%; filter: blur(2px);"></div>
+                        <div style="position: absolute; bottom: 30%; right: 20%; width: 30px; height: 30px; background: radial-gradient(#65a30d, transparent); border-radius: 50%; filter: blur(3px);"></div>
+                    </div>
+                </div>
+                <div class="comparison-slider" id="comp-slider"></div>
+            </div>
+        </section>
+
+        <!-- 3. MAIN COMPONENTS -->
+        <section class="glass-panel">
+            <h2>Agents of Decay</h2>
+            <p>Food acts as a nutrient-rich planet for microscopic invaders. Explore the primary biological and chemical components responsible for spoilage.</p>
+            
+            <div class="components-layout">
+                <!-- Visual / Illustration -->
+                <div class="diagram-container">
+                    <!-- SVG Canvas for Microscopic View -->
+                    <svg class="micro-svg" viewBox="0 0 400 400" preserveAspectRatio="xMidYMid slice">
+                        <defs>
+                            <!-- Food Substrate Texture -->
+                            <pattern id="cell-pattern" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+                                <path d="M20 0 L40 10 L40 30 L20 40 L0 30 L0 10 Z" fill="none" stroke="#a78bfa" stroke-width="0.5" stroke-opacity="0.3"/>
+                            </pattern>
+                            <radialGradient id="moldGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#39ff14" stop-opacity="0.8"/>
+                                <stop offset="100%" stop-color="#14532d" stop-opacity="0"/>
+                            </radialGradient>
+                            <filter id="glowCyan"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                            <filter id="glowOrange"><feGaussianBlur stdDeviation="2" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                        </defs>
+                        
+                        <!-- Background/Substrate (Component 4) -->
+                        <circle cx="200" cy="200" r="190" fill="url(#cell-pattern)" />
+                        <!-- Cell walls breaking down -->
+                        <path d="M100 150 Q 150 180 200 150 T 300 150" fill="none" stroke="#a78bfa" stroke-width="2" opacity="0.5" stroke-dasharray="5,5"/>
+                        
+                        <!-- Mold (Component 2) -->
+                        <g transform="translate(100, 250)">
+                            <circle cx="0" cy="0" r="60" fill="url(#moldGrad)" />
+                            <path d="M0 0 Q -20 -30 -10 -50" fill="none" stroke="#39ff14" stroke-width="2"/>
+                            <circle cx="-10" cy="-50" r="4" fill="#39ff14"/>
+                            <path d="M0 0 Q 20 -40 30 -60" fill="none" stroke="#39ff14" stroke-width="1.5"/>
+                            <circle cx="30" cy="-60" r="3" fill="#39ff14"/>
+                            <path d="M0 0 Q 40 -10 60 -20" fill="none" stroke="#39ff14" stroke-width="2"/>
+                            <circle cx="60" cy="-20" r="5" fill="#39ff14"/>
+                        </g>
+
+                        <!-- Bacteria (Component 1) -->
+                        <g filter="url(#glowCyan)" transform="translate(280, 120)">
+                            <rect x="0" y="0" width="30" height="12" rx="6" fill="rgba(0,240,255,0.7)"/>
+                            <rect x="-20" y="20" width="25" height="10" rx="5" fill="rgba(0,240,255,0.6)"/>
+                            <rect x="15" y="30" width="35" height="14" rx="7" fill="rgba(0,240,255,0.8)"/>
+                            <circle cx="20" cy="-15" r="5" fill="rgba(0,240,255,0.7)"/>
+                            <circle cx="40" cy="10" r="4" fill="rgba(0,240,255,0.5)"/>
+                        </g>
+
+                        <!-- Enzymes (Component 3) -->
+                        <g filter="url(#glowOrange)" transform="translate(200, 150)">
+                            <!-- Pacman-like shape for enzyme -->
+                            <path d="M0 0 L 15 -10 A 18 18 0 1 0 15 10 Z" fill="rgba(255, 170, 0, 0.8)"/>
+                            <circle cx="25" cy="0" r="3" fill="#a78bfa"/> <!-- Substrate particle about to be eaten -->
+                            
+                            <path d="M-60 40 L -45 30 A 18 18 0 1 0 -45 50 Z" fill="rgba(255, 170, 0, 0.6)" transform="rotate(45, -60, 40)"/>
+                        </g>
+                    </svg>
+
+                    <!-- Absolutely Positioned Markers -->
+                    <div class="marker comp-1" style="left: 75%; top: 35%;" data-comp="1">1</div>
+                    <div class="marker comp-2" style="left: 25%; top: 65%;" data-comp="2">2</div>
+                    <div class="marker comp-3" style="left: 50%; top: 38%;" data-comp="3">3</div>
+                    <div class="marker comp-4" style="left: 50%; top: 80%;" data-comp="4">4</div>
+                </div>
+
+                <!-- Legend / Explanations -->
+                <ul class="legend-list">
+                    <li class="legend-item" data-comp="1">
+                        <div class="legend-badge comp-1">1</div>
+                        <div class="legend-content">
+                            <h4>Bacteria (Bacilli & Cocci)</h4>
+                            <p>Microscopic organisms that multiply rapidly. They consume food nutrients and excrete waste, causing slime, bad odors, and dangerous toxins.</p>
+                        </div>
+                    </li>
+                    <li class="legend-item" data-comp="2">
+                        <div class="legend-badge comp-2">2</div>
+                        <div class="legend-content">
+                            <h4>Fungi (Molds & Yeasts)</h4>
+                            <p>Multicellular organisms that grow in thread-like structures (hyphae). They thrive in high acid/sugar environments, producing visible fuzzy colonies and spores.</p>
+                        </div>
+                    </li>
+                    <li class="legend-item" data-comp="3">
+                        <div class="legend-badge comp-3">3</div>
+                        <div class="legend-content">
+                            <h4>Enzymes</h4>
+                            <p>Intrinsic proteins within the food acting as chemical scissors. They naturally break down tissues for ripening, but eventually cause over-softening and browning (oxidation).</p>
+                        </div>
+                    </li>
+                    <li class="legend-item" data-comp="4">
+                        <div class="legend-badge comp-4">4</div>
+                        <div class="legend-content">
+                            <h4>Food Substrate (Water Activity)</h4>
+                            <p>The food itself provides carbohydrates, proteins, and crucial free moisture ($a_w$). Microbes cannot grow without available water in the cellular matrix.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 4. WORKING PROCESS (Mechanism) -->
+        <section class="glass-panel">
+            <h2>The Spoilage Lifecycle</h2>
+            <p>How does a localized contamination become total degradation? Follow the biological mechanism stage-by-stage.</p>
+            
+            <div class="process-container">
+                <div class="process-visual" id="process-visual">
+                    
+                    <!-- SVG Container for morphing states -->
+                    <svg width="100%" height="100%" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+                        <!-- Background grid -->
+                        <path d="M0 200 L800 200 M400 0 L400 400" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+                        
+                        <!-- Core Food Cell Matrix (Morphs across stages) -->
+                        <g id="proc-matrix" transform="translate(400, 200)">
+                            <!-- Hexagons representing plant/meat cells -->
+                            <path class="proc-cell" id="cell-1" d="M0 -60 L52 -30 L52 30 L0 60 L-52 30 L-52 -30 Z" fill="rgba(74, 222, 128, 0.2)" stroke="#4ade80" stroke-width="2"/>
+                            <path class="proc-cell" id="cell-2" d="M104 0 L156 30 L156 90 L104 120 L52 90 L52 30 Z" fill="rgba(74, 222, 128, 0.2)" stroke="#4ade80" stroke-width="2"/>
+                            <path class="proc-cell" id="cell-3" d="M-104 0 L-52 30 L-52 90 L-104 120 L-156 90 L-156 30 Z" fill="rgba(74, 222, 128, 0.2)" stroke="#4ade80" stroke-width="2"/>
+                        </g>
+
+                        <!-- Intruders (Appear/Morph based on stage) -->
+                        <g id="proc-intruders" transform="translate(400, 200)">
+                            <!-- Spores landing (Stage 1) -->
+                            <circle class="proc-microbe spore" cx="-80" cy="-120" r="4" fill="#39ff14"/>
+                            <circle class="proc-microbe spore" cx="30" cy="-100" r="4" fill="#39ff14"/>
+                            
+                            <!-- Bacteria log phase (Stage 2/3) -->
+                            <rect class="proc-microbe bac" x="-20" y="-10" width="20" height="8" rx="4" fill="#00f0ff"/>
+                            <rect class="proc-microbe bac" x="10" y="20" width="20" height="8" rx="4" fill="#00f0ff" transform="rotate(45, 10, 20)"/>
+                            <rect class="proc-microbe bac" x="-40" y="30" width="20" height="8" rx="4" fill="#00f0ff" transform="rotate(-30, -40, 30)"/>
+                            <rect class="proc-microbe bac-multi" x="-10" y="40" width="20" height="8" rx="4" fill="#00f0ff"/>
+                            <rect class="proc-microbe bac-multi" x="30" y="-20" width="20" height="8" rx="4" fill="#00f0ff"/>
+                            
+                            <!-- Mold hyphae (Stage 3/4) -->
+                            <path class="proc-microbe mold" d="M-80 -120 Q -50 -80 -10 -40" fill="none" stroke="#39ff14" stroke-width="3"/>
+                            <path class="proc-microbe mold" d="M30 -100 Q 60 -50 40 10" fill="none" stroke="#39ff14" stroke-width="3"/>
+                        </g>
+
+                        <!-- Particle Container for Ins/Outs -->
+                        <g id="proc-particles"></g>
+                    </svg>
+
+                </div>
+                
+                <div class="stage-info">
+                    <h4 id="stage-title">Stage 1: Contamination</h4>
+                    <p id="stage-desc">Airborne spores and surface bacteria attach to the nutrient-rich food surface.</p>
+                </div>
+
+                <div class="process-controls">
+                    <button class="btn" id="proc-prev" disabled>← Prev</button>
+                    <div class="progress-dots" id="proc-dots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    <button class="btn" id="proc-next">Next →</button>
+                    <button class="btn btn-primary" id="proc-auto">▶ Auto-Play</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. INTERACTIVE SIMULATION (Canvas) -->
+        <section class="glass-panel">
+            <h2>Environmental Sandbox Simulator</h2>
+            <p>Adjust environmental variables to see how they govern microbial growth rates and enzymatic browning. Watch the visual progression on the substrate.</p>
+            
+            <div class="sim-layout">
+                <div class="canvas-container" id="canvas-wrapper">
+                    <canvas id="spoilage-canvas"></canvas>
+                </div>
+                
+                <div class="controls-panel">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Temperature (T)</span>
+                            <span class="val-display" id="val-temp">22°C</span>
+                        </div>
+                        <input type="range" id="temp-slider" min="-10" max="40" value="22" step="1">
+                        <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted);">
+                            <span>Freeze</span><span>Fridge</span><span>Room</span><span>Danger</span>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Relative Humidity (RH)</span>
+                            <span class="val-display" id="val-humid">60%</span>
+                        </div>
+                        <input type="range" id="humid-slider" min="10" max="100" value="60" step="5">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Time Elapsed (t)</span>
+                            <span class="val-display" id="val-time">Day 0</span>
+                        </div>
+                        <input type="range" id="time-slider" min="0" max="14" value="0" step="0.1">
+                    </div>
+                    
+                    <button class="btn" id="btn-run-sim" style="justify-content: center; margin-top: 10px;">▶ Run Simulation Over Time</button>
+
+                    <div class="sim-metrics">
+                        <div class="metric">
+                            <div class="metric-label">Bacterial Load</div>
+                            <div class="metric-val" id="metric-bac">Low</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Mold Spores</div>
+                            <div class="metric-val" id="metric-mold">None</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. APPLICATIONS & FACTS -->
+        <section class="grid-3">
+            <div class="glass-panel info-card">
+                <div class="icon-circle">❄️</div>
+                <h3>Preservation: Cold</h3>
+                <p>Refrigeration (< 4°C) slows down enzyme activity and pushes bacteria into a dormant state, extending the "Lag Phase" significantly.</p>
+            </div>
+            <div class="glass-panel info-card">
+                <div class="icon-circle">🏜️</div>
+                <h3>Preservation: Drying</h3>
+                <p>Dehydration removes free water. Lowering water activity ($a_w < 0.6$) starves microbes, preventing both bacterial and mold growth entirely.</p>
+            </div>
+            <div class="glass-panel info-card fact-card">
+                <div class="icon-circle">🍯</div>
+                <h3>Fun Fact: Honey</h3>
+                <p>Natural honey almost never spoils. Its high sugar concentration creates high osmotic pressure, sucking water out of any bacteria that enters it, killing them instantly.</p>
+            </div>
+        </section>
+
+        <!-- 7. COMMON MISTAKES & REVISION -->
+        <div class="components-layout">
+            <section class="glass-panel mistake-card">
+                <h2>Common Misconceptions</h2>
+                <ul class="styled-list">
+                    <li><strong>"Freezing kills bacteria"</strong><br>False. Freezing only pauses their growth. Once thawed, they resume multiplying rapidly.</li>
+                    <li><strong>"Cutting off mold makes it safe"</strong><br>False for soft foods. Mold roots (hyphae) penetrate deep below the surface invisibly. Only hard cheeses/salamis can be salvaged this way.</li>
+                    <li><strong>"Spoiled food always smells bad"</strong><br>Pathogenic bacteria (like Salmonella) often produce no smell or visual change. Spoilage bacteria cause the smell, but aren't always the ones that make you sick.</li>
+                </ul>
+            </section>
+
+            <section class="glass-panel">
+                <h2>Quick Revision</h2>
+                <ul class="styled-list">
+                    <li><strong>Substrate:</strong> Food providing nutrients and water ($a_w$).</li>
+                    <li><strong>Intrinsic Factors:</strong> pH, enzymes, physical structure.</li>
+                    <li><strong>Extrinsic Factors:</strong> Temperature, humidity, oxygen, time.</li>
+                    <li><strong>Rule of Thumb:</strong> "FAT TOM" (Food, Acidity, Time, Temperature, Oxygen, Moisture) dictates microbial survival. Control these to prevent spoilage.</li>
+                </ul>
+            </section>
+        </div>
+
+    </main>
+
+    <script>
+        /* ==========================================================================
+           2. TOPIC OVERVIEW (Comparison Slider)
+           ========================================================================== */
+        const compContainer = document.getElementById('comp-container');
+        const spoiledImg = document.getElementById('spoiled-img');
+        const compSlider = document.getElementById('comp-slider');
+        
+        let isDragging = false;
+
+        const handleMove = (e) => {
+            if (!isDragging) return;
+            // Get correct clientX for mouse or touch
+            const clientX = e.type.includes('mouse') ? e.clientX : e.touches[0].clientX;
+            const rect = compContainer.getBoundingClientRect();
+            let x = clientX - rect.left;
+            // Clamp
+            x = Math.max(0, Math.min(x, rect.width));
+            const percent = (x / rect.width) * 100;
+            
+            spoiledImg.style.clipPath = `inset(0 0 0 ${percent}%)`;
+            compSlider.style.left = `${percent}%`;
+        };
+
+        compContainer.addEventListener('mousedown', () => isDragging = true);
+        compContainer.addEventListener('touchstart', () => isDragging = true, {passive: true});
+        window.addEventListener('mouseup', () => isDragging = false);
+        window.addEventListener('touchend', () => isDragging = false);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('touchmove', handleMove, {passive: true});
+
+
+        /* ==========================================================================
+           3. MAIN COMPONENTS (Marker + Legend Logic)
+           ========================================================================== */
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        const activateComponent = (id) => {
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            document.querySelector(`.marker[data-comp="${id}"]`).classList.add('active');
+            document.querySelector(`.legend-item[data-comp="${id}"]`).classList.add('active');
+        };
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => activateComponent(marker.dataset.comp));
+            marker.addEventListener('click', () => activateComponent(marker.dataset.comp));
+        });
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => activateComponent(item.dataset.comp));
+            item.addEventListener('click', () => activateComponent(item.dataset.comp));
+        });
+
+
+        /* ==========================================================================
+           4. WORKING PROCESS (State Machine & SVG Morphing)
+           ========================================================================== */
+        const stages = [
+            {
+                title: "Stage 1: Contamination",
+                desc: "Airborne spores and surface bacteria attach to the nutrient-rich food surface. Enzymes remain internal.",
+                matrixColor: "#4ade80",
+                matrixStroke: "#4ade80",
+                showSpores: true,
+                showBac: false,
+                showBacMulti: false,
+                showMold: false,
+                particlesIn: ['#39ff14'], // Green spores
+                particlesOut: []
+            },
+            {
+                title: "Stage 2: Lag & Enzyme Action",
+                desc: "Microbes acclimate. Natural internal enzymes begin breaking down rigid cell walls, releasing free water and simple sugars.",
+                matrixColor: "#84cc16",
+                matrixStroke: "#65a30d",
+                showSpores: true,
+                showBac: true,
+                showBacMulti: false,
+                showMold: false,
+                particlesIn: [],
+                particlesOut: ['#ffaa00'] // Orange enzymes/sugars leaking
+            },
+            {
+                title: "Stage 3: Exponential (Log) Growth",
+                desc: "Fueled by released nutrients, bacteria divide rapidly. Mold hyphae penetrate the softening tissue structure.",
+                matrixColor: "#ca8a04",
+                matrixStroke: "#a16207",
+                showSpores: false,
+                showBac: true,
+                showBacMulti: true,
+                showMold: true,
+                particlesIn: [],
+                particlesOut: ['#00f0ff', '#39ff14'] // Bacteria and mold multiplying
+            },
+            {
+                title: "Stage 4: Structural Collapse",
+                desc: "Cells are completely lysed. Massive microbial mats form (slime/fuzz). Byproducts cause severe off-odors and tissue liquefaction.",
+                matrixColor: "#78716c",
+                matrixStroke: "#44403c",
+                showSpores: false,
+                showBac: true,
+                showBacMulti: true,
+                showMold: true,
+                particlesIn: [],
+                particlesOut: ['#ff3366'] // Toxins/Decay
+            }
+        ];
+
+        let currentStage = 0;
+        let isAutoPlaying = false;
+        let autoPlayInterval;
+
+        const titleEl = document.getElementById('stage-title');
+        const descEl = document.getElementById('stage-desc');
+        const prevBtn = document.getElementById('proc-prev');
+        const nextBtn = document.getElementById('proc-next');
+        const autoBtn = document.getElementById('proc-auto');
+        const dots = document.querySelectorAll('.progress-dots .dot');
+
+        // SVG Elements
+        const cells = document.querySelectorAll('.proc-cell');
+        const spores = document.querySelectorAll('.proc-microbe.spore');
+        const bac = document.querySelectorAll('.proc-microbe.bac');
+        const bacMulti = document.querySelectorAll('.proc-microbe.bac-multi');
+        const mold = document.querySelectorAll('.proc-microbe.mold');
+        const particleGroup = document.getElementById('proc-particles');
+
+        function createParticle(color, isOut) {
+            const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            const startX = 400 + (Math.random() * 100 - 50);
+            const startY = 200 + (Math.random() * 100 - 50);
+            
+            circle.setAttribute('r', '3');
+            circle.setAttribute('fill', color);
+            circle.setAttribute('cx', isOut ? startX : startX + (Math.random()>0.5?150:-150));
+            circle.setAttribute('cy', isOut ? startY : startY - 150);
+            circle.style.transition = "all 1s ease-in";
+            
+            particleGroup.appendChild(circle);
+
+            // Trigger animation
+            setTimeout(() => {
+                circle.setAttribute('cx', isOut ? startX + (Math.random()>0.5?150:-150) : startX);
+                circle.setAttribute('cy', isOut ? startY + 150 : startY);
+                circle.style.opacity = '0';
+            }, 50);
+
+            setTimeout(() => circle.remove(), 1050);
+        }
+
+        let particleTimer;
+
+        function updateProcessStage(index) {
+            currentStage = index;
+            const stage = stages[index];
+
+            // Update Text
+            titleEl.textContent = stage.title;
+            descEl.textContent = stage.desc;
+
+            // Update Controls
+            dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
+            prevBtn.disabled = index === 0;
+            nextBtn.disabled = index === stages.length - 1;
+
+            // Animate SVG Elements
+            cells.forEach(c => {
+                c.style.fill = stage.matrixColor;
+                c.style.stroke = stage.matrixStroke;
+                // Distort shape as it progresses
+                if(index > 1) {
+                    c.style.transform = `scale(${1 - (index*0.1)}) rotate(${index*5}deg)`;
+                } else {
+                    c.style.transform = 'scale(1) rotate(0deg)';
+                }
+            });
+
+            spores.forEach(s => s.style.opacity = stage.showSpores ? '1' : '0');
+            bac.forEach(b => s = b.style.opacity = stage.showBac ? '1' : '0');
+            bacMulti.forEach(b => b.style.opacity = stage.showBacMulti ? '1' : '0');
+            mold.forEach(m => m.style.opacity = stage.showMold ? '1' : '0');
+
+            // Handle Particles
+            clearInterval(particleTimer);
+            if (stage.particlesIn.length > 0 || stage.particlesOut.length > 0) {
+                particleTimer = setInterval(() => {
+                    if(stage.particlesIn.length > 0) {
+                        createParticle(stage.particlesIn[Math.floor(Math.random()*stage.particlesIn.length)], false);
+                    }
+                    if(stage.particlesOut.length > 0) {
+                        createParticle(stage.particlesOut[Math.floor(Math.random()*stage.particlesOut.length)], true);
+                    }
+                }, 300);
+            }
+        }
+
+        prevBtn.addEventListener('click', () => { if(currentStage > 0) updateProcessStage(currentStage - 1); stopAuto(); });
+        nextBtn.addEventListener('click', () => { if(currentStage < stages.length - 1) updateProcessStage(currentStage + 1); stopAuto(); });
+        dots.forEach((dot, i) => dot.addEventListener('click', () => { updateProcessStage(i); stopAuto(); }));
+
+        const stopAuto = () => {
+            isAutoPlaying = false;
+            clearInterval(autoPlayInterval);
+            autoBtn.textContent = "▶ Auto-Play";
+            autoBtn.classList.remove('active');
+        };
+
+        autoBtn.addEventListener('click', () => {
+            if (isAutoPlaying) {
+                stopAuto();
+            } else {
+                isAutoPlaying = true;
+                autoBtn.textContent = "⏸ Pause";
+                autoBtn.classList.add('active');
+                if(currentStage === stages.length -1) updateProcessStage(0);
+                autoPlayInterval = setInterval(() => {
+                    if(currentStage < stages.length - 1) updateProcessStage(currentStage + 1);
+                    else updateProcessStage(0);
+                }, 3500);
+            }
+        });
+
+        // Initialize Process
+        updateProcessStage(0);
+
+
+        /* ==========================================================================
+           5. INTERACTIVE SIMULATOR (Canvas Engine)
+           ========================================================================== */
+        const canvas = document.getElementById('spoilage-canvas');
+        const ctx = canvas.getContext('2d');
+        const wrapper = document.getElementById('canvas-wrapper');
+
+        // Inputs
+        const sliderTemp = document.getElementById('temp-slider');
+        const sliderHumid = document.getElementById('humid-slider');
+        const sliderTime = document.getElementById('time-slider');
+        
+        // Displays
+        const valTemp = document.getElementById('val-temp');
+        const valHumid = document.getElementById('val-humid');
+        const valTime = document.getElementById('val-time');
+        const metricBac = document.getElementById('metric-bac');
+        const metricMold = document.getElementById('metric-mold');
+        const btnRunSim = document.getElementById('btn-run-sim');
+
+        let simRunning = false;
+        let simAnimationId;
+
+        // Resize Canvas properly for Retina/Device ratio
+        function resizeCanvas() {
+            const rect = wrapper.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            drawSimulation(); // Redraw immediately
+        }
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+
+        // Math Utility: Lerp Color (RGB)
+        function lerpColor(c1, c2, t) {
+            const parse = c => [parseInt(c.substr(1,2),16), parseInt(c.substr(3,2),16), parseInt(c.substr(5,2),16)];
+            const [r1, g1, b1] = parse(c1);
+            const [r2, g2, b2] = parse(c2);
+            const r = Math.round(r1 + (r2 - r1) * t);
+            const g = Math.round(g1 + (g2 - g1) * t);
+            const b = Math.round(b1 + (b2 - b1) * t);
+            return `rgb(${r},${g},${b})`;
+        }
+
+        // Apple Base Colors based on "freshness" (1 = fresh, 0 = rotten)
+        const C_FRESH_BASE = "#ff2a2a";
+        const C_FRESH_HL = "#ff7b7b";
+        const C_ROTTEN_BASE = "#3d2616";
+        const C_ROTTEN_HL = "#5c412a";
+
+        // Pre-generate mold spot coordinates (randomized but consistent per session)
+        const moldSpots = Array.from({length: 15}, () => ({
+            x: (Math.random() - 0.5) * 1.2, // relative to radius
+            y: (Math.random() - 0.5) * 1.2,
+            maxRadiusMultiplier: 0.1 + Math.random() * 0.3,
+            activationThreshold: Math.random() * 0.5 // Requires at least this much spoilage to appear
+        }));
+
+        function drawSimulation() {
+            const rect = canvas.getBoundingClientRect();
+            const cx = rect.width / 2;
+            const cy = rect.height / 2;
+            const radius = Math.min(cx, cy) * 0.6;
+
+            // Get State
+            const temp = parseFloat(sliderTemp.value);
+            const humid = parseFloat(sliderHumid.value);
+            const days = parseFloat(sliderTime.value);
+
+            // Calculate Spoilage Factor (The Core Math)
+            // Temp: Goldilocks is 25-35C. Below 4C is very slow. Below 0C is stopped.
+            let tempFactor = 0;
+            if (temp > 0) tempFactor = Math.min(1, temp / 30); 
+            if (temp > 35) tempFactor = 1 - ((temp-35)/10); // Extreme heat kills some bacteria, but enzymes go crazy
+            
+            // Humid: Needs > 60% for mold, > 90% for rapid bacteria.
+            let humidFactor = humid / 100;
+
+            // Total decay velocity
+            let velocity = tempFactor * humidFactor;
+            if (temp <= 0) velocity = 0; // Frozen
+
+            // Cumulative decay (0 to 1) based on days and velocity
+            // Non-linear: lag phase -> exponential -> stationary
+            let rawDecay = (days / 14) * velocity * 2.5;
+            let decay = Math.min(1, Math.max(0, rawDecay));
+            
+            // Calculate specific organism growth for metrics
+            let bacteriaLoad = Math.min(1, decay * (temp > 5 ? 1.5 : 0.2));
+            let moldLoad = Math.min(1, decay * (humid > 60 ? 1.5 : 0.1));
+
+            ctx.clearRect(0, 0, rect.width, rect.height);
+
+            // 1. DRAW SUBSTRATE (APPLE)
+            const currentColor = lerpColor(C_FRESH_BASE, C_ROTTEN_BASE, decay);
+            const currentHl = lerpColor(C_FRESH_HL, C_ROTTEN_HL, decay);
+
+            // Apple Body
+            ctx.beginPath();
+            // A slightly imperfect apple shape using bezier curves
+            ctx.moveTo(cx, cy - radius*0.8);
+            ctx.bezierCurveTo(cx + radius*0.8, cy - radius*1.1, cx + radius*1.2, cy + radius*0.2, cx + radius*0.4, cy + radius*0.9);
+            ctx.bezierCurveTo(cx + radius*0.1, cy + radius*1.1, cx - radius*0.1, cy + radius*1.1, cx - radius*0.4, cy + radius*0.9);
+            ctx.bezierCurveTo(cx - radius*1.2, cy + radius*0.2, cx - radius*0.8, cy - radius*1.1, cx, cy - radius*0.8);
+            ctx.closePath();
+
+            // Radial gradient for 3D sphere effect
+            const gradient = ctx.createRadialGradient(cx - radius*0.3, cy - radius*0.3, radius*0.1, cx, cy, radius*1.2);
+            gradient.addColorStop(0, currentHl);
+            gradient.addColorStop(0.7, currentColor);
+            gradient.addColorStop(1, "#111");
+            
+            ctx.fillStyle = gradient;
+            
+            // Structural shrinkage (shrinks slightly as it decays and loses water)
+            ctx.save();
+            ctx.translate(cx, cy);
+            let shrink = 1 - (decay * 0.1);
+            ctx.scale(shrink, shrink);
+            ctx.translate(-cx, -cy);
+            ctx.fill();
+
+            // Stem
+            ctx.beginPath();
+            ctx.moveTo(cx, cy - radius*0.75);
+            ctx.quadraticCurveTo(cx + radius*0.1, cy - radius*1.2, cx + radius*0.2, cy - radius*1.3);
+            ctx.lineWidth = radius * 0.08;
+            ctx.strokeStyle = lerpColor("#4a3623", "#1a120b", decay);
+            ctx.lineCap = "round";
+            ctx.stroke();
+            ctx.restore(); // Restore shrink transform
+
+
+            // 2. DRAW BACTERIAL SLIME LAYER
+            if (bacteriaLoad > 0.2) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.scale(shrink, shrink);
+                ctx.translate(-cx, -cy);
+                
+                // Reuse apple path for clipping
+                ctx.beginPath();
+                ctx.moveTo(cx, cy - radius*0.8);
+                ctx.bezierCurveTo(cx + radius*0.8, cy - radius*1.1, cx + radius*1.2, cy + radius*0.2, cx + radius*0.4, cy + radius*0.9);
+                ctx.bezierCurveTo(cx + radius*0.1, cy + radius*1.1, cx - radius*0.1, cy + radius*1.1, cx - radius*0.4, cy + radius*0.9);
+                ctx.bezierCurveTo(cx - radius*1.2, cy + radius*0.2, cx - radius*0.8, cy - radius*1.1, cx, cy - radius*0.8);
+                ctx.clip();
+
+                ctx.fillStyle = `rgba(200, 255, 200, ${bacteriaLoad * 0.3})`;
+                ctx.fillRect(0,0, rect.width, rect.height);
+                ctx.restore();
+            }
+
+
+            // 3. DRAW MOLD SPOTS
+            if (moldLoad > 0.1) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.scale(shrink, shrink);
+                
+                moldSpots.forEach(spot => {
+                    // Normalize mold load against spot threshold so they appear sequentially
+                    let localizedGrowth = Math.max(0, (moldLoad - spot.activationThreshold) * 2);
+                    if (localizedGrowth > 0) {
+                        let spotRadius = radius * spot.maxRadiusMultiplier * Math.min(1, localizedGrowth);
+                        let sx = spot.x * radius;
+                        let sy = spot.y * radius;
+                        
+                        const moldGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, spotRadius);
+                        moldGrad.addColorStop(0, `rgba(57, 255, 20, ${0.9 * localizedGrowth})`); // Dense center (Green/White)
+                        moldGrad.addColorStop(0.3, `rgba(20, 83, 45, ${0.7 * localizedGrowth})`);
+                        moldGrad.addColorStop(1, `rgba(0,0,0,0)`); // Fuzzy edge
+
+                        ctx.fillStyle = moldGrad;
+                        ctx.beginPath();
+                        ctx.arc(sx, sy, spotRadius, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+                ctx.restore();
+            }
+
+            // Update UI Metrics
+            valTemp.textContent = `${temp}°C`;
+            valHumid.textContent = `${humid}%`;
+            valTime.textContent = `Day ${days.toFixed(1)}`;
+
+            let bacText = "Low";
+            if (bacteriaLoad > 0.3) bacText = "Moderate";
+            if (bacteriaLoad > 0.7) bacText = "DANGEROUS";
+            metricBac.textContent = bacText;
+            metricBac.style.color = bacteriaLoad > 0.7 ? "var(--accent-danger)" : (bacteriaLoad > 0.3 ? "var(--accent-tertiary)" : "var(--text-main)");
+
+            let moldText = "None";
+            if (moldLoad > 0.1) moldText = "Growing";
+            if (moldLoad > 0.6) moldText = "Widespread";
+            metricMold.textContent = moldText;
+            metricMold.style.color = moldLoad > 0.6 ? "var(--accent-danger)" : (moldLoad > 0.1 ? "var(--accent-secondary)" : "var(--text-main)");
+        }
+
+        // Event Listeners for Sliders
+        [sliderTemp, sliderHumid, sliderTime].forEach(slider => {
+            slider.addEventListener('input', drawSimulation);
+        });
+
+        // Run Simulation Button Logic
+        btnRunSim.addEventListener('click', () => {
+            if (simRunning) {
+                simRunning = false;
+                cancelAnimationFrame(simAnimationId);
+                btnRunSim.textContent = "▶ Run Simulation Over Time";
+            } else {
+                simRunning = true;
+                btnRunSim.textContent = "⏸ Pause Simulation";
+                
+                // If at end, reset
+                if (parseFloat(sliderTime.value) >= 14) {
+                    sliderTime.value = 0;
+                }
+
+                let lastTime = performance.now();
+                const step = (timestamp) => {
+                    if (!simRunning) return;
+                    
+                    const dt = timestamp - lastTime;
+                    lastTime = timestamp;
+                    
+                    // Advance time (approx 1 day per second real-time)
+                    let currentVal = parseFloat(sliderTime.value);
+                    let newVal = currentVal + (dt / 1000) * 1.5;
+                    
+                    if (newVal >= 14) {
+                        newVal = 14;
+                        simRunning = false;
+                        btnRunSim.textContent = "↺ Reset Simulation";
+                    }
+                    
+                    sliderTime.value = newVal;
+                    drawSimulation();
+                    
+                    if (simRunning) simAnimationId = requestAnimationFrame(step);
+                };
+                simAnimationId = requestAnimationFrame(step);
+            }
+        });
+
+        // Initial setup
+        setTimeout(() => {
+            resizeCanvas();
+            drawSimulation();
+        }, 100);
+
+    </script>
+</body>
+</html>

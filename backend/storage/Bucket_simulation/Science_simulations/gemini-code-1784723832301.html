@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Weather Station Simulator | Premium Educational Experience</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & THEME SETUP
+           ========================================================================== */
+        :root {
+            --bg-dark: #0a0f18;
+            --bg-panel: rgba(16, 24, 39, 0.6);
+            --bg-glass: rgba(255, 255, 255, 0.03);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            --accent-cyan: #06b6d4;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+            --accent-orange: #f59e0b;
+            --accent-red: #ef4444;
+
+            --glow-cyan: 0 0 20px rgba(6, 182, 212, 0.4);
+            --glow-blue: 0 0 20px rgba(59, 130, 246, 0.4);
+
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            
+            --spacing-sm: clamp(0.5rem, 1vw, 0.75rem);
+            --spacing-md: clamp(1rem, 2vw, 1.5rem);
+            --spacing-lg: clamp(1.5rem, 3vw, 2.5rem);
+            --spacing-xl: clamp(2rem, 5vw, 4rem);
+
+            --radius-md: 12px;
+            --radius-lg: 24px;
+            --radius-full: 9999px;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* ==========================================================================
+           2. RESET & GLOBAL STYLES
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            font-size: clamp(14px, 1.2vw, 16px);
+        }
+
+        /* Canvas Background */
+        #ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        h1, h2, h3, h4 {
+            line-height: 1.2;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); background: linear-gradient(135deg, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.75rem, 3vw, 2.5rem); margin-bottom: var(--spacing-md); }
+        h3 { font-size: clamp(1.25rem, 2vw, 1.75rem); margin-bottom: var(--spacing-sm); color: var(--accent-cyan); }
+
+        p { margin-bottom: var(--spacing-md); color: var(--text-muted); }
+        strong { color: var(--text-main); font-weight: 600; }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-md);
+        }
+
+        section {
+            padding: var(--spacing-xl) 0;
+            position: relative;
+        }
+
+        /* ==========================================================================
+           3. UI COMPONENTS (Glassmorphism & Cards)
+           ========================================================================== */
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Disable heavy blurs on mobile for performance */
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(4px);
+                -webkit-backdrop-filter: blur(4px);
+                background: rgba(16, 24, 39, 0.9);
+            }
+        }
+
+        .highlight-text {
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: var(--radius-full);
+            background: rgba(6, 182, 212, 0.1);
+            color: var(--accent-cyan);
+            font-size: 0.85em;
+            font-weight: 600;
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .grid-layout {
+            display: grid;
+            gap: var(--spacing-lg);
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+        }
+
+        /* ==========================================================================
+           4. INTRO & OVERVIEW
+           ========================================================================== */
+        #intro {
+            min-height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            z-index: 2;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1.1rem, 2vw, 1.5rem);
+            color: var(--accent-cyan);
+            margin-bottom: var(--spacing-lg);
+            font-weight: 300;
+        }
+
+        /* ==========================================================================
+           5. MAIN COMPONENTS (DIAGRAM + LEGEND RULE)
+           ========================================================================== */
+        .diagram-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        @media (min-width: 1024px) {
+            .diagram-container {
+                flex-direction: row;
+                align-items: center;
+            }
+        }
+
+        .illustration-wrapper {
+            flex: 1;
+            position: relative;
+            min-height: 350px;
+            background: radial-gradient(circle at center, rgba(6, 182, 212, 0.1) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--spacing-md);
+        }
+
+        .illustration-wrapper svg {
+            width: 100%;
+            height: 100%;
+            max-width: 500px;
+            overflow: visible;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
+        }
+
+        /* Interactive Markers */
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            background: var(--bg-dark);
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: var(--glow-cyan);
+            transition: var(--transition-smooth);
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            background: var(--accent-cyan);
+            color: var(--bg-dark);
+            transform: translate(-50%, -50%) scale(1.2);
+            box-shadow: 0 0 25px rgba(6, 182, 212, 0.8);
+        }
+
+        /* SVG Animation Classes */
+        .spin-slow { transform-origin: center; animation: spin 4s linear infinite; }
+        .spin-fast { transform-origin: center; animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Legend */
+        .legend-wrapper {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--spacing-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            border-radius: var(--radius-md);
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(6, 182, 212, 0.05);
+            border-color: rgba(6, 182, 212, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-number {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            background: var(--bg-dark);
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover .legend-number, .legend-item.active .legend-number {
+            background: var(--accent-cyan);
+            color: var(--bg-dark);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .legend-content h4 {
+            color: var(--text-main);
+            margin-bottom: 0.2rem;
+            font-size: 1.1rem;
+        }
+
+        .legend-content p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           6. WORKING PROCESS (DEDICATED STAGES)
+           ========================================================================== */
+        .process-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        .process-visual {
+            width: 100%;
+            height: clamp(200px, 30vw, 350px);
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* Data Flow Pipeline Nodes */
+        .pipeline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 90%;
+            position: relative;
+            z-index: 2;
+        }
+
+        .pipeline-line {
+            position: absolute;
+            top: 50%;
+            left: 5%;
+            right: 5%;
+            height: 2px;
+            background: rgba(255,255,255,0.1);
+            z-index: -1;
+            transform: translateY(-50%);
+        }
+
+        .pipeline-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--accent-cyan);
+            width: 0%;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .node {
+            width: clamp(50px, 8vw, 80px);
+            height: clamp(50px, 8vw, 80px);
+            background: var(--bg-panel);
+            border: 2px solid var(--border-glass);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition-smooth);
+            position: relative;
+        }
+
+        .node svg {
+            width: 50%;
+            height: 50%;
+            fill: var(--text-muted);
+            transition: var(--transition-smooth);
+        }
+
+        .node.active {
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+            background: rgba(6, 182, 212, 0.1);
+            transform: scale(1.15);
+        }
+
+        .node.active svg { fill: var(--accent-cyan); }
+        .node.completed { border-color: var(--accent-blue); }
+        .node.completed svg { fill: var(--accent-blue); }
+
+        /* Flow Particles */
+        .data-particle {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            opacity: 0;
+            transition: all 0.5s linear;
+        }
+
+        .process-info {
+            text-align: center;
+            min-height: 120px;
+        }
+
+        .process-title {
+            font-size: clamp(1.2rem, 2.5vw, 1.8rem);
+            color: var(--accent-cyan);
+            margin-bottom: 0.5rem;
+            transition: opacity 0.3s ease;
+        }
+        
+        .process-io {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            background: rgba(255,255,255,0.05);
+            padding: 0.25rem 1rem;
+            border-radius: var(--radius-full);
+            font-size: 0.9rem;
+            color: var(--accent-orange);
+            margin-bottom: 0.5rem;
+        }
+
+        .process-desc {
+            font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .process-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-md);
+            margin-top: var(--spacing-md);
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            padding: 0.75rem 1.5rem;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .control-btn:hover { background: rgba(255, 255, 255, 0.1); }
+        .control-btn:active { transform: scale(0.95); }
+        .control-btn.primary { background: var(--accent-cyan); color: var(--bg-dark); border-color: var(--accent-cyan); }
+        .control-btn.primary:hover { box-shadow: var(--glow-cyan); }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-smooth);
+        }
+        .dot.active { background: var(--accent-cyan); transform: scale(1.3); }
+
+        /* ==========================================================================
+           7. INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+        }
+
+        @media (min-width: 1024px) {
+            .sim-container { grid-template-columns: 300px 1fr; }
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: var(--spacing-sm);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.02);
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        
+        .val-display { color: var(--accent-cyan); font-family: monospace; font-size: 1.1em; }
+
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 10px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+
+        .sim-visual {
+            position: relative;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #0f172a; /* Fallback */
+            min-height: 400px;
+            border: 1px solid var(--border-glass);
+        }
+
+        #sim-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* ==========================================================================
+           8. INFO SECTIONS (Applications, Facts, Mistakes, Revision)
+           ========================================================================== */
+        .info-card {
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
+            border: 1px solid rgba(255,255,255,0.05);
+            height: 100%;
+        }
+
+        .info-card h4 {
+            color: var(--accent-purple);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .info-icon {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+        }
+
+        .mistake-card h4 { color: var(--accent-red); }
+        .fact-card h4 { color: var(--accent-orange); }
+        .app-card h4 { color: var(--accent-green); }
+
+        ul.styled-list {
+            list-style: none;
+            margin-top: var(--spacing-sm);
+        }
+
+        ul.styled-list li {
+            position: relative;
+            padding-left: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+        }
+
+        ul.styled-list li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: var(--accent-cyan);
+            font-weight: bold;
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Animated Background -->
+    <canvas id="ambient-bg"></canvas>
+
+    <div class="container">
+        
+        <!-- SECTION 1 & 2: Intro & Overview -->
+        <section id="intro">
+            <div class="hero-content">
+                <span class="badge">Atmospheric Physics</span>
+                <h1>Automatic Weather Station</h1>
+                <p class="hero-subtitle">The silent sentinels decoding the Earth's atmosphere.</p>
+                <div class="glass-panel">
+                    <p>A modern <strong>Automatic Weather Station (AWS)</strong> is a highly accurate, self-contained laboratory. It continuously measures atmospheric conditions—converting invisible physical forces like air pressure, solar radiation, and wind kinetic energy into digital signals. These stations form the vital nervous system of global climate science and daily weather forecasting.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: Main Components -->
+        <section id="components">
+            <div class="glass-panel">
+                <h2>Anatomy of a Station</h2>
+                <p>Explore the specialized sensors that capture meteorological data. Hover or tap the numbered markers.</p>
+                
+                <div class="diagram-container">
+                    <!-- Illustration with Markers -->
+                    <div class="illustration-wrapper">
+                        <!-- Premium SVG Drawing of AWS -->
+                        <svg viewBox="0 0 600 800" xmlns="http://www.w3.org/2000/svg">
+                            <defs>
+                                <linearGradient id="metal" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stop-color="#94a3b8"/>
+                                    <stop offset="50%" stop-color="#e2e8f0"/>
+                                    <stop offset="100%" stop-color="#64748b"/>
+                                </linearGradient>
+                                <linearGradient id="solar" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#1e3a8a"/>
+                                    <stop offset="50%" stop-color="#2563eb"/>
+                                    <stop offset="100%" stop-color="#172554"/>
+                                </linearGradient>
+                                <linearGradient id="white-plastic" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" stop-color="#f8fafc"/>
+                                    <stop offset="100%" stop-color="#cbd5e1"/>
+                                </linearGradient>
+                                <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#000" flood-opacity="0.6"/>
+                                </filter>
+                                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feGaussianBlur stdDeviation="5" result="blur" />
+                                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                                </filter>
+                            </defs>
+
+                            <!-- Ground/Base -->
+                            <ellipse cx="300" cy="750" rx="150" ry="20" fill="rgba(0,0,0,0.4)" filter="url(#glow)"/>
+
+                            <!-- Tripod Legs -->
+                            <g stroke="url(#metal)" stroke-width="12" stroke-linecap="round">
+                                <line x1="300" y1="500" x2="200" y2="740" />
+                                <line x1="300" y1="500" x2="400" y2="740" />
+                                <line x1="300" y1="500" x2="300" y2="730" stroke-width="16"/>
+                            </g>
+                            
+                            <!-- Main Mast -->
+                            <rect x="290" y="150" width="20" height="380" fill="url(#metal)" />
+
+                            <!-- 5. Enclosure / Datalogger Box -->
+                            <g filter="url(#drop-shadow)">
+                                <rect x="260" y="450" width="80" height="100" rx="5" fill="url(#white-plastic)"/>
+                                <rect x="270" y="460" width="60" height="80" rx="3" fill="#334155"/>
+                                <line x1="260" y1="475" x2="340" y2="475" stroke="#94a3b8" stroke-width="2"/>
+                            </g>
+
+                            <!-- 6. Solar Panel -->
+                            <g transform="translate(320, 520) rotate(-30)" filter="url(#drop-shadow)">
+                                <rect x="0" y="0" width="120" height="70" rx="4" fill="#0f172a" stroke="#94a3b8" stroke-width="4"/>
+                                <rect x="4" y="4" width="112" height="62" fill="url(#solar)"/>
+                                <!-- Grid lines -->
+                                <line x1="32" y1="4" x2="32" y2="66" stroke="#60a5fa" stroke-width="1" opacity="0.5"/>
+                                <line x1="60" y1="4" x2="60" y2="66" stroke="#60a5fa" stroke-width="1" opacity="0.5"/>
+                                <line x1="88" y1="4" x2="88" y2="66" stroke="#60a5fa" stroke-width="1" opacity="0.5"/>
+                                <line x1="4" y1="35" x2="116" y2="35" stroke="#60a5fa" stroke-width="1" opacity="0.5"/>
+                            </g>
+                            <line x1="300" y1="500" x2="350" y2="520" stroke="url(#metal)" stroke-width="8"/>
+
+                            <!-- 4. Rain Gauge -->
+                            <g transform="translate(180, 420)" filter="url(#drop-shadow)">
+                                <path d="M 0,0 L 40,0 L 35,60 L 5,60 Z" fill="url(#white-plastic)"/>
+                                <rect x="-5" y="-10" width="50" height="10" rx="2" fill="#cbd5e1"/>
+                            </g>
+                            <line x1="290" y1="450" x2="220" y2="450" stroke="url(#metal)" stroke-width="6"/>
+
+                            <!-- 3. Stevenson Screen (Temp/Humidity) -->
+                            <g transform="translate(260, 300)" filter="url(#drop-shadow)">
+                                <rect x="0" y="0" width="80" height="90" rx="2" fill="url(#white-plastic)"/>
+                                <!-- Louvers -->
+                                <line x1="5" y1="15" x2="75" y2="15" stroke="#94a3b8" stroke-width="4"/>
+                                <line x1="5" y1="30" x2="75" y2="30" stroke="#94a3b8" stroke-width="4"/>
+                                <line x1="5" y1="45" x2="75" y2="45" stroke="#94a3b8" stroke-width="4"/>
+                                <line x1="5" y1="60" x2="75" y2="60" stroke="#94a3b8" stroke-width="4"/>
+                                <line x1="5" y1="75" x2="75" y2="75" stroke="#94a3b8" stroke-width="4"/>
+                                <!-- Roof -->
+                                <path d="M -10,0 L 90,0 L 40,-20 Z" fill="url(#white-plastic)"/>
+                            </g>
+
+                            <!-- Top Mast Extension -->
+                            <rect x="295" y="50" width="10" height="100" fill="url(#metal)" />
+
+                            <!-- Cross arm -->
+                            <rect x="150" y="100" width="300" height="8" fill="url(#metal)" rx="4"/>
+
+                            <!-- 1. Anemometer (Left) -->
+                            <g transform="translate(160, 60)" filter="url(#drop-shadow)">
+                                <rect x="-4" y="40" width="8" height="40" fill="url(#metal)"/>
+                                <g id="anemometer-rotor">
+                                    <circle cx="0" cy="40" r="6" fill="#334155"/>
+                                    <!-- Arms -->
+                                    <line x1="-35" y1="40" x2="35" y2="40" stroke="#64748b" stroke-width="3"/>
+                                    <line x1="0" y1="5" x2="0" y2="75" stroke="#64748b" stroke-width="3"/>
+                                    <!-- Cups -->
+                                    <path d="M -35,30 A 10 10 0 0 0 -35,50 Z" fill="#0f172a"/>
+                                    <path d="M 35,30 A 10 10 0 0 1 35,50 Z" fill="#0f172a"/>
+                                    <path d="M -10,5 A 10 10 0 0 1 10,5 Z" fill="#0f172a"/>
+                                    <path d="M -10,75 A 10 10 0 0 0 10,75 Z" fill="#0f172a"/>
+                                </g>
+                            </g>
+
+                            <!-- 2. Wind Vane (Right) -->
+                            <g transform="translate(440, 60)" filter="url(#drop-shadow)">
+                                <rect x="-4" y="40" width="8" height="40" fill="url(#metal)"/>
+                                <g id="wind-vane">
+                                    <circle cx="0" cy="40" r="5" fill="#334155"/>
+                                    <!-- Arrow rod -->
+                                    <line x1="-40" y1="40" x2="30" y2="40" stroke="#64748b" stroke-width="4"/>
+                                    <!-- Arrow head -->
+                                    <polygon points="-40,40 -25,30 -25,50" fill="#ef4444"/>
+                                    <!-- Tail fin -->
+                                    <polygon points="30,30 50,20 50,60 30,50" fill="#3b82f6"/>
+                                </g>
+                            </g>
+                            
+                            <!-- 7. Antenna -->
+                            <g transform="translate(300, 10)">
+                                <line x1="0" y1="40" x2="0" y2="-20" stroke="url(#metal)" stroke-width="4"/>
+                                <circle cx="0" cy="-20" r="4" fill="#ef4444" filter="url(#glow)"/>
+                            </g>
+
+                        </svg>
+
+                        <!-- Absolute Positioned Markers -->
+                        <div class="marker" style="left: 26%; top: 18%;" data-idx="1">1</div>
+                        <div class="marker" style="left: 73%; top: 18%;" data-idx="2">2</div>
+                        <div class="marker" style="left: 50%; top: 48%;" data-idx="3">3</div>
+                        <div class="marker" style="left: 33%; top: 58%;" data-idx="4">4</div>
+                        <div class="marker" style="left: 50%; top: 68%;" data-idx="5">5</div>
+                        <div class="marker" style="left: 70%; top: 78%;" data-idx="6">6</div>
+                        <div class="marker" style="left: 50%; top: 6%;" data-idx="7">7</div>
+                    </div>
+
+                    <!-- Legend List -->
+                    <div class="legend-wrapper" id="component-legend">
+                        <div class="legend-item" data-idx="1">
+                            <div class="legend-number">1</div>
+                            <div class="legend-content">
+                                <h4>Anemometer</h4>
+                                <p>Measures wind speed via spinning cups. Kinetic energy dictates rotation rate.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-idx="2">
+                            <div class="legend-number">2</div>
+                            <div class="legend-content">
+                                <h4>Wind Vane</h4>
+                                <p>Indicates wind direction. The aerodynamic tail ensures the arrow points into the wind.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-idx="3">
+                            <div class="legend-number">3</div>
+                            <div class="legend-content">
+                                <h4>Stevenson Screen</h4>
+                                <p>Shields thermistors (temp) and hygrometers (humidity) from direct sunlight while allowing airflow.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-idx="4">
+                            <div class="legend-number">4</div>
+                            <div class="legend-content">
+                                <h4>Tipping Bucket Rain Gauge</h4>
+                                <p>Measures precipitation. A small seesaw tips every 0.2mm of rain, generating an electrical pulse.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-idx="5">
+                            <div class="legend-number">5</div>
+                            <div class="legend-content">
+                                <h4>Datalogger & Barometer</h4>
+                                <p>The 'brain' that processes analog signals to digital data. Also houses pressure sensors.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-idx="6">
+                            <div class="legend-number">6</div>
+                            <div class="legend-content">
+                                <h4>Solar Panel & Battery</h4>
+                                <p>Provides autonomous power, ensuring continuous operation in remote environments.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-idx="7">
+                            <div class="legend-number">7</div>
+                            <div class="legend-content">
+                                <h4>Telemetry Antenna</h4>
+                                <p>Transmits packets of compressed meteorological data via radio or satellite to forecasters.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: Working Process (Mechanism) -->
+        <section id="working">
+            <div class="glass-panel">
+                <h2>How Data Flows</h2>
+                <p>Classification: <strong>Continuous Flow Pipeline</strong>. The station operates in a continuous loop, sensing the environment and transmitting digital telemetry.</p>
+                
+                <div class="process-container">
+                    
+                    <!-- Visual Area -->
+                    <div class="process-visual">
+                        <div class="pipeline">
+                            <div class="pipeline-line">
+                                <div class="pipeline-progress" id="flow-progress"></div>
+                            </div>
+                            
+                            <!-- Nodes -->
+                            <div class="node" id="node-0">
+                                <svg viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6Z"/></svg>
+                            </div>
+                            <div class="node" id="node-1">
+                                <svg viewBox="0 0 24 24"><path d="M19,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M19,19H5V5H19V19M11,7V9H13V7H11M11,11V17H13V11H11Z"/></svg>
+                            </div>
+                            <div class="node" id="node-2">
+                                <svg viewBox="0 0 24 24"><path d="M8,14A2,2 0 0,1 6,16A2,2 0 0,1 4,14A2,2 0 0,1 6,12A2,2 0 0,1 8,14M20,14A2,2 0 0,1 18,16A2,2 0 0,1 16,14A2,2 0 0,1 18,12A2,2 0 0,1 20,14M14,14A2,2 0 0,1 12,16A2,2 0 0,1 10,14A2,2 0 0,1 12,12A2,2 0 0,1 14,14Z"/></svg>
+                            </div>
+                            <div class="node" id="node-3">
+                                <svg viewBox="0 0 24 24"><path d="M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.73 1.5,7.6L3,9.5C5.25,7.12 8.45,5.5 12,5.5C15.55,5.5 18.75,7.12 21,9.5L22.5,7.6C19.79,4.73 16.05,3 12,3M12,9C9.3,9 6.81,9.91 4.96,11.45L6.46,13.35C7.96,12.15 9.87,11.5 12,11.5C14.13,11.5 16.04,12.15 17.54,13.35L19.04,11.45C17.19,9.91 14.7,9 12,9Z"/></svg>
+                            </div>
+                            <div class="node" id="node-4">
+                                <svg viewBox="0 0 24 24"><path d="M19,18H5V6H19M21,4H3C1.89,4 1,4.89 1,6V18A2,2 0 0,0 3,20H7V22H17V20H21A2,2 0 0,0 23,18V6C23,4.89 22.1,4 21,4Z"/></svg>
+                            </div>
+                            
+                            <!-- Particle injected via JS -->
+                            <div id="flow-particle" class="data-particle"></div>
+                        </div>
+                    </div>
+
+                    <!-- Info & Controls -->
+                    <div class="process-info">
+                        <div class="process-io" id="stage-io">Physical Change → Sensor</div>
+                        <h3 class="process-title" id="stage-title">1. Environmental Input</h3>
+                        <p class="process-desc" id="stage-desc">Atmospheric variables like heat, pressure, or kinetic wind energy act upon the station's external sensors continuously.</p>
+                        
+                        <div class="process-controls">
+                            <button class="control-btn" id="btn-prev">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg> Prev
+                            </button>
+                            <div class="progress-dots" id="stage-dots">
+                                <div class="dot active"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                                <div class="dot"></div>
+                            </div>
+                            <button class="control-btn" id="btn-next">
+                                Next <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+                            </button>
+                            <button class="control-btn primary" id="btn-play">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Auto
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5: Interactive Simulation -->
+        <section id="simulation">
+            <div class="glass-panel">
+                <h2>Microclimate Sandbox</h2>
+                <p>Adjust the atmospheric variables below and observe how the station reacts in real-time.</p>
+                
+                <div class="sim-container">
+                    <!-- Controls -->
+                    <div class="sim-controls">
+                        <div class="control-group">
+                            <div class="control-header">
+                                <span>Wind Speed</span>
+                                <span class="val-display" id="val-wind">15 km/h</span>
+                            </div>
+                            <input type="range" id="slider-wind" min="0" max="120" value="15">
+                        </div>
+                        
+                        <div class="control-group">
+                            <div class="control-header">
+                                <span>Temperature</span>
+                                <span class="val-display" id="val-temp">22 °C</span>
+                            </div>
+                            <input type="range" id="slider-temp" min="-20" max="50" value="22">
+                        </div>
+                        
+                        <div class="control-group">
+                            <div class="control-header">
+                                <span>Rainfall Rate</span>
+                                <span class="val-display" id="val-rain">0 mm/h</span>
+                            </div>
+                            <input type="range" id="slider-rain" min="0" max="100" value="0">
+                        </div>
+                    </div>
+
+                    <!-- Canvas Visualizer -->
+                    <div class="sim-visual">
+                        <canvas id="sim-canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 6-9: Info Grid -->
+        <section id="extra-info">
+            <div class="grid-layout">
+                <!-- Applications -->
+                <div class="info-card app-card">
+                    <h4>
+                        <svg class="info-icon" viewBox="0 0 24 24"><path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M11,16.5L6.5,12L7.91,10.59L11,13.67L16.59,8.09L18,9.5L11,16.5Z"/></svg>
+                        Applications
+                    </h4>
+                    <p>Where is this data used?</p>
+                    <ul class="styled-list">
+                        <li><strong>Aviation:</strong> Runway wind and pressure mapping.</li>
+                        <li><strong>Agriculture:</strong> Evapotranspiration rates for crop irrigation.</li>
+                        <li><strong>Synoptic Forecasting:</strong> Feeding supercomputers for global weather models.</li>
+                    </ul>
+                </div>
+
+                <!-- Facts -->
+                <div class="info-card fact-card">
+                    <h4>
+                        <svg class="info-icon" viewBox="0 0 24 24"><path d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z"/></svg>
+                        Did You Know?
+                    </h4>
+                    <p>The <strong>Stevenson Screen</strong> (the slatted white box) was invented by Thomas Stevenson, a civil engineer and the father of famous author <em>Robert Louis Stevenson</em> (Treasure Island).</p>
+                </div>
+
+                <!-- Mistakes -->
+                <div class="info-card mistake-card">
+                    <h4>
+                        <svg class="info-icon" viewBox="0 0 24 24"><path d="M12,2C17.53,2 22,6.47 22,12C22,17.53 17.53,22 12,22C6.47,22 2,17.53 2,12C2,6.47 6.47,2 12,2M15.59,7L12,10.59L8.41,7L7,8.41L10.59,12L7,15.59L8.41,17L12,13.41L15.59,17L17,15.59L13.41,12L17,8.41L15.59,7Z"/></svg>
+                        Common Misconception
+                    </h4>
+                    <p><strong>Myth:</strong> "Wind chill" is measured by the weather station thermometer.<br>
+                    <strong>Truth:</strong> Thermometers only measure actual air temp. Wind chill is a <em>calculated index</em> of how cold it feels to human skin due to heat loss from wind.</p>
+                </div>
+
+                <!-- Revision -->
+                <div class="info-card">
+                    <h4 style="color: var(--accent-cyan);">
+                        <svg class="info-icon" viewBox="0 0 24 24"><path d="M14,10H2V12H14V10M14,6H2V8H14V6M2,16H10V14H2V16M21.5,11.5L23,13L16,20L11.5,15.5L13,14L16,17L21.5,11.5Z"/></svg>
+                        Quick Revision
+                    </h4>
+                    <ul class="styled-list">
+                        <li><strong>Anemometer:</strong> Speed</li>
+                        <li><strong>Wind Vane:</strong> Direction</li>
+                        <li><strong>Barometer:</strong> Pressure</li>
+                        <li><strong>Hygrometer:</strong> Humidity</li>
+                        <li><strong>Datalogger:</strong> Brain</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+        
+        <br><br>
+    </div>
+
+    <!-- ==========================================================================
+         9. JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        // Utilities
+        const $ = (s) => document.querySelector(s);
+        const $$ = (s) => document.querySelectorAll(s);
+
+        // ----------------------------------------------------------------------
+        // A. BACKGROUND AMBIENT CANVAS (Particles)
+        // ----------------------------------------------------------------------
+        const bgCanvas = $('#ambient-bg');
+        const bgCtx = bgCanvas.getContext('2d');
+        let bgParticles = [];
+
+        function initBgCanvas() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+            bgParticles = [];
+            for (let i = 0; i < 40; i++) {
+                bgParticles.push({
+                    x: Math.random() * bgCanvas.width,
+                    y: Math.random() * bgCanvas.height,
+                    r: Math.random() * 2 + 1,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    opacity: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        function drawBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.fillStyle = 'rgba(6, 182, 212, 0.5)';
+            bgParticles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if (p.x < 0) p.x = bgCanvas.width;
+                if (p.x > bgCanvas.width) p.x = 0;
+                if (p.y < 0) p.y = bgCanvas.height;
+                if (p.y > bgCanvas.height) p.y = 0;
+                
+                bgCtx.globalAlpha = p.opacity;
+                bgCtx.beginPath();
+                bgCtx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                bgCtx.fill();
+            });
+            requestAnimationFrame(drawBg);
+        }
+        window.addEventListener('resize', initBgCanvas);
+        initBgCanvas();
+        drawBg();
+
+        // ----------------------------------------------------------------------
+        // B. COMPONENTS DIAGRAM (SVG Hover Sync)
+        // ----------------------------------------------------------------------
+        const markers = $$('.marker');
+        const legendItems = $$('.legend-item');
+
+        function syncHighlight(idx) {
+            markers.forEach(m => m.classList.toggle('active', m.dataset.idx == idx));
+            legendItems.forEach(l => l.classList.toggle('active', l.dataset.idx == idx));
+        }
+
+        markers.forEach(m => {
+            m.addEventListener('mouseenter', () => syncHighlight(m.dataset.idx));
+            m.addEventListener('touchstart', (e) => { e.preventDefault(); syncHighlight(m.dataset.idx); });
+        });
+
+        legendItems.forEach(l => {
+            l.addEventListener('mouseenter', () => syncHighlight(l.dataset.idx));
+            l.addEventListener('touchstart', (e) => { e.preventDefault(); syncHighlight(l.dataset.idx); });
+        });
+
+        // ----------------------------------------------------------------------
+        // C. WORKING PROCESS (Stages Logic)
+        // ----------------------------------------------------------------------
+        const stages = [
+            {
+                title: "1. Environmental Input",
+                desc: "Atmospheric variables like heat, pressure, or kinetic wind energy act upon the station's external sensors continuously.",
+                io: "Physical Force → Sensors"
+            },
+            {
+                title: "2. Analog Sensing",
+                desc: "Sensors react to physical changes (e.g., cups spin, metal expands, resistance changes) creating an analog electrical signal.",
+                io: "Sensors → Electrical Signal"
+            },
+            {
+                title: "3. Data Conversion",
+                desc: "The Datalogger's ADC (Analog-to-Digital Converter) translates fluctuating voltages into precise digital binary numbers.",
+                io: "Analog → Digital Data"
+            },
+            {
+                title: "4. Radio Transmission",
+                desc: "Data packets are encoded and transmitted via antenna using radio waves, cellular networks, or satellite uplinks.",
+                io: "Datalogger → Antenna"
+            },
+            {
+                title: "5. Forecast Integration",
+                desc: "Meteorological centers receive the telemetry, feeding it into supercomputers to model and predict weather patterns.",
+                io: "Telemetry → Forecaster"
+            }
+        ];
+
+        let currentStage = 0;
+        let playInterval = null;
+        let isPlaying = false;
+
+        const elTitle = $('#stage-title');
+        const elDesc = $('#stage-desc');
+        const elIO = $('#stage-io');
+        const elProgress = $('#flow-progress');
+        const elParticle = $('#flow-particle');
+        const nodes = $$('.node');
+        const dots = $$('.dot');
+        const btnPrev = $('#btn-prev');
+        const btnNext = $('#btn-next');
+        const btnPlay = $('#btn-play');
+
+        function updateStage(idx) {
+            currentStage = (idx + stages.length) % stages.length;
+            
+            // Text update with brief fade
+            elTitle.style.opacity = 0;
+            elDesc.style.opacity = 0;
+            setTimeout(() => {
+                elTitle.textContent = stages[currentStage].title;
+                elDesc.textContent = stages[currentStage].desc;
+                elIO.textContent = stages[currentStage].io;
+                elTitle.style.opacity = 1;
+                elDesc.style.opacity = 1;
+            }, 150);
+
+            // Nodes & Progress
+            nodes.forEach((n, i) => {
+                n.classList.remove('active', 'completed');
+                if (i < currentStage) n.classList.add('completed');
+                if (i === currentStage) n.classList.add('active');
+            });
+            
+            dots.forEach((d, i) => {
+                d.classList.toggle('active', i === currentStage);
+            });
+
+            // Pipeline Progress line
+            elProgress.style.width = `${(currentStage / (stages.length - 1)) * 100}%`;
+
+            // Particle Animation
+            elParticle.style.opacity = 1;
+            elParticle.style.left = `${(currentStage / (stages.length - 1)) * 90 + 5}%`;
+            elParticle.style.transition = 'left 0.5s cubic-bezier(0.4, 0, 0.2, 1)';
+        }
+
+        btnPrev.addEventListener('click', () => { pauseAuto(); updateStage(currentStage - 1); });
+        btnNext.addEventListener('click', () => { pauseAuto(); updateStage(currentStage + 1); });
+        
+        btnPlay.addEventListener('click', () => {
+            if (isPlaying) {
+                pauseAuto();
+            } else {
+                isPlaying = true;
+                btnPlay.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg> Pause`;
+                updateStage((currentStage + 1) % stages.length);
+                playInterval = setInterval(() => {
+                    updateStage(currentStage + 1);
+                }, 2500);
+            }
+        });
+
+        function pauseAuto() {
+            isPlaying = false;
+            clearInterval(playInterval);
+            btnPlay.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Auto`;
+        }
+
+        // Init Stage 0
+        updateStage(0);
+
+
+        // ----------------------------------------------------------------------
+        // D. INTERACTIVE SIMULATION CANVAS
+        // ----------------------------------------------------------------------
+        const simCanvas = $('#sim-canvas');
+        const simCtx = simCanvas.getContext('2d');
+        const sliderWind = $('#slider-wind');
+        const sliderTemp = $('#slider-temp');
+        const sliderRain = $('#slider-rain');
+        
+        let simW, simH;
+        let windVal = 15;
+        let tempVal = 22;
+        let rainVal = 0;
+        let time = 0;
+        let raindrops = [];
+
+        function resizeSimCanvas() {
+            const rect = simCanvas.parentElement.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            simCanvas.width = rect.width * dpr;
+            simCanvas.height = rect.height * dpr;
+            simW = simCanvas.width;
+            simH = simCanvas.height;
+            simCtx.scale(dpr, dpr);
+            simW /= dpr;
+            simH /= dpr;
+        }
+
+        window.addEventListener('resize', resizeSimCanvas);
+        resizeSimCanvas();
+
+        // Listeners for sliders
+        sliderWind.addEventListener('input', (e) => { windVal = parseInt(e.target.value); $('#val-wind').textContent = `${windVal} km/h`; updateAnemometerSpin(); });
+        sliderTemp.addEventListener('input', (e) => { tempVal = parseInt(e.target.value); $('#val-temp').textContent = `${tempVal} °C`; });
+        sliderRain.addEventListener('input', (e) => { rainVal = parseInt(e.target.value); $('#val-rain').textContent = `${rainVal} mm/h`; });
+
+        // Bind SVG Anemometer Spin to slider as well (visual connection)
+        const svgAnemometer = $('#anemometer-rotor');
+        function updateAnemometerSpin() {
+            if(!svgAnemometer) return;
+            const duration = windVal === 0 ? 0 : Math.max(0.2, 50 / windVal);
+            if(duration === 0) {
+                svgAnemometer.style.animation = 'none';
+            } else {
+                svgAnemometer.style.animation = `spin ${duration}s linear infinite`;
+                svgAnemometer.style.transformOrigin = '0px 40px';
+            }
+        }
+        updateAnemometerSpin(); // init
+
+        function drawSim() {
+            time += 0.016; // Approx 60fps delta
+            
+            // 1. Sky Background (interpolate color based on temp and rain)
+            // Hot = orange/red, Cold = deep blue. Rain = grey overlay.
+            let t = (tempVal + 20) / 70; // 0 (cold) to 1 (hot)
+            let r = rainVal / 100; // 0 to 1
+            
+            let skyCold = [10, 20, 60];
+            let skyHot = [200, 100, 50];
+            let skyGrey = [80, 90, 100];
+            
+            let rC = skyCold[0] * (1-t) + skyHot[0] * t;
+            let gC = skyCold[1] * (1-t) + skyHot[1] * t;
+            let bC = skyCold[2] * (1-t) + skyHot[2] * t;
+            
+            // Mix with rain grey
+            let finalR = rC * (1-r) + skyGrey[0] * r;
+            let finalG = gC * (1-r) + skyGrey[1] * r;
+            let finalB = bC * (1-r) + skyGrey[2] * r;
+
+            let grad = simCtx.createLinearGradient(0, 0, 0, simH);
+            grad.addColorStop(0, `rgb(${finalR}, ${finalG}, ${finalB})`);
+            grad.addColorStop(1, '#0f172a');
+            simCtx.fillStyle = grad;
+            simCtx.fillRect(0, 0, simW, simH);
+
+            // 2. Draw Sun (Opacity based on rain)
+            if (rainVal < 80) {
+                simCtx.save();
+                simCtx.globalAlpha = 1 - (rainVal / 80);
+                simCtx.fillStyle = `rgba(255, 200, 50, 0.8)`;
+                simCtx.filter = 'blur(10px)';
+                simCtx.beginPath();
+                simCtx.arc(simW * 0.8, simH * 0.3, 40, 0, Math.PI * 2);
+                simCtx.fill();
+                simCtx.restore();
+            }
+
+            // 3. Draw Stylized AWS Silhouette
+            simCtx.fillStyle = '#1e293b';
+            const cx = simW / 2;
+            const by = simH * 0.9;
+            
+            // Ground
+            simCtx.beginPath();
+            simCtx.ellipse(cx, by, 100, 15, 0, 0, Math.PI * 2);
+            simCtx.fill();
+
+            // Mast
+            simCtx.fillRect(cx - 3, by - 150, 6, 150);
+            
+            // Stevenson Screen
+            simCtx.fillRect(cx - 15, by - 100, 30, 35);
+            simCtx.fillStyle = '#cbd5e1';
+            simCtx.fillRect(cx - 13, by - 98, 26, 31); // inner lighter box
+
+            // Cross arm & Anemometer base
+            simCtx.fillStyle = '#1e293b';
+            simCtx.fillRect(cx - 40, by - 140, 80, 4);
+            
+            // Draw Spinning Anemometer
+            simCtx.save();
+            simCtx.translate(cx - 35, by - 145);
+            // Spin speed based on windVal
+            let rot = windVal > 0 ? (time * windVal * 0.2) : 0;
+            
+            simCtx.beginPath();
+            simCtx.moveTo(0,0); simCtx.lineTo(0, -15);
+            simCtx.strokeStyle = '#475569'; simCtx.lineWidth = 2; simCtx.stroke();
+            
+            simCtx.translate(0, -15);
+            
+            // Flatten scale for 3D effect of spinning
+            simCtx.scale(1, 0.3);
+            simCtx.rotate(rot);
+            
+            simCtx.beginPath();
+            simCtx.moveTo(-15, 0); simCtx.lineTo(15, 0);
+            simCtx.moveTo(0, -15); simCtx.lineTo(0, 15);
+            simCtx.stroke();
+            
+            simCtx.fillStyle = '#334155';
+            simCtx.beginPath(); simCtx.arc(-15, 0, 5, 0, Math.PI, true); simCtx.fill();
+            simCtx.beginPath(); simCtx.arc(15, 0, 5, 0, Math.PI, false); simCtx.fill();
+            simCtx.beginPath(); simCtx.arc(0, -15, 5, -Math.PI/2, Math.PI/2, true); simCtx.fill();
+            simCtx.beginPath(); simCtx.arc(0, 15, 5, Math.PI/2, -Math.PI/2, true); simCtx.fill();
+            
+            simCtx.restore();
+
+
+            // 4. Draw Rain Particles
+            if (rainVal > 0) {
+                // Add new drops based on intensity
+                let dropsToSpawn = Math.floor(rainVal / 10);
+                for(let i=0; i<dropsToSpawn; i++) {
+                    raindrops.push({
+                        x: Math.random() * simW * 1.5 - simW * 0.25, // allow offscreen to blow in
+                        y: -10,
+                        l: Math.random() * 10 + 10,
+                        v: Math.random() * 5 + 10 + (rainVal * 0.1)
+                    });
+                }
+
+                simCtx.strokeStyle = `rgba(200, 220, 255, ${0.4 + rainVal/200})`;
+                simCtx.lineWidth = 1;
+                simCtx.beginPath();
+                
+                // Wind angle deflection
+                let windDeflect = (windVal / 120) * 15;
+
+                for (let i = raindrops.length - 1; i >= 0; i--) {
+                    let p = raindrops[i];
+                    p.x += windDeflect;
+                    p.y += p.v;
+                    
+                    simCtx.moveTo(p.x, p.y);
+                    simCtx.lineTo(p.x - (windDeflect * 0.5), p.y - p.l);
+
+                    if (p.y > simH) {
+                        raindrops.splice(i, 1);
+                    }
+                }
+                simCtx.stroke();
+            } else {
+                raindrops = [];
+            }
+
+            requestAnimationFrame(drawSim);
+        }
+
+        // Start sim loop
+        drawSim();
+
+    </script>
+</body>
+</html>

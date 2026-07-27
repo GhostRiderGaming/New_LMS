@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Threshing: The Separation Mechanism</title>
+    <style>
+        /* ==========================================================================
+           ROOT & RESET
+           ========================================================================== */
+        :root {
+            --bg-dark: #070913;
+            --bg-panel: rgba(20, 25, 45, 0.4);
+            --bg-glass: rgba(30, 38, 66, 0.25);
+            --border-glass: rgba(100, 140, 255, 0.15);
+            
+            --text-main: #f0f4ff;
+            --text-muted: #94a3b8;
+            
+            --accent-gold: #f59e0b;
+            --accent-gold-glow: rgba(245, 158, 11, 0.5);
+            --accent-blue: #3b82f6;
+            --accent-blue-glow: rgba(59, 130, 246, 0.5);
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+
+            --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(245, 158, 11, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800; letter-spacing: -1px; line-height: 1.1; }
+        h2 { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; margin-bottom: 1rem; }
+        h3 { font-size: clamp(1.2rem, 2.5vw, 1.5rem); font-weight: 600; }
+        p { font-size: clamp(0.95rem, 1.5vw, 1.1rem); color: var(--text-muted); margin-bottom: 1rem; }
+
+        .text-gradient-gold {
+            background: linear-gradient(135deg, #fcd34d, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .text-gradient-blue {
+            background: linear-gradient(135deg, #93c5fd, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ==========================================================================
+           LAYOUT & CONTAINERS
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 5%;
+        }
+
+        section {
+            padding: 100px 0;
+            position: relative;
+        }
+        
+        @media (max-width: 768px) {
+            section { padding: 60px 0; }
+        }
+
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-glass);
+            padding: clamp(1.5rem, 4vw, 3rem);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: clamp(2rem, 5vw, 4rem);
+            align-items: center;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        #hero {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+
+        #hero canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            opacity: 0.6;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            z-index: 1;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.4rem 1rem;
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid var(--accent-gold);
+            color: var(--accent-gold);
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 0 15px var(--accent-gold-glow);
+        }
+
+        /* ==========================================================================
+           ANATOMY SECTION (MARKERS & LEGEND)
+           ========================================================================== */
+        .anatomy-layout {
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .anatomy-layout { grid-template-columns: 1fr; }
+        }
+
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            background: radial-gradient(circle at center, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            min-height: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .diagram-svg {
+            width: 100%;
+            height: auto;
+            max-height: 500px;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--bg-dark);
+            border: 2px solid var(--accent-blue);
+            color: var(--text-main);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--accent-blue-glow);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            border: 1px solid var(--accent-blue);
+            animation: pulse 2s infinite;
+            z-index: -1;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--accent-blue);
+            color: #fff;
+            box-shadow: 0 0 25px var(--accent-blue-glow);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+
+        /* Legend */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(59, 130, 246, 0.1);
+            border-color: rgba(59, 130, 246, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-num {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: var(--bg-dark);
+            border: 2px solid var(--accent-blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .legend-item.active .legend-num {
+            background: var(--accent-blue);
+        }
+
+        .legend-info h4 { margin-bottom: 0.2rem; font-size: 1.1rem; }
+        .legend-info p { font-size: 0.9rem; margin: 0; color: #a1a1aa; }
+
+        /* ==========================================================================
+           WORKING MECHANISM (STEPPER)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .canvas-wrapper {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #0b0f19;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid var(--border-glass);
+            position: relative;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+        
+        @media (max-width: 768px) {
+            .canvas-wrapper { aspect-ratio: 4/3; }
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Controls */
+        .controls-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        button {
+            background: var(--bg-glass);
+            color: var(--text-main);
+            border: 1px solid var(--border-glass);
+            padding: 0.6rem 1.2rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:hover { background: rgba(255,255,255,0.1); }
+        button.primary {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+        button.primary:hover {
+            background: #2563eb;
+            box-shadow: 0 0 15px var(--accent-blue-glow);
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Progress Dots */
+        .progress-dots {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: #334155;
+            transition: 0.3s;
+        }
+        .dot.active { background: var(--accent-blue); box-shadow: 0 0 10px var(--accent-blue); }
+
+        .stage-info {
+            text-align: center;
+            min-height: 80px;
+        }
+        .stage-info h3 { color: var(--accent-gold); margin-bottom: 0.5rem; }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+        }
+        @media (max-width: 1024px) { .sim-layout { grid-template-columns: 1fr; } }
+
+        .dashboard {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px var(--accent-blue-glow);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .metric-card {
+            background: rgba(0,0,0,0.3);
+            padding: 1rem;
+            border-radius: var(--radius-sm);
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .value-good { color: var(--accent-green); }
+        .value-warn { color: var(--accent-gold); }
+        .value-bad { color: var(--accent-red); }
+
+        /* ==========================================================================
+           FACTS & APP
+           ========================================================================== */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+        
+        .fact-card {
+            background: linear-gradient(145deg, rgba(30,38,66,0.4) 0%, rgba(15,20,35,0.4) 100%);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            padding: 2rem;
+            transition: transform 0.3s;
+        }
+        .fact-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+        .icon-box {
+            width: 48px; height: 48px;
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--accent-gold);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px;
+            margin-bottom: 1rem;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- HERO SECTION -->
+    <section id="hero">
+        <canvas id="heroBgCanvas"></canvas>
+        <div class="container hero-content">
+            <div class="badge">Agricultural Engineering</div>
+            <h1>The Physics of <span class="text-gradient-gold">Threshing</span></h1>
+            <p style="font-size: clamp(1.1rem, 2vw, 1.3rem); margin-top: 1rem; max-width: 600px; margin-inline: auto;">
+                Separating the valuable grain from the stalks. Explore the mechanics, forces, and design behind one of humanity's most crucial machines.
+            </p>
+        </div>
+    </section>
+
+    <!-- ANATOMY SECTION -->
+    <section id="components">
+        <div class="container glass-panel">
+            <h2>System <span class="text-gradient-blue">Anatomy</span></h2>
+            <p>The modern threshing cylinder operates on precise clearances and high-speed impact.</p>
+            
+            <div class="anatomy-layout mt-4">
+                <!-- Visual Area -->
+                <div class="diagram-container" id="anatomyContainer">
+                    <!-- SVG Diagram -->
+                    <svg class="diagram-svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Metallic Gradients -->
+                            <linearGradient id="metal-drum" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#94a3b8" />
+                                <stop offset="50%" stop-color="#475569" />
+                                <stop offset="100%" stop-color="#1e293b" />
+                            </linearGradient>
+                            <linearGradient id="metal-bar" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#cbd5e1" />
+                                <stop offset="100%" stop-color="#64748b" />
+                            </linearGradient>
+                            <linearGradient id="concave-grate" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#334155" />
+                                <stop offset="50%" stop-color="#64748b" />
+                                <stop offset="100%" stop-color="#334155" />
+                            </linearGradient>
+                            <!-- Drop Shadows -->
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="5" dy="10" stdDeviation="8" flood-opacity="0.5"/>
+                            </filter>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+
+                        <!-- Feeder Conveyor -->
+                        <path d="M 50,300 L 250,380 L 250,420 L 50,340 Z" fill="#1e293b" stroke="#475569" stroke-width="3"/>
+                        <path d="M 50,320 L 240,395" stroke="#fcd34d" stroke-width="8" stroke-dasharray="15, 10" opacity="0.7"/> <!-- Incoming crop -->
+                        
+                        <!-- Concave (Grate below drum) -->
+                        <path d="M 270,400 A 180 180 0 0 0 530,400" fill="none" stroke="url(#concave-grate)" stroke-width="25" filter="url(#shadow)"/>
+                        <path d="M 270,400 A 180 180 0 0 0 530,400" fill="none" stroke="#0f172a" stroke-width="25" stroke-dasharray="10, 15"/>
+
+                        <!-- Threshing Drum -->
+                        <circle cx="400" cy="280" r="140" fill="url(#metal-drum)" filter="url(#shadow)"/>
+                        <circle cx="400" cy="280" r="15" fill="#0f172a"/> <!-- Shaft -->
+                        
+                        <!-- Rasp Bars / Pegs on Drum (Drawn statically for diagram) -->
+                        <g id="rasp-bars">
+                            <!-- Generate via JS or hardcode a few -->
+                            <rect x="390" y="110" width="20" height="30" fill="url(#metal-bar)" rx="3"/>
+                            <rect x="540" y="270" width="30" height="20" fill="url(#metal-bar)" rx="3"/>
+                            <rect x="390" y="420" width="20" height="30" fill="url(#metal-bar)" rx="3"/>
+                            <rect x="230" y="270" width="30" height="20" fill="url(#metal-bar)" rx="3"/>
+                            
+                            <!-- Diagonals -->
+                            <g transform="rotate(45, 400, 280)"><rect x="390" y="110" width="20" height="30" fill="url(#metal-bar)" rx="3"/></g>
+                            <g transform="rotate(135, 400, 280)"><rect x="390" y="110" width="20" height="30" fill="url(#metal-bar)" rx="3"/></g>
+                            <g transform="rotate(225, 400, 280)"><rect x="390" y="110" width="20" height="30" fill="url(#metal-bar)" rx="3"/></g>
+                            <g transform="rotate(315, 400, 280)"><rect x="390" y="110" width="20" height="30" fill="url(#metal-bar)" rx="3"/></g>
+                        </g>
+
+                        <!-- Straw Beater / Discharge -->
+                        <circle cx="620" cy="300" r="60" fill="url(#metal-drum)" filter="url(#shadow)"/>
+                        <g transform="rotate(20, 620, 300)">
+                            <rect x="610" y="220" width="20" height="160" fill="url(#metal-bar)"/>
+                            <rect x="540" y="290" width="160" height="20" fill="url(#metal-bar)"/>
+                        </g>
+
+                        <!-- Grain Pan (Below) -->
+                        <path d="M 280,500 L 520,530 L 520,550 L 280,520 Z" fill="#1e293b" stroke="#3b82f6" stroke-width="2"/>
+                        <circle cx="400" cy="525" r="4" fill="#fcd34d" filter="url(#glow)"/>
+                        <circle cx="420" cy="528" r="4" fill="#fcd34d" filter="url(#glow)"/>
+                        <circle cx="380" cy="522" r="4" fill="#fcd34d" filter="url(#glow)"/>
+
+                    </svg>
+
+                    <!-- HTML Markers placed via percentage to scale with SVG -->
+                    <div class="marker" data-target="item-1" style="top: 60%; left: 25%;">1</div>
+                    <div class="marker" data-target="item-2" style="top: 40%; left: 50%;">2</div>
+                    <div class="marker" data-target="item-3" style="top: 72%; left: 50%;">3</div>
+                    <div class="marker" data-target="item-4" style="top: 48%; left: 77%;">4</div>
+                    <div class="marker" data-target="item-5" style="top: 88%; left: 50%;">5</div>
+                </div>
+
+                <!-- Legend List -->
+                <div class="legend-list">
+                    <div class="legend-item" id="item-1" data-target="1">
+                        <div class="legend-num">1</div>
+                        <div class="legend-info">
+                            <h4>Feeder Conveyor</h4>
+                            <p>Delivers the cut crop into the threshing mechanism at a steady rate.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-2" data-target="2">
+                        <div class="legend-num">2</div>
+                        <div class="legend-info">
+                            <h4>Threshing Cylinder (Drum)</h4>
+                            <p>Heavy, high-speed rotating drum fitted with rasp bars that impact the crop.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-3" data-target="3">
+                        <div class="legend-num">3</div>
+                        <div class="legend-info">
+                            <h4>Concave Screen</h4>
+                            <p>Stationary curved grate. The crop is rubbed between the drum and this screen.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-4" data-target="4">
+                        <div class="legend-num">4</div>
+                        <div class="legend-info">
+                            <h4>Straw Beater</h4>
+                            <p>Slows down and redirects the threshed straw out of the cylinder area.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-5" data-target="5">
+                        <div class="legend-num">5</div>
+                        <div class="legend-info">
+                            <h4>Grain Pan</h4>
+                            <p>Catches the separated grains falling through the holes of the concave grate.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING MECHANISM (STEP BY STEP) -->
+    <section id="mechanism">
+        <div class="container glass-panel">
+            <h2>The <span class="text-gradient-gold">Working</span> Process</h2>
+            <p>How the physical forces of impact and friction separate the grain from the stalk. Step-by-step.</p>
+
+            <div class="working-container mt-4">
+                <div class="canvas-wrapper">
+                    <canvas id="mechCanvas"></canvas>
+                </div>
+                
+                <div class="stage-info">
+                    <h3 id="stageTitle">1. Feeding</h3>
+                    <p id="stageDesc">The unthreshed crop is pulled toward the narrow gap.</p>
+                </div>
+
+                <div class="controls-bar">
+                    <div class="btn-group">
+                        <button id="btnPrev">
+                            <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg> Prev
+                        </button>
+                        <button id="btnNext" class="primary">
+                            Next <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>
+                        </button>
+                    </div>
+                    
+                    <div class="progress-dots" id="mechDots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+
+                    <button id="btnAutoPlay">
+                        <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16" id="playIcon"><path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/></svg>
+                        <span id="autoPlayText">Auto-Play</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION -->
+    <section id="simulation">
+        <div class="container glass-panel">
+            <h2>Physics <span class="text-gradient-blue">Simulation</span></h2>
+            <p>Balance the parameters. Too slow, and grain remains on the stalk. Too fast, and you damage the harvest.</p>
+
+            <div class="sim-layout mt-4">
+                <div class="canvas-wrapper" style="box-shadow: inset 0 0 30px rgba(59, 130, 246, 0.2);">
+                    <canvas id="simCanvas"></canvas>
+                </div>
+
+                <div class="dashboard">
+                    <!-- Controls -->
+                    <div class="control-group">
+                        <div class="control-header">
+                            <label>Cylinder Speed (RPM)</label>
+                            <span id="speedVal" class="text-gradient-blue" style="font-weight: bold;">900</span>
+                        </div>
+                        <input type="range" id="simSpeed" min="300" max="1500" step="50" value="900">
+                        <p style="font-size: 0.8rem; margin-top: 0.5rem; margin-bottom: 0;">Controls impact force.</p>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <label>Concave Clearance (mm)</label>
+                            <span id="gapVal" class="text-gradient-gold" style="font-weight: bold;">15</span>
+                        </div>
+                        <input type="range" id="simGap" min="5" max="40" step="1" value="15">
+                        <p style="font-size: 0.8rem; margin-top: 0.5rem; margin-bottom: 0;">Distance between drum and grate. Controls rubbing friction.</p>
+                    </div>
+
+                    <!-- Live Metrics -->
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div style="font-size: 0.9rem; color: var(--text-muted);">Threshing Efficiency</div>
+                            <div class="metric-value" id="effMetric">98%</div>
+                        </div>
+                        <div class="metric-card">
+                            <div style="font-size: 0.9rem; color: var(--text-muted);">Grain Damage</div>
+                            <div class="metric-value" id="dmgMetric">1%</div>
+                        </div>
+                    </div>
+                    
+                    <div id="simFeedback" style="padding: 1rem; border-radius: 8px; background: rgba(16, 185, 129, 0.1); border: 1px solid var(--accent-green); font-size: 0.9rem;">
+                        Optimal settings achieved. High separation, low damage.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FACTS & SUMMARY -->
+    <section id="facts">
+        <div class="container">
+            <h2 class="text-center" style="text-align: center;">Beyond the <span class="text-gradient-gold">Machine</span></h2>
+            
+            <div class="cards-grid mt-4" style="margin-top: 3rem;">
+                <div class="fact-card">
+                    <div class="icon-box">⏳</div>
+                    <h3>Historical Evolution</h3>
+                    <p>Before machines, humans used <b>flails</b> (wooden sticks jointed together) to manually beat harvested crops on a threshing floor. It took days to do what modern machines do in minutes.</p>
+                </div>
+                <div class="fact-card">
+                    <div class="icon-box">🌪️</div>
+                    <h3>Aerodynamic Winnowing</h3>
+                    <p>Threshing only detaches the grain. It's mixed with chaff (husks). The next step is always winnowing—using directed air flow to blow away the lighter chaff while heavy grain falls straight down.</p>
+                </div>
+                <div class="fact-card">
+                    <div class="icon-box">🧬</div>
+                    <h3>Crop Variables</h3>
+                    <p>There is no "one setting fits all". Wheat requires higher cylinder speeds than delicate crops like soybeans. Moisture content also drastically changes the required concave clearance.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- JS LOGIC -->
+    <script>
+        // ==========================================================================
+        // UI & INTERACTIONS (Anatomy Markers)
+        // ==========================================================================
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function setActive(targetId) {
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            document.querySelector(`.marker[data-target="item-${targetId}"]`).classList.add('active');
+            document.getElementById(`item-${targetId}`).classList.add('active');
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => setActive(marker.dataset.target.split('-')[1]));
+            marker.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                setActive(marker.dataset.target.split('-')[1]);
+            });
+        });
+
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => setActive(item.dataset.target));
+            item.addEventListener('touchstart', (e) => {
+                // Let scrolling happen, but activate on tap
+                setActive(item.dataset.target);
+            });
+        });
+
+
+        // ==========================================================================
+        // CORE PHYSICS & RENDERING ENGINE (Used by both Canvas sections)
+        // ==========================================================================
+        class Particle {
+            constructor(x, y, type, vx = 0, vy = 0) {
+                this.x = x; this.y = y;
+                this.type = type; // 'stalk', 'grain', 'straw', 'broken_grain', 'unthreshed_stalk'
+                this.vx = vx; this.vy = vy;
+                this.life = 1.0;
+                this.rotation = Math.random() * Math.PI * 2;
+                this.rotSpeed = (Math.random() - 0.5) * 0.2;
+                this.size = type === 'stalk' ? 40 : (type.includes('grain') ? 4 : 30);
+            }
+
+            update(dt, forces) {
+                this.x += this.vx * dt;
+                this.y += this.vy * dt;
+                this.rotation += this.rotSpeed;
+                
+                // Gravity
+                if (this.type !== 'stalk') {
+                    this.vy += forces.gravity * dt;
+                }
+
+                // Drag
+                this.vx *= 0.99;
+                
+                // Fade out based on type
+                if (this.type !== 'stalk') this.life -= 0.005 * dt;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+                ctx.globalAlpha = Math.max(0, this.life);
+
+                if (this.type === 'stalk' || this.type === 'unthreshed_stalk') {
+                    ctx.strokeStyle = '#fcd34d';
+                    ctx.lineWidth = 3;
+                    ctx.beginPath(); ctx.moveTo(-20, 0); ctx.lineTo(20, 0); ctx.stroke();
+                    // Draw head
+                    ctx.fillStyle = '#b45309';
+                    ctx.beginPath(); ctx.ellipse(15, 0, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+                } 
+                else if (this.type === 'straw') {
+                    ctx.strokeStyle = '#92400e';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(-15, 0); ctx.lineTo(15, 0); ctx.stroke();
+                }
+                else if (this.type === 'grain') {
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.shadowColor = '#fbbf24';
+                    ctx.shadowBlur = 5;
+                    ctx.beginPath(); ctx.ellipse(0, 0, 4, 2.5, 0, 0, Math.PI*2); ctx.fill();
+                }
+                else if (this.type === 'broken_grain') {
+                    ctx.fillStyle = '#ef4444'; // Reddish to show damage
+                    ctx.beginPath(); ctx.moveTo(-3, -2); ctx.lineTo(3, 1); ctx.lineTo(-1, 3); ctx.fill();
+                }
+
+                ctx.restore();
+            }
+        }
+
+        class ThreshingSystem {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.width = 0; this.height = 0;
+                this.particles = [];
+                this.drumAngle = 0;
+                
+                // Parameters
+                this.drumSpeed = 0.05; // rad per frame
+                this.gap = 20; // visual pixel gap offset
+                this.cx = 0; this.cy = 0; this.r = 100;
+                
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                this.canvas.width = rect.width * dpr;
+                this.canvas.height = rect.height * dpr;
+                this.ctx.scale(dpr, dpr);
+                this.width = rect.width;
+                this.height = rect.height;
+                
+                this.cx = this.width * 0.5;
+                this.cy = this.height * 0.45;
+                this.r = Math.min(this.width * 0.15, 120);
+            }
+
+            drawMechanism(highlightDrum = false, highlightConcave = false) {
+                const ctx = this.ctx;
+                
+                // Concave
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(this.cx, this.cy, this.r + this.gap, Math.PI * 0.2, Math.PI * 0.8, false);
+                ctx.strokeStyle = highlightConcave ? '#f59e0b' : '#334155';
+                ctx.lineWidth = 10;
+                if(highlightConcave) {
+                    ctx.shadowColor = '#f59e0b';
+                    ctx.shadowBlur = 15;
+                }
+                ctx.stroke();
+                
+                // Grate holes visualization
+                ctx.setLineDash([5, 15]);
+                ctx.beginPath();
+                ctx.arc(this.cx, this.cy, this.r + this.gap, Math.PI * 0.2, Math.PI * 0.8, false);
+                ctx.strokeStyle = '#0f172a';
+                ctx.stroke();
+                ctx.setLineDash([]);
+                ctx.restore();
+
+                // Drum
+                ctx.save();
+                ctx.translate(this.cx, this.cy);
+                ctx.rotate(this.drumAngle);
+                
+                ctx.beginPath();
+                ctx.arc(0, 0, this.r, 0, Math.PI * 2);
+                const grd = ctx.createLinearGradient(-this.r, -this.r, this.r, this.r);
+                grd.addColorStop(0, '#64748b');
+                grd.addColorStop(1, '#1e293b');
+                ctx.fillStyle = grd;
+                if(highlightDrum) {
+                    ctx.strokeStyle = '#3b82f6';
+                    ctx.lineWidth = 4;
+                    ctx.shadowColor = '#3b82f6';
+                    ctx.shadowBlur = 20;
+                    ctx.stroke();
+                }
+                ctx.fill();
+
+                // Rasp bars
+                ctx.fillStyle = '#94a3b8';
+                for (let i = 0; i < 8; i++) {
+                    ctx.save();
+                    ctx.rotate((Math.PI * 2 / 8) * i);
+                    ctx.fillRect(this.r - 5, -10, 15, 20);
+                    ctx.restore();
+                }
+                ctx.restore();
+            }
+        }
+
+
+        // ==========================================================================
+        // SECTION: WORKING MECHANISM (STEPPER)
+        // ==========================================================================
+        const mech = new ThreshingSystem('mechCanvas');
+        
+        const stages = [
+            { title: "1. Feeding", desc: "Crop enters the system horizontally via conveyor.", hlDrum: false, hlConcave: false },
+            { title: "2. Impact & Friction", desc: "Rasp bars impact crop against the stationary concave grate.", hlDrum: true, hlConcave: true },
+            { title: "3. Separation", desc: "Heavy grain falls through holes; straw is carried over.", hlDrum: false, hlConcave: true },
+            { title: "4. Output", desc: "Clean grain collects below, straw exits back.", hlDrum: false, hlConcave: false }
+        ];
+
+        let currentStage = 0;
+        let isAutoPlay = false;
+        let stageTimer = 0;
+        let lastTime = 0;
+
+        // UI Elements
+        const btnPrev = document.getElementById('btnPrev');
+        const btnNext = document.getElementById('btnNext');
+        const btnAutoPlay = document.getElementById('btnAutoPlay');
+        const stageTitle = document.getElementById('stageTitle');
+        const stageDesc = document.getElementById('stageDesc');
+        const dots = document.querySelectorAll('#mechDots .dot');
+
+        function updateStageUI() {
+            stageTitle.innerText = stages[currentStage].title;
+            stageDesc.innerText = stages[currentStage].desc;
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentStage);
+            });
+            btnPrev.disabled = currentStage === 0;
+            btnNext.disabled = currentStage === stages.length - 1;
+        }
+
+        btnPrev.addEventListener('click', () => { if(currentStage > 0) { currentStage--; isAutoPlay=false; updateBtnUI(); updateStageUI(); }});
+        btnNext.addEventListener('click', () => { if(currentStage < 3) { currentStage++; isAutoPlay=false; updateBtnUI(); updateStageUI(); }});
+        
+        function updateBtnUI() {
+            const icon = document.getElementById('playIcon');
+            const text = document.getElementById('autoPlayText');
+            if (isAutoPlay) {
+                icon.innerHTML = `<path d="M5.5 3.5A1.5 1.5 0 0 1 7 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5zm5 0A1.5 1.5 0 0 1 12 5v6a1.5 1.5 0 0 1-3 0V5a1.5 1.5 0 0 1 1.5-1.5z"/>`;
+                text.innerText = "Pause";
+                btnAutoPlay.classList.add('primary');
+            } else {
+                icon.innerHTML = `<path d="M11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z"/>`;
+                text.innerText = "Auto-Play";
+                btnAutoPlay.classList.remove('primary');
+            }
+        }
+
+        btnAutoPlay.addEventListener('click', () => {
+            isAutoPlay = !isAutoPlay;
+            updateBtnUI();
+        });
+
+        // Stepper Animation Loop
+        function mechLoop(timestamp) {
+            const dt = (timestamp - lastTime) || 16;
+            lastTime = timestamp;
+            const timeScale = dt / 16; // normalize to 60fps
+
+            if (isAutoPlay) {
+                stageTimer += dt;
+                if (stageTimer > 3000) { // 3 seconds per stage
+                    currentStage = (currentStage + 1) % 4;
+                    updateStageUI();
+                    stageTimer = 0;
+                }
+            }
+
+            mech.ctx.clearRect(0, 0, mech.width, mech.height);
+            
+            // Draw background flow indicators based on stage
+            mech.ctx.fillStyle = 'rgba(255,255,255,0.02)';
+            if(currentStage === 0) mech.ctx.fillRect(0, mech.cy-40, mech.cx-mech.r, 80); // In
+            if(currentStage === 2) mech.ctx.fillRect(mech.cx-80, mech.cy+mech.r, 160, mech.height); // Down
+            if(currentStage === 3) mech.ctx.fillRect(mech.cx+mech.r, mech.cy-40, mech.width, 80); // Out
+
+            mech.drumAngle -= (currentStage >= 1 ? 0.08 : 0.02) * timeScale; // Spin faster during thresh
+            mech.gap = 25;
+            
+            mech.drawMechanism(stages[currentStage].hlDrum, stages[currentStage].hlConcave);
+
+            // Particle Logic based on Stage
+            // Stage 0: Feed -> generate stalks moving right
+            if (currentStage === 0 && Math.random() < 0.1 * timeScale) {
+                mech.particles.push(new Particle(0, mech.cy - 10 + (Math.random()*20-10), 'stalk', 3, 0));
+            }
+            
+            // Stage 1/2: Threshing -> Generate stalks, convert at drum
+            if ((currentStage === 1 || currentStage === 2) && Math.random() < 0.15 * timeScale) {
+                mech.particles.push(new Particle(0, mech.cy - 10, 'stalk', 4, 0));
+            }
+
+            for (let i = mech.particles.length - 1; i >= 0; i--) {
+                let p = mech.particles[i];
+                p.update(timeScale, { gravity: 0.2 });
+                
+                // Logic based on position
+                if (p.type === 'stalk' && p.x > mech.cx - mech.r && p.x < mech.cx) {
+                    if (currentStage >= 1) {
+                        // Thresh it! Remove stalk, spawn grains and straw
+                        mech.particles.splice(i, 1);
+                        // Grains fall down
+                        for(let g=0; g<4; g++) {
+                            let gx = p.x + (Math.random()*20-10);
+                            mech.particles.push(new Particle(gx, p.y+10, 'grain', (Math.random()-0.5)*2, Math.random()*2+1));
+                        }
+                        // Straw continues right
+                        mech.particles.push(new Particle(p.x, p.y-10, 'straw', 5, -1));
+                        continue; // Skip draw for removed stalk
+                    } else {
+                        // Just stop at drum in stage 0
+                        p.vx = 0; p.life -= 0.05 * timeScale;
+                    }
+                }
+                
+                // Restrict grain falling in Stage 1, allow in Stage 2/3
+                if (p.type === 'grain') {
+                    if (currentStage === 1 && p.y > mech.cy + mech.r + mech.gap) {
+                        p.vy = 0; p.y = mech.cy + mech.r + mech.gap; // Stop on grate
+                    } else if (currentStage > 1) {
+                        p.vy += 0.1 * timeScale; // Allow falling through
+                    }
+                }
+
+                p.draw(mech.ctx);
+                
+                if (p.life <= 0 || p.x > mech.width + 50 || p.y > mech.height + 50) {
+                    mech.particles.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(mechLoop);
+        }
+        
+        updateStageUI();
+        requestAnimationFrame(mechLoop);
+
+
+        // ==========================================================================
+        // SECTION: INTERACTIVE SIMULATION
+        // ==========================================================================
+        const sim = new ThreshingSystem('simCanvas');
+        
+        const inSpeed = document.getElementById('simSpeed');
+        const inGap = document.getElementById('simGap');
+        const valSpeed = document.getElementById('speedVal');
+        const valGap = document.getElementById('gapVal');
+        
+        const effMetric = document.getElementById('effMetric');
+        const dmgMetric = document.getElementById('dmgMetric');
+        const feedback = document.getElementById('simFeedback');
+
+        let simLastTime = 0;
+        let cropSpawnTimer = 0;
+        
+        // Stats tracking for rolling average
+        let totalGrains = 0;
+        let separatedGrains = 0;
+        let damagedGrains = 0;
+        let unthreshedStalks = 0;
+
+        function updateMetricsDisplay() {
+            // Calculate theoretical efficiency based on sliders
+            const rpm = parseInt(inSpeed.value);
+            const gap = parseInt(inGap.value);
+            
+            // Optimal: RPM ~900, Gap ~15mm
+            let eff = 100;
+            let dmg = 0;
+            
+            // Gap logic
+            if (gap > 20) eff -= (gap - 20) * 3; // Too wide = miss crop
+            if (gap < 10) dmg += (10 - gap) * 2; // Too tight = crush crop
+            
+            // Speed logic
+            if (rpm < 700) eff -= (700 - rpm) / 10; // Too slow = low impact
+            if (rpm > 1100) dmg += (rpm - 1100) / 20; // Too fast = shatter
+            
+            // Clamp values
+            eff = Math.max(0, Math.min(100, Math.round(eff)));
+            dmg = Math.max(0, Math.min(100, Math.round(dmg)));
+
+            effMetric.innerText = eff + "%";
+            dmgMetric.innerText = dmg + "%";
+
+            // Colors
+            effMetric.className = "metric-value " + (eff > 90 ? "value-good" : (eff > 70 ? "value-warn" : "value-bad"));
+            dmgMetric.className = "metric-value " + (dmg < 5 ? "value-good" : (dmg < 15 ? "value-warn" : "value-bad"));
+
+            // Feedback text
+            if (eff > 90 && dmg < 5) {
+                feedback.style.background = 'rgba(16, 185, 129, 0.1)';
+                feedback.style.borderColor = 'var(--accent-green)';
+                feedback.style.color = 'var(--text-main)';
+                feedback.innerText = "Optimal settings achieved. High separation, low damage.";
+            } else if (dmg >= 5) {
+                feedback.style.background = 'rgba(239, 68, 68, 0.1)';
+                feedback.style.borderColor = 'var(--accent-red)';
+                feedback.style.color = '#fca5a5';
+                feedback.innerText = "Warning: Aggressive settings causing grain damage (shattering).";
+            } else if (eff <= 90) {
+                feedback.style.background = 'rgba(245, 158, 11, 0.1)';
+                feedback.style.borderColor = 'var(--accent-gold)';
+                feedback.style.color = '#fde68a';
+                feedback.innerText = "Inefficient: Crop is passing through unthreshed. Increase speed or decrease gap.";
+            }
+
+            return { eff, dmg };
+        }
+
+        inSpeed.addEventListener('input', (e) => { valSpeed.innerText = e.target.value; updateMetricsDisplay(); });
+        inGap.addEventListener('input', (e) => { valGap.innerText = e.target.value; updateMetricsDisplay(); });
+        
+        // Initial setup
+        updateMetricsDisplay();
+
+        function simLoop(timestamp) {
+            const dt = (timestamp - simLastTime) || 16;
+            simLastTime = timestamp;
+            const timeScale = dt / 16;
+
+            sim.ctx.clearRect(0, 0, sim.width, sim.height);
+            
+            const rpm = parseInt(inSpeed.value);
+            const gap = parseInt(inGap.value);
+            const stats = updateMetricsDisplay(); // Get current theoretical probabilities
+
+            // Map UI parameters to visual parameters
+            sim.drumAngle -= (rpm / 10000) * timeScale; // Visual rotation speed
+            sim.gap = gap * 1.5; // Visual gap scale
+            
+            sim.drawMechanism();
+
+            // Spawn incoming crop steadily
+            cropSpawnTimer += dt;
+            if (cropSpawnTimer > 300) { // Spawn every 300ms
+                sim.particles.push(new Particle(0, sim.cy + (Math.random()*20-10), 'stalk', 4, 0));
+                cropSpawnTimer = 0;
+            }
+
+            for (let i = sim.particles.length - 1; i >= 0; i--) {
+                let p = sim.particles[i];
+                p.update(timeScale, { gravity: 0.3 }); // Stronger gravity here
+                
+                // Interaction at the Drum Zone
+                if (p.type === 'stalk' && p.x > sim.cx - sim.r * 0.8 && p.x < sim.cx) {
+                    
+                    // Determine fate based on current stats probability
+                    const roll = Math.random() * 100;
+                    
+                    if (roll > stats.eff) {
+                        // Failed to thresh (passes through intact)
+                        p.type = 'unthreshed_stalk';
+                        p.vx = 6; p.vy = -2; // Shoots out back
+                    } else {
+                        // Successfully threshed
+                        sim.particles.splice(i, 1);
+                        
+                        // Straw
+                        sim.particles.push(new Particle(p.x, p.y-10, 'straw', 5 + (rpm/300), -2));
+                        
+                        // Grains
+                        for(let g=0; g<5; g++) {
+                            let gx = p.x + (Math.random()*30-15);
+                            let gType = (Math.random()*100 < stats.dmg) ? 'broken_grain' : 'grain';
+                            // Initial scatter velocity based on RPM
+                            let vx = (Math.random()-0.5) * (rpm/200);
+                            let vy = (Math.random()) * (rpm/150) + 2; 
+                            sim.particles.push(new Particle(gx, p.y+20, gType, vx, vy));
+                        }
+                        continue;
+                    }
+                }
+
+                // Concave Collision (Grains falling through)
+                if ((p.type === 'grain' || p.type === 'broken_grain') && p.y > sim.cy) {
+                    // Check distance from center
+                    const dx = p.x - sim.cx;
+                    const dy = p.y - sim.cy;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    const grateRadius = sim.r + sim.gap;
+                    
+                    // If hitting the grate boundary
+                    if (dist >= grateRadius - 5 && dist <= grateRadius + 5) {
+                        // 80% chance to fall through, 20% to bounce
+                        if (Math.random() > 0.8) {
+                            p.vy *= -0.5; // Bounce
+                        } else {
+                            p.vy *= 0.9; // Slow slightly as it passes through
+                        }
+                    }
+                }
+
+                p.draw(sim.ctx);
+                
+                // Cleanup
+                if (p.life <= 0 || p.x > sim.width + 50 || p.y > sim.height + 50) {
+                    sim.particles.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(simLoop);
+        }
+
+        requestAnimationFrame(simLoop);
+
+        // ==========================================================================
+        // HERO BACKGROUND ANIMATION (Dust/Chaff)
+        // ==========================================================================
+        const heroCanvas = document.getElementById('heroBgCanvas');
+        const hctx = heroCanvas.getContext('2d');
+        let hW, hH;
+        let dust = [];
+
+        function resizeHero() {
+            hW = heroCanvas.width = heroCanvas.parentElement.clientWidth;
+            hH = heroCanvas.height = heroCanvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeHero);
+        resizeHero();
+
+        for(let i=0; i<50; i++) {
+            dust.push({
+                x: Math.random() * hW,
+                y: Math.random() * hH,
+                s: Math.random() * 2 + 1,
+                vx: (Math.random() - 0.5) * 0.5 + 0.5, // drift right
+                vy: (Math.random() - 0.5) * 0.5,
+                a: Math.random()
+            });
+        }
+
+        function drawHeroBg() {
+            hctx.clearRect(0, 0, hW, hH);
+            hctx.fillStyle = '#fbbf24';
+            dust.forEach(d => {
+                d.x += d.vx;
+                d.y += d.vy;
+                if(d.x > hW) d.x = 0;
+                if(d.x < 0) d.x = hW;
+                if(d.y > hH) d.y = 0;
+                if(d.y < 0) d.y = hH;
+                
+                hctx.globalAlpha = Math.sin(d.a) * 0.5 + 0.5; // pulsing alpha
+                d.a += 0.05;
+                
+                hctx.beginPath();
+                hctx.arc(d.x, d.y, d.s, 0, Math.PI*2);
+                hctx.fill();
+            });
+            requestAnimationFrame(drawHeroBg);
+        }
+        drawHeroBg();
+
+    </script>
+</body>
+</html>

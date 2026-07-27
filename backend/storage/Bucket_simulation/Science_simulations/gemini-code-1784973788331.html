@@ -1,0 +1,1555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ray Diagram Generator & Optics Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-dark: #05050A;
+            --bg-panel: rgba(20, 22, 35, 0.6);
+            --bg-panel-hover: rgba(30, 33, 50, 0.8);
+            
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --text-main: #E2E8F0;
+            --text-muted: #94A3B8;
+            
+            --accent-cyan: #00F0FF;
+            --accent-magenta: #FF0055;
+            --accent-yellow: #FFD700;
+            --accent-green: #00FF66;
+            
+            --laser-ray-1: #00F0FF; /* Parallel Ray */
+            --laser-ray-2: #FF0055; /* Center Ray */
+            --laser-virtual: #FFD700;
+            
+            --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --shadow-glow: 0 0 20px rgba(0, 240, 255, 0.2);
+            --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(255, 0, 85, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        h1, h2, h3 {
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        h1 { font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1.1; margin-bottom: 1rem; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); margin-bottom: 1.5rem; color: #fff; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); margin-bottom: 0.5rem; color: var(--accent-cyan); }
+        p { font-size: clamp(0.95rem, 1.2vw, 1.1rem); color: var(--text-muted); margin-bottom: 1rem; }
+
+        /* ==========================================================================
+           2. LAYOUT & GLASSMORPHISM
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(1rem, 3vw, 2rem);
+        }
+
+        section {
+            margin-bottom: clamp(4rem, 8vw, 8rem);
+            scroll-margin-top: 100px;
+        }
+
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: clamp(1.5rem, 3vw, 3rem);
+            box-shadow: var(--shadow-glass);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: clamp(1.5rem, 3vw, 3rem);
+            align-items: center;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* ==========================================================================
+           3. HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-title {
+            background: linear-gradient(to right, var(--text-main), var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-graphics {
+            margin-top: 3rem;
+            width: 100%;
+            max-width: 800px;
+            height: 300px;
+            position: relative;
+        }
+
+        /* ==========================================================================
+           4. MARKER & LEGEND SYSTEM (MANDATORY REQUIREMENT)
+           ========================================================================== */
+        .anatomy-container {
+            display: flex;
+            flex-direction: row;
+            gap: 2rem;
+            align-items: flex-start;
+        }
+
+        @media (max-width: 900px) {
+            .anatomy-container { flex-direction: column; }
+        }
+
+        .illustration-wrapper {
+            flex: 1;
+            position: relative;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            min-height: 350px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-panel);
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.3);
+            background: var(--accent-cyan);
+            color: var(--bg-dark);
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+        }
+
+        .legend-list {
+            flex: 0 0 350px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.1);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--accent-cyan);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            flex-shrink: 0;
+            border: 1px solid rgba(0, 240, 255, 0.3);
+        }
+
+        .legend-item.active .legend-badge {
+            background: var(--accent-cyan);
+            color: var(--bg-dark);
+        }
+
+        .legend-content h4 {
+            color: var(--text-main);
+            font-size: 1rem;
+            margin-bottom: 0.2rem;
+        }
+        .legend-content p {
+            font-size: 0.85rem;
+            margin: 0;
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           5. WORKING PROCESS (ANIMATED STAGES)
+           ========================================================================== */
+        .stage-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .stage-visual {
+            width: 100%;
+            height: 400px;
+            background: rgba(0,0,0,0.4);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stage-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.2);
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 0.6rem 1.2rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: inherit;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--glass-highlight);
+        }
+
+        .btn.primary {
+            background: rgba(0, 240, 255, 0.15);
+            border-color: rgba(0, 240, 255, 0.4);
+            color: var(--accent-cyan);
+        }
+
+        .btn.primary:hover {
+            background: rgba(0, 240, 255, 0.25);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .stage-indicators {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .dot.active {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            transform: scale(1.2);
+        }
+
+        .stage-info {
+            text-align: center;
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .stage-info h4 {
+            color: var(--accent-yellow);
+            font-size: 1.2rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .stage-info p {
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+        /* ==========================================================================
+           6. INTERACTIVE SIMULATOR (MAIN)
+           ========================================================================== */
+        .simulator-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 1.5rem;
+            height: 600px;
+        }
+
+        @media (max-width: 1024px) {
+            .simulator-layout {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            overflow-y: auto;
+            padding-right: 0.5rem;
+        }
+
+        .sim-canvas-container {
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+            background: #020205;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+
+        /* Form Controls */
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 1.2rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.8rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .control-val {
+            color: var(--accent-cyan);
+            font-family: monospace;
+            font-size: 1rem;
+        }
+
+        /* Styled Range Input */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            border: 1px solid rgba(0,0,0,0.5);
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--text-main);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+            border: 2px solid var(--bg-dark);
+            transition: transform 0.1s, background 0.2s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover,
+        input[type=range]:active::-webkit-slider-thumb {
+            transform: scale(1.2);
+            background: var(--accent-cyan);
+        }
+
+        /* Firefox equivalents omitted for brevity but conceptually similar */
+
+        .lens-toggle {
+            display: flex;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-sm);
+            padding: 4px;
+            border: 1px solid var(--glass-border);
+            margin-bottom: 1.5rem;
+        }
+
+        .toggle-btn {
+            flex: 1;
+            padding: 0.6rem;
+            text-align: center;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .toggle-btn.active {
+            background: rgba(0, 240, 255, 0.15);
+            color: var(--accent-cyan);
+            box-shadow: inset 0 0 10px rgba(0, 240, 255, 0.1);
+        }
+
+        /* Results Panel */
+        .results-panel {
+            margin-top: auto;
+            border-top: 1px solid var(--glass-border);
+            padding-top: 1rem;
+        }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.95rem;
+        }
+        .result-label { color: var(--text-muted); }
+        .result-value { font-weight: 600; color: #fff; font-family: monospace;}
+        
+        .badge {
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .badge.real { background: rgba(0, 255, 102, 0.15); color: var(--accent-green); border: 1px solid rgba(0, 255, 102, 0.3); }
+        .badge.virtual { background: rgba(255, 215, 0, 0.15); color: var(--accent-yellow); border: 1px solid rgba(255, 215, 0, 0.3); }
+
+
+        /* ==========================================================================
+           7. EXTRAS (Cards, Lists)
+           ========================================================================== */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--glass-border);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .info-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.04);
+        }
+
+        .info-card h4 {
+            color: var(--text-main);
+            margin-bottom: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .info-card p { margin: 0; font-size: 0.95rem; }
+
+        .fact-highlight {
+            border-left: 4px solid var(--accent-magenta);
+            padding-left: 1rem;
+            background: linear-gradient(90deg, rgba(255,0,85,0.1), transparent);
+            padding: 1.5rem;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            margin: 2rem 0;
+        }
+        .fact-highlight p { color: #fff; margin: 0; font-style: italic; }
+
+        .list-styled {
+            list-style: none;
+        }
+        .list-styled li {
+            position: relative;
+            padding-left: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--text-muted);
+        }
+        .list-styled li::before {
+            content: "→";
+            position: absolute;
+            left: 0;
+            color: var(--accent-cyan);
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- HERO SECTION -->
+    <section class="hero">
+        <h1 class="hero-title">Optica Visualization</h1>
+        <p style="max-width: 600px; margin: 0 auto; font-size: 1.2rem;">A premium interactive simulation exploring the physics of light, lenses, and image formation through dynamic ray tracing.</p>
+        
+        <div class="hero-graphics" id="heroCanvasContainer">
+            <canvas id="heroCanvas"></canvas>
+        </div>
+    </section>
+
+    <!-- OVERVIEW -->
+    <section id="overview" class="glass-panel">
+        <div class="grid-2">
+            <div>
+                <h2>The Geometry of Light</h2>
+                <p>When light passes through a transparent medium with curved surfaces, such as a lens, it bends. This bending is called <strong>refraction</strong>.</p>
+                <p>By tracing the path of specific geometric rays from an object through a lens, we can perfectly predict where an image will form, whether it will be upside down, and how large it will appear.</p>
+                <p>This principle is the foundation of cameras, telescopes, microscopes, and the human eye.</p>
+            </div>
+            <div class="fact-highlight">
+                <h4 style="color: var(--accent-magenta);">Fascinating Fact</h4>
+                <p>"The lens in your eye is flexible. Small muscles constantly change its curvature (focal length) to keep objects in focus as they move closer or further away—a process called accommodation."</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- COMPONENTS (MARKER PATTERN) -->
+    <section id="components" class="glass-panel">
+        <h2>Anatomy of a Convex Lens</h2>
+        <p>Before tracing rays, we must define the mathematical coordinate system of a lens. Hover or tap the markers below to understand each component.</p>
+        
+        <div class="anatomy-container">
+            <!-- Visual with absolute markers -->
+            <div class="illustration-wrapper">
+                <!-- SVG Illustration of Lens System -->
+                <svg width="100%" height="100%" viewBox="0 0 800 400" style="position: absolute; top:0; left:0; width:100%; height:100%;">
+                    <!-- Grid -->
+                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+                    </pattern>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+                    
+                    <!-- Principal Axis -->
+                    <line x1="0" y1="200" x2="800" y2="200" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-dasharray="10 5" />
+                    
+                    <!-- Lens -->
+                    <path d="M 400 50 Q 450 200 400 350 Q 350 200 400 50 Z" fill="rgba(0, 240, 255, 0.1)" stroke="rgba(0, 240, 255, 0.6)" stroke-width="3" />
+                    <!-- Optical Axis (Vertical) -->
+                    <line x1="400" y1="30" x2="400" y2="370" stroke="rgba(0, 240, 255, 0.3)" stroke-width="1" stroke-dasharray="5 5" />
+
+                    <!-- Points Points F and 2F -->
+                    <circle cx="250" cy="200" r="4" fill="#fff" />
+                    <circle cx="100" cy="200" r="4" fill="#fff" />
+                    <circle cx="550" cy="200" r="4" fill="#fff" />
+                    <circle cx="700" cy="200" r="4" fill="#fff" />
+                </svg>
+
+                <!-- Markers mapped to percentage positions for responsiveness -->
+                <div class="marker" data-target="item-o" style="left: 50%; top: 50%;">1</div>
+                <div class="marker" data-target="item-f1" style="left: 31.25%; top: 50%;">2</div>
+                <div class="marker" data-target="item-2f1" style="left: 12.5%; top: 50%;">3</div>
+                <div class="marker" data-target="item-axis" style="left: 85%; top: 50%;">4</div>
+                <div class="marker" data-target="item-lens" style="left: 50%; top: 20%;">5</div>
+            </div>
+
+            <!-- Normal Document Flow Legend -->
+            <div class="legend-list">
+                <div class="legend-item" id="item-o" data-marker="1">
+                    <div class="legend-badge">1</div>
+                    <div class="legend-content">
+                        <h4>Optical Centre (O)</h4>
+                        <p>The exact center point of the lens. Light passing through here does not deviate.</p>
+                    </div>
+                </div>
+                <div class="legend-item" id="item-f1" data-marker="2">
+                    <div class="legend-badge">2</div>
+                    <div class="legend-content">
+                        <h4>Principal Focus (F)</h4>
+                        <p>The point where light rays parallel to the axis converge after refracting.</p>
+                    </div>
+                </div>
+                <div class="legend-item" id="item-2f1" data-marker="3">
+                    <div class="legend-badge">3</div>
+                    <div class="legend-content">
+                        <h4>Centre of Curvature (2F)</h4>
+                        <p>Located at twice the focal length. Represents the center of the sphere forming the lens surface.</p>
+                    </div>
+                </div>
+                <div class="legend-item" id="item-axis" data-marker="4">
+                    <div class="legend-badge">4</div>
+                    <div class="legend-content">
+                        <h4>Principal Axis</h4>
+                        <p>The imaginary horizontal line passing straight through the optical centre and foci.</p>
+                    </div>
+                </div>
+                <div class="legend-item" id="item-lens" data-marker="5">
+                    <div class="legend-badge">5</div>
+                    <div class="legend-content">
+                        <h4>Aperture</h4>
+                        <p>The effective light-gathering area of the lens. Determines image brightness.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING PROCESS (MANDATORY STRUCTURE) -->
+    <section id="rules" class="glass-panel">
+        <h2>The 3 Rules of Ray Tracing</h2>
+        <p>To locate an image, we only need to trace two of these three standard rays originating from the tip of the object. The point where they intersect (or appear to intersect) is where the image forms.</p>
+
+        <div class="stage-container">
+            <!-- Animation Stage -->
+            <div class="stage-visual">
+                <canvas id="rulesCanvas"></canvas>
+            </div>
+
+            <!-- Controls & Info -->
+            <div class="stage-controls">
+                <button class="btn" id="btn-prev">← Prev</button>
+                
+                <div class="stage-info">
+                    <h4 id="stage-title">1. The Parallel Ray</h4>
+                    <p id="stage-desc">A ray parallel to the principal axis passes through the Focus (F) after refraction.</p>
+                </div>
+                
+                <div class="stage-indicators" id="stage-dots">
+                    <div class="dot active"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn primary" id="btn-autoplay">Auto-Play ▶</button>
+                    <button class="btn" id="btn-next">Next →</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CORE SIMULATOR -->
+    <section id="simulator" class="glass-panel" style="border-color: rgba(0, 240, 255, 0.3); box-shadow: 0 0 40px rgba(0, 240, 255, 0.1);">
+        <h2 style="color: var(--accent-cyan); display: flex; align-items: center; gap: 1rem;">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12 6.477 2 12 2zm0 0v20"/></svg>
+            Interactive Ray Lab
+        </h2>
+        
+        <div class="simulator-layout">
+            <!-- Controls Panel -->
+            <div class="sim-controls">
+                
+                <div class="lens-toggle">
+                    <button class="toggle-btn active" data-type="convex">Convex Lens</button>
+                    <button class="toggle-btn" data-type="concave">Concave Lens</button>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Object Position (u)</span>
+                        <span class="control-val" id="val-u">-150 cm</span>
+                    </div>
+                    <input type="range" id="slider-u" min="-300" max="-20" value="-150" step="1">
+                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-muted); margin-top:4px;">
+                        <span>Far</span><span>Near Lens</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Focal Length (f)</span>
+                        <span class="control-val" id="val-f">100 cm</span>
+                    </div>
+                    <input type="range" id="slider-f" min="40" max="150" value="100" step="1">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Object Height (h₀)</span>
+                        <span class="control-val" id="val-h">50 cm</span>
+                    </div>
+                    <input type="range" id="slider-h" min="10" max="100" value="50" step="1">
+                </div>
+
+                <!-- Results Output -->
+                <div class="results-panel">
+                    <h3 style="font-size: 1rem; color: #fff; margin-bottom: 1rem;">Image Properties</h3>
+                    
+                    <div class="result-row">
+                        <span class="result-label">Position (v)</span>
+                        <span class="result-value" id="res-v">300.0 cm</span>
+                    </div>
+                    
+                    <div class="result-row">
+                        <span class="result-label">Magnification (m)</span>
+                        <span class="result-value" id="res-m">-2.00x</span>
+                    </div>
+                    
+                    <div class="result-row">
+                        <span class="result-label">Nature</span>
+                        <span class="badge real" id="res-nature">REAL & INVERTED</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Canvas -->
+            <div class="sim-canvas-container" id="simWrapper">
+                <!-- Overlay labels for the canvas are handled by drawing them in canvas to ensure they don't block interaction and scale perfectly -->
+                <canvas id="simCanvas"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- APPLICATIONS & FACTS -->
+    <section class="grid-2">
+        <div>
+            <h2>Real-World Applications</h2>
+            <div class="card-grid" style="grid-template-columns: 1fr;">
+                <div class="info-card">
+                    <h4>Magnifying Glass</h4>
+                    <p>Uses a convex lens. When the object is placed *between* the Optical Centre and Focus (u < f), it forms a virtual, erect, and highly magnified image.</p>
+                </div>
+                <div class="info-card">
+                    <h4>Human Eye & Glasses</h4>
+                    <p>The eye contains a natural convex lens. Myopia (shortsightedness) is corrected using <strong>concave</strong> lenses to diverge light slightly before it enters the eye.</p>
+                </div>
+                <div class="info-card">
+                    <h4>Cameras</h4>
+                    <p>Use a convex lens system to form a real, inverted, and diminished image directly onto the digital sensor (or film) located precisely at the image distance (v).</p>
+                </div>
+            </div>
+        </div>
+        
+        <div>
+            <h2>Quick Revision & Mistakes</h2>
+            <div class="glass-panel" style="padding: 1.5rem; height: 100%;">
+                <h3 style="color: var(--accent-magenta);">Common Pitfalls</h3>
+                <ul class="list-styled" style="margin-bottom: 2rem;">
+                    <li><strong>Sign Convention:</strong> Forgetting that Object Distance (u) is always taken as negative (measured to the left).</li>
+                    <li><strong>Virtual vs Real:</strong> Real images are formed by actual intersection of rays (solid lines). Virtual images are formed by extrapolation (dashed lines).</li>
+                    <li><strong>Concave Focal Length:</strong> A concave lens has a <em>negative</em> focal length in equations because its principal focus is virtual (on the left side).</li>
+                </ul>
+
+                <h3 style="color: var(--accent-yellow);">The Lens Formula</h3>
+                <div style="background: rgba(0,0,0,0.5); padding: 1.5rem; border-radius: var(--radius-sm); text-align: center; font-family: 'Times New Roman', serif; font-size: 1.5rem; letter-spacing: 2px;">
+                    <span style="color: #fff;">1/f</span> = <span style="color: var(--accent-cyan);">1/v</span> - <span style="color: var(--accent-magenta);">1/u</span>
+                </div>
+                <p style="text-align: center; font-size: 0.85rem; margin-top: 0.5rem;">f = focal length, v = image distance, u = object distance</p>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<script>
+    /* ==========================================================================
+       UTILITIES & GLOBALS
+       ========================================================================== */
+    const D2R = Math.PI / 180;
+    
+    // Easing function for smooth animations
+    function easeInOutQuart(t) { return t < .5 ? 8 * t * t * t * t : 1 - 8 * (--t) * t * t * t; }
+
+    function setupCanvas(canvasId, containerId) {
+        const canvas = document.getElementById(canvasId);
+        const container = containerId ? document.getElementById(containerId) : canvas.parentElement;
+        const ctx = canvas.getContext('2d');
+        
+        function resize() {
+            const rect = container.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+            return { w: rect.width, h: rect.height };
+        }
+        
+        let dims = resize();
+        window.addEventListener('resize', () => { dims = resize(); });
+        
+        return { canvas, ctx, getDims: () => dims, triggerResize: resize };
+    }
+
+    // Helper to draw a glowing line
+    function drawGlowLine(ctx, x1, y1, x2, y2, color, width, glowSize, dashed = false) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        
+        if (dashed) ctx.setLineDash([8, 8]);
+        
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.shadowBlur = glowSize;
+        ctx.shadowColor = color;
+        ctx.stroke();
+        
+        // Core bright line
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = width * 0.5;
+        ctx.stroke();
+        
+        ctx.restore();
+    }
+
+    // Helper to draw an arrow object
+    function drawArrow(ctx, x, y, height, color, label) {
+        ctx.save();
+        const arrowW = 8;
+        const arrowH = Math.sign(height) * 12; // Direction of arrowhead
+        
+        // Main line
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y - height);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 4;
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = color;
+        ctx.stroke();
+
+        // Arrow head
+        ctx.beginPath();
+        ctx.moveTo(x, y - height);
+        ctx.lineTo(x - arrowW, y - height + arrowH);
+        ctx.lineTo(x + arrowW, y - height + arrowH);
+        ctx.closePath();
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        // Label
+        if (label) {
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#fff';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'center';
+            // Position label intelligently based on height direction
+            const textY = height > 0 ? y - height - 15 : y - height + 25;
+            ctx.fillText(label, x, textY);
+        }
+
+        ctx.restore();
+    }
+
+
+    /* ==========================================================================
+       1. HERO BACKGROUND ANIMATION
+       ========================================================================== */
+    (function initHeroAnim() {
+        const { canvas, ctx, getDims } = setupCanvas('heroCanvas');
+        let time = 0;
+
+        function draw() {
+            const { w, h } = getDims();
+            ctx.clearRect(0, 0, w, h);
+            
+            const cx = w / 2;
+            const cy = h / 2;
+            
+            // Draw stylized abstract lens/rays
+            ctx.save();
+            ctx.translate(cx, cy);
+            
+            // Central glowing shape
+            const scale = 1 + Math.sin(time * 0.05) * 0.05;
+            ctx.scale(scale, scale);
+
+            // Lens abstract
+            ctx.beginPath();
+            ctx.moveTo(0, -100);
+            ctx.quadraticCurveTo(50, 0, 0, 100);
+            ctx.quadraticCurveTo(-50, 0, 0, -100);
+            ctx.fillStyle = 'rgba(0, 240, 255, 0.05)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
+            ctx.stroke();
+
+            // Flowing rays
+            for(let i=0; i<5; i++) {
+                let yOffset = (i - 2) * 30;
+                let phase = time * 0.05 + i;
+                
+                // Left incoming
+                let startX = -w/2;
+                let bendX = 0;
+                let endX = w/2;
+                
+                let targetY = yOffset * 0.5 * Math.sin(phase); // converge slightly
+
+                ctx.beginPath();
+                ctx.moveTo(startX, yOffset);
+                ctx.lineTo(bendX, yOffset);
+                ctx.lineTo(endX, targetY);
+                
+                ctx.strokeStyle = `hsla(${180 + i*15}, 100%, 60%, ${0.2 + Math.sin(phase)*0.1})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            ctx.restore();
+            
+            time++;
+            requestAnimationFrame(draw);
+        }
+        draw();
+    })();
+
+
+    /* ==========================================================================
+       2. INTERACTIVE MARKER & LEGEND LOGIC
+       ========================================================================== */
+    (function initMarkers() {
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function setActive(id) {
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            if(id) {
+                const m = document.querySelector(`.marker[data-target="${id}"]`);
+                const l = document.getElementById(id);
+                if(m) m.classList.add('active');
+                if(l) l.classList.add('active');
+            }
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => setActive(marker.dataset.target));
+            // For touch
+            marker.addEventListener('touchstart', (e) => { e.preventDefault(); setActive(marker.dataset.target); });
+        });
+
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => setActive(item.id));
+            item.addEventListener('touchstart', (e) => { e.preventDefault(); setActive(item.id); });
+        });
+        
+        // Click outside to clear
+        document.addEventListener('click', (e) => {
+            if(!e.target.closest('.marker') && !e.target.closest('.legend-item')) {
+                setActive(null);
+            }
+        });
+    })();
+
+
+    /* ==========================================================================
+       3. WORKING PROCESS (ANIMATED RULES)
+       ========================================================================== */
+    (function initRulesAnimation() {
+        const { canvas, ctx, getDims } = setupCanvas('rulesCanvas');
+        
+        let currentStage = 0; // 0, 1, 2
+        let animProgress = 0;
+        let isAnimating = true;
+        let autoPlay = false;
+        let lastTime = 0;
+
+        const stages = [
+            { title: "1. The Parallel Ray", desc: "Ray parallel to principal axis refracts through the Principal Focus (F)." },
+            { title: "2. The Center Ray", desc: "Ray passing through the Optical Centre (O) goes straight without deviation." },
+            { title: "3. The Focal Ray", desc: "Ray passing through the Principal Focus (F) refracts parallel to the axis." }
+        ];
+
+        // DOM elements
+        const titleEl = document.getElementById('stage-title');
+        const descEl = document.getElementById('stage-desc');
+        const dots = document.querySelectorAll('#stage-dots .dot');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnAuto = document.getElementById('btn-autoplay');
+
+        function setStage(index) {
+            currentStage = Math.max(0, Math.min(2, index));
+            animProgress = 0; // Reset animation
+            isAnimating = true;
+            
+            // Update UI
+            titleEl.textContent = stages[currentStage].title;
+            descEl.textContent = stages[currentStage].desc;
+            
+            dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === currentStage);
+            });
+            
+            btnPrev.disabled = (currentStage === 0 && !autoPlay);
+            // btnNext.disabled = (currentStage === 2 && !autoPlay); // removed to allow looping on next
+        }
+
+        btnPrev.onclick = () => { autoPlay=false; updateAutoBtn(); setStage(currentStage - 1); };
+        btnNext.onclick = () => { autoPlay=false; updateAutoBtn(); setStage((currentStage + 1) % 3); };
+        btnAuto.onclick = () => { autoPlay = !autoPlay; updateAutoBtn(); if(autoPlay && animProgress>=1) setStage((currentStage + 1) % 3); };
+        
+        function updateAutoBtn() {
+            btnAuto.innerHTML = autoPlay ? 'Pause ⏸' : 'Auto-Play ▶';
+            btnAuto.classList.toggle('primary', !autoPlay);
+            btnAuto.style.background = autoPlay ? 'rgba(255,0,85,0.2)' : '';
+            btnAuto.style.borderColor = autoPlay ? 'rgba(255,0,85,0.5)' : '';
+            btnAuto.style.color = autoPlay ? 'var(--accent-magenta)' : '';
+        }
+
+        function draw(timestamp) {
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            const { w, h } = getDims();
+            ctx.clearRect(0, 0, w, h);
+            
+            const cx = w / 2;
+            const cy = h / 2;
+            
+            // Static environment parameters
+            const f = 100;
+            const objX = -200;
+            const objY = 80;
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            // Draw Grid & Axis
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(-w/2, 0); ctx.lineTo(w/2, 0);
+            ctx.stroke();
+
+            // Draw Lens
+            ctx.beginPath();
+            ctx.moveTo(0, -120);
+            ctx.quadraticCurveTo(30, 0, 0, 120);
+            ctx.quadraticCurveTo(-30, 0, 0, -120);
+            ctx.fillStyle = 'rgba(0, 240, 255, 0.1)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
+            ctx.stroke();
+
+            // Draw Points
+            ctx.fillStyle = '#fff';
+            [-2*f, -f, f, 2*f].forEach(x => {
+                ctx.beginPath(); ctx.arc(x, 0, 3, 0, Math.PI*2); ctx.fill();
+            });
+            ctx.font = '12px sans-serif';
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.fillText("F", f-4, 15); ctx.fillText("2F", 2*f-8, 15);
+            ctx.fillText("F", -f-4, 15); ctx.fillText("2F", -2*f-8, 15);
+
+            // Draw Object (simple arrow)
+            drawArrow(ctx, objX, 0, objY, '#fff', '');
+
+            // Animation Logic
+            if (isAnimating) {
+                animProgress += (dt / 2000); // 2 seconds per stage
+                if (animProgress > 1.2) { // stay visible for a bit
+                    if (autoPlay) {
+                        setStage((currentStage + 1) % 3);
+                    } else {
+                        animProgress = 1;
+                        isAnimating = false;
+                    }
+                }
+            }
+            
+            // Visual progress clamped 0-1 for drawing
+            const p = Math.min(1, Math.max(0, animProgress));
+            const easeP = easeInOutQuart(p);
+
+            // Path definitions based on stage
+            // We draw ray in two segments: Obj -> Lens, Lens -> Exit
+            let path = [];
+            
+            if (currentStage === 0) { // Parallel
+                const hitY = -objY;
+                path = [
+                    {x: objX, y: -objY}, // start
+                    {x: 0, y: -objY},    // hit lens
+                    {x: 300, y: -objY + (300/f)*objY} // through focus f (slope is objY / f)
+                ];
+                drawAnimatedRay(ctx, path, easeP, varColor('--laser-ray-1'));
+            } 
+            else if (currentStage === 1) { // Center
+                path = [
+                    {x: objX, y: -objY},
+                    {x: 0, y: 0},
+                    {x: 300, y: 300 * (objY / -objX)} // straight line
+                ];
+                drawAnimatedRay(ctx, path, easeP, varColor('--laser-ray-2'));
+            }
+            else if (currentStage === 2) { // Focal
+                // Ray goes through -f
+                const slope = (-objY) / (objX - (-f));
+                const hitY = slope * (0 - (-f)); // y at lens
+                path = [
+                    {x: objX, y: -objY},
+                    {x: 0, y: hitY},
+                    {x: 300, y: hitY} // emerges parallel
+                ];
+                drawAnimatedRay(ctx, path, easeP, varColor('--accent-green'));
+            }
+
+            ctx.restore();
+            requestAnimationFrame(draw);
+        }
+        
+        function drawAnimatedRay(ctx, points, progress, color) {
+            if(progress <= 0) return;
+            
+            const seg1Len = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
+            const seg2Len = Math.hypot(points[2].x - points[1].x, points[2].y - points[1].y);
+            const totalLen = seg1Len + seg2Len;
+            
+            const targetLen = totalLen * progress;
+            
+            // Draw segment 1
+            if (targetLen <= seg1Len) {
+                const ratio = targetLen / seg1Len;
+                const endX = points[0].x + (points[1].x - points[0].x) * ratio;
+                const endY = points[0].y + (points[1].y - points[0].y) * ratio;
+                drawGlowLine(ctx, points[0].x, points[0].y, endX, endY, color, 3, 15);
+            } else {
+                // Segment 1 complete
+                drawGlowLine(ctx, points[0].x, points[0].y, points[1].x, points[1].y, color, 3, 15);
+                
+                // Draw segment 2
+                const remLen = targetLen - seg1Len;
+                const ratio = remLen / seg2Len;
+                const endX = points[1].x + (points[2].x - points[1].x) * ratio;
+                const endY = points[1].y + (points[2].y - points[1].y) * ratio;
+                drawGlowLine(ctx, points[1].x, points[1].y, endX, endY, color, 3, 15);
+            }
+            
+            // Draw particle at tip
+            if(progress < 1) {
+                const tipX = targetLen <= seg1Len 
+                    ? points[0].x + (points[1].x - points[0].x) * (targetLen/seg1Len)
+                    : points[1].x + (points[2].x - points[1].x) * ((targetLen-seg1Len)/seg2Len);
+                const tipY = targetLen <= seg1Len 
+                    ? points[0].y + (points[1].y - points[0].y) * (targetLen/seg1Len)
+                    : points[1].y + (points[2].y - points[1].y) * ((targetLen-seg1Len)/seg2Len);
+                
+                ctx.beginPath();
+                ctx.arc(tipX, tipY, 4, 0, Math.PI*2);
+                ctx.fillStyle = '#fff';
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = color;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        function varColor(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+        // Start loop
+        requestAnimationFrame((t) => { lastTime = t; draw(t); });
+        
+        // Initial setup
+        setStage(0);
+
+    })();
+
+
+    /* ==========================================================================
+       4. CORE SIMULATOR (THE GENERATOR)
+       ========================================================================== */
+    (function initSimulator() {
+        const { canvas, ctx, getDims, triggerResize } = setupCanvas('simCanvas', 'simWrapper');
+        
+        // State
+        const state = {
+            lensType: 'convex', // 'convex' or 'concave'
+            u: -150, // object pos (always negative in our UI range)
+            f: 100,  // focal length magnitude
+            ho: 50,  // object height
+            
+            // Calculated
+            v: 0,
+            hi: 0,
+            m: 0,
+            isReal: true,
+            
+            // Animation
+            animTime: 0
+        };
+
+        // UI Elements
+        const uSlider = document.getElementById('slider-u');
+        const fSlider = document.getElementById('slider-f');
+        const hSlider = document.getElementById('slider-h');
+        
+        const uVal = document.getElementById('val-u');
+        const fVal = document.getElementById('val-f');
+        const hVal = document.getElementById('val-h');
+        
+        const resV = document.getElementById('res-v');
+        const resM = document.getElementById('res-m');
+        const resNature = document.getElementById('res-nature');
+        
+        const lensBtns = document.querySelectorAll('.toggle-btn');
+
+        // Math Engine
+        function calculate() {
+            // Apply sign conventions based on lens type
+            const u = parseFloat(state.u);
+            const ho = parseFloat(state.ho);
+            let f = parseFloat(state.f);
+            
+            if (state.lensType === 'concave') {
+                f = -f; // Concave lens has negative focal length
+            }
+
+            // Lens Formula: 1/f = 1/v - 1/u => 1/v = 1/f + 1/u = (u+f)/(u*f) => v = (u*f)/(u+f)
+            let v;
+            if (u === -f) {
+                // Object at focus
+                v = Infinity;
+            } else {
+                v = (u * f) / (u + f);
+            }
+
+            // Magnification: m = v/u = hi/ho
+            let m, hi;
+            if (v === Infinity) {
+                m = Infinity;
+                hi = Infinity;
+            } else {
+                m = v / u;
+                hi = m * ho;
+            }
+
+            state.v = v;
+            state.m = m;
+            state.hi = hi;
+            state.isReal = (v > 0); // For lenses, positive v means real image (other side)
+
+            updateOutputUI();
+        }
+
+        function updateOutputUI() {
+            // Update slider labels
+            uVal.textContent = `${state.u} cm`;
+            fVal.textContent = `${state.f} cm`;
+            hVal.textContent = `${state.ho} cm`;
+
+            if (!isFinite(state.v)) {
+                resV.textContent = "Infinity";
+                resM.textContent = "Infinity";
+                resNature.className = "badge";
+                resNature.textContent = "NO IMAGE FORMED";
+                resNature.style.background = 'rgba(255,255,255,0.1)';
+                resNature.style.borderColor = 'rgba(255,255,255,0.3)';
+                resNature.style.color = '#fff';
+                return;
+            }
+
+            resV.textContent = `${state.v.toFixed(1)} cm`;
+            resM.textContent = `${state.m.toFixed(2)}x`;
+            
+            if (state.isReal) {
+                resNature.className = "badge real";
+                resNature.textContent = state.hi < 0 ? "REAL & INVERTED" : "REAL & ERECT";
+            } else {
+                resNature.className = "badge virtual";
+                resNature.textContent = state.hi > 0 ? "VIRTUAL & ERECT" : "VIRTUAL & INVERTED";
+            }
+        }
+
+        // Event Listeners
+        uSlider.addEventListener('input', (e) => { state.u = e.target.value; calculate(); });
+        fSlider.addEventListener('input', (e) => { state.f = e.target.value; calculate(); });
+        hSlider.addEventListener('input', (e) => { state.ho = e.target.value; calculate(); });
+        
+        lensBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                lensBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.lensType = btn.dataset.type;
+                calculate();
+            });
+        });
+
+        // Ensure canvas resizes when panel layout changes
+        window.addEventListener('resize', triggerResize);
+
+        // Render Loop
+        function render() {
+            state.animTime += 0.01;
+            const { w, h } = getDims();
+            ctx.clearRect(0, 0, w, h);
+            
+            // Coordinates mapping: 
+            // Origin (0,0) is center of canvas.
+            // Math coordinates: X right is +, Y up is +.
+            // Canvas coordinates: X right is +, Y down is +.
+            const cx = w / 2;
+            const cy = h / 2;
+            
+            ctx.save();
+            ctx.translate(cx, cy);
+
+            // Scale drawing to fit nicely (assume max v is ~500, max u is 300)
+            // Let's use a dynamic scale if needed, or a fixed one for simplicity.
+            // Since our inputs are max -300 and max f 150, total width needed is ~800 math units.
+            // So scale = canvasWidth / 800 roughly.
+            const scaleFactor = Math.min(w / 800, h / 400); 
+            ctx.scale(scaleFactor, scaleFactor);
+
+            // 1. Draw Grid
+            ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+            ctx.lineWidth = 1/scaleFactor;
+            const step = 50;
+            ctx.beginPath();
+            for(let x = -600; x <= 600; x+=step) { ctx.moveTo(x, -400); ctx.lineTo(x, 400); }
+            for(let y = -400; y <= 400; y+=step) { ctx.moveTo(-600, y); ctx.lineTo(600, y); }
+            ctx.stroke();
+
+            // 2. Draw Principal Axis
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.lineWidth = 2/scaleFactor;
+            ctx.beginPath();
+            ctx.moveTo(-600, 0); ctx.lineTo(600, 0);
+            ctx.stroke();
+
+            // 3. Draw Lens
+            const lensH = 150;
+            const lensW = 20;
+            ctx.beginPath();
+            if(state.lensType === 'convex') {
+                ctx.moveTo(0, -lensH);
+                ctx.quadraticCurveTo(lensW, 0, 0, lensH);
+                ctx.quadraticCurveTo(-lensW, 0, 0, -lensH);
+            } else {
+                // Concave
+                ctx.moveTo(-lensW/2, -lensH);
+                ctx.lineTo(lensW/2, -lensH);
+                ctx.quadraticCurveTo(0, 0, lensW/2, lensH);
+                ctx.lineTo(-lensW/2, lensH);
+                ctx.quadraticCurveTo(0, 0, -lensW/2, -lensH);
+            }
+            ctx.fillStyle = 'rgba(0, 240, 255, 0.1)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.6)';
+            ctx.lineWidth = 2/scaleFactor;
+            ctx.stroke();
+            
+            // Optical center line
+            ctx.beginPath(); ctx.moveTo(0, -lensH); ctx.lineTo(0, lensH);
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.2)'; ctx.setLineDash([5,5]); ctx.stroke(); ctx.setLineDash([]);
+
+            // 4. Draw Points (F, 2F)
+            const fMag = parseFloat(state.f);
+            ctx.fillStyle = '#fff';
+            [-2*fMag, -fMag, fMag, 2*fMag].forEach(x => {
+                ctx.beginPath(); ctx.arc(x, 0, 4/scaleFactor, 0, Math.PI*2); ctx.fill();
+            });
+            ctx.font = `${14/scaleFactor}px sans-serif`;
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            // Label properly based on lens type (primary focus is on right for convex, left for concave)
+            let f1_sign = state.lensType === 'convex' ? 1 : -1;
+            
+            ctx.fillText("F", fMag - 15, 20/scaleFactor);
+            ctx.fillText("2F", 2*fMag - 15, 20/scaleFactor);
+            ctx.fillText("F", -fMag - 15, 20/scaleFactor);
+            ctx.fillText("2F", -2*fMag - 15, 20/scaleFactor);
+
+            // Extract math values
+            const u = parseFloat(state.u);
+            const ho = parseFloat(state.ho);
+            const v = state.v;
+            const hi = state.hi;
+            const isReal = state.isReal;
+            const mathF = state.lensType === 'convex' ? fMag : -fMag;
+
+            // Canvas Y is inverted relative to math Y
+            const objX = u;
+            const objY = -ho; 
+            const imgX = v;
+            const imgY = -hi;
+
+            // 5. Draw Rays
+            const c_ray1 = getComputedStyle(document.documentElement).getPropertyValue('--laser-ray-1').trim();
+            const c_ray2 = getComputedStyle(document.documentElement).getPropertyValue('--laser-ray-2').trim();
+            const c_virt = getComputedStyle(document.documentElement).getPropertyValue('--laser-virtual').trim();
+
+            if (isFinite(v)) {
+                // Ray 1: Parallel to axis, passes through Focus
+                // Start -> Hit Lens -> End
+                const r1_start = {x: objX, y: objY};
+                const r1_hit = {x: 0, y: objY};
+                
+                // Where does it go? Through primary focus (mathF).
+                // Slope = (0 - (-ho)) / (mathF - 0) = ho / mathF.
+                // Note: canvas Y is inverted.
+                // Actually, let's just use two points to define line.
+                const r1_focus = {x: mathF, y: 0};
+                
+                // Extend ray 1 far to the right
+                const extX = 600;
+                // y - y1 = m(x - x1) -> y = m(x - x1) + y1
+                const m1 = (r1_focus.y - r1_hit.y) / (r1_focus.x - r1_hit.x);
+                const r1_end = {x: extX, y: m1 * (extX - r1_hit.x) + r1_hit.y};
+
+                // Ray 2: Through optical center
+                const r2_start = {x: objX, y: objY};
+                const r2_hit = {x: 0, y: 0};
+                const m2 = (r2_hit.y - r2_start.y) / (r2_hit.x - r2_start.x);
+                const r2_end = {x: extX, y: m2 * (extX - r2_hit.x) + r2_hit.y};
+
+                // Draw actual light rays (solid)
+                drawGlowLine(ctx, r1_start.x, r1_start.y, r1_hit.x, r1_hit.y, c_ray1, 2/scaleFactor, 10/scaleFactor);
+                drawGlowLine(ctx, r1_hit.x, r1_hit.y, r1_end.x, r1_end.y, c_ray1, 2/scaleFactor, 10/scaleFactor);
+
+                drawGlowLine(ctx, r2_start.x, r2_start.y, r2_hit.x, r2_hit.y, c_ray2, 2/scaleFactor, 10/scaleFactor);
+                drawGlowLine(ctx, r2_hit.x, r2_hit.y, r2_end.x, r2_end.y, c_ray2, 2/scaleFactor, 10/scaleFactor);
+
+                // If virtual image, draw dashed extrapolated lines backward
+                if (!isReal) {
+                    // Extrapolate Ray 1 from hit point backward
+                    const extLeftX = -600;
+                    const r1_back = {x: extLeftX, y: m1 * (extLeftX - r1_hit.x) + r1_hit.y};
+                    drawGlowLine(ctx, r1_hit.x, r1_hit.y, r1_back.x, r1_back.y, c_virt, 2/scaleFactor, 5, true);
+
+                    // Extrapolate Ray 2 backward
+                    const r2_back = {x: extLeftX, y: m2 * (extLeftX - r2_hit.x) + r2_hit.y};
+                    drawGlowLine(ctx, r2_hit.x, r2_hit.y, r2_back.x, r2_back.y, c_virt, 2/scaleFactor, 5, true);
+                }
+
+                // 6. Draw Image
+                // Draw as solid if real, dashed/semi-transparent if virtual
+                ctx.globalAlpha = isReal ? 1.0 : 0.6;
+                let imgColor = isReal ? '#00FF66' : '#FFD700';
+                drawArrow(ctx, imgX, 0, imgY, imgColor, "Image");
+                ctx.globalAlpha = 1.0;
+                
+            } else {
+                // Object at Focus (parallel rays)
+                const r1_start = {x: objX, y: objY};
+                const r1_hit = {x: 0, y: objY};
+                const r2_start = {x: objX, y: objY};
+                const r2_hit = {x: 0, y: 0};
+
+                // Both rays emerge parallel
+                const slope = (0 - objY) / (0 - objX); // slope of center ray
+                
+                const extX = 600;
+                const r1_end = {x: extX, y: slope * (extX - r1_hit.x) + r1_hit.y};
+                const r2_end = {x: extX, y: slope * (extX - r2_hit.x) + r2_hit.y};
+
+                drawGlowLine(ctx, r1_start.x, r1_start.y, r1_hit.x, r1_hit.y, c_ray1, 2/scaleFactor, 10/scaleFactor);
+                drawGlowLine(ctx, r1_hit.x, r1_hit.y, r1_end.x, r1_end.y, c_ray1, 2/scaleFactor, 10/scaleFactor);
+                
+                drawGlowLine(ctx, r2_start.x, r2_start.y, r2_hit.x, r2_hit.y, c_ray2, 2/scaleFactor, 10/scaleFactor);
+                drawGlowLine(ctx, r2_hit.x, r2_hit.y, r2_end.x, r2_end.y, c_ray2, 2/scaleFactor, 10/scaleFactor);
+            }
+
+            // 7. Draw Object
+            drawArrow(ctx, objX, 0, objY, '#fff', "Object");
+
+            ctx.restore();
+            requestAnimationFrame(render);
+        }
+
+        // Init
+        calculate();
+        requestAnimationFrame(render);
+
+    })();
+
+</script>
+</body>
+</html>

@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Electric Motor Simulation | Premium Educational Platform</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            --bg-base: #060913;
+            --bg-accent: #0f162a;
+            --glass-bg: rgba(20, 27, 45, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            --color-primary: #00f0ff;
+            --color-primary-glow: rgba(0, 240, 255, 0.4);
+            --color-secondary: #7000ff;
+            --color-text: #e2e8f0;
+            --color-text-muted: #94a3b8;
+            
+            --magnet-n: #ff2a5f;
+            --magnet-s: #2a75ff;
+            --copper: #ff9d00;
+            
+            --font-xl: clamp(2.5rem, 5vw, 4.5rem);
+            --font-lg: clamp(1.8rem, 3.5vw, 2.5rem);
+            --font-md: clamp(1.2rem, 2.5vw, 1.5rem);
+            --font-base: clamp(1rem, 1.5vw, 1.125rem);
+            --font-sm: clamp(0.875rem, 1.2vw, 1rem);
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* ==========================================================================
+           RESET & GLOBAL STYLES
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--color-text);
+            line-height: 1.6;
+            overflow-x: hidden;
+            font-size: var(--font-base);
+        }
+
+        /* Ambient Background Effect */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 15% 50%, rgba(112, 0, 255, 0.15), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(0, 240, 255, 0.15), transparent 25%);
+            filter: blur(60px);
+            animation: pulseBg 10s infinite alternate;
+        }
+
+        @keyframes pulseBg {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+        /* Typography */
+        h1, h2, h3 { font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; }
+        h1 { font-size: var(--font-xl); background: linear-gradient(135deg, #fff, #a5b4fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--font-lg); margin-bottom: 1.5rem; }
+        h3 { font-size: var(--font-md); color: var(--color-primary); }
+        p { color: var(--color-text-muted); margin-bottom: 1rem; }
+        
+        .gradient-text { background: linear-gradient(90deg, var(--color-primary), var(--color-secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: clamp(1.5rem, 3vw, 3rem);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Performance for low-end mobile */
+        @media (max-width: 768px) {
+            .glass-panel { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+            .ambient-bg { filter: blur(30px); }
+        }
+
+        /* Layout Structure */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 clamp(16px, 4vw, 48px);
+        }
+
+        section { padding: clamp(40px, 8vw, 100px) 0; }
+
+        /* ==========================================================================
+           HERO & INTRODUCTION
+           ========================================================================== */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+        
+        .hero p { max-width: 600px; margin: 0 auto 2rem; font-size: var(--font-md); }
+
+        /* Main Engine Canvas Container */
+        .hero-canvas-container {
+            width: 100%;
+            max-width: 900px;
+            height: clamp(300px, 50vw, 500px);
+            position: relative;
+            margin-top: 2rem;
+            border-radius: var(--radius-lg);
+            background: radial-gradient(circle at center, rgba(0, 240, 255, 0.05) 0%, transparent 70%);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: var(--radius-lg);
+        }
+
+        /* ==========================================================================
+           COMPONENTS (STRICT RULE PATTERN)
+           ========================================================================== */
+        .components-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .illustration-wrapper {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.03), transparent);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            padding: 1rem;
+        }
+
+        .illustration-svg { width: 100%; height: auto; display: block; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); }
+
+        /* Numbered Markers */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-accent);
+            border: 2px solid var(--color-primary);
+            color: var(--color-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px var(--color-primary-glow);
+            transition: var(--transition);
+            z-index: 10;
+        }
+        .marker:hover, .marker.active {
+            background: var(--color-primary);
+            color: var(--bg-base);
+            transform: translate(-50%, -50%) scale(1.2);
+            box-shadow: 0 0 25px var(--color-primary);
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.05);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(5px);
+        }
+        
+        .legend-badge {
+            flex-shrink: 0;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: bold;
+        }
+        .legend-item.active .legend-badge { background: var(--color-primary); color: var(--bg-base); }
+
+        .legend-content h4 { margin: 0 0 0.25rem 0; color: #fff; font-size: 1rem; }
+        .legend-content p { margin: 0; font-size: 0.85rem; }
+
+        @media (max-width: 1024px) {
+            .components-grid { grid-template-columns: 1fr; }
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (STRICT RULE PATTERN)
+           ========================================================================== */
+        .working-container {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .working-visual {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/10;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #000;
+            border: 1px solid var(--glass-border);
+        }
+
+        .working-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .stage-info {
+            background: rgba(255,255,255,0.03);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--color-primary);
+            min-height: 140px;
+        }
+        .stage-info h3 { display: flex; align-items: center; gap: 0.5rem; }
+        .stage-info .badge { background: var(--color-primary); color: var(--bg-base); padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; }
+        .stage-info p { margin-top: 0.5rem; font-size: var(--font-sm); color: #fff; }
+
+        .io-indicators {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            font-size: 0.8rem;
+            color: var(--color-primary);
+        }
+        .io-indicators div { display: flex; align-items: center; gap: 0.5rem; background: rgba(0,240,255,0.1); padding: 4px 12px; border-radius: 20px; }
+
+        .control-panel {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.3);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+        }
+
+        .btn {
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: var(--transition);
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); border-color: white; }
+        .btn.primary { background: var(--color-primary); color: var(--bg-base); border: none; font-weight: bold; }
+        .btn.primary:hover { box-shadow: 0 0 15px var(--color-primary-glow); }
+        .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: var(--transition); }
+        .dot.active { background: var(--color-primary); box-shadow: 0 0 10px var(--color-primary); transform: scale(1.2); }
+
+        @media (max-width: 1024px) {
+            .working-container { grid-template-columns: 1fr; }
+        }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 2rem;
+        }
+        
+        .sim-canvas-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: radial-gradient(circle at center, rgba(20,27,45,0.8), #000);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            padding: 1.5rem;
+            background: rgba(255,255,255,0.02);
+            border-radius: var(--radius-lg);
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .control-header { display: flex; justify-content: space-between; align-items: center; }
+        .control-label { font-size: 0.9rem; font-weight: bold; color: var(--color-text); }
+        .control-value { font-size: 0.9rem; color: var(--color-primary); font-family: monospace; }
+
+        /* Custom Slider Range */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--color-primary);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px var(--color-primary-glow);
+            transition: transform 0.1s;
+        }
+        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); }
+
+        @media (max-width: 1024px) {
+            .sim-grid { grid-template-columns: 1fr; }
+            .sim-controls { flex-direction: row; flex-wrap: wrap; }
+            .control-group { flex: 1; min-width: 200px; }
+        }
+
+        /* ==========================================================================
+           KNOWLEDGE SECTION (Cards)
+           ========================================================================== */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius-md);
+            padding: 1.5rem;
+            transition: var(--transition);
+        }
+        .info-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.1);
+        }
+        .info-card h4 { color: var(--color-primary); margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .info-card ul { list-style: none; margin-left: 0; padding: 0; }
+        .info-card li { position: relative; padding-left: 1.5rem; margin-bottom: 0.5rem; font-size: 0.9rem; color: var(--color-text-muted); }
+        .info-card li::before { content: '→'; position: absolute; left: 0; color: var(--color-secondary); }
+
+    </style>
+</head>
+<body>
+
+    <div class="ambient-bg"></div>
+
+    <!-- ==========================================================================
+         HERO SECTION
+         ========================================================================== -->
+    <section class="hero container">
+        <h1>The Electric Motor</h1>
+        <p>A mesmerizing interaction of electricity and magnetism that powers our modern world. Experience how invisible forces create physical motion.</p>
+        
+        <div class="hero-canvas-container">
+            <canvas id="heroCanvas"></canvas>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         COMPONENTS SECTION (Strict Visual + Legend)
+         ========================================================================== -->
+    <section class="container" id="components">
+        <div class="glass-panel">
+            <h2>Anatomy of a Motor</h2>
+            <p>Every component serves a specific physical purpose. Hover or tap the markers to explore.</p>
+            
+            <div class="components-grid">
+                <!-- Visual Left -->
+                <div class="illustration-wrapper">
+                    <!-- SVG acts as a high-quality responsive base -->
+                    <svg class="illustration-svg" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <!-- Linear Gradients for metallic look -->
+                            <linearGradient id="gradN" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#ff4d79"/>
+                                <stop offset="100%" stop-color="#cc0033"/>
+                            </linearGradient>
+                            <linearGradient id="gradS" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#4d94ff"/>
+                                <stop offset="100%" stop-color="#0044cc"/>
+                            </linearGradient>
+                            <linearGradient id="gradCopper" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#ffcc66"/>
+                                <stop offset="50%" stop-color="#cc8800"/>
+                                <stop offset="100%" stop-color="#995500"/>
+                            </linearGradient>
+                            <linearGradient id="gradCarbon" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#555"/>
+                                <stop offset="50%" stop-color="#888"/>
+                                <stop offset="100%" stop-color="#333"/>
+                            </linearGradient>
+                            <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                                <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity="0.6"/>
+                            </filter>
+                        </defs>
+                        
+                        <!-- Magnets (Stator) -->
+                        <path d="M 100,200 C 250,200 250,400 100,400 L 50,400 L 50,200 Z" fill="url(#gradN)" filter="url(#shadow)"/>
+                        <text x="80" y="310" fill="white" font-size="30" font-weight="bold" opacity="0.5">N</text>
+                        
+                        <path d="M 700,200 C 550,200 550,400 700,400 L 750,400 L 750,200 Z" fill="url(#gradS)" filter="url(#shadow)"/>
+                        <text x="690" y="310" fill="white" font-size="30" font-weight="bold" opacity="0.5">S</text>
+
+                        <!-- Armature Coil -->
+                        <g filter="url(#shadow)">
+                            <path d="M 280,300 L 520,250 L 520,350 L 280,350 Z" fill="none" stroke="url(#gradCopper)" stroke-width="12" stroke-linejoin="round"/>
+                            <!-- Shaft -->
+                            <rect x="200" y="295" width="400" height="10" fill="#aaa"/>
+                        </g>
+
+                        <!-- Commutator -->
+                        <path d="M 240,285 A 20 20 0 0 1 240,315 L 220,315 A 20 20 0 0 0 220,285 Z" fill="#ffb366" filter="url(#shadow)"/>
+                        <path d="M 240,317 A 20 20 0 0 0 240,283 L 220,283 A 20 20 0 0 1 220,317 Z" fill="#cc8800" filter="url(#shadow)"/>
+
+                        <!-- Brushes -->
+                        <rect x="210" y="270" width="15" height="14" fill="url(#gradCarbon)"/>
+                        <rect x="210" y="318" width="15" height="14" fill="url(#gradCarbon)"/>
+
+                        <!-- Wires & Battery -->
+                        <path d="M 217,270 L 217,150 L 400,150 L 400,180" fill="none" stroke="#555" stroke-width="4"/>
+                        <path d="M 217,332 L 217,450 L 400,450 L 400,420" fill="none" stroke="#555" stroke-width="4"/>
+                        <!-- Battery Symbol -->
+                        <rect x="360" y="180" width="80" height="240" rx="10" fill="#1a1a2e" stroke="#444" stroke-width="2" filter="url(#shadow)"/>
+                        <rect x="380" y="170" width="40" height="10" fill="#00f0ff"/>
+                        <text x="400" y="220" fill="#00f0ff" font-size="24" text-anchor="middle">+</text>
+                        <text x="400" y="400" fill="#ff4d79" font-size="24" text-anchor="middle">-</text>
+                    </svg>
+
+                    <!-- Absolutely Positioned Markers -->
+                    <div class="marker" style="top: 50%; left: 13%;" data-id="1">1</div>
+                    <div class="marker" style="top: 50%; left: 87%;" data-id="1">1</div>
+                    <div class="marker" style="top: 45%; left: 50%;" data-id="2">2</div>
+                    <div class="marker" style="top: 50%; left: 29%;" data-id="3">3</div>
+                    <div class="marker" style="top: 40%; left: 27%;" data-id="4">4</div>
+                    <div class="marker" style="top: 80%; left: 50%;" data-id="5">5</div>
+                </div>
+
+                <!-- Legend Right -->
+                <div class="legend-list">
+                    <!-- populated by JS -->
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         WORKING PROCESS (Strict Stage-by-Stage Cycle)
+         ========================================================================== -->
+    <section class="container" id="working">
+        <div class="glass-panel">
+            <h2>The Continuous Cycle</h2>
+            <p>A DC motor operates in a continuous flow sequence. Step through the stages to understand the exact moment physics transforms electricity into motion.</p>
+            
+            <div class="working-container">
+                <!-- Visual Left -->
+                <div class="working-visual">
+                    <canvas id="workingCanvas"></canvas>
+                    <!-- Overlays via JS -->
+                </div>
+                
+                <!-- Controls Right -->
+                <div class="working-controls">
+                    <div class="stage-info" id="stageInfo">
+                        <h3><span class="badge" id="stageBadge">Stage 1</span> <span id="stageTitle">Loading...</span></h3>
+                        <p id="stageDesc">Loading description...</p>
+                        <div class="io-indicators" id="stageIO">
+                            <!-- JS injected -->
+                        </div>
+                    </div>
+                    
+                    <div class="control-panel">
+                        <button class="btn" id="btnPrev">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                        </button>
+                        
+                        <div class="progress-dots" id="progressDots">
+                            <div class="dot active"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+
+                        <button class="btn" id="btnNext">
+                            Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                    
+                    <button class="btn primary" id="btnAutoPlay" style="justify-content: center;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Auto-Play Cycle
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         INTERACTIVE SIMULATION
+         ========================================================================== -->
+    <section class="container" id="simulation">
+        <div class="glass-panel">
+            <h2>Interactive Laboratory</h2>
+            <p>Experiment with variables to see how they affect the motor's performance in real-time.</p>
+            
+            <div class="sim-grid">
+                <div class="sim-canvas-wrapper">
+                    <canvas id="simCanvas"></canvas>
+                </div>
+                
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span class="control-label">Voltage (Current)</span>
+                            <span class="control-value" id="valVoltage">9V</span>
+                        </div>
+                        <input type="range" id="sliderVoltage" min="0" max="24" value="9" step="1">
+                        <p style="font-size: 0.75rem; margin-top: 4px;">Increases electron flow and electromagnetic force.</p>
+                    </div>
+                    
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span class="control-label">Magnetic Strength</span>
+                            <span class="control-value" id="valMagnet">1.0T</span>
+                        </div>
+                        <input type="range" id="sliderMagnet" min="0.1" max="2" value="1" step="0.1">
+                        <p style="font-size: 0.75rem; margin-top: 4px;">Stronger stator magnets produce higher torque.</p>
+                    </div>
+                    
+                    <div class="control-group" style="margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--glass-border);">
+                        <div class="control-header">
+                            <span class="control-label">Resulting Speed</span>
+                            <span class="control-value" style="color: #fff;" id="valSpeed">120 RPM</span>
+                        </div>
+                        <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; margin-top: 8px; overflow: hidden;">
+                            <div id="barSpeed" style="width: 50%; height: 100%; background: var(--color-primary); box-shadow: 0 0 10px var(--color-primary); transition: width 0.3s;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         KNOWLEDGE BASE
+         ========================================================================== -->
+    <section class="container">
+        <h2>Fascinating Facts & Applications</h2>
+        <div class="cards-grid">
+            <div class="info-card">
+                <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> The Commutator Trick</h4>
+                <p>If the commutator didn't reverse the current every half-turn, the coil would just flip 90 degrees and get stuck. The split-ring design is the genius mechanic that ensures continuous rotation.</p>
+            </div>
+            <div class="info-card">
+                <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> It's Also a Generator</h4>
+                <p>A DC motor and a DC generator are fundamentally the same machine. If you apply electricity, it spins (Motor). If you mechanically spin it by hand, it produces electricity (Generator). This principle is used in regenerative braking in EVs.</p>
+            </div>
+            <div class="info-card">
+                <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Lorentz Force Law</h4>
+                <p>The mathematical foundation. The force (F) on the wire equals the magnetic field strength (B) times the current (I) times the length of the wire (L). <strong>F = B × I × L</strong>.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        /**
+         * UTILITY: Smooth Easing
+         */
+        const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+        const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
+
+        /**
+         * RENDER ENGINE: Isometric-style 2.5D Motor Renderer
+         * Used across different canvases with different states.
+         */
+        class MotorRenderer {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d', { alpha: false });
+                this.dpr = window.devicePixelRatio || 1;
+                this.width = 0;
+                this.height = 0;
+                this.cx = 0;
+                this.cy = 0;
+                this.scale = 1;
+                
+                // State variables
+                this.angle = 0;           // Coil rotation (radians)
+                this.voltage = 9;         // Affects current particle speed & glow
+                this.magnetStrength = 1.0; // Affects field line density & torque arrows
+                this.time = 0;            // Internal time for particles
+                
+                // Highlights for working section
+                this.highlightCoil = false;
+                this.highlightCommutator = false;
+                this.highlightMagnets = false;
+                this.highlightForce = false;
+                
+                this.initResize();
+            }
+
+            initResize() {
+                const resizeObserver = new ResizeObserver(entries => {
+                    for (let entry of entries) {
+                        const rect = entry.contentRect;
+                        this.width = rect.width;
+                        this.height = rect.height;
+                        this.canvas.width = this.width * this.dpr;
+                        this.canvas.height = this.height * this.dpr;
+                        this.ctx.scale(this.dpr, this.dpr);
+                        this.cx = this.width / 2;
+                        this.cy = this.height / 2;
+                        // Base scale relative to a 800px width reference
+                        this.scale = Math.min(this.width / 800, this.height / 500) * 0.9;
+                    }
+                });
+                resizeObserver.observe(this.canvas.parentElement);
+            }
+
+            drawBackground() {
+                this.ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-base');
+                if(this.canvas.id === 'simCanvas') {
+                    const grad = this.ctx.createRadialGradient(this.cx, this.cy, 0, this.cx, this.cy, this.width);
+                    grad.addColorStop(0, '#101524');
+                    grad.addColorStop(1, '#05070a');
+                    this.ctx.fillStyle = grad;
+                }
+                this.ctx.fillRect(0, 0, this.width, this.height);
+            }
+
+            /**
+             * Draws curved magnets with pseudo-3D gradients
+             */
+            drawMagnets() {
+                const ctx = this.ctx;
+                const s = this.scale;
+                
+                const magnetWidth = 100 * s;
+                const magnetHeight = 250 * s;
+                const gap = 300 * s;
+                
+                ctx.save();
+                
+                // Highlight logic
+                if (this.highlightMagnets) {
+                    ctx.shadowBlur = 30 * s;
+                    ctx.shadowColor = 'rgba(255, 255, 255, 0.5)';
+                } else {
+                    ctx.shadowBlur = 15 * s;
+                    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+                }
+
+                // Left Magnet (North)
+                const nx = this.cx - gap/2 - magnetWidth;
+                const ny = this.cy - magnetHeight/2;
+                
+                const gradN = ctx.createLinearGradient(nx, ny, nx + magnetWidth, ny + magnetHeight);
+                gradN.addColorStop(0, '#ff4d79');
+                gradN.addColorStop(1, '#990026');
+                
+                ctx.fillStyle = gradN;
+                ctx.beginPath();
+                ctx.moveTo(nx, ny);
+                ctx.lineTo(nx + magnetWidth * 0.3, ny);
+                // Curve inner face
+                ctx.quadraticCurveTo(nx + magnetWidth, this.cy, nx + magnetWidth * 0.3, ny + magnetHeight);
+                ctx.lineTo(nx, ny + magnetHeight);
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw 'N'
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.font = `bold ${40*s}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('N', nx + magnetWidth*0.3, this.cy);
+
+                // Right Magnet (South)
+                const sx = this.cx + gap/2;
+                const sy = ny;
+                
+                const gradS = ctx.createLinearGradient(sx, sy, sx + magnetWidth, sy + magnetHeight);
+                gradS.addColorStop(0, '#4d94ff');
+                gradS.addColorStop(1, '#003399');
+                
+                ctx.fillStyle = gradS;
+                ctx.beginPath();
+                ctx.moveTo(sx + magnetWidth, sy);
+                ctx.lineTo(sx + magnetWidth * 0.7, sy);
+                // Curve inner face
+                ctx.quadraticCurveTo(sx, this.cy, sx + magnetWidth * 0.7, sy + magnetHeight);
+                ctx.lineTo(sx + magnetWidth, sy + magnetHeight);
+                ctx.closePath();
+                ctx.fill();
+
+                // Draw 'S'
+                ctx.fillText('S', sx + magnetWidth*0.7, this.cy);
+
+                ctx.restore();
+            }
+
+            drawFieldLines() {
+                if (this.magnetStrength <= 0) return;
+                
+                const ctx = this.ctx;
+                const s = this.scale;
+                const gap = 300 * s;
+                const startX = this.cx - gap/2 * 0.8;
+                const endX = this.cx + gap/2 * 0.8;
+                
+                ctx.save();
+                ctx.strokeStyle = `rgba(0, 240, 255, ${0.1 + (this.magnetStrength * 0.2)})`;
+                ctx.lineWidth = 2 * s;
+                ctx.setLineDash([10 * s, 15 * s]);
+                ctx.lineDashOffset = -this.time * 50 * s; // Animate flow N to S
+
+                const lines = Math.floor(5 * this.magnetStrength);
+                const spread = 150 * s;
+
+                for (let i = -lines; i <= lines; i++) {
+                    const y = this.cy + (i * spread / lines);
+                    ctx.beginPath();
+                    ctx.moveTo(startX, y);
+                    ctx.lineTo(endX, y);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            /**
+             * Draws the rotating rectangular coil with 2.5D depth perception
+             */
+            drawRotor() {
+                const ctx = this.ctx;
+                const s = this.scale;
+                
+                // Dimensions
+                const coilLength = 220 * s; // along X axis (horizontal)
+                const coilRadius = 90 * s;  // radius of rotation around X axis
+                const wireThickness = 8 * s;
+                
+                // Calculate 3D to 2D projection
+                // Rotation is around the X axis (horizontal line through center).
+                // We view it slightly from above, so a circle becomes an ellipse.
+                const perspectiveY = 0.5; // squash factor for Y
+                
+                // Side 1 (Front/Back)
+                const y1 = Math.sin(this.angle) * coilRadius * perspectiveY;
+                const z1 = Math.cos(this.angle); // for depth sorting
+                
+                // Side 2 (Opposite)
+                const y2 = Math.sin(this.angle + Math.PI) * coilRadius * perspectiveY;
+                const z2 = Math.cos(this.angle + Math.PI);
+                
+                const leftX = this.cx - coilLength/2;
+                const rightX = this.cx + coilLength/2;
+
+                ctx.save();
+                ctx.lineJoin = 'round';
+                
+                if (this.highlightCoil) {
+                    ctx.shadowBlur = 20 * s;
+                    ctx.shadowColor = '#ff9d00';
+                }
+
+                // Helper to draw a wire segment
+                const drawWire = (x1, y_1, x2, y_2, isFront, currentDir) => {
+                    // Color based on current direction and depth
+                    const brightness = isFront ? 60 : 35; // HSL lightness
+                    const hue = 35; // Copper orange
+                    
+                    // If voltage is 0, no current flow color
+                    let strokeColor = `hsl(${hue}, 100%, ${brightness}%)`;
+                    if (this.voltage > 0) {
+                        // Add glow if current is flowing
+                        strokeColor = `hsl(${hue}, 100%, ${brightness + (isFront ? 15 : 0)}%)`;
+                    }
+
+                    ctx.beginPath();
+                    ctx.moveTo(x1, this.cy + y_1);
+                    ctx.lineTo(x2, this.cy + y_2);
+                    ctx.strokeStyle = strokeColor;
+                    ctx.lineWidth = wireThickness * (isFront ? 1.2 : 0.8); // Perspective thickness
+                    ctx.stroke();
+
+                    // Draw moving electrons if voltage > 0
+                    if (this.voltage > 0 && currentDir !== 0) {
+                        const numParticles = 3;
+                        ctx.fillStyle = '#00f0ff';
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = '#00f0ff';
+                        for (let i = 0; i < numParticles; i++) {
+                            // Calculate position based on time and direction
+                            let progress = ((this.time * this.voltage * 0.5) + (i / numParticles)) % 1;
+                            if (currentDir < 0) progress = 1 - progress;
+                            
+                            const px = lerp(x1, x2, progress);
+                            const py = this.cy + lerp(y_1, y_2, progress);
+                            
+                            ctx.beginPath();
+                            ctx.arc(px, py, 3 * s * (isFront ? 1 : 0.6), 0, Math.PI * 2);
+                            ctx.fill();
+                        }
+                        ctx.shadowBlur = 0; // reset
+                    }
+                };
+
+                // Draw Shaft (Background part)
+                ctx.fillStyle = '#444';
+                ctx.fillRect(this.cx - 200*s, this.cy - 3*s, 400*s, 6*s);
+
+                // Determine Current Direction in the loop based on Commutator position
+                // Commutator switches every Pi radians.
+                // normalizedAngle modulo 2Pi. 0 to Pi: pos. Pi to 2Pi: neg.
+                const normAngle = ((this.angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+                let currentSide1 = 0, currentSide2 = 0; // 1 for right, -1 for left
+                
+                if (this.voltage > 0) {
+                    if (normAngle < Math.PI) {
+                        currentSide1 = 1;  // Flows right on side 1
+                        currentSide2 = -1; // Flows left on side 2
+                    } else {
+                        currentSide1 = -1; // Flows left on side 1
+                        currentSide2 = 1;  // Flows right on side 2
+                    }
+                }
+
+                // Depth Sorting Draw Order
+                if (z1 < z2) {
+                    // Side 1 is back, draw it first
+                    drawWire(leftX, y1, rightX, y1, false, currentSide1);
+                    // Draw connectors
+                    drawWire(leftX, y1, leftX, y2, false, 0); // left connector (simplified current)
+                    drawWire(rightX, y1, rightX, y2, false, 0); // right connector
+                    // Side 2 is front
+                    drawWire(leftX, y2, rightX, y2, true, currentSide2);
+                } else {
+                    // Side 2 is back
+                    drawWire(leftX, y2, rightX, y2, false, currentSide2);
+                    // Draw connectors
+                    drawWire(leftX, y2, leftX, y1, false, 0);
+                    drawWire(rightX, y2, rightX, y1, false, 0);
+                    // Side 1 is front
+                    drawWire(leftX, y1, rightX, y1, true, currentSide1);
+                }
+
+                // --- Force Vectors (Arrows) ---
+                if (this.highlightForce && this.voltage > 0 && this.magnetStrength > 0) {
+                    // Force = I x B.
+                    // Left side always experiences downward force? Wait, let's trace:
+                    // N is left, S is right. B-field is Left to Right.
+                    // If current goes "in" (away from viewer, +Z) on left wire?
+                    // Actually, let's simplify for visual impact.
+                    // Commutator ensures current on the LEFT side of the axis always flows one way.
+                    // Wait, the coil itself rotates. Let's look at the physical wire at z > 0 (front).
+                    // Just draw torque arrows based on the side's position.
+                    
+                    const drawArrow = (x, y, isUp) => {
+                        ctx.beginPath();
+                        ctx.strokeStyle = '#00f0ff';
+                        ctx.lineWidth = 3 * s;
+                        const len = 40 * s * this.magnetStrength * (this.voltage/9);
+                        const tipY = isUp ? y - len : y + len;
+                        ctx.moveTo(x, y);
+                        ctx.lineTo(x, tipY);
+                        // arrowhead
+                        ctx.lineTo(x - 5*s, isUp ? tipY + 10*s : tipY - 10*s);
+                        ctx.moveTo(x, tipY);
+                        ctx.lineTo(x + 5*s, isUp ? tipY + 10*s : tipY - 10*s);
+                        ctx.stroke();
+                    };
+
+                    // Draw arrow on the wire that is currently in the "front"
+                    // In a real motor, force acts on wires perpendicular to B-field.
+                    // Our horizontal wires (parallel to X axis) don't experience force.
+                    // The connectors (parallel to Z axis) experience the force!
+                    // Let's put arrows on the left and right ends.
+                    // Left side (near N pole): Force is UP.
+                    // Right side (near S pole): Force is DOWN.
+                    // Position them at the ends of the coil.
+                    
+                    drawArrow(leftX, 0 + this.cy, true); // Left goes up
+                    drawArrow(rightX, 0 + this.cy, false); // Right goes down
+                }
+
+                ctx.restore();
+            }
+
+            drawCommutatorAndBrushes() {
+                const ctx = this.ctx;
+                const s = this.scale;
+                
+                const commX = this.cx - 180 * s; // Position on shaft
+                const commRadius = 25 * s;
+                const commWidth = 30 * s;
+                
+                ctx.save();
+                
+                if (this.highlightCommutator) {
+                    ctx.shadowBlur = 15 * s;
+                    ctx.shadowColor = '#fff';
+                }
+
+                // Brushes (Static)
+                ctx.fillStyle = '#666';
+                ctx.fillRect(commX - commWidth/2, this.cy - commRadius - 10*s, commWidth, 10*s); // Top
+                ctx.fillRect(commX - commWidth/2, this.cy + commRadius, commWidth, 10*s); // Bottom
+
+                // Split Rings (Commutator) - rotating
+                // It's a cylinder viewed from side. We draw two rectangles representing the halves.
+                // The split happens when angle is 0 or Pi.
+                
+                // Calculate visible heights based on rotation
+                const normAngle = ((this.angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+                
+                let h1 = Math.cos(normAngle) * commRadius; // Height of top split
+                
+                // Drawing a cylinder segment from side is tricky. Let's simplify.
+                // Draw a full background cylinder, then overlay the gap.
+                ctx.fillStyle = '#b36b00'; // Dark copper
+                ctx.fillRect(commX - commWidth/2 + 2*s, this.cy - commRadius, commWidth - 4*s, commRadius * 2);
+                
+                // Draw the gap. The gap's Y position moves based on sin(angle).
+                const gapY = Math.sin(normAngle) * commRadius;
+                ctx.fillStyle = this.canvas.id === 'workingCanvas' ? '#000' : getComputedStyle(document.documentElement).getPropertyValue('--bg-base');
+                
+                // Gap is a horizontal line that moves up and down
+                // Only visible if it's on the front half (cos(angle) > 0)
+                if (Math.cos(normAngle) > 0) {
+                    ctx.fillRect(commX - commWidth/2, this.cy + gapY - 2*s, commWidth, 4*s);
+                } else {
+                    // draw gap for the back side? usually hidden by shaft, omit for simplicity.
+                }
+
+                // Add gradient for cylindrical volume
+                const cylGrad = ctx.createLinearGradient(0, this.cy - commRadius, 0, this.cy + commRadius);
+                cylGrad.addColorStop(0, 'rgba(255,255,255,0.4)');
+                cylGrad.addColorStop(0.5, 'rgba(0,0,0,0)');
+                cylGrad.addColorStop(1, 'rgba(0,0,0,0.6)');
+                ctx.fillStyle = cylGrad;
+                ctx.fillRect(commX - commWidth/2 + 2*s, this.cy - commRadius, commWidth - 4*s, commRadius * 2);
+
+                ctx.restore();
+            }
+
+            render(dt) {
+                this.time += dt;
+                
+                this.drawBackground();
+                this.drawFieldLines();
+                this.drawMagnets();
+                this.drawCommutatorAndBrushes();
+                this.drawRotor();
+            }
+        }
+
+
+        /**
+         * ==========================================================================
+         * APPLICATION LOGIC
+         * ==========================================================================
+         */
+        
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 1. HERO ANIMATION ---
+            const heroRenderer = new MotorRenderer('heroCanvas');
+            heroRenderer.voltage = 12;
+            heroRenderer.magnetStrength = 1.2;
+            let lastTimeHero = performance.now();
+            
+            function animateHero(now) {
+                const dt = (now - lastTimeHero) / 1000;
+                lastTimeHero = now;
+                // Continuous rotation
+                heroRenderer.angle += dt * 2; 
+                heroRenderer.render(dt);
+                requestAnimationFrame(animateHero);
+            }
+            requestAnimationFrame(animateHero);
+
+
+            // --- 2. COMPONENTS INTERACTION (Strict Pattern) ---
+            const legendData = [
+                { id: 1, title: 'Stator Magnets', desc: 'Stationary permanent magnets providing a constant magnetic field (N to S) across the rotor.' },
+                { id: 2, title: 'Armature (Coil)', desc: 'The rotating electromagnet. Current flows through copper windings, creating a magnetic field that pushes against the stator.' },
+                { id: 3, title: 'Commutator (Split-ring)', desc: 'Crucial mechanism: reverses the current direction in the coil every half-turn to keep it spinning in one direction.' },
+                { id: 4, title: 'Brushes', desc: 'Stationary carbon blocks that conduct electricity from the battery to the spinning commutator.' },
+                { id: 5, title: 'DC Power Source', desc: 'Provides the direct current (electrons) required to create the electromagnetic force.' }
+            ];
+
+            const legendContainer = document.querySelector('.legend-list');
+            const markers = document.querySelectorAll('.marker');
+
+            // Populate Legend
+            legendData.forEach(item => {
+                const html = `
+                    <div class="legend-item" data-id="${item.id}">
+                        <div class="legend-badge">${item.id}</div>
+                        <div class="legend-content">
+                            <h4>${item.title}</h4>
+                            <p>${item.desc}</p>
+                        </div>
+                    </div>
+                `;
+                legendContainer.insertAdjacentHTML('beforeend', html);
+            });
+
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function highlightComponent(id) {
+                markers.forEach(m => m.classList.toggle('active', m.dataset.id == id));
+                legendItems.forEach(l => l.classList.toggle('active', l.dataset.id == id));
+            }
+
+            // Bind Events
+            markers.forEach(m => {
+                m.addEventListener('mouseenter', () => highlightComponent(m.dataset.id));
+                m.addEventListener('touchstart', (e) => { e.preventDefault(); highlightComponent(m.dataset.id); }, {passive: false});
+            });
+            legendItems.forEach(l => {
+                l.addEventListener('mouseenter', () => highlightComponent(l.dataset.id));
+                l.addEventListener('touchstart', (e) => { e.preventDefault(); highlightComponent(l.dataset.id); }, {passive: false});
+            });
+            // Clear on leave
+            document.querySelector('.components-grid').addEventListener('mouseleave', () => highlightComponent(null));
+
+
+            // --- 3. WORKING PROCESS (Strict Sequence Rule) ---
+            const workingRenderer = new MotorRenderer('workingCanvas');
+            const stages = [
+                {
+                    title: "Current Injection",
+                    desc: "Electrons flow from battery through carbon brushes onto the split-ring commutator, entering the coil.",
+                    angleTarget: 0, // Flat horizontal
+                    io: ['⚡ Current IN', '🔄 Contact Made'],
+                    highlights: { comm: true, coil: true, mag: false, force: false }
+                },
+                {
+                    title: "Lorentz Force",
+                    desc: "The current-carrying wire interacts with the stator's magnetic field. An upward force hits the left side, downward on the right.",
+                    angleTarget: Math.PI / 4, // 45 degrees
+                    io: ['🧲 Magnetic Field IN', '⬆️ Torque OUT'],
+                    highlights: { comm: false, coil: true, mag: true, force: true }
+                },
+                {
+                    title: "Commutation",
+                    desc: "As the coil reaches vertical, the split ring breaks contact, then reconnects backward. Current direction in the coil reverses!",
+                    angleTarget: Math.PI / 2, // 90 degrees vertical
+                    io: ['🔄 Polarity Reversal', '⚡ Current Switched'],
+                    highlights: { comm: true, coil: false, mag: false, force: false }
+                },
+                {
+                    title: "Momentum Phase",
+                    desc: "Momentum carries the coil past the vertical dead-zone. The reversed current ensures force continues pushing in the same rotational direction.",
+                    angleTarget: Math.PI * 0.9, // Almost horizontal again
+                    io: ['⚙️ Momentum IN', '🔄 Continuous Rotation OUT'],
+                    highlights: { comm: false, coil: true, mag: true, force: true }
+                }
+            ];
+
+            let currentStage = 0;
+            let isAutoPlaying = false;
+            let autoPlayTimer = null;
+            let targetAngle = stages[0].angleTarget;
+
+            const btnPrev = document.getElementById('btnPrev');
+            const btnNext = document.getElementById('btnNext');
+            const btnAuto = document.getElementById('btnAutoPlay');
+            const dots = document.querySelectorAll('#progressDots .dot');
+            
+            function updateStageUI() {
+                const stage = stages[currentStage];
+                document.getElementById('stageBadge').textContent = `Stage ${currentStage + 1}`;
+                document.getElementById('stageTitle').textContent = stage.title;
+                document.getElementById('stageDesc').textContent = stage.desc;
+                
+                const ioContainer = document.getElementById('stageIO');
+                ioContainer.innerHTML = stage.io.map(text => `<div>${text}</div>`).join('');
+                
+                dots.forEach((dot, idx) => {
+                    dot.classList.toggle('active', idx === currentStage);
+                });
+
+                btnPrev.disabled = currentStage === 0 && !isAutoPlaying;
+                btnNext.disabled = currentStage === stages.length - 1 && !isAutoPlaying;
+
+                // Set Renderer targets
+                targetAngle = stage.angleTarget;
+                if (isAutoPlaying) {
+                    // If auto playing, target is continuously increasing
+                    targetAngle = workingRenderer.angle + (Math.PI / 2);
+                }
+                
+                workingRenderer.highlightCommutator = stage.highlights.comm;
+                workingRenderer.highlightCoil = stage.highlights.coil;
+                workingRenderer.highlightMagnets = stage.highlights.mag;
+                workingRenderer.highlightForce = stage.highlights.force;
+            }
+
+            function goToStage(idx) {
+                currentStage = (idx + stages.length) % stages.length; // Wrap around for auto-play
+                // If moving backwards normally, need to adjust angle target logic slightly, but let's stick to forward cycle visually
+                if(!isAutoPlaying && workingRenderer.angle > stages[currentStage].angleTarget + Math.PI) {
+                     // Normalize renderer angle downward to prevent full backward spin if user clicks prev a lot
+                     workingRenderer.angle = stages[currentStage].angleTarget;
+                }
+                updateStageUI();
+            }
+
+            btnNext.addEventListener('click', () => { stopAutoPlay(); goToStage(currentStage + 1); });
+            btnPrev.addEventListener('click', () => { stopAutoPlay(); goToStage(currentStage - 1); });
+            btnAuto.addEventListener('click', () => {
+                isAutoPlaying ? stopAutoPlay() : startAutoPlay();
+            });
+
+            function startAutoPlay() {
+                isAutoPlaying = true;
+                btnAuto.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg> Stop Auto-Play`;
+                btnAuto.style.background = '#ff2a5f'; // Red stop button
+                
+                // Next stage every 2.5s
+                autoPlayTimer = setInterval(() => {
+                    goToStage(currentStage + 1);
+                }, 2500);
+                
+                updateStageUI(); // Trigger initial state
+            }
+
+            function stopAutoPlay() {
+                isAutoPlaying = false;
+                clearInterval(autoPlayTimer);
+                btnAuto.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Auto-Play Cycle`;
+                btnAuto.style.background = ''; // Default
+                // Snap target back to current stage defined angle to stop rotation
+                targetAngle = stages[currentStage].angleTarget + Math.floor(workingRenderer.angle / (Math.PI*2)) * (Math.PI*2);
+                updateStageUI();
+            }
+
+            // Animation Loop for Working section
+            let lastTimeWork = performance.now();
+            function animateWorking(now) {
+                const dt = (now - lastTimeWork) / 1000;
+                lastTimeWork = now;
+                
+                // Smoothly interpolate current angle to target angle (Morphing transition)
+                // If diff is large (e.g. wrap around), adjust.
+                if (isAutoPlaying) {
+                     // Constant speed based on stage change rate
+                     workingRenderer.angle += dt * 1.5;
+                } else {
+                    // Ease towards target
+                    const diff = targetAngle - workingRenderer.angle;
+                    workingRenderer.angle += diff * dt * 5; // Spring factor
+                }
+
+                workingRenderer.render(dt);
+                requestAnimationFrame(animateWorking);
+            }
+            
+            // Initialize Working section
+            updateStageUI();
+            requestAnimationFrame(animateWorking);
+
+
+            // --- 4. SIMULATION INTERACTION ---
+            const simRenderer = new MotorRenderer('simCanvas');
+            simRenderer.highlightForce = true; // Always show forces in sim to see changes
+            
+            const sliderV = document.getElementById('sliderVoltage');
+            const sliderM = document.getElementById('sliderMagnet');
+            const valV = document.getElementById('valVoltage');
+            const valM = document.getElementById('valMagnet');
+            const valSpeed = document.getElementById('valSpeed');
+            const barSpeed = document.getElementById('barSpeed');
+
+            function updateSimulation() {
+                const v = parseFloat(sliderV.value);
+                const m = parseFloat(sliderM.value);
+                
+                valV.textContent = v + 'V';
+                valM.textContent = m.toFixed(1) + 'T';
+                
+                simRenderer.voltage = v;
+                simRenderer.magnetStrength = m;
+                
+                // Speed is roughly V * M. 
+                // If V=0, speed=0.
+                const speed = v * m * 15; // Arbitrary multiplier for display
+                valSpeed.textContent = Math.round(speed) + ' RPM';
+                
+                // Max theoretical speed here is 24 * 2 * 15 = 720
+                const percent = Math.min(100, (speed / 720) * 100);
+                barSpeed.style.width = percent + '%';
+                
+                // Change bar color based on speed
+                if(percent > 80) barSpeed.style.background = '#ff2a5f'; // Hot/Fast
+                else if(percent > 40) barSpeed.style.background = '#00f0ff'; // Normal
+                else barSpeed.style.background = '#2a75ff'; // Slow
+            }
+
+            sliderV.addEventListener('input', updateSimulation);
+            sliderM.addEventListener('input', updateSimulation);
+            
+            // Handle touch events on sliders to ensure responsive feel
+            [sliderV, sliderM].forEach(el => {
+                el.addEventListener('touchstart', (e) => e.stopPropagation(), {passive: true});
+                el.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
+            });
+
+            updateSimulation(); // Init
+
+            // Animation Loop for Simulation
+            let lastTimeSim = performance.now();
+            function animateSim(now) {
+                const dt = (now - lastTimeSim) / 1000;
+                lastTimeSim = now;
+                
+                // Rotational speed = Voltage * MagnetStrength * constant
+                const speedRad = (simRenderer.voltage / 12) * simRenderer.magnetStrength * 3;
+                simRenderer.angle += speedRad * dt;
+                
+                simRenderer.render(dt);
+                requestAnimationFrame(animateSim);
+            }
+            requestAnimationFrame(animateSim);
+
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Power Simulator | Interactive Educational Experience</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Core Colors */
+            --bg-dark: #05070a;
+            --bg-panel: rgba(15, 20, 30, 0.6);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(255, 255, 255, 0.2);
+            
+            /* Thematic Colors */
+            --color-v: #ff6b00; /* Voltage - Orange/Push */
+            --color-i: #00e5ff; /* Current - Blue/Flow */
+            --color-r: #ff2a5f; /* Resistance - Red/Block */
+            --color-p: #ffd700; /* Power - Gold/Energy */
+            
+            /* Text */
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            /* Typography (Fluid) */
+            --font-hero: clamp(2.5rem, 5vw, 4.5rem);
+            --font-h2: clamp(1.8rem, 3vw, 2.5rem);
+            --font-h3: clamp(1.2rem, 2vw, 1.5rem);
+            --font-body: clamp(0.9rem, 1.5vw, 1.1rem);
+            --font-small: clamp(0.8rem, 1.2vw, 0.95rem);
+            
+            /* Spacing */
+            --space-section: clamp(40px, 8vw, 100px);
+            --space-card: clamp(16px, 3vw, 32px);
+            
+            /* UI */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --blur-heavy: blur(20px);
+            --blur-light: blur(10px);
+            
+            /* Easing */
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            /* Ambient background glow */
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(255, 107, 0, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Performance optimization for mobile blurs */
+        @media (max-width: 768px) {
+            :root {
+                --blur-heavy: blur(8px);
+                --blur-light: blur(4px);
+            }
+            body {
+                background-image: none; /* Reduce GPU load */
+            }
+        }
+
+        /* ==========================================================================
+           2. TYPOGRAPHY & UTILITIES
+           ========================================================================== */
+        h1, h2, h3, h4 { font-weight: 600; line-height: 1.2; letter-spacing: -0.02em; }
+        h1 { font-size: var(--font-hero); }
+        h2 { font-size: var(--font-h2); margin-bottom: 1.5rem; text-align: center; }
+        h3 { font-size: var(--font-h3); margin-bottom: 0.5rem; }
+        p { font-size: var(--font-body); color: var(--text-muted); }
+        
+        .highlight { color: var(--text-main); font-weight: 500; }
+        .gradient-text-p {
+            background: linear-gradient(135deg, #ffd700, #ffaa00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 clamp(16px, 4vw, 40px);
+        }
+
+        .section {
+            padding: var(--space-section) 0;
+            position: relative;
+        }
+
+        /* Premium Glass Panel */
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: var(--blur-heavy);
+            -webkit-backdrop-filter: var(--blur-heavy);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: var(--space-card);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transition: border-color 0.3s ease, transform 0.3s ease;
+        }
+
+        /* ==========================================================================
+           3. HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            opacity: 0.6;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 215, 0, 0.1);
+            border: 1px solid rgba(255, 215, 0, 0.2);
+            border-radius: 100px;
+            color: var(--color-p);
+            font-size: var(--font-small);
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+        }
+
+        .hero h1 { margin-bottom: 1rem; }
+        .hero p { max-width: 600px; margin: 0 auto 2rem auto; font-size: clamp(1.1rem, 2vw, 1.3rem); }
+
+        .formula-card {
+            background: linear-gradient(145deg, rgba(30,40,50,0.8), rgba(15,20,30,0.9));
+            border: 1px solid var(--color-p);
+            padding: 1.5rem 3rem;
+            border-radius: var(--radius-md);
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: bold;
+            box-shadow: 0 0 30px rgba(255, 215, 0, 0.15);
+            display: inline-block;
+            letter-spacing: 0.1em;
+        }
+        .f-p { color: var(--color-p); }
+        .f-v { color: var(--color-v); }
+        .f-i { color: var(--color-i); }
+
+        /* ==========================================================================
+           4. OVERVIEW (Concept Grid)
+           ========================================================================== */
+        .concept-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-card);
+            margin-top: 2rem;
+        }
+
+        .concept-card {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .concept-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+        }
+        .concept-card.v::before { background: var(--color-v); box-shadow: 0 0 15px var(--color-v); }
+        .concept-card.i::before { background: var(--color-i); box-shadow: 0 0 15px var(--color-i); }
+        .concept-card.r::before { background: var(--color-r); box-shadow: 0 0 15px var(--color-r); }
+
+        .concept-icon {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem; font-weight: bold;
+        }
+        .concept-card.v .concept-icon { background: rgba(255, 107, 0, 0.1); color: var(--color-v); border: 1px solid rgba(255, 107, 0, 0.2); }
+        .concept-card.i .concept-icon { background: rgba(0, 229, 255, 0.1); color: var(--color-i); border: 1px solid rgba(0, 229, 255, 0.2); }
+        .concept-card.r .concept-icon { background: rgba(255, 42, 95, 0.1); color: var(--color-r); border: 1px solid rgba(255, 42, 95, 0.2); }
+
+        /* ==========================================================================
+           5. COMPONENTS (Strict Marker & Legend Pattern)
+           ========================================================================== */
+        .diagram-layout {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: clamp(24px, 4vw, 48px);
+            align-items: center;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: var(--space-card);
+        }
+
+        .visual-area {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: #0a0e14;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            overflow: hidden;
+        }
+
+        .svg-circuit {
+            width: 100%;
+            height: 100%;
+            max-width: 500px;
+            overflow: visible;
+        }
+
+        /* Marker Styling */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700; color: white;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4);
+            transition: all 0.3s var(--ease-out-expo);
+            z-index: 10;
+        }
+        
+        .marker::before {
+            content: ''; position: absolute; top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%; border: 1px dashed rgba(255,255,255,0.3);
+            animation: spin 6s linear infinite;
+        }
+
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .marker.active {
+            background: var(--color-p); border-color: var(--color-p); color: black;
+            box-shadow: 0 0 20px var(--color-p), 0 0 0 6px rgba(255, 215, 0, 0.2);
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+        .marker.active::before { border-color: var(--color-p); }
+
+        /* Legend Styling */
+        .legend-area {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.15);
+            transform: translateX(4px);
+        }
+        
+        .legend-item.active {
+            border-color: var(--color-p);
+            background: rgba(255, 215, 0, 0.05);
+        }
+
+        .legend-badge {
+            flex-shrink: 0;
+            width: 28px; height: 28px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: bold;
+            transition: all 0.2s ease;
+        }
+        
+        .legend-item.active .legend-badge {
+            background: var(--color-p); color: black;
+            box-shadow: 0 0 10px var(--color-p);
+        }
+
+        .legend-text { display: flex; flex-direction: column; gap: 4px; }
+        .legend-title { font-weight: 600; font-size: var(--font-body); color: var(--text-main); }
+        .legend-desc { font-size: var(--font-small); color: var(--text-muted); line-height: 1.4; }
+
+        @media (max-width: 1024px) {
+            .diagram-layout { grid-template-columns: 1fr; }
+            .visual-area { min-height: 260px; padding: 1rem; }
+        }
+
+        /* ==========================================================================
+           6. WORKING MECHANISM (Mandatory Sequence Pattern)
+           ========================================================================== */
+        .mechanism-container {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+        }
+
+        /* Top visual area of mechanism */
+        .mech-visual {
+            width: 100%;
+            height: clamp(250px, 40vw, 400px);
+            background: #080b10;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-bottom: 1px solid var(--border-glass);
+            overflow: hidden;
+        }
+
+        /* Mechanism Animation Elements */
+        .mech-circuit {
+            width: 80%; height: 60%;
+            border: 4px solid #334155;
+            border-radius: 20px;
+            position: relative;
+            transition: all 0.5s ease;
+        }
+        
+        .mech-battery {
+            position: absolute; left: 0; top: 50%; transform: translate(-50%, -50%);
+            width: 40px; height: 80px; background: linear-gradient(to bottom, #475569, #1e293b);
+            border-radius: 8px; border: 2px solid #64748b;
+            display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 4px 0;
+            transition: all 0.5s ease; z-index: 2;
+        }
+        .mech-battery::before { content: '+'; color: var(--color-v); font-weight: bold; font-size: 20px; line-height: 1;}
+        .mech-battery::after { content: '-'; color: var(--color-i); font-weight: bold; font-size: 24px; line-height: 1;}
+
+        .mech-bulb {
+            position: absolute; right: 0; top: 50%; transform: translate(50%, -50%);
+            width: 60px; height: 60px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%; border: 2px solid #475569;
+            transition: all 0.5s ease; z-index: 2;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .mech-filament {
+            width: 20px; height: 10px; border-top: 2px solid #64748b; border-radius: 50% 50% 0 0;
+            transition: all 0.5s ease;
+        }
+
+        /* Electrons */
+        .mech-electron {
+            position: absolute; width: 8px; height: 8px; background: var(--color-i); border-radius: 50%;
+            box-shadow: 0 0 8px var(--color-i); opacity: 0;
+            offset-path: path('M 0 50 L 0 0 L 100 0 L 100 100 L 0 100 Z'); /* Approximated via JS for responsiveness */
+        }
+
+        /* Stage states */
+        .mech-visual[data-stage="1"] .mech-battery { box-shadow: 0 0 30px var(--color-v); border-color: var(--color-v); }
+        
+        .mech-visual[data-stage="2"] .mech-circuit { border-color: rgba(0, 229, 255, 0.4); }
+        .mech-visual[data-stage="2"] .mech-electron { opacity: 1; animation: flow 2s linear infinite; }
+        
+        .mech-visual[data-stage="3"] .mech-electron { opacity: 1; animation: flow 2s linear infinite; }
+        .mech-visual[data-stage="3"] .mech-bulb { background: rgba(255, 215, 0, 0.2); border-color: var(--color-p); box-shadow: 0 0 50px rgba(255, 215, 0, 0.5); }
+        .mech-visual[data-stage="3"] .mech-filament { border-color: #fff; box-shadow: 0 -5px 15px #fff; }
+        
+        .mech-visual[data-stage="4"] .mech-electron { opacity: 1; animation: flow 2s linear infinite; }
+        .mech-visual[data-stage="4"] .mech-battery::after { text-shadow: 0 0 10px var(--color-i); }
+
+        @keyframes flow {
+            0% { offset-distance: 0%; }
+            100% { offset-distance: 100%; }
+        }
+
+        /* Bottom info area */
+        .mech-info {
+            padding: var(--space-card);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .mech-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        
+        @media (max-width: 600px) {
+            .mech-header { flex-direction: column; }
+        }
+
+        .mech-text h3 { color: var(--color-p); font-size: 1.4rem; margin-bottom: 4px;}
+        .mech-caption { font-size: 1.1rem; color: var(--text-main); }
+
+        .mech-io {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(0,0,0,0.3);
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-glass);
+            font-size: var(--font-small);
+        }
+        .io-tag { display: flex; align-items: center; gap: 6px; }
+        .io-icon { width: 16px; height: 16px; border-radius: 50%; }
+        .io-arrow { color: var(--text-muted); }
+
+        /* Controls */
+        .mech-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 10px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border-glass);
+        }
+
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: 0.3s; }
+        .dot.active { background: var(--color-p); transform: scale(1.5); box-shadow: 0 0 8px var(--color-p); }
+
+        .btn-group { display: flex; gap: 8px; }
+        
+        .btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-glass);
+            color: var(--text-main);
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex; align-items: center; gap: 8px;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover { background: rgba(255,255,255,0.1); }
+        .btn:active { transform: scale(0.95); }
+        .btn.primary { background: rgba(255, 215, 0, 0.15); border-color: rgba(255, 215, 0, 0.4); color: var(--color-p); }
+        .btn.primary:hover { background: rgba(255, 215, 0, 0.25); }
+
+
+        /* ==========================================================================
+           7. INTERACTIVE SIMULATOR (Engine)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 24px;
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .sim-layout { grid-template-columns: 1fr; }
+        }
+
+        /* Left Panel - Controls */
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+        
+        .val-readout { font-family: monospace; font-size: 1.1rem; }
+        .c-v .val-readout { color: var(--color-v); }
+        .c-r .val-readout { color: var(--color-r); }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 24px; /* Touch target size */
+            cursor: pointer;
+        }
+        
+        input[type=range]:focus { outline: none; }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+        
+        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); }
+        
+        .c-v input[type=range]::-webkit-slider-thumb { background: var(--color-v); box-shadow: 0 0 12px var(--color-v); }
+        .c-r input[type=range]::-webkit-slider-thumb { background: var(--color-r); box-shadow: 0 0 12px var(--color-r); }
+
+        /* Live Readouts */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .metric-card {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            padding: 12px;
+            text-align: center;
+        }
+        .metric-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;}
+        .metric-val { font-size: 1.5rem; font-weight: bold; font-family: monospace; margin-top: 4px;}
+        .m-i { color: var(--color-i); }
+        .m-p { color: var(--color-p); text-shadow: 0 0 15px rgba(255,215,0,0.4); }
+
+        /* Right Panel - Canvas Visuals */
+        .sim-canvas-container {
+            width: 100%;
+            height: clamp(300px, 50vw, 500px);
+            background: #06080d;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-glass);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* ==========================================================================
+           8. APPLICATIONS & FACTS
+           ========================================================================== */
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: var(--space-card);
+        }
+
+        .app-card {
+            background: linear-gradient(180deg, rgba(30,40,50,0.4) 0%, rgba(15,20,30,0.2) 100%);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        .app-card:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.2); }
+        
+        .app-icon { font-size: 2.5rem; margin-bottom: 16px; }
+        .app-power { font-size: 1.8rem; font-weight: bold; color: var(--color-p); font-family: monospace; margin-bottom: 8px;}
+        .app-name { font-weight: 600; margin-bottom: 8px; }
+        .app-desc { font-size: 0.9rem; color: var(--text-muted); }
+
+    </style>
+</head>
+<body>
+
+    <!-- =======================================================================
+         HERO SECTION
+         ======================================================================= -->
+    <section class="hero">
+        <canvas id="bgCanvas" class="hero-canvas"></canvas>
+        <div class="container" style="position: relative; z-index: 1;">
+            <div class="hero-badge">Interactive Physics Module</div>
+            <h1>Understanding <span class="gradient-text-p">Power</span></h1>
+            <p>Power is the rate at which energy is transferred or work is done. In electronics, it determines how bright a bulb glows or how hot a heater gets.</p>
+            
+            <div class="formula-card glass-panel" style="margin-top: 2rem;">
+                <span class="f-p">P</span> = <span class="f-v">V</span> × <span class="f-i">I</span>
+            </div>
+            <p style="margin-top: 1rem; font-size: 1rem;">Power (Watts) = Voltage (Volts) × Current (Amps)</p>
+        </div>
+    </section>
+
+    <!-- =======================================================================
+         OVERVIEW SECTION (Variables)
+         ======================================================================= -->
+    <section class="section container">
+        <h2>The Core Variables</h2>
+        <p style="text-align: center; max-width: 600px; margin: 0 auto;">To understand Power, you must first understand the elements that create it.</p>
+        
+        <div class="concept-grid">
+            <div class="glass-panel concept-card v">
+                <div class="concept-icon">V</div>
+                <h3>Voltage (Volts)</h3>
+                <p>The <span class="highlight">Pressure</span> or <span class="highlight">Push</span>. It's the electrical force that causes free electrons to move from one atom to another. Think of it as the water pressure in a pipe.</p>
+            </div>
+            
+            <div class="glass-panel concept-card i">
+                <div class="concept-icon">I</div>
+                <h3>Current (Amps)</h3>
+                <p>The <span class="highlight">Flow Rate</span>. It is the volume of electrons passing through a point per second. Think of it as the amount of water flowing through the pipe.</p>
+            </div>
+            
+            <div class="glass-panel concept-card r">
+                <div class="concept-icon">Ω</div>
+                <h3>Resistance (Ohms)</h3>
+                <p>The <span class="highlight">Obstruction</span>. It is the opposition to the flow of current. The filament in a bulb has high resistance, which causes friction, generating heat and light.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- =======================================================================
+         COMPONENTS SECTION (Strict Marker Rule)
+         ======================================================================= -->
+    <section class="section container">
+        <h2>System Components</h2>
+        <p style="text-align: center; margin-bottom: 2rem;">Explore a basic electrical circuit that generates power (light and heat).</p>
+        
+        <div class="diagram-layout">
+            <!-- Visual Area -->
+            <div class="visual-area" id="component-diagram">
+                <!-- High Quality SVG Graphic -->
+                <svg class="svg-circuit" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <!-- Battery Gradients -->
+                        <linearGradient id="batBody" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#2a3240"/>
+                            <stop offset="50%" stop-color="#4a5a73"/>
+                            <stop offset="100%" stop-color="#1e2430"/>
+                        </linearGradient>
+                        <linearGradient id="batCap" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#b0b5c0"/>
+                            <stop offset="50%" stop-color="#ffffff"/>
+                            <stop offset="100%" stop-color="#707682"/>
+                        </linearGradient>
+                        <linearGradient id="batLabel" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ff7b00"/>
+                            <stop offset="100%" stop-color="#cc3b00"/>
+                        </linearGradient>
+                        
+                        <!-- Bulb Gradients -->
+                        <radialGradient id="glassGlow" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="rgba(255,255,255,0.15)"/>
+                            <stop offset="80%" stop-color="rgba(255,255,255,0.05)"/>
+                            <stop offset="100%" stop-color="rgba(255,255,255,0.2)"/>
+                        </radialGradient>
+                        
+                        <!-- Shadows -->
+                        <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#000" flood-opacity="0.8"/>
+                        </filter>
+                    </defs>
+
+                    <!-- Wires (Background) -->
+                    <path d="M 100 220 L 300 220 L 300 120 M 100 80 L 300 80 L 300 120" fill="none" stroke="#b08d57" stroke-width="8" stroke-linecap="round" filter="url(#dropShadow)"/>
+                    <!-- Wire highlights -->
+                    <path d="M 100 220 L 300 220 L 300 120 M 100 80 L 300 80 L 300 120" fill="none" stroke="#e0c08b" stroke-width="2" stroke-linecap="round"/>
+
+                    <!-- Battery -->
+                    <g transform="translate(60, 90)" filter="url(#dropShadow)">
+                        <!-- Negative Terminal -->
+                        <rect x="15" y="120" width="30" height="10" rx="3" fill="url(#batCap)"/>
+                        <!-- Body -->
+                        <rect x="0" y="20" width="60" height="100" rx="5" fill="url(#batBody)"/>
+                        <!-- Label Wrap -->
+                        <rect x="0" y="40" width="60" height="60" fill="url(#batLabel)"/>
+                        <!-- Positive Terminal -->
+                        <rect x="15" y="10" width="30" height="10" rx="3" fill="url(#batCap)"/>
+                        <!-- Text -->
+                        <text x="30" y="65" fill="#fff" font-family="sans-serif" font-weight="bold" font-size="12" text-anchor="middle">9V</text>
+                        <text x="30" y="85" fill="#fff" font-family="sans-serif" font-weight="bold" font-size="16" text-anchor="middle">+</text>
+                    </g>
+
+                    <!-- Bulb -->
+                    <g transform="translate(250, 40)" filter="url(#dropShadow)">
+                        <!-- Base Threads -->
+                        <path d="M 35 100 C 35 110, 65 110, 65 100 M 35 105 C 35 115, 65 115, 65 105 M 35 110 C 35 120, 65 120, 65 110" fill="none" stroke="url(#batCap)" stroke-width="8"/>
+                        <!-- Bottom Contact -->
+                        <circle cx="50" cy="120" r="8" fill="#111"/>
+                        <!-- Inner Supports -->
+                        <path d="M 45 100 L 40 60 M 55 100 L 60 60" fill="none" stroke="#888" stroke-width="2"/>
+                        <!-- Tungsten Filament -->
+                        <path d="M 40 60 Q 50 40 60 60" fill="none" stroke="#555" stroke-width="2" id="svg-filament"/>
+                        <!-- Glass Bulb -->
+                        <path d="M 35 100 C 20 80, 10 60, 20 30 C 30 0, 70 0, 80 30 C 90 60, 80 80, 65 100 Z" fill="url(#glassGlow)" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>
+                    </g>
+                </svg>
+
+                <!-- Absolute Positioned Markers overlaying the SVG -->
+                <!-- Coordinates are relative to visual-area (percentages for fluid positioning) -->
+                <div class="marker" style="top: 45%; left: 22%;" data-id="1">1</div>
+                <div class="marker" style="top: 85%; left: 50%;" data-id="2">2</div>
+                <div class="marker" style="top: 25%; left: 74%;" data-id="3">3</div>
+            </div>
+
+            <!-- Legend Area (Flex Flow - No Overlap) -->
+            <div class="legend-area" id="component-legend">
+                <div class="legend-item" data-id="1">
+                    <div class="legend-badge">1</div>
+                    <div class="legend-text">
+                        <span class="legend-title">Voltage Source (Battery)</span>
+                        <span class="legend-desc">Provides the electromotive force (push). Chemical reactions separate charges to create potential difference.</span>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="2">
+                    <div class="legend-badge">2</div>
+                    <div class="legend-text">
+                        <span class="legend-title">Conductive Path (Copper Wire)</span>
+                        <span class="legend-desc">Low-resistance channel that allows free electrons to flow from the negative to the positive terminal.</span>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="3">
+                    <div class="legend-badge">3</div>
+                    <div class="legend-text">
+                        <span class="legend-title">Load / Resistor (Filament)</span>
+                        <span class="legend-desc">High-resistance component. It converts electrical energy into heat and light power as electrons force their way through.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- =======================================================================
+         WORKING MECHANISM (Strict Stages Pattern)
+         ======================================================================= -->
+    <section class="section container">
+        <h2>How Power is Generated</h2>
+        <p style="text-align: center; margin-bottom: 2rem;">Step-by-step breakdown of energy conversion in a circuit loop.</p>
+        
+        <div class="mechanism-container">
+            <!-- Visual Animation Area -->
+            <div class="mech-visual" id="mech-display" data-stage="1">
+                <div class="mech-circuit" id="m-circuit">
+                    <!-- Electrons are injected via JS -->
+                </div>
+                <div class="mech-battery"></div>
+                <div class="mech-bulb">
+                    <div class="mech-filament"></div>
+                </div>
+            </div>
+            
+            <!-- Information & Controls -->
+            <div class="mech-info">
+                <div class="mech-header">
+                    <div class="mech-text">
+                        <h3 id="mech-title">1. Potential Difference</h3>
+                        <p class="mech-caption" id="mech-caption">Chemical reactions inside the battery pile up electrons at the negative terminal, creating a "push" (Voltage).</p>
+                    </div>
+                    <div class="mech-io">
+                        <div class="io-tag"><span class="io-icon" style="background:#475569"></span> Chemistry</div>
+                        <span class="io-arrow">→</span>
+                        <div class="io-tag"><span class="io-icon" style="background:var(--color-v)"></span> Voltage Push</div>
+                    </div>
+                </div>
+                
+                <div class="mech-controls">
+                    <div class="progress-dots" id="mech-dots">
+                        <div class="dot active" data-index="1"></div>
+                        <div class="dot" data-index="2"></div>
+                        <div class="dot" data-index="3"></div>
+                        <div class="dot" data-index="4"></div>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn" id="btn-prev">Prev</button>
+                        <button class="btn primary" id="btn-play">Auto-Play</button>
+                        <button class="btn" id="btn-next">Next</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- =======================================================================
+         INTERACTIVE SIMULATOR (Engine)
+         ======================================================================= -->
+    <section class="section container">
+        <h2>Interactive Simulator</h2>
+        <p style="text-align: center; margin-bottom: 2rem;">Adjust the inputs to see how Voltage and Resistance affect Current and Total Power output (Brightness/Heat).</p>
+
+        <div class="sim-layout glass-panel">
+            <!-- Left Controls -->
+            <div class="sim-controls">
+                
+                <div class="control-group c-v">
+                    <div class="control-header">
+                        <span>Voltage (V)</span>
+                        <span class="val-readout" id="val-v">12 V</span>
+                    </div>
+                    <input type="range" id="slider-v" min="0" max="24" step="1" value="12">
+                    <p style="font-size: 0.8rem; margin-top: 8px; opacity: 0.7">Higher voltage = stronger push.</p>
+                </div>
+
+                <div class="control-group c-r">
+                    <div class="control-header">
+                        <span>Resistance (R)</span>
+                        <span class="val-readout" id="val-r">4 Ω</span>
+                    </div>
+                    <input type="range" id="slider-r" min="1" max="20" step="1" value="4">
+                    <p style="font-size: 0.8rem; margin-top: 8px; opacity: 0.7">Higher resistance = tighter bottleneck.</p>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-label">Current (I = V/R)</div>
+                        <div class="metric-val m-i" id="out-i">3.00 A</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Power (P = V×I)</div>
+                        <div class="metric-val m-p" id="out-p">36.0 W</div>
+                    </div>
+                </div>
+                
+            </div>
+
+            <!-- Right Visuals (Canvas) -->
+            <div class="sim-canvas-container">
+                <canvas id="simCanvas"></canvas>
+            </div>
+        </div>
+    </section>
+
+    <!-- =======================================================================
+         APPLICATIONS & FACTS
+         ======================================================================= -->
+    <section class="section container">
+        <h2>Real-World Power</h2>
+        
+        <div class="app-grid">
+            <div class="app-card glass-panel">
+                <div class="app-icon">📱</div>
+                <div class="app-power">15 W</div>
+                <div class="app-name">Smartphone Charger</div>
+                <div class="app-desc">Low power. Operates at ~5V and 3A. Transfers energy slowly to charge a small battery.</div>
+            </div>
+            
+            <div class="app-card glass-panel">
+                <div class="app-icon">💡</div>
+                <div class="app-power">60 W</div>
+                <div class="app-name">Classic Light Bulb</div>
+                <div class="app-desc">Medium power. Uses 120V mains to push 0.5A through a very thin tungsten wire.</div>
+            </div>
+            
+            <div class="app-card glass-panel">
+                <div class="app-icon">🧊</div>
+                <div class="app-power">400 W</div>
+                <div class="app-name">Refrigerator</div>
+                <div class="app-desc">High power. Requires significant energy per second to run compressors and move heat.</div>
+            </div>
+            
+            <div class="app-card glass-panel">
+                <div class="app-icon">🚗</div>
+                <div class="app-power">150,000 W</div>
+                <div class="app-name">Electric Vehicle (150kW)</div>
+                <div class="app-desc">Extreme power. Operates at ~400V and pulls hundreds of amps to physically move heavy mass.</div>
+            </div>
+        </div>
+    </section>
+
+    <footer style="text-align: center; padding: 40px 20px; border-top: 1px solid var(--border-glass); margin-top: 40px; color: var(--text-muted); font-size: 0.9rem;">
+        Educational Simulator • Interactive Physics Series
+    </footer>
+
+    <!-- =======================================================================
+         JAVASCRIPT LOGIC
+         ======================================================================= -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* -----------------------------------------------------------
+               1. COMPONENTS SECTION LOGIC (Marker/Legend Sync)
+            ----------------------------------------------------------- */
+            const markers = document.querySelectorAll('.marker');
+            const legends = document.querySelectorAll('.legend-item');
+
+            function setActiveComponent(id) {
+                markers.forEach(m => m.classList.remove('active'));
+                legends.forEach(l => l.classList.remove('active'));
+                
+                const activeMarker = document.querySelector(`.marker[data-id="${id}"]`);
+                const activeLegend = document.querySelector(`.legend-item[data-id="${id}"]`);
+                
+                if (activeMarker) activeMarker.classList.add('active');
+                if (activeLegend) activeLegend.classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => setActiveComponent(marker.dataset.id));
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); setActiveComponent(marker.dataset.id); }, {passive: false});
+            });
+
+            legends.forEach(legend => {
+                legend.addEventListener('mouseenter', () => setActiveComponent(legend.dataset.id));
+                legend.addEventListener('touchstart', (e) => { e.preventDefault(); setActiveComponent(legend.dataset.id); }, {passive: false});
+            });
+
+
+            /* -----------------------------------------------------------
+               2. WORKING MECHANISM LOGIC (Stages)
+            ----------------------------------------------------------- */
+            const stages = [
+                {
+                    id: 1,
+                    title: "1. Potential Difference",
+                    caption: "Chemical reactions inside the battery pile up electrons at the negative terminal, creating a 'push' (Voltage).",
+                    inIcon: "#475569", inText: "Chemistry",
+                    outIcon: "var(--color-v)", outText: "Voltage Push"
+                },
+                {
+                    id: 2,
+                    title: "2. Current Flow",
+                    caption: "The voltage push forces free electrons to drift through the low-resistance copper wire.",
+                    inIcon: "var(--color-v)", inText: "Voltage Push",
+                    outIcon: "var(--color-i)", outText: "Electron Flow (Current)"
+                },
+                {
+                    id: 3,
+                    title: "3. Power Dissipation",
+                    caption: "Electrons hit the high-resistance filament, losing energy as they squeeze through. This energy becomes heat and light (Power).",
+                    inIcon: "var(--color-i)", inText: "Current",
+                    outIcon: "var(--color-p)", outText: "Heat & Light (Power)"
+                },
+                {
+                    id: 4,
+                    title: "4. Circuit Return",
+                    caption: "Depleted electrons return to the positive terminal. The battery does work to pump them back, sustaining the cycle.",
+                    inIcon: "var(--color-p)", inText: "Energy Spent",
+                    outIcon: "#475569", outText: "Return Flow"
+                }
+            ];
+
+            let currentStage = 1;
+            let isAutoPlaying = false;
+            let mechInterval;
+
+            const mechDisplay = document.getElementById('mech-display');
+            const titleEl = document.getElementById('mech-title');
+            const captionEl = document.getElementById('mech-caption');
+            const ioContainer = document.querySelector('.mech-io');
+            const dots = document.querySelectorAll('.progress-dots .dot');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnPlay = document.getElementById('btn-play');
+            const circuitBox = document.getElementById('m-circuit');
+
+            // Generate fake electrons along a path for CSS animation (simpler than drawing exact SVG path dynamically)
+            function setupMechElectrons() {
+                circuitBox.innerHTML = '';
+                // Add 8 electrons spaced out
+                for(let i=0; i<8; i++) {
+                    let el = document.createElement('div');
+                    el.className = 'mech-electron';
+                    // Spread their animation delay so they form a continuous loop
+                    el.style.animationDelay = `-${(i * 2) / 8}s`;
+                    // CSS offset-path is defined in stylesheet approximating the box
+                    circuitBox.appendChild(el);
+                }
+            }
+            setupMechElectrons();
+
+            function updateStage(stageId) {
+                currentStage = stageId;
+                const data = stages[stageId - 1];
+                
+                // Update DOM text
+                titleEl.textContent = data.title;
+                captionEl.textContent = data.caption;
+                
+                ioContainer.innerHTML = `
+                    <div class="io-tag"><span class="io-icon" style="background:${data.inIcon}"></span> ${data.inText}</div>
+                    <span class="io-arrow">→</span>
+                    <div class="io-tag"><span class="io-icon" style="background:${data.outIcon}"></span> ${data.outText}</div>
+                `;
+
+                // Update Visual state via data attribute (CSS handles the styling changes)
+                mechDisplay.setAttribute('data-stage', stageId);
+
+                // Update Dots
+                dots.forEach(d => d.classList.remove('active'));
+                document.querySelector(`.dot[data-index="${stageId}"]`).classList.add('active');
+            }
+
+            function nextStage() {
+                let next = currentStage + 1;
+                if (next > 4) next = 1;
+                updateStage(next);
+            }
+            function prevStage() {
+                let prev = currentStage - 1;
+                if (prev < 1) prev = 4;
+                updateStage(prev);
+            }
+
+            btnNext.addEventListener('click', () => { stopAutoPlay(); nextStage(); });
+            btnPrev.addEventListener('click', () => { stopAutoPlay(); prevStage(); });
+            
+            function toggleAutoPlay() {
+                if (isAutoPlaying) {
+                    stopAutoPlay();
+                } else {
+                    isAutoPlaying = true;
+                    btnPlay.textContent = "Pause";
+                    btnPlay.classList.add('active');
+                    nextStage(); // start immediately
+                    mechInterval = setInterval(nextStage, 3000); // 3 sec per stage
+                }
+            }
+
+            function stopAutoPlay() {
+                isAutoPlaying = false;
+                btnPlay.textContent = "Auto-Play";
+                btnPlay.classList.remove('active');
+                clearInterval(mechInterval);
+            }
+
+            btnPlay.addEventListener('click', toggleAutoPlay);
+            
+            // Allow clicking dots
+            dots.forEach(dot => {
+                dot.addEventListener('click', () => {
+                    stopAutoPlay();
+                    updateStage(parseInt(dot.dataset.index));
+                });
+            });
+
+
+            /* -----------------------------------------------------------
+               3. INTERACTIVE SIMULATOR (Canvas Engine)
+            ----------------------------------------------------------- */
+            const simCanvas = document.getElementById('simCanvas');
+            const simCtx = simCanvas.getContext('2d');
+            
+            const sliderV = document.getElementById('slider-v');
+            const sliderR = document.getElementById('slider-r');
+            const valV = document.getElementById('val-v');
+            const valR = document.getElementById('val-r');
+            const outI = document.getElementById('out-i');
+            const outP = document.getElementById('out-p');
+
+            let simWidth, simHeight;
+            let simScale = 1;
+
+            // Physics State
+            let V = parseFloat(sliderV.value);
+            let R = parseFloat(sliderR.value);
+            let I = 0;
+            let P = 0;
+
+            // Animation State
+            let simTime = 0;
+            let electrons = [];
+            const NUM_ELECTRONS = 30;
+
+            // Layout metrics (calculated on resize)
+            let circuitRect = {x:0, y:0, w:0, h:0, r:20};
+
+            function initElectrons() {
+                electrons = [];
+                for(let i=0; i<NUM_ELECTRONS; i++) {
+                    electrons.push({
+                        progress: i / NUM_ELECTRONS // 0 to 1 position along the loop
+                    });
+                }
+            }
+
+            function resizeSimCanvas() {
+                const rect = simCanvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                
+                simWidth = rect.width;
+                simHeight = rect.height;
+                
+                simCanvas.width = simWidth * dpr;
+                simCanvas.height = simHeight * dpr;
+                simCtx.scale(dpr, dpr);
+
+                // Define central circuit path dimensions
+                let padX = simWidth * 0.15;
+                let padY = simHeight * 0.2;
+                
+                // Adjust for mobile screens
+                if (simWidth < 400) { padX = 30; padY = 50; }
+
+                circuitRect = {
+                    x: padX,
+                    y: padY,
+                    w: simWidth - (padX * 2),
+                    h: simHeight - (padY * 2),
+                    r: Math.min(30, simWidth*0.05)
+                };
+            }
+
+            function updatePhysics() {
+                V = parseFloat(sliderV.value);
+                R = parseFloat(sliderR.value);
+                
+                I = V / R; // Ohm's Law
+                P = V * I; // Power Equation
+
+                // Update DOM readouts
+                valV.textContent = V + " V";
+                valR.textContent = R + " Ω";
+                outI.textContent = I.toFixed(2) + " A";
+                outP.textContent = P.toFixed(1) + " W";
+                
+                // Add scale effect to power readout if high
+                outP.style.transform = `scale(${1 + Math.min(P/200, 0.2)})`;
+            }
+
+            // Map progress (0-1) to x,y coordinate on rounded rectangle
+            function getPointOnCircuit(progress) {
+                // Perimeter calculation
+                const pTop = circuitRect.w - 2*circuitRect.r;
+                const pRight = circuitRect.h - 2*circuitRect.r;
+                const pBottom = circuitRect.w - 2*circuitRect.r;
+                const pLeft = circuitRect.h - 2*circuitRect.r;
+                const pCorner = (Math.PI * circuitRect.r * 2) / 4;
+                
+                const totalLength = pTop + pRight + pBottom + pLeft + (4 * pCorner);
+                let dist = (progress % 1) * totalLength;
+                if (dist < 0) dist += totalLength; // handle negative movement
+
+                let x, y;
+                
+                // Top edge
+                if (dist <= pTop) {
+                    x = circuitRect.x + circuitRect.r + dist;
+                    y = circuitRect.y;
+                    return {x,y};
+                }
+                dist -= pTop;
+                
+                // Top Right Corner
+                if (dist <= pCorner) {
+                    let angle = -Math.PI/2 + (dist/pCorner) * (Math.PI/2);
+                    x = circuitRect.x + circuitRect.w - circuitRect.r + Math.cos(angle)*circuitRect.r;
+                    y = circuitRect.y + circuitRect.r + Math.sin(angle)*circuitRect.r;
+                    return {x,y};
+                }
+                dist -= pCorner;
+
+                // Right Edge
+                if (dist <= pRight) {
+                    x = circuitRect.x + circuitRect.w;
+                    y = circuitRect.y + circuitRect.r + dist;
+                    return {x,y};
+                }
+                dist -= pRight;
+
+                // Bottom Right Corner
+                if (dist <= pCorner) {
+                    let angle = 0 + (dist/pCorner) * (Math.PI/2);
+                    x = circuitRect.x + circuitRect.w - circuitRect.r + Math.cos(angle)*circuitRect.r;
+                    y = circuitRect.y + circuitRect.h - circuitRect.r + Math.sin(angle)*circuitRect.r;
+                    return {x,y};
+                }
+                dist -= pCorner;
+
+                // Bottom Edge
+                if (dist <= pBottom) {
+                    x = circuitRect.x + circuitRect.w - circuitRect.r - dist;
+                    y = circuitRect.y + circuitRect.h;
+                    return {x,y};
+                }
+                dist -= pBottom;
+
+                // Bottom Left Corner
+                if (dist <= pCorner) {
+                    let angle = Math.PI/2 + (dist/pCorner) * (Math.PI/2);
+                    x = circuitRect.x + circuitRect.r + Math.cos(angle)*circuitRect.r;
+                    y = circuitRect.y + circuitRect.h - circuitRect.r + Math.sin(angle)*circuitRect.r;
+                    return {x,y};
+                }
+                dist -= pCorner;
+
+                // Left Edge
+                if (dist <= pLeft) {
+                    x = circuitRect.x;
+                    y = circuitRect.y + circuitRect.h - circuitRect.r - dist;
+                    return {x,y};
+                }
+                dist -= pLeft;
+
+                // Top Left Corner
+                if (dist <= pCorner) {
+                    let angle = Math.PI + (dist/pCorner) * (Math.PI/2);
+                    x = circuitRect.x + circuitRect.r + Math.cos(angle)*circuitRect.r;
+                    y = circuitRect.y + circuitRect.r + Math.sin(angle)*circuitRect.r;
+                    return {x,y};
+                }
+                
+                return {x: circuitRect.x, y: circuitRect.y}; // Fallback
+            }
+
+            function drawRoundedRect(ctx, x, y, width, height, radius) {
+                ctx.beginPath();
+                ctx.moveTo(x + radius, y);
+                ctx.lineTo(x + width - radius, y);
+                ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+                ctx.lineTo(x + width, y + height - radius);
+                ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                ctx.lineTo(x + radius, y + height);
+                ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+                ctx.lineTo(x, y + radius);
+                ctx.quadraticCurveTo(x, y, x + radius, y);
+                ctx.closePath();
+            }
+
+            function renderSim() {
+                // Clear
+                simCtx.clearRect(0, 0, simWidth, simHeight);
+
+                // Draw Base Wire
+                simCtx.lineWidth = 12;
+                simCtx.strokeStyle = '#1e293b';
+                simCtx.lineJoin = 'round';
+                drawRoundedRect(simCtx, circuitRect.x, circuitRect.y, circuitRect.w, circuitRect.h, circuitRect.r);
+                simCtx.stroke();
+                
+                // Draw inner wire track
+                simCtx.lineWidth = 4;
+                simCtx.strokeStyle = '#334155';
+                drawRoundedRect(simCtx, circuitRect.x, circuitRect.y, circuitRect.w, circuitRect.h, circuitRect.r);
+                simCtx.stroke();
+
+                // Calculate Battery and Bulb Positions
+                const batX = circuitRect.x;
+                const batY = circuitRect.y + circuitRect.h/2;
+                
+                const bulbX = circuitRect.x + circuitRect.w;
+                const bulbY = circuitRect.y + circuitRect.h/2;
+
+                // --- Draw Electrons ---
+                // Speed depends on Current (I). Cap speed for visual sanity.
+                const speed = (I * 0.001); 
+                
+                simCtx.fillStyle = '#00e5ff';
+                simCtx.shadowColor = '#00e5ff';
+                simCtx.shadowBlur = 10;
+                
+                // If V is 0, no movement. If R is very high, movement is slow.
+                electrons.forEach(el => {
+                    el.progress += speed;
+                    if(el.progress > 1) el.progress -= 1;
+                    
+                    const pos = getPointOnCircuit(el.progress);
+                    
+                    simCtx.beginPath();
+                    simCtx.arc(pos.x, pos.y, 4, 0, Math.PI*2);
+                    simCtx.fill();
+                });
+                simCtx.shadowBlur = 0; // reset
+
+                // --- Draw Battery (Left) ---
+                const bWidth = 50, bHeight = 100;
+                simCtx.fillStyle = '#1e293b';
+                simCtx.fillRect(batX - bWidth/2, batY - bHeight/2, bWidth, bHeight);
+                simCtx.lineWidth = 2;
+                simCtx.strokeStyle = '#64748b';
+                simCtx.strokeRect(batX - bWidth/2, batY - bHeight/2, bWidth, bHeight);
+                
+                // Terminals
+                simCtx.fillStyle = '#94a3b8';
+                simCtx.fillRect(batX - 10, batY - bHeight/2 - 8, 20, 8); // +
+                simCtx.fillRect(batX - 10, batY + bHeight/2, 20, 8); // -
+                
+                // Battery glow based on V
+                if(V > 0) {
+                    simCtx.shadowColor = '#ff6b00';
+                    simCtx.shadowBlur = (V / 24) * 30;
+                    simCtx.strokeStyle = '#ff6b00';
+                    simCtx.strokeRect(batX - bWidth/2, batY - bHeight/2, bWidth, bHeight);
+                    simCtx.shadowBlur = 0;
+                }
+
+                // Battery Text
+                simCtx.fillStyle = '#fff';
+                simCtx.font = 'bold 16px sans-serif';
+                simCtx.textAlign = 'center';
+                simCtx.fillText("+", batX, batY - bHeight/2 + 20);
+                simCtx.fillText("-", batX, batY + bHeight/2 - 10);
+                simCtx.fillStyle = '#ff6b00';
+                simCtx.fillText(V+"V", batX, batY+5);
+
+                // --- Draw Bulb/Resistor (Right) ---
+                // Max possible power is 24^2 / 1 = 576W. 
+                // Normalize P for visuals (0 to 1)
+                const maxExpectedP = (24*24)/1; 
+                let pRatio = Math.min(1, P / 300); // Scale down denominator so it gets bright faster
+                
+                // Base structure
+                simCtx.fillStyle = 'rgba(255,255,255,0.05)';
+                simCtx.beginPath();
+                simCtx.arc(bulbX, bulbY, 40, 0, Math.PI*2);
+                simCtx.fill();
+                simCtx.lineWidth = 2;
+                simCtx.strokeStyle = '#475569';
+                simCtx.stroke();
+                
+                // Filament ( zigzag inside )
+                simCtx.beginPath();
+                simCtx.moveTo(bulbX - 15, bulbY + 20);
+                simCtx.lineTo(bulbX - 10, bulbY - 10);
+                simCtx.lineTo(bulbX, bulbY + 10);
+                simCtx.lineTo(bulbX + 10, bulbY - 10);
+                simCtx.lineTo(bulbX + 15, bulbY + 20);
+                
+                // Filament color & glow based on Power
+                // Low power = dull red. Medium = yellow. High = bright white.
+                let r=100, g=100, b=100, blur=0;
+                if (P > 0) {
+                    r = 255;
+                    g = Math.min(255, P * 2);
+                    b = Math.min(255, P * 0.5);
+                    blur = pRatio * 60;
+                }
+                
+                simCtx.strokeStyle = `rgb(${r},${g},${b})`;
+                simCtx.lineWidth = 3 + (pRatio * 2);
+                simCtx.shadowColor = `rgb(${r},${g},${b})`;
+                simCtx.shadowBlur = blur;
+                simCtx.stroke();
+                
+                // Overall bulb ambient glow
+                if (P > 0) {
+                    simCtx.fillStyle = `rgba(${r},${g},${b},${pRatio * 0.3})`;
+                    simCtx.beginPath();
+                    simCtx.arc(bulbX, bulbY, 40 + (pRatio*20), 0, Math.PI*2);
+                    simCtx.fill();
+                }
+                
+                simCtx.shadowBlur = 0; // reset
+
+                // Resistance label
+                simCtx.fillStyle = '#ff2a5f';
+                simCtx.font = 'bold 14px sans-serif';
+                simCtx.fillText(R+"Ω", bulbX + 55, bulbY+5);
+
+                // Loop
+                requestAnimationFrame(renderSim);
+            }
+
+            // Event Listeners for Simulator
+            sliderV.addEventListener('input', updatePhysics);
+            sliderR.addEventListener('input', updatePhysics);
+            
+            // Touch support for sliders (mobile optimization)
+            const handleTouch = (e, slider) => {
+                const touch = e.touches[0];
+                const rect = slider.getBoundingClientRect();
+                const percent = Math.min(Math.max((touch.clientX - rect.left) / rect.width, 0), 1);
+                const min = parseFloat(slider.min);
+                const max = parseFloat(slider.max);
+                slider.value = Math.round(min + percent * (max - min));
+                updatePhysics();
+            };
+            sliderV.addEventListener('touchmove', (e) => { e.preventDefault(); handleTouch(e, sliderV); }, {passive: false});
+            sliderR.addEventListener('touchmove', (e) => { e.preventDefault(); handleTouch(e, sliderR); }, {passive: false});
+
+            window.addEventListener('resize', () => {
+                resizeSimCanvas();
+            });
+
+
+            /* -----------------------------------------------------------
+               4. HERO BACKGROUND PARTICLES (Ambient Effect)
+            ----------------------------------------------------------- */
+            const bgCanvas = document.getElementById('bgCanvas');
+            const bgCtx = bgCanvas.getContext('2d');
+            let bgWidth, bgHeight;
+            let particles = [];
+
+            function resizeBgCanvas() {
+                bgWidth = bgCanvas.width = window.innerWidth;
+                bgHeight = bgCanvas.height = window.innerHeight * 0.8; // match hero height roughly
+            }
+
+            class Particle {
+                constructor() {
+                    this.x = Math.random() * bgWidth;
+                    this.y = Math.random() * bgHeight;
+                    this.vx = (Math.random() - 0.5) * 0.5;
+                    this.vy = (Math.random() - 0.5) * 0.5;
+                    this.r = Math.random() * 2;
+                    this.alpha = Math.random() * 0.5;
+                    // Mix of voltage/current colors
+                    this.color = Math.random() > 0.5 ? '#00e5ff' : '#ffd700';
+                }
+                update() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    if(this.x < 0 || this.x > bgWidth) this.vx *= -1;
+                    if(this.y < 0 || this.y > bgHeight) this.vy *= -1;
+                }
+                draw() {
+                    bgCtx.fillStyle = this.color;
+                    bgCtx.globalAlpha = this.alpha;
+                    bgCtx.beginPath();
+                    bgCtx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+                    bgCtx.fill();
+                    bgCtx.globalAlpha = 1;
+                }
+            }
+
+            function initBgParticles() {
+                particles = [];
+                const count = window.innerWidth < 768 ? 30 : 80; // Performance limit on mobile
+                for(let i=0; i<count; i++) particles.push(new Particle());
+            }
+
+            function renderBg() {
+                bgCtx.clearRect(0, 0, bgWidth, bgHeight);
+                particles.forEach(p => {
+                    p.update();
+                    p.draw();
+                });
+                
+                // Draw connecting lines if close
+                bgCtx.lineWidth = 0.5;
+                for(let i=0; i<particles.length; i++) {
+                    for(let j=i+1; j<particles.length; j++) {
+                        let dx = particles[i].x - particles[j].x;
+                        let dy = particles[i].y - particles[j].y;
+                        let dist = Math.sqrt(dx*dx + dy*dy);
+                        if(dist < 100) {
+                            bgCtx.globalAlpha = (100 - dist) / 100 * 0.2;
+                            bgCtx.strokeStyle = particles[i].color;
+                            bgCtx.beginPath();
+                            bgCtx.moveTo(particles[i].x, particles[i].y);
+                            bgCtx.lineTo(particles[j].x, particles[j].y);
+                            bgCtx.stroke();
+                        }
+                    }
+                }
+                bgCtx.globalAlpha = 1;
+                requestAnimationFrame(renderBg);
+            }
+
+            window.addEventListener('resize', () => {
+                resizeBgCanvas();
+                initBgParticles();
+            });
+
+            // Init everything
+            resizeBgCanvas();
+            initBgParticles();
+            renderBg();
+            
+            initElectrons();
+            resizeSimCanvas();
+            updatePhysics();
+            renderSim();
+
+        });
+    </script>
+</body>
+</html>

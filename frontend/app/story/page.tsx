@@ -5,8 +5,10 @@ import TopicInput from '@/components/shared/TopicInput'
 import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import StoryPlayer from '@/components/story/StoryPlayer'
-import { api, type Job } from '@/lib/api'
+import { api } from '@/lib/api'
+import type { Job, StoryPlan, EpisodePlan } from '@/lib/api'
 import { useGameProgress } from '@/lib/useGameProgress'
+import { useBellaStore } from '@/lib/bellaStore'
 
 export interface ScenePlan {
   scene_number: number
@@ -63,6 +65,19 @@ function StoryPageInner() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const { completeMission } = useGameProgress()
+  const { triggerExplanation, isExplaining, requestStopSpeaking } = useBellaStore()
+
+  const explainStory = (t: string) => {
+    api.bellaExplain(t, { section: 'story', language: useBellaStore.getState().language })
+      .then((data) => {
+        triggerExplanation({
+          topic: t,
+          text: data.explanation,
+          audioB64: data.audio_b64 ?? null,
+        })
+      })
+      .catch((err) => console.warn('[Story] Bella explain failed:', err))
+  }
 
   const handleJobComplete = async (job: Job) => {
     setJobStatus(job.status)
@@ -95,7 +110,10 @@ function StoryPageInner() {
         try {
           const planAsset = await api.getAsset(job.asset_id)
           const meta = planAsset.metadata as Record<string, unknown>
-          if (buildStoryFromMeta(meta)) return
+          if (buildStoryFromMeta(meta)) {
+            explainStory(topic)
+            return
+          }
         } catch {
           // Fall through to fallback
         }
@@ -109,7 +127,10 @@ function StoryPageInner() {
         )
         if (planAsset) {
           const meta = planAsset.metadata as Record<string, unknown>
-          if (buildStoryFromMeta(meta)) return
+          if (buildStoryFromMeta(meta)) {
+            explainStory(topic)
+            return
+          }
         }
       } catch {
         // ignore
@@ -200,7 +221,22 @@ function StoryPageInner() {
         </div>
       )}
 
-      {story && <StoryPlayer story={story} />}
+      {story && (
+        <div className="animate-fadeInUp">
+          {isExplaining && (
+            <div className="flex justify-end mb-4">
+              <button
+                onClick={requestStopSpeaking}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all shadow-lg"
+              >
+                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                🔇 Stop Bella
+              </button>
+            </div>
+          )}
+          <StoryPlayer story={story} />
+        </div>
+      )}
 
       {!story && !loading && !jobId && (
         <div className="text-center py-20 text-slate-600">

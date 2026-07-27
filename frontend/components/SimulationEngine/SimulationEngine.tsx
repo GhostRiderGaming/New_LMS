@@ -4,6 +4,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useSimulationCache } from './useSimulationCache'
 import { generateSimulation } from './nemotronService'
 import SimulationGallery from './SimulationGallery'
+import SimShell from './SimShell'
 import './SimulationEngine.css'
 
 /**
@@ -55,32 +56,15 @@ export default function SimulationEngine() {
   const [fullscreen, setFullscreen] = useState(false)
   const [iframeLoaded, setIframeLoaded] = useState(false)
   const [iframeError, setIframeError] = useState(false)
+  const [loadingPhase, setLoadingPhase] = useState(0)
 
   const inputRef = useRef<HTMLInputElement>(null)
-  const iframeRef = useRef<HTMLIFrameElement>(null)
   const { getCached, setCached } = useSimulationCache()
 
   // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
-
-  // Load simulation HTML into iframe via direct DOM manipulation.
-  // React does NOT reliably update iframe `src` via state/props — this is a known React issue.
-  // Using ref-based approach (same pattern as SimulationFrame) is the proven fix.
-  useEffect(() => {
-    if (!simulationCode || !iframeRef.current) return
-    setIframeLoaded(false)
-    setIframeError(false)
-    const blob = new Blob([simulationCode], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    iframeRef.current.src = url
-    
-    return () => {
-      // Delay revocation so React Strict Mode doesn't break the iframe load
-      setTimeout(() => URL.revokeObjectURL(url), 1000)
-    }
-  }, [simulationCode])
 
   // Escape key exits fullscreen
   useEffect(() => {
@@ -90,6 +74,15 @@ export default function SimulationEngine() {
     window.addEventListener('keydown', handleEsc)
     return () => window.removeEventListener('keydown', handleEsc)
   }, [fullscreen])
+
+  // Cycle loading phase messages
+  useEffect(() => {
+    if (!loading) { setLoadingPhase(0); return }
+    const interval = setInterval(() => {
+      setLoadingPhase(prev => (prev + 1) % 5)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [loading])
 
   const handleSimulate = useCallback(async (conceptOverride?: string) => {
     const target = conceptOverride ?? concept
@@ -145,23 +138,7 @@ export default function SimulationEngine() {
     setGalleryKey(prev => prev + 1)
   }
 
-  const handleDownload = () => {
-    if (!simulationCode || !activeConcept) return
-    const blob = new Blob([simulationCode], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${activeConcept.replace(/\s+/g, '-').toLowerCase()}-simulation.html`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
 
-  const handleOpenNewTab = () => {
-    if (!simulationCode) return
-    const blob = new Blob([simulationCode], { type: 'text/html' })
-    const url = URL.createObjectURL(blob)
-    window.open(url, '_blank')
-  }
 
   const handleRegenerate = () => {
     if (activeConcept) {
@@ -289,12 +266,21 @@ export default function SimulationEngine() {
       {loading && (
         <div className="sim-engine__loading">
           <div className="sim-engine__loading-orb">
+            <div className="sim-engine__loading-ring sim-engine__loading-ring--outer" />
             <div className="sim-engine__loading-ring" />
             <div className="sim-engine__loading-ring sim-engine__loading-ring--delay" />
             <span className="sim-engine__loading-icon">🧠</span>
           </div>
           <div className="sim-engine__loading-text">
-            <p className="sim-engine__loading-title">Generating simulation…</p>
+            <p className="sim-engine__loading-title">
+              {[
+                'Analyzing concept…',
+                'Building simulation layout…',
+                'Rendering canvas physics…',
+                'Wiring interactive controls…',
+                'Finalizing simulation…',
+              ][loadingPhase]}
+            </p>
             <p className="sim-engine__loading-desc">
               AI is crafting an interactive visualization for <strong>{activeConcept}</strong>
             </p>
@@ -345,86 +331,17 @@ export default function SimulationEngine() {
         </div>
       )}
 
-      {/* Simulation Iframe */}
-      {simulationCode && (
-        <div className={`sim-engine__viewport ${fullscreen ? 'sim-engine__viewport--fullscreen' : ''}`}>
-          <div className="sim-engine__viewport-toolbar">
-            <div className="sim-engine__viewport-dots">
-              <span className="sim-engine__dot sim-engine__dot--red" />
-              <span className="sim-engine__dot sim-engine__dot--yellow" />
-              <span className="sim-engine__dot sim-engine__dot--green" />
-            </div>
-            <span className="sim-engine__viewport-label">
-              {activeConcept} — Interactive Simulation
-            </span>
-            <div className="sim-engine__viewport-actions">
-              {fromCache && (
-                <span className="sim-engine__viewport-cached">⚡ cached</span>
-              )}
-              <button
-                className="sim-engine__action-btn sim-engine__action-btn--regen"
-                onClick={handleRegenerate}
-                title="Regenerate this simulation"
-              >
-                <span className="sim-engine__action-btn-icon">↻</span>
-                <span className="sim-engine__action-btn-label">Regenerate</span>
-              </button>
-              <button
-                className="sim-engine__action-btn"
-                onClick={handleDownload}
-                title="Download as HTML file"
-              >
-                <span className="sim-engine__action-btn-icon">↓</span>
-                <span className="sim-engine__action-btn-label">Download</span>
-              </button>
-              <button
-                className="sim-engine__action-btn"
-                onClick={handleOpenNewTab}
-                title="Open in a new browser tab"
-              >
-                <span className="sim-engine__action-btn-icon">↗</span>
-                <span className="sim-engine__action-btn-label">New Tab</span>
-              </button>
-              {fullscreen ? (
-                <button
-                  className="sim-engine__action-btn sim-engine__action-btn--close-fs"
-                  onClick={() => setFullscreen(false)}
-                  title="Exit fullscreen (Esc)"
-                >
-                  <span className="sim-engine__action-btn-icon">✕</span>
-                  <span className="sim-engine__action-btn-label">Exit</span>
-                </button>
-              ) : (
-                <button
-                  className="sim-engine__action-btn sim-engine__action-btn--fullscreen"
-                  onClick={() => setFullscreen(true)}
-                  title="Fullscreen mode"
-                >
-                  <span className="sim-engine__action-btn-icon">⊞</span>
-                  <span className="sim-engine__action-btn-label">Fullscreen</span>
-                </button>
-              )}
-            </div>
-          </div>
-          <iframe
-            ref={iframeRef}
-            id="simulation-iframe"
-            sandbox="allow-scripts allow-same-origin"
-            title="Interactive Simulation"
-            className="sim-engine__iframe"
-            style={{ height: fullscreen ? 'calc(100vh - 3.25rem)' : '560px' }}
-            onLoad={() => { setIframeLoaded(true); setIframeError(false) }}
-            onError={() => { setIframeError(true); setIframeLoaded(false) }}
-          />
-          {/* Status bar */}
-          {(iframeLoaded || iframeError) && (
-            <div className={`sim-engine__iframe-status ${iframeLoaded ? 'sim-engine__iframe-status--loaded' : ''} ${iframeError ? 'sim-engine__iframe-status--error' : ''}`}>
-              <span className="sim-engine__iframe-status-dot" />
-              {iframeLoaded && 'Simulation loaded successfully'}
-              {iframeError && 'Simulation failed to load — try regenerating'}
-            </div>
-          )}
-        </div>
+      {/* Simulation Shell (PhET-style Architecture) */}
+      {simulationCode && activeConcept && (
+        <SimShell
+          concept={activeConcept}
+          simulationCode={simulationCode}
+          fullscreen={fullscreen}
+          onToggleFullscreen={() => setFullscreen(!fullscreen)}
+          onRegenerate={handleRegenerate}
+          onIframeLoad={() => { setIframeLoaded(true); setIframeError(false); }}
+          onIframeError={() => { setIframeError(true); setIframeLoaded(false); }}
+        />
       )}
 
       {/* Empty State */}
@@ -437,11 +354,12 @@ export default function SimulationEngine() {
             <div className="sim-engine__empty-orbit sim-engine__empty-orbit--3" />
           </div>
           <p className="sim-engine__empty-text">
-            Enter a concept above to generate an interactive simulation
+            Type any concept to generate a stunning interactive simulation
           </p>
           <p className="sim-engine__empty-hint">
             Works with physics laws, math theorems, geometry, waves, circuits & more.
-            Each simulation includes real-time controls and educational explanations.
+            Each simulation features a premium two-column layout with live measurements,
+            custom sliders, and real-time canvas visualizations with glow effects.
           </p>
 
           {/* How it works steps */}

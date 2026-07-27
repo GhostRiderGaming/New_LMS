@@ -1,108 +1,151 @@
 """
-Simulation generation router.
+Simulation library router.
 
-POST /api/v1/simulation/generate — submit a simulation generation job.
+GET /api/v1/simulation/list — list all pre-built simulations, categorized.
+GET /api/v1/simulation/file/{category}/{filename} — serve a simulation HTML file.
 
-Returns 202 immediately with job_id (async Celery task does the actual work).
-Runs safety pre-check before enqueuing (Requirement 8.4).
-
-Requirements: 2.6
+Reads HTML files from storage/Bucket_simulation/{Maths_simulations,Science_simulations}
+and extracts <title> tags for display names.
 """
 from __future__ import annotations
 
-import uuid
+import os
+import re
+from functools import lru_cache
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
-
-from app.core.auth import get_current_session
-from app.models.anime_assets import Job, get_db
-from app.services.safety import safety_service
-from app.services.simulation_engine import SimulationCategory
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 
 router = APIRouter()
 
-
 # ---------------------------------------------------------------------------
-# Request / Response models
-# ---------------------------------------------------------------------------
-
-class SimulationRequest(BaseModel):
-    topic: str = Field(..., min_length=1, max_length=500)
-    category: SimulationCategory = SimulationCategory.physics
-
-
-class SimulationResponse(BaseModel):
-    job_id: str
-    status: str
-    request_id: str
-
-
-# ---------------------------------------------------------------------------
-# Endpoint
+# Paths
 # ---------------------------------------------------------------------------
 
-@router.post("/generate", response_model=SimulationResponse, status_code=202)
-async def generate_simulation(
-    body: SimulationRequest,
-    db: Session = Depends(get_db),
-    session: dict = Depends(get_current_session),
-):
-    """
-    Submit a simulation generation job.
+_STORAGE_ROOT = Path(__file__).resolve().parent.parent.parent / "storage" / "Bucket_simulation"
 
-    Returns 202 with job_id immediately — generation runs asynchronously.
-    Rejects unsafe topics with 422 before any job is created (Requirement 8.4).
-    """
-    request_id = str(uuid.uuid4())
+_CATEGORY_MAP = {
+    "Maths": {
+        "dir": "Maths_simulations",
+        "icon": "📐",
+    },
+    "Science": {
+        "dir": "Science_simulations",
+        "icon": "🔬",
+    },
+}
 
-    # Safety pre-check (Requirement 8.4)
-    safety = await safety_service.check_topic(body.topic)
-    if not safety.safe:
-        raise HTTPException(
-            status_code=422,
-            detail={
-                "error": "safety_violation",
-                "reason": safety.reason,
-                "request_id": request_id,
-            },
-        )
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    # Create job record
-    job_id = str(uuid.uuid4())
-    job = Job(
-        job_id=job_id,
-        type="simulation",
-        status="queued",
-        topic=body.topic,
-        parameters={"category": body.category.value},
-        session_id=session["session_id"],
-    )
-    db.add(job)
-    db.commit()
+_TITLE_RE = re.compile(r"<title>(.*?)</title>", re.IGNORECASE | re.DOTALL)
 
-    # Enqueue Celery task, fall back to in-process execution if broker is down
+
+def _extract_title(filepath: Path) -> str:
+    """Read just enough of the file to grab the <title> tag."""
     try:
-        from app.worker import generate_simulation_task
-        generate_simulation_task.delay(
-            job_id=job_id,
-            topic=body.topic,
-            category=body.category.value,
-            session_id=session["session_id"],
-        )
+        # Read first 2KB — titles are always near the top
+        with open(filepath, "r", encoding="utf-8", errors="replace") as f:
+            head = f.read(2048)
+        match = _TITLE_RE.search(head)
+        if match:
+            # Clean up the title: strip suffixes like " | Interactive Simulation"
+            raw = match.group(1).strip()
+            # Remove common verbose suffixes for a cleaner display name
+            for sep in [" | ", " - ", " — ", ": "]:
+                if sep in raw:
+                    parts = raw.split(sep)
+                    # Keep up to the first meaningful part if the rest is generic
+                    generic_words = {"interactive", "simulation", "lab", "laboratory",
+                                     "premium", "educational", "experience",
+                                     "visualizer", "visualization", "explorer",
+                                     "science", "physics", "math"}
+                    # If the last part is mostly generic descriptor words, drop it
+                    last_words = set(parts[-1].lower().split())
+                    if last_words and last_words.issubset(generic_words):
+                        raw = sep.join(parts[:-1])
+                        break
+            return raw
+        return filepath.stem.replace("-", " ").replace("_", " ").title()
     except Exception:
-        from app.services.task_executor import run_simulation_job
-        from app.services.task_runner import dispatch_async
-        dispatch_async(run_simulation_job(
-            job_id=job_id,
-            topic=body.topic,
-            category=body.category.value,
-            session_id=session["session_id"],
+        return filepath.stem.replace("-", " ").replace("_", " ").title()
+
+
+# ---------------------------------------------------------------------------
+# Response models
+# ---------------------------------------------------------------------------
+
+class SimulationItem(BaseModel):
+    id: str
+    title: str
+    filename: str
+    category: str
+
+
+class CategoryGroup(BaseModel):
+    name: str
+    icon: str
+    simulations: list[SimulationItem]
+
+
+class SimulationListResponse(BaseModel):
+    categories: list[CategoryGroup]
+    total: int
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/list", response_model=SimulationListResponse)
+async def list_simulations():
+    """Return all pre-built simulations grouped by category."""
+    categories: list[CategoryGroup] = []
+    total = 0
+
+    for cat_name, cat_info in _CATEGORY_MAP.items():
+        cat_dir = _STORAGE_ROOT / cat_info["dir"]
+        if not cat_dir.is_dir():
+            continue
+
+        sims: list[SimulationItem] = []
+        for html_file in sorted(cat_dir.glob("*.html")):
+            title = _extract_title(html_file)
+            sims.append(SimulationItem(
+                id=html_file.stem,
+                title=title,
+                filename=html_file.name,
+                category=cat_name,
+            ))
+
+        total += len(sims)
+        categories.append(CategoryGroup(
+            name=cat_name,
+            icon=cat_info["icon"],
+            simulations=sims,
         ))
 
-    return SimulationResponse(
-        job_id=job_id,
-        status="queued",
-        request_id=request_id,
-    )
+    return SimulationListResponse(categories=categories, total=total)
+
+
+@router.get("/file/{category}/{filename}", response_class=HTMLResponse)
+async def get_simulation_file(category: str, filename: str):
+    """Serve a specific simulation HTML file."""
+    # Validate category
+    cat_info = _CATEGORY_MAP.get(category)
+    if not cat_info:
+        raise HTTPException(status_code=404, detail=f"Category '{category}' not found")
+
+    # Security: prevent path traversal
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    filepath = _STORAGE_ROOT / cat_info["dir"] / filename
+    if not filepath.is_file():
+        raise HTTPException(status_code=404, detail=f"Simulation '{filename}' not found")
+
+    content = filepath.read_text(encoding="utf-8", errors="replace")
+    return HTMLResponse(content=content)

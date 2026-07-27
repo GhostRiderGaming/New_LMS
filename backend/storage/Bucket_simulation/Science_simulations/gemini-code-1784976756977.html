@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Particle Motion Visualizer</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & DESIGN SYSTEM
+           ========================================================================== */
+        :root {
+            /* Colors */
+            --bg-dark: #05050A;
+            --bg-glow: #1a1a2e;
+            --accent-cold: #00E5FF;
+            --accent-mid: #B055FF;
+            --accent-hot: #FF3366;
+            --text-main: #FFFFFF;
+            --text-muted: #8E9BAE;
+            
+            /* Glassmorphism */
+            --glass-bg: rgba(20, 22, 35, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --glass-highlight: inset 0 1px 0 0 rgba(255,255,255,0.1);
+
+            /* Typography */
+            --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            /* Transitions */
+            --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+            --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+        }
+
+        /* ==========================================================================
+           BASE STYLES & RESET
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Animated Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.08), transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(255, 51, 102, 0.08), transparent 50%);
+            animation: breathe 10s ease-in-out infinite alternate;
+        }
+
+        @keyframes breathe {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(1rem, 4vw, 3rem);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(3rem, 6vw, 6rem);
+        }
+
+        /* Typography */
+        h1 {
+            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #fff 0%, #8E9BAE 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        h2 {
+            font-size: clamp(1.8rem, 4vw, 3rem);
+            font-weight: 700;
+            margin-bottom: 1.5rem;
+            color: #fff;
+        }
+
+        h3 {
+            font-size: clamp(1.2rem, 2vw, 1.5rem);
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+
+        p {
+            font-size: clamp(1rem, 1.2vw, 1.125rem);
+            color: var(--text-muted);
+            max-width: 65ch;
+        }
+
+        /* Glass Card Utility */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: clamp(1.5rem, 3vw, 2.5rem);
+            box-shadow: var(--glass-shadow);
+            box-shadow: var(--glass-highlight), var(--glass-shadow);
+        }
+
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(10px); /* Performance on mobile */
+                -webkit-backdrop-filter: blur(10px);
+                border-radius: 16px;
+                padding: 1.25rem;
+            }
+        }
+
+        /* ==========================================================================
+           SECTION 1: HERO
+           ========================================================================== */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: relative;
+            gap: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .hero-content {
+            flex: 1;
+            min-width: 300px;
+            z-index: 2;
+        }
+
+        .hero-visual {
+            flex: 1;
+            min-width: 300px;
+            height: 500px;
+            position: relative;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #hero-canvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            mix-blend-mode: screen;
+        }
+
+        .gradient-orb {
+            width: 60%;
+            height: 60%;
+            background: radial-gradient(circle, rgba(176,85,255,0.4) 0%, transparent 70%);
+            border-radius: 50%;
+            filter: blur(40px);
+            animation: pulse-orb 4s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulse-orb {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.2); opacity: 1; }
+        }
+
+        /* ==========================================================================
+           SECTION 2: COMPONENTS (SVG & LEGEND)
+           ========================================================================== */
+        .components-grid {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .components-grid { grid-template-columns: 1fr; }
+        }
+
+        .svg-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            padding: 1rem;
+            border: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .svg-container svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+            overflow: visible;
+        }
+
+        /* Interactive Markers */
+        .marker {
+            cursor: pointer;
+            transition: all 0.3s var(--ease-out-expo);
+        }
+        
+        .marker circle {
+            fill: var(--bg-dark);
+            stroke: var(--accent-mid);
+            stroke-width: 2;
+            transition: all 0.3s;
+        }
+
+        .marker text {
+            fill: #fff;
+            font-family: var(--font-main);
+            font-size: 14px;
+            font-weight: bold;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+
+        .marker-glow {
+            fill: var(--accent-mid);
+            opacity: 0;
+            filter: blur(4px);
+            transition: opacity 0.3s;
+        }
+
+        .marker:hover circle, .marker.active circle {
+            fill: var(--accent-mid);
+            transform: scale(1.1);
+        }
+        .marker:hover .marker-glow, .marker.active .marker-glow {
+            opacity: 0.5;
+        }
+
+        /* Legend */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s var(--ease-out-expo);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(176, 85, 255, 0.1);
+            border-color: rgba(176, 85, 255, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--accent-mid);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+            box-shadow: 0 0 10px rgba(176,85,255,0.5);
+        }
+
+        .legend-content h4 {
+            color: #fff;
+            font-size: 1.1rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .legend-content p {
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        /* ==========================================================================
+           SECTION 3: WORKING MECHANISM (STEP-BY-STEP)
+           ========================================================================== */
+        .working-section {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .stage-visual {
+            width: 100%;
+            height: 400px;
+            background: #000;
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        #working-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .stage-info {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+            align-items: center;
+        }
+
+        .stage-title {
+            color: var(--accent-mid);
+            font-size: 1.5rem;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: #fff;
+        }
+
+        .btn-primary {
+            background: var(--accent-mid);
+            border-color: var(--accent-mid);
+        }
+        .btn-primary:hover {
+            background: #c37aff;
+            box-shadow: 0 0 15px rgba(176, 85, 255, 0.5);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 0.5rem;
+            margin: 0 1rem;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+
+        .dot.active {
+            background: var(--accent-mid);
+            transform: scale(1.3);
+            box-shadow: 0 0 8px var(--accent-mid);
+        }
+
+        /* ==========================================================================
+           SECTION 4: INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 2rem;
+            min-height: 500px;
+        }
+
+        @media (max-width: 1024px) {
+            .sim-grid { grid-template-columns: 1fr; }
+        }
+
+        .sim-visual {
+            background: #000;
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            height: 100%;
+            min-height: 400px;
+        }
+
+        #sandbox-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Real-time Data overlay inside canvas container */
+        .data-overlay {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            display: flex;
+            gap: 1rem;
+            pointer-events: none;
+        }
+
+        .data-metric {
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+            font-family: monospace;
+            font-size: 0.9rem;
+            display: flex;
+            flex-direction: column;
+        }
+        .data-metric span:first-child { color: var(--text-muted); font-size: 0.7rem; text-transform: uppercase;}
+        .data-metric span:last-child { color: #fff; font-weight: bold; font-size: 1.1rem;}
+
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .control-header label {
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .control-value {
+            font-family: monospace;
+            color: var(--accent-mid);
+            background: rgba(176,85,255,0.1);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        /* Custom Slider Premium Design */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]:focus {
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* Thermal Gradient Track for Temperature */
+        #temp-slider::-webkit-slider-runnable-track {
+            background: linear-gradient(90deg, var(--accent-cold), var(--accent-mid), var(--accent-hot));
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            border: 2px solid var(--bg-dark);
+            transition: transform 0.1s;
+        }
+
+        input[type=range]:active::-webkit-slider-thumb {
+            transform: scale(1.2);
+        }
+
+        /* State Presets */
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+        }
+        .btn-preset {
+            padding: 0.5rem;
+            font-size: 0.85rem;
+            text-align: center;
+            justify-content: center;
+        }
+
+        /* ==========================================================================
+           SECTION 5: INFO GRIDS (Apps, Facts, Mistakes)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .info-card {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .icon-wrapper.blue { color: var(--accent-cold); background: rgba(0,229,255,0.1); border-color: rgba(0,229,255,0.2); }
+        .icon-wrapper.purple { color: var(--accent-mid); background: rgba(176,85,255,0.1); border-color: rgba(176,85,255,0.2); }
+        .icon-wrapper.red { color: var(--accent-hot); background: rgba(255,51,102,0.1); border-color: rgba(255,51,102,0.2); }
+
+
+    </style>
+</head>
+<body>
+    <div class="ambient-bg"></div>
+
+    <main class="container">
+        
+        <!-- HERO SECTION -->
+        <section class="hero">
+            <div class="hero-content">
+                <h1>Kinetic Theory<br>Visualized.</h1>
+                <p>Matter is never truly still. Discover how the invisible motion of particles dictates the state of everything around us, governed by temperature and pressure.</p>
+            </div>
+            <div class="hero-visual">
+                <div class="gradient-orb"></div>
+                <canvas id="hero-canvas"></canvas>
+            </div>
+        </section>
+
+        <!-- COMPONENTS SECTION -->
+        <section class="glass-panel">
+            <h2>The Containment Apparatus</h2>
+            <p style="margin-bottom: 2rem;">To observe molecular behavior, we conceptualize a specialized apparatus that manipulates thermal energy and physical boundaries.</p>
+            
+            <div class="components-grid">
+                <!-- SVG Illustration -->
+                <div class="svg-container">
+                    <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="chamber-bg" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#1A1C29" />
+                                <stop offset="100%" stop-color="#0A0B10" />
+                            </linearGradient>
+                            <linearGradient id="glass-glare" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.2)" />
+                                <stop offset="50%" stop-color="rgba(255,255,255,0.0)" />
+                            </linearGradient>
+                            <linearGradient id="thermal-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#00E5FF" />
+                                <stop offset="50%" stop-color="#B055FF" />
+                                <stop offset="100%" stop-color="#FF3366" />
+                            </linearGradient>
+                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="5" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                        </defs>
+
+                        <!-- Main Chamber Body -->
+                        <rect x="100" y="50" width="200" height="200" rx="20" fill="url(#chamber-bg)" stroke="#333" stroke-width="2"/>
+                        
+                        <!-- Observation Window (Glass) -->
+                        <rect x="120" y="70" width="160" height="130" rx="10" fill="#05050A" stroke="#555" stroke-width="1"/>
+                        <rect x="120" y="70" width="160" height="130" rx="10" fill="url(#glass-glare)" pointer-events="none"/>
+                        
+                        <!-- Particles (Decorative static) -->
+                        <circle cx="160" cy="150" r="4" fill="#00E5FF" filter="url(#glow)"/>
+                        <circle cx="200" cy="130" r="4" fill="#B055FF" filter="url(#glow)"/>
+                        <circle cx="240" cy="160" r="4" fill="#FF3366" filter="url(#glow)"/>
+
+                        <!-- Pressure Piston (Top) -->
+                        <path d="M140 50 L140 20 L260 20 L260 50" fill="none" stroke="#666" stroke-width="4"/>
+                        <rect x="130" y="10" width="140" height="15" rx="4" fill="#444"/>
+                        <rect x="145" y="50" width="110" height="10" fill="#888"/> <!-- Piston head -->
+
+                        <!-- Thermal Injector (Bottom) -->
+                        <rect x="120" y="250" width="160" height="20" rx="5" fill="#222" stroke="#444" stroke-width="2"/>
+                        <rect x="130" y="255" width="140" height="10" rx="2" fill="url(#thermal-grad)"/>
+
+                        <!-- Data Link (Side) -->
+                        <path d="M300 135 L340 135 L340 165 L300 165" fill="none" stroke="#00E5FF" stroke-width="2" opacity="0.7"/>
+                        <circle cx="340" cy="150" r="12" fill="#111" stroke="#00E5FF" stroke-width="2"/>
+                        <circle cx="340" cy="150" r="4" fill="#00E5FF" filter="url(#glow)"/>
+
+                        <!-- MARKERS (Non-overlapping rules applied) -->
+                        <!-- 1. Observation Window -->
+                        <g class="marker" data-target="item-1" transform="translate(200, 135)">
+                            <circle class="marker-glow" cx="0" cy="0" r="16"/>
+                            <circle cx="0" cy="0" r="12"/>
+                            <text x="0" y="1">1</text>
+                        </g>
+                        <!-- 2. Pressure Piston -->
+                        <g class="marker" data-target="item-2" transform="translate(200, 35)">
+                            <circle class="marker-glow" cx="0" cy="0" r="16"/>
+                            <circle cx="0" cy="0" r="12"/>
+                            <text x="0" y="1">2</text>
+                        </g>
+                        <!-- 3. Thermal Core -->
+                        <g class="marker" data-target="item-3" transform="translate(200, 260)">
+                            <circle class="marker-glow" cx="0" cy="0" r="16"/>
+                            <circle cx="0" cy="0" r="12"/>
+                            <text x="0" y="1">3</text>
+                        </g>
+                        <!-- 4. Telemetry Link -->
+                        <g class="marker" data-target="item-4" transform="translate(340, 120)">
+                            <circle class="marker-glow" cx="0" cy="0" r="16"/>
+                            <circle cx="0" cy="0" r="12"/>
+                            <text x="0" y="1">4</text>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Legend List -->
+                <div class="legend-list">
+                    <div class="legend-item" id="item-1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Containment Field</h4>
+                            <p>An isolated vacuum chamber that prevents external interference, allowing pure observation of particle dynamics.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-2">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4>Variable Piston</h4>
+                            <p>Modifies the available volume. Compressing the volume increases pressure and forces particles closer together.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-3">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4>Thermal Core</h4>
+                            <p>Injects or extracts kinetic energy (heat). This directly governs the velocity and state of the particles.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-4">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-content">
+                            <h4>Telemetry Array</h4>
+                            <p>Real-time sensors calculating average kinetic energy (Temperature) and collision frequency (Pressure).</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING MECHANISM SECTION -->
+        <section class="glass-panel working-section">
+            <div style="text-align: center; margin-bottom: 1rem;">
+                <h2>Phase Transition Sequence</h2>
+                <p style="margin: 0 auto;">Observe how increasing thermal energy sequentially breaks molecular bonds, transforming matter through its fundamental states.</p>
+            </div>
+
+            <div class="stage-visual">
+                <canvas id="working-canvas"></canvas>
+            </div>
+
+            <div class="stage-info">
+                <div class="stage-title" id="stage-title">Stage 1: Crystalline Solid</div>
+                <p id="stage-desc">Particles are locked in a rigid lattice. Kinetic energy is low, manifesting only as slight vibrational motion around fixed points.</p>
+                
+                <div class="controls">
+                    <button class="btn" id="btn-prev">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        Prev
+                    </button>
+                    <div class="progress-dots" id="stage-dots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    <button class="btn" id="btn-next">
+                        Next
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                    <button class="btn btn-primary" id="btn-autoplay" style="margin-left: 1rem;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        Auto-Play
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION -->
+        <section class="glass-panel">
+            <h2 style="margin-bottom: 0.5rem;">Kinetic Sandbox</h2>
+            <p style="margin-bottom: 2rem;">Take manual control. Adjust temperature and observe how particle velocity and structural integrity respond in real-time.</p>
+
+            <div class="sim-grid">
+                <div class="sim-visual">
+                    <div class="data-overlay">
+                        <div class="data-metric">
+                            <span>Avg Velocity</span>
+                            <span id="data-vel">0.0 m/s</span>
+                        </div>
+                        <div class="data-metric">
+                            <span>System State</span>
+                            <span id="data-state" style="color: var(--accent-cold)">Solid</span>
+                        </div>
+                    </div>
+                    <canvas id="sandbox-canvas"></canvas>
+                </div>
+
+                <div class="sim-controls">
+                    <div class="glass-panel" style="padding: 1.5rem; background: rgba(0,0,0,0.2);">
+                        <div class="control-group">
+                            <div class="control-header">
+                                <label>Thermal Energy (Temp)</label>
+                                <span class="control-value" id="val-temp">0 K</span>
+                            </div>
+                            <input type="range" id="temp-slider" min="0" max="1000" value="50">
+                            <p style="font-size: 0.8rem; margin-top: 0.5rem; color: #888;">Controls the kinetic energy and speed of particles.</p>
+                        </div>
+
+                        <div class="control-group" style="margin-top: 2rem;">
+                            <div class="control-header" style="margin-bottom: 0.5rem;">
+                                <label>Quick Presets</label>
+                            </div>
+                            <div class="preset-grid">
+                                <button class="btn btn-preset" onclick="setPreset('solid')">Solid</button>
+                                <button class="btn btn-preset" onclick="setPreset('liquid')">Liquid</button>
+                                <button class="btn btn-preset" onclick="setPreset('gas')">Gas</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- APPLICATION & FACTS -->
+        <section>
+            <div class="info-grid">
+                <div class="glass-panel info-card">
+                    <div class="icon-wrapper blue">❄️</div>
+                    <h3>Absolute Zero</h3>
+                    <p>At 0 Kelvin (-273.15°C), theoretical particle motion stops entirely. While impossible to reach perfectly, scientists have cooled atoms to fractions of a degree above it, creating strange states like Bose-Einstein condensates.</p>
+                </div>
+                
+                <div class="glass-panel info-card">
+                    <div class="icon-wrapper purple">🎈</div>
+                    <h3>Common Mistake</h3>
+                    <p><strong>"Particles expand when heated."</strong><br>False! The particles themselves (atoms/molecules) do not change size. The <em>space between them</em> increases because higher kinetic energy causes them to push away from each other.</p>
+                </div>
+
+                <div class="glass-panel info-card">
+                    <div class="icon-wrapper red">🚀</div>
+                    <h3>Real-World App</h3>
+                    <p><strong>Combustion Engines:</strong> By igniting a liquid fuel, it rapidly turns into a high-energy gas. The sudden increase in particle velocity and pressure forces pistons to move, driving the vehicle forward.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        /* ==========================================================================
+           CORE UTILITIES
+           ========================================================================== */
+        const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+        const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
+
+        // Color transition logic (Cold Cyan -> Mid Purple -> Hot Red)
+        function getTemperatureColor(tempRatio) {
+            // tempRatio 0 to 1
+            const colors = [
+                { r: 0, g: 229, b: 255 },  // Cyan (0)
+                { r: 176, g: 85, b: 255 }, // Purple (0.5)
+                { r: 255, g: 51, b: 102 }  // Red (1)
+            ];
+            
+            let c1, c2, t;
+            if (tempRatio < 0.5) {
+                c1 = colors[0]; c2 = colors[1];
+                t = tempRatio * 2;
+            } else {
+                c1 = colors[1]; c2 = colors[2];
+                t = (tempRatio - 0.5) * 2;
+            }
+
+            const r = Math.round(lerp(c1.r, c2.r, t));
+            const g = Math.round(lerp(c1.g, c2.g, t));
+            const b = Math.round(lerp(c1.b, c2.b, t));
+            return `rgb(${r},${g},${b})`;
+        }
+
+        /* ==========================================================================
+           PARTICLE ENGINE (Shared logic for all canvases)
+           ========================================================================== */
+        class Particle {
+            constructor(x, y, radius) {
+                this.x = x;
+                this.y = y;
+                this.baseX = x; // For solid lattice
+                this.baseY = y;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.radius = radius;
+                this.mass = 1;
+            }
+
+            update(stateData, width, height) {
+                const { temp, phase } = stateData;
+                
+                // Speed scaling based on temperature
+                const speedMult = 0.5 + (temp * 15);
+                
+                if (phase === 'solid') {
+                    // Solid: Spring towards base position, vibrate based on temp
+                    const dx = this.baseX - this.x;
+                    const dy = this.baseY - this.y;
+                    
+                    // Strong return force
+                    this.vx += dx * 0.1;
+                    this.vy += dy * 0.1;
+                    
+                    // Add thermal vibration
+                    this.vx += (Math.random() - 0.5) * temp * 5;
+                    this.vy += (Math.random() - 0.5) * temp * 5;
+                    
+                    // Dampen to prevent exploding
+                    this.vx *= 0.8;
+                    this.vy *= 0.8;
+
+                } else if (phase === 'liquid') {
+                    // Liquid: Gravity, bottom collision, moderate thermal movement
+                    this.vy += 0.2; // Gravity
+                    
+                    // Thermal random walk
+                    this.vx += (Math.random() - 0.5) * temp * 2;
+                    this.vy += (Math.random() - 0.5) * temp * 2;
+                    
+                    // Slight damping
+                    this.vx *= 0.95;
+                    this.vy *= 0.95;
+                    
+                    // Wall collisions (bounce)
+                    if (this.x - this.radius < 0) { this.x = this.radius; this.vx *= -0.5; }
+                    if (this.x + this.radius > width) { this.x = width - this.radius; this.vx *= -0.5; }
+                    if (this.y + this.radius > height) { this.y = height - this.radius; this.vy *= -0.5; }
+
+                } else if (phase === 'gas') {
+                    // Gas: Free movement, high speed, bounce everywhere
+                    // Normalize velocity direction and apply speed based on temp
+                    let speed = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+                    if(speed < 0.1) speed = 0.1; // prevent zero div
+                    
+                    // Gradually adjust to target speed
+                    const targetSpeed = speedMult;
+                    this.vx = (this.vx / speed) * lerp(speed, targetSpeed, 0.1);
+                    this.vy = (this.vy / speed) * lerp(speed, targetSpeed, 0.1);
+
+                    // Wall collisions (perfect elastic)
+                    if (this.x - this.radius < 0) { this.x = this.radius; this.vx *= -1; }
+                    if (this.x + this.radius > width) { this.x = width - this.radius; this.vx *= -1; }
+                    if (this.y - this.radius < 0) { this.y = this.radius; this.vy *= -1; }
+                    if (this.y + this.radius > height) { this.y = height - this.radius; this.vy *= -1; }
+                }
+
+                this.x += this.vx;
+                this.y += this.vy;
+            }
+
+            draw(ctx, color) {
+                // Draw glowing orb
+                const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 2);
+                grad.addColorStop(0, '#ffffff');
+                grad.addColorStop(0.2, color);
+                grad.addColorStop(1, 'transparent');
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius * 2, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+            }
+        }
+
+        class ParticleSystem {
+            constructor(canvasId, particleCount, isHero = false) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.particles = [];
+                this.count = particleCount;
+                this.isHero = isHero;
+                this.state = { temp: 0.1, phase: 'solid' }; // 0 to 1
+                
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+                
+                this.initParticles();
+            }
+
+            resize() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                this.canvas.width = rect.width * dpr;
+                this.canvas.height = rect.height * dpr;
+                this.ctx.scale(dpr, dpr);
+                this.width = rect.width;
+                this.height = rect.height;
+                
+                // Re-init positions on resize so they don't break grid
+                this.initParticles();
+            }
+
+            initParticles() {
+                this.particles = [];
+                const radius = this.isHero ? 3 : 6;
+                
+                if (this.isHero) {
+                    // Random distribution for hero
+                    for (let i = 0; i < this.count; i++) {
+                        this.particles.push(new Particle(
+                            Math.random() * this.width,
+                            Math.random() * this.height,
+                            radius
+                        ));
+                    }
+                    this.state.phase = 'gas'; // Hero is always flowing
+                    this.state.temp = 0.3;
+                } else {
+                    // Grid distribution for simulations (Solid initial state)
+                    const cols = Math.floor(Math.sqrt(this.count * (this.width / this.height)));
+                    const rows = Math.floor(this.count / cols);
+                    
+                    // Center the grid
+                    const gridW = cols * (radius * 4);
+                    const gridH = rows * (radius * 4);
+                    const startX = (this.width - gridW) / 2;
+                    const startY = (this.height - gridH) / 2 + (this.height * 0.2); // Offset down slightly
+                    
+                    let pCount = 0;
+                    for (let r = 0; r < rows; r++) {
+                        for (let c = 0; c < cols; c++) {
+                            if (pCount >= this.count) break;
+                            const x = startX + c * (radius * 4);
+                            const y = startY + r * (radius * 4);
+                            this.particles.push(new Particle(x, y, radius));
+                            pCount++;
+                        }
+                    }
+                }
+            }
+
+            // Simple O(n^2) collision for liquids to prevent overlap (kept simple for performance)
+            resolveCollisions() {
+                if (this.state.phase === 'solid') return; // Solids handle their own spacing via grid
+                
+                for (let i = 0; i < this.particles.length; i++) {
+                    for (let j = i + 1; j < this.particles.length; j++) {
+                        const p1 = this.particles[i];
+                        const p2 = this.particles[j];
+                        
+                        const dx = p2.x - p1.x;
+                        const dy = p2.y - p1.y;
+                        const distSq = dx*dx + dy*dy;
+                        const minDist = p1.radius + p2.radius;
+                        
+                        if (distSq < minDist * minDist) {
+                            const dist = Math.sqrt(distSq);
+                            // Avoid division by zero
+                            const nx = dist === 0 ? 0 : dx / dist;
+                            const ny = dist === 0 ? 0 : dy / dist;
+                            
+                            // Separate
+                            const overlap = minDist - dist;
+                            p1.x -= nx * overlap * 0.5;
+                            p1.y -= ny * overlap * 0.5;
+                            p2.x += nx * overlap * 0.5;
+                            p2.y += ny * overlap * 0.5;
+                            
+                            // Simple velocity reflection (inelastic for liquid feel)
+                            const bounce = this.state.phase === 'gas' ? 1.0 : 0.3;
+                            const dvx = p1.vx - p2.vx;
+                            const dvy = p1.vy - p2.vy;
+                            p1.vx -= nx * dvx * bounce * 0.5;
+                            p1.vy -= ny * dvy * bounce * 0.5;
+                            p2.vx += nx * dvx * bounce * 0.5;
+                            p2.vy += ny * dvy * bounce * 0.5;
+                        }
+                    }
+                }
+            }
+
+            render() {
+                // Motion blur effect
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                this.ctx.fillRect(0, 0, this.width, this.height);
+                
+                const color = getTemperatureColor(this.state.temp);
+                
+                if(!this.isHero) this.resolveCollisions();
+
+                let totalVel = 0;
+
+                this.particles.forEach(p => {
+                    p.update(this.state, this.width, this.height);
+                    p.draw(this.ctx, color);
+                    totalVel += Math.sqrt(p.vx*p.vx + p.vy*p.vy);
+                });
+
+                return totalVel / this.particles.length; // Return avg velocity
+            }
+        }
+
+
+        /* ==========================================================================
+           SECTION LOGIC IMPLEMENTATIONS
+           ========================================================================== */
+        
+        // 1. HERO ANIMATION
+        const heroSim = new ParticleSystem('hero-canvas', 50, true);
+        
+        // 2. SVG LEGEND INTERACTION
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function highlightElement(id) {
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            const marker = document.querySelector(`.marker[data-target="${id}"]`);
+            const item = document.getElementById(id);
+            
+            if(marker) marker.classList.add('active');
+            if(item) {
+                item.classList.add('active');
+                // Scroll into view if on mobile
+                if(window.innerWidth < 768) {
+                    item.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+                }
+            }
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => highlightElement(marker.dataset.target));
+            // Touch support
+            marker.addEventListener('touchstart', (e) => { e.preventDefault(); highlightElement(marker.dataset.target); });
+        });
+
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => highlightElement(item.id));
+        });
+
+        // 3. WORKING MECHANISM (STEP-BY-STEP)
+        const workingSim = new ParticleSystem('working-canvas', 120);
+        const stages = [
+            { 
+                title: 'Stage 1: Crystalline Solid', 
+                desc: 'Particles are locked in a rigid lattice. Kinetic energy is low, manifesting only as slight vibrational motion around fixed points.',
+                temp: 0.05, phase: 'solid'
+            },
+            { 
+                title: 'Stage 2: Melting (Liquid)', 
+                desc: 'Thermal energy breaks rigid bonds. Particles flow over one another but remain contained by gravity, adapting to the container base.',
+                temp: 0.4, phase: 'liquid'
+            },
+            { 
+                title: 'Stage 3: Boiling (Gas)', 
+                desc: 'High kinetic energy overcomes attractive forces completely. Particles move rapidly in all directions, filling the available volume.',
+                temp: 0.9, phase: 'gas'
+            }
+        ];
+        
+        let currentStage = 0;
+        let isAutoPlaying = false;
+        let autoPlayInterval;
+
+        const titleEl = document.getElementById('stage-title');
+        const descEl = document.getElementById('stage-desc');
+        const dots = document.querySelectorAll('#stage-dots .dot');
+
+        function setStage(index) {
+            currentStage = clamp(index, 0, stages.length - 1);
+            const stage = stages[currentStage];
+            
+            // Update UI
+            titleEl.textContent = stage.title;
+            descEl.textContent = stage.desc;
+            dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === currentStage);
+            });
+
+            // If switching back to solid from gas/liquid, we need to reset positions to reform lattice smoothly visually
+            if(stage.phase === 'solid' && workingSim.state.phase !== 'solid') {
+                workingSim.initParticles();
+            }
+
+            // Animate transition using lerp in the render loop is tricky, let's just set state and let physics handle morph
+            workingSim.state.phase = stage.phase;
+            // Smoothly animate temp
+            let startTemp = workingSim.state.temp;
+            let endTemp = stage.temp;
+            let progress = 0;
+            
+            const animateTemp = () => {
+                progress += 0.05;
+                if (progress <= 1) {
+                    workingSim.state.temp = lerp(startTemp, endTemp, progress);
+                    requestAnimationFrame(animateTemp);
+                }
+            };
+            animateTemp();
+        }
+
+        document.getElementById('btn-prev').addEventListener('click', () => { stopAutoPlay(); setStage(currentStage - 1); });
+        document.getElementById('btn-next').addEventListener('click', () => { stopAutoPlay(); setStage(currentStage + 1); });
+        
+        const autoBtn = document.getElementById('btn-autoplay');
+        function toggleAutoPlay() {
+            isAutoPlaying = !isAutoPlaying;
+            if (isAutoPlaying) {
+                autoBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg> Pause';
+                autoBtn.classList.remove('btn-primary');
+                autoPlayInterval = setInterval(() => {
+                    setStage((currentStage + 1) % stages.length);
+                }, 4000);
+            } else {
+                stopAutoPlay();
+            }
+        }
+
+        function stopAutoPlay() {
+            isAutoPlaying = false;
+            clearInterval(autoPlayInterval);
+            autoBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Auto-Play';
+            autoBtn.classList.add('btn-primary');
+        }
+        
+        autoBtn.addEventListener('click', toggleAutoPlay);
+        
+        // Initialize working sim
+        setStage(0);
+
+        // 4. INTERACTIVE SANDBOX
+        const sandboxSim = new ParticleSystem('sandbox-canvas', 150);
+        const tempSlider = document.getElementById('temp-slider');
+        const valTemp = document.getElementById('val-temp');
+        const dataVel = document.getElementById('data-vel');
+        const dataState = document.getElementById('data-state');
+
+        function updateSandboxFromUI() {
+            const val = parseInt(tempSlider.value);
+            valTemp.textContent = `${val} K`;
+            
+            // Map 0-1000 to 0.0 - 1.0 logic temp
+            const logicTemp = val / 1000;
+            sandboxSim.state.temp = logicTemp;
+
+            // Determine phase based on temp thresholds
+            let phase = 'solid';
+            let color = 'var(--accent-cold)';
+            
+            if (val > 600) {
+                phase = 'gas';
+                color = 'var(--accent-hot)';
+            } else if (val > 250) {
+                phase = 'liquid';
+                color = 'var(--accent-mid)';
+            }
+
+            // Handle lattice recreation if dropping back to solid
+            if (phase === 'solid' && sandboxSim.state.phase !== 'solid') {
+                sandboxSim.initParticles();
+            }
+
+            sandboxSim.state.phase = phase;
+            dataState.textContent = phase.charAt(0).toUpperCase() + phase.slice(1);
+            dataState.style.color = color;
+        }
+
+        tempSlider.addEventListener('input', updateSandboxFromUI);
+        // Touch support for slider is native, but ensure smooth updates
+        tempSlider.addEventListener('touchmove', updateSandboxFromUI, {passive: true});
+
+        // Expose to window for inline onclicks
+        window.setPreset = function(type) {
+            let targetVal = 50;
+            if(type === 'liquid') targetVal = 400;
+            if(type === 'gas') targetVal = 850;
+            
+            tempSlider.value = targetVal;
+            updateSandboxFromUI();
+        }
+
+        // Init sandbox
+        updateSandboxFromUI();
+
+
+        /* ==========================================================================
+           MAIN RENDER LOOP
+           ========================================================================== */
+        function animate() {
+            heroSim.render();
+            workingSim.render();
+            
+            const avgVel = sandboxSim.render();
+            // Map raw velocity arbitrary number to a display string
+            dataVel.textContent = (avgVel * 100).toFixed(1) + ' m/s';
+
+            requestAnimationFrame(animate);
+        }
+
+        // Start
+        animate();
+
+    </script>
+</body>
+</html>

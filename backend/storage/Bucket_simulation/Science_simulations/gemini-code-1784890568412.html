@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Composting Simulator: The Science of Decomposition</title>
+    <style>
+        /* ==========================================================================
+           BASE & VARIABLES
+           ========================================================================== */
+        :root {
+            --bg-color: #0f172a; /* Slate 900 */
+            --bg-gradient: radial-gradient(circle at 50% 0%, #1e293b, #020617);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            --accent-green: #10b981; /* Nitrogen / Greens */
+            --accent-brown: #d97706; /* Carbon / Browns */
+            --accent-blue: #3b82f6;  /* Moisture */
+            --accent-red: #ef4444;   /* Heat / Pathogens */
+            --accent-glow: rgba(16, 185, 129, 0.5);
+
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            --border-radius: 16px;
+            --transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg-gradient);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            font-size: clamp(14px, 1.5vw, 16px);
+        }
+
+        /* Typography Fluid Scaling */
+        h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 600; margin-bottom: 1rem; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 500; }
+        p { font-size: clamp(0.9rem, 1.5vw, 1.1rem); color: var(--text-muted); }
+
+        /* ==========================================================================
+           LAYOUT & CONTAINERS
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(20px, 4vw, 40px) clamp(16px, 5vw, 60px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 100px);
+        }
+
+        section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: relative;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            padding: clamp(20px, 4vw, 40px);
+            box-shadow: var(--glass-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: clamp(20px, 4vw, 40px);
+        }
+        @media (min-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr 1fr; align-items: center; }
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        @media (min-width: 768px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
+        @media (min-width: 1024px) { .grid-3 { grid-template-columns: repeat(3, 1fr); } }
+
+        /* ==========================================================================
+           UI COMPONENTS (Buttons, Sliders, Tags)
+           ========================================================================== */
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            margin-bottom: 1rem;
+        }
+        .tag.green { color: var(--accent-green); border-color: var(--accent-green); background: rgba(16, 185, 129, 0.1); }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: var(--transition);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            min-width: 44px;
+            min-height: 44px; /* Touch target */
+        }
+        .btn:hover, .btn:active {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+        }
+        .btn.primary { background: var(--accent-green); border-color: var(--accent-green); color: #000; font-weight: 600; }
+        .btn.primary:hover { background: #0ea5e9; box-shadow: 0 0 15px var(--accent-glow); }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 15px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer;
+            background: rgba(255,255,255,0.1); border-radius: 4px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 24px; width: 24px; border-radius: 50%;
+            background: #fff; cursor: pointer;
+            -webkit-appearance: none; margin-top: -9px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+        
+        .slider-group { margin-bottom: 24px; }
+        .slider-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 500; }
+        .slider-value { color: var(--accent-green); font-variant-numeric: tabular-nums; }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+        .hero-content { z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 20px; width: 100%; }
+        .hero-title-wrap { position: relative; }
+        .hero-bg-glow {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60vw; height: 60vw;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
+            z-index: 0;
+            pointer-events: none;
+            animation: pulse-slow 8s infinite alternate;
+        }
+        @keyframes pulse-slow { 0% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; } 100% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; } }
+
+        /* ==========================================================================
+           DIAGRAM LABELS (MANDATORY RULE IMPLEMENTATION)
+           ========================================================================== */
+        .diagram-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        @media (min-width: 1024px) {
+            .diagram-container { flex-direction: row; align-items: flex-start; }
+        }
+
+        .illustration-area {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            min-height: 280px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        @media (min-width: 1024px) { .illustration-area { flex: 2; aspect-ratio: 16/9; } }
+
+        svg { width: 100%; height: 100%; display: block; }
+
+        /* Markers on SVG */
+        .marker {
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        .marker circle.bg { fill: rgba(255,255,255,0.1); stroke: rgba(255,255,255,0.4); stroke-width: 2; transition: var(--transition); }
+        .marker text { fill: white; font-family: sans-serif; font-size: 14px; font-weight: bold; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+        .marker:hover circle.bg, .marker.active circle.bg { stroke: white; filter: drop-shadow(0 0 8px rgba(255,255,255,0.8)); transform: scale(1.15); transform-origin: center; }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+        @media (min-width: 1024px) { .legend-list { flex: 1; min-width: 300px; } }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.2);
+            transform: translateX(4px);
+        }
+        .legend-badge {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 0.9rem;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.3);
+            transition: var(--transition);
+        }
+        .legend-item.active .legend-badge { background: white; color: black; box-shadow: 0 0 10px rgba(255,255,255,0.5); }
+        .legend-text { display: flex; flex-direction: column; gap: 4px; }
+        .legend-title { font-weight: 600; color: white; font-size: 1rem; }
+        .legend-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; }
+
+        /* Color Coding */
+        .color-brown .legend-badge, .marker.color-brown circle.bg { stroke: var(--accent-brown); }
+        .color-green .legend-badge, .marker.color-green circle.bg { stroke: var(--accent-green); }
+        .color-blue .legend-badge, .marker.color-blue circle.bg { stroke: var(--accent-blue); }
+        .color-air .legend-badge, .marker.color-air circle.bg { stroke: #a78bfa; }
+
+        .legend-item.active.color-brown .legend-badge { background: var(--accent-brown); }
+        .legend-item.active.color-green .legend-badge { background: var(--accent-green); }
+        .legend-item.active.color-blue .legend-badge { background: var(--accent-blue); }
+        .legend-item.active.color-air .legend-badge { background: #a78bfa; }
+
+
+        /* ==========================================================================
+           WORKING PROCESS (MANDATORY SECTION)
+           ========================================================================== */
+        .process-stage {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        /* Process Visual Area */
+        .process-visual {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #020617;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+        .process-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+        .process-bg-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; transition: filter 1s ease; }
+
+        /* Process UI Overlay */
+        .process-overlay {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%;
+            padding: 20px;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .stage-info { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 10px; }
+        .stage-title { font-size: clamp(1.2rem, 2.5vw, 1.8rem); font-weight: 700; color: white; display: flex; align-items: center; gap: 10px; }
+        .stage-title-number { background: var(--accent-green); color: black; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+        .stage-caption { font-size: clamp(0.9rem, 1.5vw, 1.1rem); color: rgba(255,255,255,0.9); max-width: 600px; }
+        
+        /* Input/Output Icons Flow */
+        .io-flow { display: flex; gap: 16px; align-items: center; background: rgba(255,255,255,0.1); padding: 8px 16px; border-radius: 20px; backdrop-filter: blur(4px); }
+        .io-group { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 600; }
+        .io-icon { width: 20px; height: 20px; }
+        .io-arrow { color: rgba(255,255,255,0.5); }
+
+        /* Process Controls */
+        .process-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--glass-bg);
+            padding: 16px;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--glass-border);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .control-btns { display: flex; gap: 12px; }
+        .progress-dots { display: flex; gap: 8px; flex: 1; justify-content: center; }
+        .dot { width: 40px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.2); transition: var(--transition); cursor: pointer; }
+        .dot.active { background: var(--accent-green); width: 60px; box-shadow: 0 0 10px var(--accent-glow); }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-container { display: grid; grid-template-columns: 1fr; gap: 30px; }
+        @media (min-width: 1024px) { .sim-container { grid-template-columns: 300px 1fr 300px; } }
+
+        .sim-controls-panel { display: flex; flex-direction: column; gap: 24px; }
+        
+        .sim-visual {
+            position: relative;
+            background: #020617;
+            border-radius: var(--border-radius);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            min-height: 350px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .sim-visual canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none;}
+        .sim-pile-svg { position: absolute; bottom: -10%; left: 50%; transform: translateX(-50%); width: 120%; height: auto; z-index: 1; transition: filter 0.5s ease; }
+
+        .sim-metrics {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .metric-card { background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.05); text-align: center; }
+        
+        /* Gauge */
+        .gauge-container { position: relative; width: 150px; height: 75px; margin: 0 auto; overflow: hidden; }
+        .gauge-bg { position: absolute; width: 150px; height: 150px; border-radius: 50%; border: 15px solid rgba(255,255,255,0.1); border-bottom-color: transparent; border-left-color: transparent; transform: rotate(135deg); }
+        .gauge-fill { position: absolute; width: 150px; height: 150px; border-radius: 50%; border: 15px solid var(--accent-green); border-bottom-color: transparent; border-left-color: transparent; transform: rotate(-45deg); transition: transform 0.5s cubic-bezier(0.4, 2, 0.2, 1); }
+        .gauge-value { font-size: 2rem; font-weight: bold; margin-top: 10px; font-variant-numeric: tabular-nums; }
+        .gauge-label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+        .sim-status {
+            padding: 16px; border-radius: 8px; font-size: 0.95rem; font-weight: 500; text-align: center; background: rgba(255,255,255,0.05); border-left: 4px solid var(--accent-green); transition: var(--transition);
+        }
+
+        /* ==========================================================================
+           INFO CARDS (Applications, Facts, Mistakes)
+           ========================================================================== */
+        .info-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            padding: 24px;
+            transition: var(--transition);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            height: 100%;
+        }
+        .info-card:hover { transform: translateY(-5px); background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.2); }
+        .info-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02));
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .info-icon svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .info-card h4 { font-size: 1.2rem; margin: 0; color: white; }
+        .info-card p { font-size: 0.95rem; margin: 0; flex-grow: 1; }
+
+        .mistake-card { border-top: 3px solid var(--accent-red); }
+        .mistake-icon { color: var(--accent-red); }
+
+        /* ==========================================================================
+           UTILITIES
+           ========================================================================== */
+        .text-gradient {
+            background: linear-gradient(90deg, #10b981, #34d399);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        /* Mobile overrides */
+        @media (max-width: 767px) {
+            .glass-panel { padding: 16px; backdrop-filter: blur(8px); }
+            .container { padding: 20px 16px; gap: 60px;}
+            .btn { width: 100%; }
+            .process-controls { flex-direction: column; }
+            .control-btns { width: 100%; justify-content: space-between; }
+            .progress-dots { order: -1; width: 100%; margin-bottom: 12px; }
+            .sim-status { font-size: 0.85rem; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <main class="container">
+
+        <!-- 1 & 2. HERO / INTRODUCTION -->
+        <section class="hero">
+            <div class="hero-bg-glow"></div>
+            <div class="hero-content">
+                <span class="tag green">Biological Process Simulation</span>
+                <h1>The Science of <br><span class="text-gradient">Composting</span></h1>
+                <p style="max-width: 600px; font-size: clamp(1.1rem, 2vw, 1.3rem);">
+                    Explore how nature transforms organic waste into nutrient-rich humus through aerobic decomposition. It's not rotting; it's a precisely balanced biological engine.
+                </p>
+                <div style="margin-top: 2rem;">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" style="animation: bounce 2s infinite;">
+                        <path d="M12 5v14M19 12l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+            <style>@keyframes bounce { 0%, 20%, 50%, 80%, 100% {transform: translateY(0);} 40% {transform: translateY(-10px);} 60% {transform: translateY(-5px);} }</style>
+        </section>
+
+        <!-- 3. MAIN COMPONENTS (Strict Labeling Rule Applied) -->
+        <section id="components">
+            <div class="glass-panel">
+                <h2>The Four Elements</h2>
+                <p>A healthy compost pile requires a specific balance of four main components to keep microorganisms active.</p>
+                
+                <div class="diagram-container" style="margin-top: 30px;">
+                    <!-- Illustration Area -->
+                    <div class="illustration-area">
+                        <svg id="components-svg" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <linearGradient id="wood" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stop-color="#3e2723"/>
+                                    <stop offset="50%" stop-color="#5d4037"/>
+                                    <stop offset="100%" stop-color="#3e2723"/>
+                                </linearGradient>
+                                <linearGradient id="soil" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#4e342e"/>
+                                    <stop offset="100%" stop-color="#212121"/>
+                                </linearGradient>
+                                <linearGradient id="greenLayer" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#4caf50"/>
+                                    <stop offset="100%" stop-color="#2e7d32"/>
+                                </linearGradient>
+                                <linearGradient id="brownLayer" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#8d6e63"/>
+                                    <stop offset="100%" stop-color="#5d4037"/>
+                                </linearGradient>
+                                <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+                                    <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#000" flood-opacity="0.5"/>
+                                </filter>
+                            </defs>
+
+                            <!-- Background ambient -->
+                            <rect width="100%" height="100%" fill="#0a0f1c" />
+
+                            <g transform="translate(150, 100)" filter="url(#shadow)">
+                                <!-- Compost Bin Back Wall -->
+                                <path d="M50 0 L450 0 L400 400 L100 400 Z" fill="#2d1d17"/>
+                                
+                                <!-- Layers -->
+                                <!-- Finished Compost (Bottom) -->
+                                <path d="M100 400 L400 400 L380 250 L120 250 Z" fill="url(#soil)"/>
+                                <!-- Brown Layer (Leaves/Twigs) -->
+                                <path d="M120 250 L380 250 L370 170 L130 170 Z" fill="url(#brownLayer)"/>
+                                <path d="M140 230 Q160 210 180 230 T220 230" fill="none" stroke="#3e2723" stroke-width="3"/>
+                                <path d="M250 200 Q270 180 290 200" fill="none" stroke="#3e2723" stroke-width="3"/>
+                                
+                                <!-- Green Layer (Scraps/Grass) -->
+                                <path d="M130 170 L370 170 L360 80 L140 80 Z" fill="url(#greenLayer)"/>
+                                <!-- Scraps visual details -->
+                                <circle cx="180" cy="130" r="10" fill="#cddc39"/>
+                                <ellipse cx="250" cy="110" rx="15" ry="8" fill="#ff9800" transform="rotate(30 250 110)"/>
+                                <path d="M300 150 Q310 130 330 140" fill="none" stroke="#8bc34a" stroke-width="4"/>
+
+                                <!-- Bin Front Frame (Cutaway) -->
+                                <path d="M50 0 L80 0 L130 400 L100 400 Z" fill="url(#wood)"/>
+                                <path d="M420 0 L450 0 L400 400 L370 400 Z" fill="url(#wood)"/>
+                                
+                                <!-- Slats front (translucent to see inside) -->
+                                <rect x="85" y="100" width="330" height="20" fill="rgba(62, 39, 35, 0.3)" rx="5"/>
+                                <rect x="95" y="200" width="310" height="20" fill="rgba(62, 39, 35, 0.3)" rx="5"/>
+                                <rect x="105" y="300" width="290" height="20" fill="rgba(62, 39, 35, 0.3)" rx="5"/>
+
+                                <!-- Air Flow Arrows (Oxygen) -->
+                                <g stroke="#a78bfa" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.8">
+                                    <!-- Left side air -->
+                                    <path d="M20 210 Q60 210 100 190" />
+                                    <polygon points="90,185 100,190 95,200" fill="#a78bfa" stroke="none"/>
+                                    <!-- Right side air -->
+                                    <path d="M480 210 Q440 210 400 190" />
+                                    <polygon points="410,185 400,190 405,200" fill="#a78bfa" stroke="none"/>
+                                </g>
+
+                                <!-- Water Droplets (Moisture) -->
+                                <g fill="#3b82f6" opacity="0.8">
+                                    <path d="M250 -30 Q250 -10 240 0 Q250 -5 260 0 Q250 -10 250 -30 Z" />
+                                    <path d="M200 10 Q200 30 190 40 Q200 35 210 40 Q200 30 200 10 Z" transform="scale(0.8) translate(50, 20)"/>
+                                    <path d="M300 0 Q300 20 290 30 Q300 25 310 30 Q300 20 300 0 Z" transform="scale(0.6) translate(200, 30)"/>
+                                </g>
+
+                                <!-- Interactive Markers -->
+                                <!-- 1. Carbon -->
+                                <g class="marker color-brown" data-target="item-carbon" transform="translate(250, 210)">
+                                    <circle class="bg" cx="0" cy="0" r="16"/>
+                                    <text x="0" y="0">1</text>
+                                </g>
+                                <!-- 2. Nitrogen -->
+                                <g class="marker color-green" data-target="item-nitrogen" transform="translate(200, 120)">
+                                    <circle class="bg" cx="0" cy="0" r="16"/>
+                                    <text x="0" y="0">2</text>
+                                </g>
+                                <!-- 3. Moisture -->
+                                <g class="marker color-blue" data-target="item-water" transform="translate(250, -5)">
+                                    <circle class="bg" cx="0" cy="0" r="16"/>
+                                    <text x="0" y="0">3</text>
+                                </g>
+                                <!-- 4. Oxygen -->
+                                <g class="marker color-air" data-target="item-oxygen" transform="translate(60, 210)">
+                                    <circle class="bg" cx="0" cy="0" r="16"/>
+                                    <text x="0" y="0">4</text>
+                                </g>
+                            </g>
+                        </svg>
+                    </div>
+
+                    <!-- Legend List -->
+                    <div class="legend-list" id="components-legend">
+                        <div class="legend-item color-brown" id="item-carbon" data-target="item-carbon">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Carbon (Browns)</span>
+                                <span class="legend-desc">Provides energy for microbes. Includes dry leaves, twigs, cardboard, and straw.</span>
+                            </div>
+                        </div>
+                        <div class="legend-item color-green" id="item-nitrogen" data-target="item-nitrogen">
+                            <div class="legend-badge">2</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Nitrogen (Greens)</span>
+                                <span class="legend-desc">Provides proteins for microbial growth. Includes grass clippings, vegetable scraps, and coffee grounds.</span>
+                            </div>
+                        </div>
+                        <div class="legend-item color-blue" id="item-water" data-target="item-water">
+                            <div class="legend-badge">3</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Moisture</span>
+                                <span class="legend-desc">Microbes need a damp environment (like a wrung-out sponge) to survive and move.</span>
+                            </div>
+                        </div>
+                        <div class="legend-item color-air" id="item-oxygen" data-target="item-oxygen">
+                            <div class="legend-badge">4</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Oxygen (Aeration)</span>
+                                <span class="legend-desc">Aerobic bacteria require air to rapidly break down material without creating bad odors.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. WORKING PROCESS (Mandatory detailed mechanism) -->
+        <section id="working">
+            <div class="glass-panel">
+                <h2>The Decomposition Cycle</h2>
+                <p>Composting is a continuous biological succession. As the environment changes, different communities of organisms take over the breakdown process.</p>
+
+                <div class="process-stage" style="margin-top: 24px;">
+                    
+                    <!-- Visual Box with Canvas and SVG -->
+                    <div class="process-visual" id="process-visual-container">
+                        <!-- Background SVG morphs based on stage -->
+                        <svg class="process-bg-svg" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid slice">
+                            <defs>
+                                <linearGradient id="pileGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop id="pileStop1" offset="0%" stop-color="#4caf50"/>
+                                    <stop id="pileStop2" offset="100%" stop-color="#5d4037"/>
+                                </linearGradient>
+                            </defs>
+                            <!-- The Pile -->
+                            <path id="process-pile-path" d="M100 500 Q500 -100 900 500 Z" fill="url(#pileGrad)" opacity="0.8"/>
+                        </svg>
+                        
+                        <!-- Canvas for dynamic particles (heat, microbes, gas) -->
+                        <canvas class="process-canvas" id="process-canvas"></canvas>
+
+                        <!-- UI Overlay inside visual -->
+                        <div class="process-overlay">
+                            <div class="stage-info">
+                                <div>
+                                    <div class="stage-title">
+                                        <div class="stage-title-number" id="stage-num">1</div>
+                                        <span id="stage-title-text">Mesophilic Phase</span>
+                                    </div>
+                                    <p class="stage-caption" id="stage-caption">Moderate temperatures. Bacteria rapidly break down soluble, easily degradable compounds.</p>
+                                </div>
+                                
+                                <!-- Input/Output Flow Indicators -->
+                                <div class="io-flow">
+                                    <div class="io-group">
+                                        <span id="stage-input-text">Raw Scraps</span>
+                                        <svg class="io-icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent-green)" stroke-width="2"><path d="M12 2L2 22h20L12 2z"/></svg>
+                                    </div>
+                                    <svg class="io-arrow io-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                    <div class="io-group">
+                                        <svg class="io-icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent-red)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                                        <span id="stage-output-text">Heat + CO2</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Controls -->
+                    <div class="process-controls">
+                        <div class="control-btns">
+                            <button class="btn" id="btn-prev">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                            </button>
+                            <button class="btn primary" id="btn-play">
+                                <svg id="icon-play" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                <svg id="icon-pause" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="display:none;"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                                <span id="text-play">Auto-Play</span>
+                            </button>
+                            <button class="btn" id="btn-next">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                            </button>
+                        </div>
+                        
+                        <div class="progress-dots" id="process-dots">
+                            <!-- Dots generated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. INTERACTIVE SIMULATION -->
+        <section id="simulation">
+            <div class="glass-panel">
+                <h2>Compost Manager Simulator</h2>
+                <p>Adjust the inputs to see how they affect decomposition speed and compost quality. Find the perfect balance.</p>
+
+                <div class="sim-container" style="margin-top: 24px;">
+                    
+                    <!-- Controls Panel -->
+                    <div class="sim-controls-panel">
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Carbon:Nitrogen Ratio</span>
+                                <span class="slider-value" id="val-cn">30:1</span>
+                            </div>
+                            <input type="range" id="slider-cn" min="10" max="60" value="30" step="1">
+                            <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted);">
+                                <span>More Greens</span>
+                                <span>More Browns</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Moisture Level</span>
+                                <span class="slider-value" id="val-moisture">50%</span>
+                            </div>
+                            <input type="range" id="slider-moisture" min="10" max="90" value="50" step="5">
+                            <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted);">
+                                <span>Dry</span>
+                                <span>Soggy</span>
+                            </div>
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Aeration (Turning)</span>
+                                <span class="slider-value" id="val-air">Regular</span>
+                            </div>
+                            <input type="range" id="slider-air" min="0" max="100" value="60" step="10">
+                            <div style="display:flex; justify-content:space-between; font-size:0.75rem; color:var(--text-muted);">
+                                <span>Never</span>
+                                <span>Frequent</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Feedback -->
+                    <div class="sim-visual" id="sim-visual-area">
+                        <svg class="sim-pile-svg" id="sim-pile" viewBox="0 0 200 100">
+                            <path d="M20 100 Q100 0 180 100 Z" fill="#5d4037" id="sim-pile-color"/>
+                        </svg>
+                        <canvas id="sim-canvas"></canvas>
+                    </div>
+
+                    <!-- Metrics Panel -->
+                    <div class="sim-metrics">
+                        <div class="metric-card">
+                            <div class="gauge-container">
+                                <div class="gauge-bg"></div>
+                                <div class="gauge-fill" id="gauge-speed"></div>
+                            </div>
+                            <div class="gauge-value" id="val-speed">85%</div>
+                            <div class="gauge-label">Decomposition Speed</div>
+                        </div>
+
+                        <div id="sim-status-box" class="sim-status">
+                            Optimal conditions. Microbes are highly active and breaking down material quickly.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6, 7, 8. FACTS, MISTAKES, APPLICATIONS -->
+        <div class="grid-3">
+            
+            <div class="info-card">
+                <div class="info-icon">
+                    <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <h4>Self-Heating Physics</h4>
+                <p>The heat in a compost pile (up to 70°C/160°F) comes entirely from the metabolic energy of billions of microbes respiring, not from the sun.</p>
+            </div>
+
+            <div class="info-card">
+                <div class="info-icon">
+                    <svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                </div>
+                <h4>Soil Structure</h4>
+                <p>Humus (finished compost) acts like a sponge. It can hold up to 200% of its weight in water, making soil drought-resistant.</p>
+            </div>
+
+            <div class="info-card mistake-card">
+                <div class="info-icon mistake-icon">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                </div>
+                <h4>Common Mistake: Meat & Dairy</h4>
+                <p>Never add animal products or oils to a standard backyard bin. They undergo putrefaction (anaerobic rotting), produce foul odors, and attract pests.</p>
+            </div>
+
+        </div>
+
+    </main>
+
+    <script>
+        // ==========================================================================
+        // 1. DIAGRAM LABELS LOGIC (Strict hover/tap association)
+        // ==========================================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function setActive(targetId) {
+                // Remove active from all
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                
+                // Add active to matching pair
+                if(targetId) {
+                    const marker = document.querySelector(`.marker[data-target="${targetId}"]`);
+                    const legend = document.getElementById(targetId);
+                    if(marker) marker.classList.add('active');
+                    if(legend) legend.classList.add('active');
+                }
+            }
+
+            // Events for SVG Markers
+            markers.forEach(marker => {
+                const target = marker.getAttribute('data-target');
+                marker.addEventListener('mouseenter', () => setActive(target));
+                marker.addEventListener('mouseleave', () => setActive(null));
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); setActive(target); }, {passive: false});
+            });
+
+            // Events for Legend Items
+            legendItems.forEach(item => {
+                const target = item.getAttribute('data-target');
+                item.addEventListener('mouseenter', () => setActive(target));
+                item.addEventListener('mouseleave', () => setActive(null));
+                item.addEventListener('touchstart', (e) => { e.preventDefault(); setActive(target); }, {passive: false});
+            });
+        });
+
+        // ==========================================================================
+        // 2. WORKING PROCESS LOGIC (State Machine & Animation)
+        // ==========================================================================
+        const stages = [
+            {
+                title: "Mesophilic Phase",
+                caption: "Initial breakdown. Mesophilic (mid-temp 20-40°C) bacteria rapidly consume simple sugars and starches. The pile begins to warm up.",
+                input: "Raw Matter", inputIconColor: "var(--accent-green)",
+                output: "Initial Heat", outputIconColor: "var(--accent-red)",
+                color1: "#8bc34a", color2: "#6d4c41", // Colors for SVG gradient
+                particleSpeed: 1, particleCount: 20, particleColor: "rgba(255, 152, 0, 0.5)"
+            },
+            {
+                title: "Thermophilic Phase",
+                caption: "Heat phase (40-70°C). Heat-loving bacteria take over, breaking down complex proteins and fats. High heat kills weed seeds and pathogens.",
+                input: "Complex Carbs", inputIconColor: "var(--accent-brown)",
+                output: "High Heat + Vapor", outputIconColor: "var(--accent-red)",
+                color1: "#795548", color2: "#3e2723",
+                particleSpeed: 3, particleCount: 80, particleColor: "rgba(239, 68, 68, 0.8)" // Fast red heat
+            },
+            {
+                title: "Cooling Phase",
+                caption: "As food sources deplete, temperatures drop. Fungi begin breaking down tough cellulose and lignin (wood/paper).",
+                input: "Cellulose/Lignin", inputIconColor: "var(--accent-brown)",
+                output: "Fungal Mycelium", outputIconColor: "#fff",
+                color1: "#5d4037", color2: "#2d1d17",
+                particleSpeed: 0.5, particleCount: 15, particleColor: "rgba(255, 255, 255, 0.6)" // Slow white spores
+            },
+            {
+                title: "Maturation Phase",
+                caption: "Macro-organisms (earthworms, beetles) move in. They chew material, mix it, and excrete nutrient-rich castings. Humus is formed.",
+                input: "Stabilized Matter", inputIconColor: "#8d6e63",
+                output: "Finished Humus", outputIconColor: "#000",
+                color1: "#3e2723", color2: "#1a100d",
+                particleSpeed: 0.2, particleCount: 5, particleColor: "rgba(139, 195, 74, 0.4)" // Occasional green sparkle
+            }
+        ];
+
+        let currentStageIndex = 0;
+        let isPlaying = false;
+        let playInterval;
+
+        // DOM Elements
+        const elTitleNum = document.getElementById('stage-num');
+        const elTitleText = document.getElementById('stage-title-text');
+        const elCaption = document.getElementById('stage-caption');
+        const elInputText = document.getElementById('stage-input-text');
+        const elOutputText = document.getElementById('stage-output-text');
+        const svgStop1 = document.getElementById('pileStop1');
+        const svgStop2 = document.getElementById('pileStop2');
+        const dotsContainer = document.getElementById('process-dots');
+        
+        // Controls
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnPlay = document.getElementById('btn-play');
+        const iconPlay = document.getElementById('icon-play');
+        const iconPause = document.getElementById('icon-pause');
+        const textPlay = document.getElementById('text-play');
+
+        // Setup dots
+        stages.forEach((_, i) => {
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            dot.addEventListener('click', () => { stopPlay(); setStage(i); });
+            dotsContainer.appendChild(dot);
+        });
+        const dots = document.querySelectorAll('.dot');
+
+        function setStage(index) {
+            currentStageIndex = index;
+            const stage = stages[index];
+
+            // Update Text
+            elTitleNum.textContent = index + 1;
+            elTitleText.textContent = stage.title;
+            elCaption.textContent = stage.caption;
+            elInputText.textContent = stage.input;
+            elOutputText.textContent = stage.output;
+
+            // Update Dots
+            dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
+
+            // Morph SVG Colors (Smooth transition handled by CSS transition on the elements, if applied, or rely on requestAnimationFrame in a complex setup. Here we use direct property change, CSS handles smooth fill transitions if defined, but linearGradient stops don't animate via CSS easily. We'll use a simple JS interpolation in the render loop or just set it).
+            // Direct set for simplicity, visual pop is okay here, particles do the heavy lifting.
+            svgStop1.setAttribute('stop-color', stage.color1);
+            svgStop2.setAttribute('stop-color', stage.color2);
+
+            // Update Particle System Config (handled in render loop)
+            processConfig.targetSpeed = stage.particleSpeed;
+            processConfig.targetCount = stage.particleCount;
+            processConfig.color = stage.particleColor;
+        }
+
+        function nextStage() { setStage((currentStageIndex + 1) % stages.length); }
+        function prevStage() { setStage((currentStageIndex - 1 + stages.length) % stages.length); }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                iconPlay.style.display = 'none';
+                iconPause.style.display = 'block';
+                textPlay.textContent = 'Pause';
+                playInterval = setInterval(nextStage, 4000); // 4 seconds per stage
+            } else {
+                stopPlay();
+            }
+        }
+
+        function stopPlay() {
+            isPlaying = false;
+            iconPlay.style.display = 'block';
+            iconPause.style.display = 'none';
+            textPlay.textContent = 'Auto-Play';
+            clearInterval(playInterval);
+        }
+
+        btnNext.addEventListener('click', () => { stopPlay(); nextStage(); });
+        btnPrev.addEventListener('click', () => { stopPlay(); prevStage(); });
+        btnPlay.addEventListener('click', togglePlay);
+
+        // ==========================================================================
+        // 3. CANVAS ANIMATIONS (Particles for Working & Simulation)
+        // ==========================================================================
+        
+        // Helper to handle retina screens and responsive resizing
+        function setupCanvas(canvas) {
+            const ctx = canvas.getContext('2d');
+            const resize = () => {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
+                return { w: rect.width, h: rect.height };
+            };
+            let dims = resize();
+            window.addEventListener('resize', () => { dims = resize(); });
+            window.addEventListener('orientationchange', () => { setTimeout(()=> {dims = resize();}, 100); });
+            return { ctx, getDims: () => dims };
+        }
+
+        // --- Process Section Canvas ---
+        const processCanvas = document.getElementById('process-canvas');
+        const processSetup = setupCanvas(processCanvas);
+        
+        const processConfig = {
+            currentCount: 0, targetCount: 20,
+            currentSpeed: 1, targetSpeed: 1,
+            color: "rgba(255, 152, 0, 0.5)"
+        };
+        
+        class Particle {
+            constructor(w, h, color, speedBase) {
+                this.w = w; this.h = h;
+                this.reset(color, speedBase);
+            }
+            reset(color, speedBase) {
+                this.x = this.w * 0.2 + Math.random() * (this.w * 0.6); // Center-ish
+                this.y = this.h;
+                this.size = Math.random() * 4 + 2;
+                this.speedY = -(Math.random() * speedBase + 0.5);
+                this.speedX = (Math.random() - 0.5) * 1;
+                this.life = Math.random() * 0.5 + 0.5; // Opacity multiplier
+                this.color = color;
+            }
+            update(speedBase, color) {
+                this.y += this.speedY * speedBase;
+                this.x += this.speedX + Math.sin(this.y * 0.05) * 0.5; // slight wobble
+                this.life -= 0.005;
+                if (this.y < 0 || this.life <= 0) this.reset(color, speedBase);
+            }
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        let processParticles = [];
+        
+        function animateProcess() {
+            const ctx = processSetup.ctx;
+            const dims = processSetup.getDims();
+            
+            ctx.clearRect(0, 0, dims.w, dims.h);
+
+            // Interpolate configs for smooth morphing
+            processConfig.currentSpeed += (processConfig.targetSpeed - processConfig.currentSpeed) * 0.05;
+            processConfig.currentCount += (processConfig.targetCount - processConfig.currentCount) * 0.05;
+
+            // Manage array size
+            while (processParticles.length < Math.floor(processConfig.currentCount)) {
+                processParticles.push(new Particle(dims.w, dims.h, processConfig.color, processConfig.currentSpeed));
+            }
+            if (processParticles.length > Math.floor(processConfig.currentCount)) {
+                processParticles.pop();
+            }
+
+            processParticles.forEach(p => {
+                p.update(processConfig.currentSpeed, processConfig.color);
+                p.draw(ctx);
+            });
+
+            requestAnimationFrame(animateProcess);
+        }
+
+        // Initialize first stage
+        setStage(0);
+        animateProcess();
+
+
+        // ==========================================================================
+        // 4. INTERACTIVE SIMULATION LOGIC
+        // ==========================================================================
+        const simCanvas = document.getElementById('sim-canvas');
+        const simSetup = setupCanvas(simCanvas);
+
+        const sCn = document.getElementById('slider-cn');
+        const sMoisture = document.getElementById('slider-moisture');
+        const sAir = document.getElementById('slider-air');
+        
+        const vCn = document.getElementById('val-cn');
+        const vMoisture = document.getElementById('val-moisture');
+        const vAir = document.getElementById('val-air');
+        
+        const gaugeFill = document.getElementById('gauge-speed');
+        const vSpeed = document.getElementById('val-speed');
+        const statusBox = document.getElementById('sim-status-box');
+        const pileColor = document.getElementById('sim-pile-color');
+
+        let simState = { speed: 85, stateType: 'optimal' }; // optimal, dry, wet, anaerobic, slow
+
+        function updateSimulation() {
+            const cn = parseInt(sCn.value);
+            const moist = parseInt(sMoisture.value);
+            const air = parseInt(sAir.value);
+
+            // Update Labels
+            vCn.textContent = `${cn}:1`;
+            vMoisture.textContent = `${moist}%`;
+            
+            let airText = "Regular";
+            if(air < 30) airText = "Poor";
+            else if (air > 80) airText = "Excessive";
+            vAir.textContent = airText;
+
+            // --- Calculation Logic ---
+            let score = 100;
+            let msg = "";
+            let type = "optimal";
+            let pileHue = "#5d4037"; // base brown
+
+            // C:N Math (Ideal 30)
+            if (cn < 20) {
+                score -= (20 - cn) * 2;
+                msg = "Too much nitrogen (greens). Pile is smelly, losing ammonia.";
+                type = "wet"; pileHue = "#33691e"; // slimy green
+            } else if (cn > 40) {
+                score -= (cn - 40) * 1.5;
+                msg = "Too much carbon (browns). Decomposition is very slow.";
+                type = "slow"; pileHue = "#8d6e63"; // dry light brown
+            }
+
+            // Moisture Math (Ideal 50-60%)
+            if (moist < 40) {
+                score -= (40 - moist) * 2;
+                msg = "Too dry. Microbes are dormant. Add water or greens.";
+                type = "dry"; pileHue = "#a1887f";
+            } else if (moist > 70) {
+                score -= (moist - 70) * 2;
+                msg = "Too wet. Water replaced air. Pile goes anaerobic and smells bad.";
+                type = "anaerobic"; pileHue = "#1b5e20";
+            }
+
+            // Aeration Math (Need > 40)
+            if (air < 30) {
+                score -= (30 - air) * 1.5;
+                if(type === "optimal") {
+                    msg = "Not enough oxygen. Process slowing down.";
+                    type = "anaerobic";
+                }
+            }
+
+            if (score > 80 && type === "optimal") {
+                msg = "Optimal conditions! High heat, rapid breakdown.";
+                pileHue = "#4e342e"; // rich dark
+            }
+
+            score = Math.max(0, Math.min(100, score));
+            simState.speed = score;
+            simState.stateType = type;
+
+            // Update UI
+            vSpeed.textContent = `${Math.round(score)}%`;
+            // Gauge rotation: -45deg is 0%, 135deg is 100%. Range = 180deg.
+            const rot = -45 + (score / 100) * 180;
+            gaugeFill.style.transform = `rotate(${rot}deg)`;
+            
+            // Color gauge based on score
+            if(score > 70) gaugeFill.style.borderColor = "var(--accent-green)";
+            else if (score > 40) gaugeFill.style.borderColor = "var(--accent-brown)";
+            else gaugeFill.style.borderColor = "var(--accent-red)";
+
+            statusBox.textContent = msg;
+            
+            // Status box color
+            statusBox.style.borderLeftColor = score > 70 ? "var(--accent-green)" : (score > 40 ? "var(--accent-brown)" : "var(--accent-red)");
+            pileColor.setAttribute('fill', pileHue);
+        }
+
+        // Sim Particle System (Context aware)
+        class SimParticle {
+            constructor(w, h) {
+                this.w = w; this.h = h;
+                this.reset();
+            }
+            reset() {
+                this.x = this.w * 0.3 + Math.random() * (this.w * 0.4);
+                this.y = this.h * 0.9;
+                this.life = 1;
+                
+                // Behavior based on state
+                const st = simState.stateType;
+                if (st === 'optimal') {
+                    // Heat waves
+                    this.size = Math.random() * 3 + 2;
+                    this.speedY = -(Math.random() * 2 + 1);
+                    this.speedX = (Math.random() - 0.5) * 0.5;
+                    this.color = `rgba(255, 100, 0, ${Math.random()*0.5 + 0.2})`;
+                } else if (st === 'wet' || st === 'anaerobic') {
+                    // Stink lines / green gas
+                    this.size = Math.random() * 5 + 3;
+                    this.speedY = -(Math.random() * 0.5 + 0.2);
+                    this.speedX = (Math.random() - 0.5) * 2;
+                    this.color = `rgba(139, 195, 74, ${Math.random()*0.3 + 0.1})`;
+                } else {
+                    // Dry/Slow - barely anything
+                    this.size = Math.random() * 2 + 1;
+                    this.speedY = -0.2;
+                    this.speedX = 0;
+                    this.color = "rgba(255, 255, 255, 0.1)";
+                    this.life = Math.random() * 0.5; // die fast
+                }
+            }
+            update() {
+                this.y += this.speedY;
+                this.x += this.speedX;
+                
+                if (simState.stateType === 'wet' || simState.stateType === 'anaerobic') {
+                    this.x += Math.sin(this.y * 0.1) * 1; // wavy stink lines
+                }
+
+                this.life -= 0.01;
+                if (this.y < 0 || this.life <= 0) this.reset();
+            }
+            draw(ctx) {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        const simParticles = Array.from({length: 40}, () => new SimParticle(simSetup.getDims().w, simSetup.getDims().h));
+
+        function animateSim() {
+            const ctx = simSetup.ctx;
+            const dims = simSetup.getDims();
+            ctx.clearRect(0, 0, dims.w, dims.h);
+
+            // Update particle dimensions on resize
+            simParticles.forEach(p => {
+                p.w = dims.w; p.h = dims.h;
+                p.update(); p.draw(ctx);
+            });
+
+            requestAnimationFrame(animateSim);
+        }
+
+        // Event Listeners for Sliders
+        [sCn, sMoisture, sAir].forEach(el => {
+            el.addEventListener('input', updateSimulation);
+            // Touch support is native for input[type=range], but ensure we capture interaction
+            el.addEventListener('touchmove', (e) => { e.stopPropagation(); }, {passive: true});
+        });
+
+        // Init
+        updateSimulation();
+        animateSim();
+
+    </script>
+</body>
+</html>

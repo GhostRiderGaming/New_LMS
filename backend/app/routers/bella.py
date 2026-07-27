@@ -28,6 +28,7 @@ from app.services.bella_service import bella_service
 class ChatRequest(BaseModel):
     message: str
     session_id: str = ""
+    language: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -43,6 +44,8 @@ class TTSRequest(BaseModel):
 
 class ExplainRequest(BaseModel):
     topic: str
+    section: Optional[str] = None
+    language: Optional[str] = None
     image_context: dict | None = None  # {source, category, caption, prompt}
 
 
@@ -82,7 +85,7 @@ async def chat(body: ChatRequest, session: dict = Depends(get_current_session)):
     """
     try:
         session_id = body.session_id or session["session_id"]
-        result = await bella_service.chat(body.message, session_id)
+        result = await bella_service.chat(body.message, session_id, language=body.language)
         return ChatResponse(
             reply=result.reply,
             audio_b64=result.audio_b64,
@@ -100,11 +103,11 @@ async def chat(body: ChatRequest, session: dict = Depends(get_current_session)):
 async def explain(body: ExplainRequest, session: dict = Depends(get_current_session)):
     """Generate a spoken educational explanation of a topic.
 
-    Called automatically after Scene Forge image generation.
+    Called automatically after content generation/opening.
     Returns explanation text + optional TTS audio for Bella's voice narration.
     """
     try:
-        result = await bella_service.explain_topic(body.topic, image_context=body.image_context)
+        result = await bella_service.explain_topic(body.topic, section=body.section, language=body.language, image_context=body.image_context)
         return ExplainResponse(
             explanation=result.reply,
             audio_b64=result.audio_b64,

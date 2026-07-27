@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Integrated Farming System - Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & THEME SETTINGS
+           ========================================================================== */
+        :root {
+            /* Color Palette - Premium Dark Nature Theme */
+            --bg-base: #080f14;
+            --bg-surface: rgba(16, 30, 40, 0.6);
+            --bg-surface-light: rgba(30, 50, 65, 0.4);
+            
+            --accent-green: #00ff88;
+            --accent-green-dim: rgba(0, 255, 136, 0.2);
+            --accent-blue: #00b8ff;
+            --accent-gold: #ffc800;
+            --accent-purple: #9d4edd;
+            --accent-red: #ff3366;
+
+            --text-main: #f0f4f8;
+            --text-muted: #94a3b8;
+
+            /* Glassmorphism */
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            --glass-blur: blur(16px);
+
+            /* Typography */
+            --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --spacing-unit: clamp(1rem, 2vw, 1.5rem);
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+
+            /* Transitions */
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* ==========================================================================
+           2. RESET & BASE STYLES
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 255, 136, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(0, 184, 255, 0.03) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Ambient animated background elements */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+            overflow: hidden;
+        }
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s infinite ease-in-out alternate;
+        }
+        .orb-1 { width: 300px; height: 300px; background: var(--accent-green-dim); top: 10%; left: 20%; animation-delay: 0s; }
+        .orb-2 { width: 400px; height: 400px; background: rgba(0, 184, 255, 0.1); bottom: 10%; right: 10%; animation-delay: -5s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(50px, 50px) scale(1.1); }
+        }
+
+        /* Fluid Typography */
+        h1 { font-size: clamp(2rem, 4vw, 3.5rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 600; margin-bottom: 1rem; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; }
+        p { font-size: clamp(0.9rem, 1.1vw, 1.1rem); color: var(--text-muted); }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent-green), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+        }
+
+        /* Layout */
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: var(--spacing-unit);
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: clamp(2rem, 6vw, 5rem);
+            padding-bottom: 100px; /* Space for mobile nav */
+        }
+
+        section {
+            width: 100%;
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+        section.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ==========================================================================
+           3. NAVIGATION
+           ========================================================================== */
+        nav {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 100px;
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.8rem 1.2rem;
+            border-radius: 100px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-btn:hover { color: var(--text-main); background: rgba(255,255,255,0.05); }
+        .nav-btn.active {
+            background: var(--accent-green-dim);
+            color: var(--accent-green);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        /* ==========================================================================
+           4. HERO SECTION
+           ========================================================================== */
+        .hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            align-items: center;
+            min-height: 80vh;
+        }
+
+        .hero-text {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .hero-visual {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 1/1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Stylized Hero SVG */
+        .hero-svg-container {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 20px 40px rgba(0, 255, 136, 0.15));
+            animation: float-slow 6s infinite ease-in-out alternate;
+        }
+
+        @keyframes float-slow {
+            0% { transform: translateY(0px); }
+            100% { transform: translateY(-20px); }
+        }
+
+        /* ==========================================================================
+           5. COMPONENTS SECTION (Strict Labeling Rule Applied)
+           ========================================================================== */
+        .components-layout {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 2rem;
+            background: rgba(0,0,0,0.2);
+            padding: var(--spacing-unit);
+            border-radius: var(--radius-lg);
+        }
+
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: radial-gradient(circle at center, rgba(30,50,65,0.8) 0%, rgba(10,20,30,1) 100%);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .diagram-svg {
+            width: 100%;
+            height: 100%;
+            max-height: 600px;
+        }
+
+        /* Markers ON the illustration */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--bg-surface);
+            border: 2px solid var(--accent-green);
+            color: var(--accent-green);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--accent-green-dim);
+            transition: var(--transition-smooth);
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            transform: scale(1.2);
+            background: var(--accent-green);
+            color: var(--bg-base);
+            box-shadow: 0 0 25px var(--accent-green);
+        }
+
+        /* Marker Positions (Percentages to stay relative to container) */
+        #m1 { top: 25%; left: 30%; } /* Crops */
+        #m2 { top: 40%; left: 65%; } /* Livestock */
+        #m3 { top: 70%; left: 50%; } /* Biogas */
+        #m4 { top: 65%; left: 20%; } /* Pond */
+        #m5 { top: 20%; left: 75%; } /* Agroforestry */
+
+        /* Legend Sidebar */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            list-style: none;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 255, 136, 0.05);
+            border-color: rgba(0, 255, 136, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            color: var(--text-main);
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item.active .legend-badge {
+            background: var(--accent-green);
+            color: var(--bg-base);
+        }
+
+        .legend-text h4 { margin-bottom: 0.2rem; font-size: 1rem; color: var(--text-main); }
+        .legend-text p { font-size: 0.85rem; margin: 0; line-height: 1.3; }
+
+        /* SVG Element Styles for Components */
+        .svg-zone { transition: var(--transition-smooth); opacity: 0.7; }
+        .svg-zone.active { opacity: 1; filter: drop-shadow(0 0 10px rgba(255,255,255,0.3)); }
+
+
+        /* ==========================================================================
+           6. WORKING PROCESS (Strict Cycle Rules Applied)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .working-visual {
+            width: 100%;
+            height: 450px;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cycle-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Base SVG styling for the cycle */
+        .node { fill: var(--bg-surface-light); stroke: rgba(255,255,255,0.1); stroke-width: 2; transition: var(--transition-smooth); }
+        .node-icon { fill: var(--text-main); opacity: 0.6; transition: var(--transition-smooth); }
+        .flow-path { fill: none; stroke: rgba(255,255,255,0.05); stroke-width: 4; stroke-dasharray: 6 6; }
+        
+        /* Active State Overrides via JS Classes */
+        .stage-active .node { fill: rgba(0, 255, 136, 0.1); stroke: var(--accent-green); filter: drop-shadow(0 0 15px var(--accent-green-dim)); }
+        .stage-active .node-icon { opacity: 1; fill: var(--accent-green); }
+        
+        /* Animated particles along paths */
+        .particle {
+            fill: var(--accent-gold);
+            r: 4;
+            opacity: 0;
+            filter: drop-shadow(0 0 5px var(--accent-gold));
+        }
+
+        .particle.active {
+            opacity: 1;
+            animation: flowParticle 2s linear infinite;
+        }
+
+        /* Dynamic path definition in JS for animations */
+
+        .working-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            background: var(--glass-bg);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+        }
+
+        .controls-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 1rem;
+        }
+        
+        .stage-info h3 { color: var(--accent-green); margin-bottom: 0.2rem; }
+        .stage-info p { margin: 0; font-size: 0.95rem; }
+
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .ctrl-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .ctrl-btn:hover { background: var(--accent-green); color: var(--bg-base); }
+        
+        .btn-play.playing {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .progress-track {
+            display: flex;
+            gap: 4px;
+            height: 6px;
+            width: 100%;
+        }
+
+        .progress-segment {
+            flex: 1;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            transition: var(--transition-smooth);
+        }
+        .progress-segment.active { background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); }
+        .progress-segment.completed { background: rgba(0, 255, 136, 0.4); }
+
+        .io-indicators {
+            display: flex;
+            gap: 2rem;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+        }
+        .io-box { display: flex; align-items: center; gap: 0.5rem; }
+        .io-icon { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; }
+        .io-in .io-icon { background: rgba(0, 184, 255, 0.2); color: var(--accent-blue); }
+        .io-out .io-icon { background: rgba(255, 200, 0, 0.2); color: var(--accent-gold); }
+
+
+        /* ==========================================================================
+           7. INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .slider-group {
+            background: rgba(0,0,0,0.2);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            font-weight: 500;
+        }
+
+        .slider-val { color: var(--accent-blue); font-family: monospace; font-size: 1.1rem; }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 44px; /* Touch target */
+            display: flex;
+            align-items: center;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: var(--text-main);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -9px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            border: 2px solid var(--accent-blue);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+
+        .sim-output {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .metric-card {
+            background: rgba(255,255,255,0.02);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--text-muted);
+            transition: var(--transition-smooth);
+        }
+
+        .metric-card.good { border-left-color: var(--accent-green); }
+        .metric-card.warning { border-left-color: var(--accent-gold); }
+        .metric-card.bad { border-left-color: var(--accent-red); }
+
+        .metric-title { font-size: 0.9rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .metric-value { font-size: 2.5rem; font-weight: 700; margin: 0.5rem 0; font-variant-numeric: tabular-nums; }
+        
+        .meter-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .meter-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--text-muted);
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.5s ease;
+        }
+
+        .balance-indicator {
+            height: 200px;
+            position: relative;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            background: radial-gradient(circle at bottom, rgba(0,255,136,0.1) 0%, transparent 70%);
+            border-bottom: 2px solid rgba(255,255,255,0.1);
+        }
+
+        .seesaw-base {
+            width: 0; height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-bottom: 40px solid var(--text-muted);
+        }
+        .seesaw-plank {
+            position: absolute;
+            bottom: 40px;
+            width: 80%;
+            height: 6px;
+            background: white;
+            border-radius: 3px;
+            transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform-origin: center;
+        }
+
+        /* ==========================================================================
+           8. GRID SECTIONS (Applications, Facts, Mistakes)
+           ========================================================================== */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .info-card {
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: var(--transition-smooth);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .info-card:hover {
+            background: rgba(255,255,255,0.05);
+            transform: translateY(-5px);
+        }
+
+        .icon-box {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.1);
+            font-size: 1.5rem;
+        }
+
+        .mistake-card { border-top: 3px solid var(--accent-red); }
+        .fact-card { border-top: 3px solid var(--accent-blue); }
+
+        /* ==========================================================================
+           9. MEDIA QUERIES (Strict Responsive Rules)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .components-layout { grid-template-columns: 1fr; }
+            .sim-layout { grid-template-columns: 1fr; }
+            .hero { grid-template-columns: 1fr; text-align: center; }
+            .hero-text { align-items: center; }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --spacing-unit: clamp(1rem, 4vw, 1.5rem);
+            }
+            
+            /* Reduce blur for mobile performance */
+            .glass-panel {
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+            }
+
+            nav {
+                width: 90%;
+                background: var(--glass-bg);
+                backdrop-filter: blur(10px);
+                border: 1px solid var(--glass-border);
+                justify-content: space-around;
+            }
+
+            .nav-btn span { display: none; } /* Hide text, show icons only */
+            .nav-btn { padding: 1rem; }
+
+            .working-visual { height: 300px; }
+            
+            .io-indicators { flex-direction: column; gap: 0.5rem; }
+
+            .controls-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+            .btn-group { align-self: flex-end; }
+        }
+
+        /* SVG Utility Classes */
+        .svg-text { font-family: var(--font-family); fill: var(--text-main); font-size: 14px; }
+        .svg-text-bold { font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="glass-panel">
+        <button class="nav-btn active" data-target="intro">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+            <span>Intro</span>
+        </button>
+        <button class="nav-btn" data-target="components">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+            <span>System</span>
+        </button>
+        <button class="nav-btn" data-target="working">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/></svg>
+            <span>Mechanism</span>
+        </button>
+        <button class="nav-btn" data-target="simulation">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+            <span>Lab</span>
+        </button>
+    </nav>
+
+    <div class="app-container">
+        <main class="main-content">
+
+            <!-- ==========================================
+                 INTRO SECTION
+                 ========================================== -->
+            <section id="intro" class="hero visible">
+                <div class="hero-text">
+                    <p style="color: var(--accent-green); text-transform: uppercase; letter-spacing: 2px; font-weight: bold;">Sustainable Agriculture</p>
+                    <h1>Integrated <br><span class="gradient-text">Farming System</span></h1>
+                    <p>Nature doesn't have waste bins. In a perfect ecosystem, the byproduct of one process fuels the next. Discover how modern agriculture combines crops, livestock, and aquaculture into a self-sustaining, zero-waste loop.</p>
+                </div>
+                <div class="hero-visual">
+                    <div class="hero-svg-container">
+                        <!-- Stylized glowing isometric-like node structure -->
+                        <svg viewBox="0 0 400 400" width="100%" height="100%">
+                            <defs>
+                                <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+                                    <stop offset="0%" stop-color="rgba(0,255,136,0.4)" />
+                                    <stop offset="100%" stop-color="transparent" />
+                                </radialGradient>
+                                <linearGradient id="leaf" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#00ff88" />
+                                    <stop offset="100%" stop-color="#0080ff" />
+                                </linearGradient>
+                            </defs>
+                            <circle cx="200" cy="200" r="150" fill="url(#glow)" />
+                            <!-- Central Node -->
+                            <polygon points="200,100 286,150 286,250 200,300 114,250 114,150" fill="rgba(30,50,65,0.8)" stroke="url(#leaf)" stroke-width="4"/>
+                            <!-- Inner patterns representing integration -->
+                            <path d="M200,100 L200,200 L286,150" fill="rgba(0,255,136,0.1)" />
+                            <path d="M200,200 L286,250 L200,300" fill="rgba(0,184,255,0.1)" />
+                            <path d="M114,150 L200,200 L114,250" fill="rgba(255,200,0,0.1)" />
+                            
+                            <!-- Orbiting elements representing sub-systems -->
+                            <circle cx="200" cy="200" r="110" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2" stroke-dasharray="10 10"/>
+                            
+                            <g transform="translate(90, 140)">
+                                <circle cx="0" cy="0" r="20" fill="#1e293b" stroke="#00ff88" stroke-width="2"/>
+                                <path d="M-6,5 L0,-5 L6,5" stroke="#00ff88" stroke-width="2" fill="none"/>
+                            </g>
+                            <g transform="translate(310, 140)">
+                                <circle cx="0" cy="0" r="20" fill="#1e293b" stroke="#00b8ff" stroke-width="2"/>
+                                <path d="M-8,-2 Q0,4 8,-2 M-8,2 Q0,8 8,2" stroke="#00b8ff" stroke-width="2" fill="none"/>
+                            </g>
+                            <g transform="translate(200, 310)">
+                                <circle cx="0" cy="0" r="20" fill="#1e293b" stroke="#ffc800" stroke-width="2"/>
+                                <rect x="-5" y="-5" width="10" height="10" fill="none" stroke="#ffc800" stroke-width="2"/>
+                            </g>
+                            
+                            <!-- Central Infinity/Cycle symbol -->
+                            <path d="M170,200 C170,180 140,180 140,200 C140,220 170,220 185,200 C200,180 230,180 230,200 C230,220 200,220 200,200" fill="none" stroke="url(#leaf)" stroke-width="6" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ==========================================
+                 COMPONENTS SECTION (Labeling Rule)
+                 ========================================== -->
+            <section id="components" class="glass-panel" style="padding: var(--spacing-unit);">
+                <h2>The Ecosystem Network</h2>
+                <p style="margin-bottom: 2rem;">A farm is not just soil and seeds. It is a biological machine. Hover over or tap the markers to explore the active nodes of this network.</p>
+
+                <div class="components-layout">
+                    <!-- SVG Visual Container with Absolute Markers -->
+                    <div class="diagram-container">
+                        <div id="m1" class="marker" data-target="item-crops">1</div>
+                        <div id="m2" class="marker" data-target="item-livestock">2</div>
+                        <div id="m3" class="marker" data-target="item-biogas">3</div>
+                        <div id="m4" class="marker" data-target="item-pond">4</div>
+                        <div id="m5" class="marker" data-target="item-trees">5</div>
+
+                        <!-- 2.5D Cross-section SVG of the Farm -->
+                        <svg class="diagram-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice">
+                            <defs>
+                                <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#0f172a" />
+                                    <stop offset="100%" stop-color="#1e293b" />
+                                </linearGradient>
+                                <linearGradient id="soil" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#3f2e1e" />
+                                    <stop offset="100%" stop-color="#1a120a" />
+                                </linearGradient>
+                                <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#006699" />
+                                    <stop offset="100%" stop-color="#001133" />
+                                </linearGradient>
+                            </defs>
+                            
+                            <!-- Background Sky -->
+                            <rect width="100%" height="60%" fill="url(#sky)" />
+                            
+                            <!-- Sun -->
+                            <circle cx="100" cy="80" r="40" fill="rgba(255,200,0,0.1)" />
+                            <circle cx="100" cy="80" r="20" fill="#ffc800" filter="blur(2px)" />
+
+                            <!-- Base Ground Terrain -->
+                            <path d="M0,300 Q200,280 400,320 T800,290 L800,500 L0,500 Z" fill="url(#soil)" />
+                            <path d="M0,300 Q200,280 400,320 T800,290 L800,310 T400,340 Q200,300 0,320 Z" fill="#2d4a22" /> <!-- Grass layer -->
+
+                            <!-- Zone 1: Crops (Left) -->
+                            <g class="svg-zone" id="zone-crops">
+                                <path d="M50,305 Q100,295 150,300" stroke="#00ff88" stroke-width="4" stroke-dasharray="10 5" fill="none"/>
+                                <path d="M70,302 Q120,292 170,298" stroke="#00cc66" stroke-width="4" stroke-dasharray="10 5" fill="none"/>
+                                <!-- Stylized crop stalks -->
+                                <path d="M80,303 L80,260 M110,298 L110,250 M140,299 L140,265" stroke="#00ff88" stroke-width="3" stroke-linecap="round"/>
+                                <circle cx="80" cy="260" r="5" fill="#ffc800"/>
+                                <circle cx="110" cy="250" r="6" fill="#ffc800"/>
+                                <circle cx="140" cy="265" r="5" fill="#ffc800"/>
+                            </g>
+
+                            <!-- Zone 2: Livestock Shelter (Right) -->
+                            <g class="svg-zone" id="zone-livestock">
+                                <!-- Shed -->
+                                <path d="M480,250 L600,220 L620,315 L480,325 Z" fill="rgba(0,0,0,0.4)" />
+                                <path d="M470,250 L610,215 L620,230 L480,265 Z" fill="#4a5568" />
+                                <!-- Stylized animal silhouette (Cow) -->
+                                <path d="M520,310 Q520,280 540,280 L560,280 Q570,280 570,290 L570,305 L565,305 L565,290 L530,290 L530,310 Z" fill="#e2e8f0"/>
+                                <circle cx="560" cy="285" r="2" fill="#0f172a"/> <!-- Eye -->
+                            </g>
+
+                            <!-- Zone 3: Biogas Digester (Center Underground) -->
+                            <g class="svg-zone" id="zone-biogas">
+                                <!-- Pit -->
+                                <path d="M350,325 C350,380 450,380 450,325 Z" fill="#1e293b" stroke="#334155" stroke-width="3"/>
+                                <!-- Dome -->
+                                <path d="M360,325 C360,290 440,290 440,325 Z" fill="#475569" stroke="#94a3b8" stroke-width="2"/>
+                                <!-- Gas Pipe Output -->
+                                <path d="M400,295 L400,260 L450,260" fill="none" stroke="#ffc800" stroke-width="4" stroke-linecap="round"/>
+                                <!-- Slurry Output Pipe -->
+                                <path d="M360,340 L300,340 L300,360" fill="none" stroke="#00ff88" stroke-width="4" stroke-linecap="round" stroke-dasharray="4 4"/>
+                            </g>
+
+                            <!-- Zone 4: Aquaculture Pond (Foreground Left/Center) -->
+                            <g class="svg-zone" id="zone-pond">
+                                <path d="M100,330 Q250,310 320,350 Q280,420 150,400 Q80,380 100,330 Z" fill="url(#water)" stroke="#00b8ff" stroke-width="2"/>
+                                <!-- Stylized Fish -->
+                                <path d="M180,360 Q190,355 200,360 Q190,365 180,360 Z M175,358 L180,360 L175,362 Z" fill="#ffc800"/>
+                                <path d="M220,380 Q230,375 240,380 Q230,385 220,380 Z M215,378 L220,380 L215,382 Z" fill="#ffc800"/>
+                                <!-- Aquatic plant -->
+                                <path d="M280,355 L280,340 M280,355 L275,345 M280,355 L285,345" stroke="#00ff88" stroke-width="2" fill="none"/>
+                            </g>
+
+                            <!-- Zone 5: Agroforestry/Trees (Far Right) -->
+                            <g class="svg-zone" id="zone-trees">
+                                <!-- Trunk -->
+                                <path d="M680,305 L680,200" stroke="#4a3b2c" stroke-width="12" stroke-linecap="round"/>
+                                <path d="M680,240 L650,210 M680,220 L710,190" stroke="#4a3b2c" stroke-width="6" stroke-linecap="round"/>
+                                <!-- Canopy -->
+                                <circle cx="680" cy="180" r="40" fill="rgba(0,255,136,0.2)" stroke="#00ff88" stroke-width="2"/>
+                                <circle cx="650" cy="200" r="30" fill="rgba(0,255,136,0.1)" stroke="#00ff88" stroke-width="1"/>
+                                <circle cx="710" cy="195" r="35" fill="rgba(0,255,136,0.15)" stroke="#00ff88" stroke-width="1"/>
+                            </g>
+                        </svg>
+                    </div>
+
+                    <!-- Non-Overlapping Legend -->
+                    <ul class="legend-list">
+                        <li class="legend-item" id="item-crops" data-target="m1">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-text">
+                                <h4>Crop Production</h4>
+                                <p>Generates food and grain. Crop residues (straw/leaves) become feed for livestock.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" id="item-livestock" data-target="m2">
+                            <div class="legend-badge">2</div>
+                            <div class="legend-text">
+                                <h4>Livestock (Dairy/Poultry)</h4>
+                                <p>Consumes crop waste. Produces milk/eggs and raw dung/manure for energy.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" id="item-biogas" data-target="m3">
+                            <div class="legend-badge">3</div>
+                            <div class="legend-text">
+                                <h4>Biogas Digester</h4>
+                                <p>Anaerobic breakdown of dung. Yields methane gas for energy and rich slurry.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" id="item-pond" data-target="m4">
+                            <div class="legend-badge">4</div>
+                            <div class="legend-text">
+                                <h4>Aquaculture Pond</h4>
+                                <p>Fish consume bio-waste. Pond water becomes nutrient-rich for field irrigation.</p>
+                            </div>
+                        </li>
+                        <li class="legend-item" id="item-trees" data-target="m5">
+                            <div class="legend-badge">5</div>
+                            <div class="legend-text">
+                                <h4>Agroforestry</h4>
+                                <p>Trees provide timber, fruit, and fodder, while fixing nitrogen in the soil.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- ==========================================
+                 WORKING MECHANISM (Strict Flow Rules)
+                 ========================================== -->
+            <section id="working" class="glass-panel" style="padding: var(--spacing-unit);">
+                <h2>How It Cycles</h2>
+                <p>Classification: <strong>Closed-Loop Cycle</strong>. Observe how matter and energy transform through the system without generating external waste.</p>
+                
+                <div class="working-container">
+                    
+                    <!-- Diagram showing the logical flow between nodes -->
+                    <div class="working-visual">
+                        <svg class="cycle-svg" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+                            
+                            <!-- Static Connecting Paths -->
+                            <!-- Path 1: Crops to Cow -->
+                            <path id="path1" d="M 150 200 Q 275 100 400 200" class="flow-path" />
+                            <!-- Path 2: Cow to Biogas -->
+                            <path id="path2" d="M 400 200 Q 525 300 650 200" class="flow-path" />
+                            <!-- Path 3: Biogas to Pond & Gas Output -->
+                            <path id="path3" d="M 650 200 Q 525 100 400 200" class="flow-path" /> <!-- Biogas back to house (middle) -->
+                            <path id="path3b" d="M 650 200 Q 400 350 150 200" class="flow-path" /> <!-- Slurry to Pond -->
+                            <!-- Path 4: Pond to Crops -->
+                            <path id="path4" d="M 150 200 A 50 50 0 1 1 150 199" class="flow-path" stroke-dasharray="2 4"/> <!-- Internal cycle representing field application -->
+                            <line x1="150" y1="200" x2="150" y2="100" class="flow-path" stroke-dasharray="none" stroke="#ffc800" opacity="0.3"/> <!-- Sun ray -->
+                            
+                            <!-- Animated Flow Particles (Activated by JS) -->
+                            <g id="flow-particles-container"></g>
+
+                            <!-- Nodes -->
+                            <!-- Node 1: Crops / Field -->
+                            <g id="wnode-1" transform="translate(150, 200)">
+                                <circle r="40" class="node" />
+                                <!-- Plant Icon -->
+                                <path d="M-10,15 L-10,0 Q-20,-10 -5,-15 Q-5,0 -10,0 M-10,5 Q0,-5 10,-10 Q5,5 -10,5" class="node-icon" stroke="currentColor" stroke-width="2" fill="none"/>
+                                <text y="60" text-anchor="middle" class="svg-text">Crops</text>
+                            </g>
+
+                            <!-- Node 2: Livestock -->
+                            <g id="wnode-2" transform="translate(400, 200)">
+                                <circle r="40" class="node" />
+                                <!-- Cow Icon (Abstract) -->
+                                <path d="M-15,10 L-15,-5 Q-15,-15 0,-15 Q15,-15 15,-5 L15,10 M-15,0 L15,0 M-10,-15 L-10,-20 M10,-15 L10,-20" class="node-icon" stroke="currentColor" stroke-width="2" fill="none"/>
+                                <text y="60" text-anchor="middle" class="svg-text">Livestock</text>
+                            </g>
+
+                            <!-- Node 3: Biogas -->
+                            <g id="wnode-3" transform="translate(650, 200)">
+                                <circle r="40" class="node" />
+                                <!-- Flame/Gas Icon -->
+                                <path d="M0,15 Q-15,15 -15,0 Q-15,-15 0,-20 Q15,-15 15,0 Q15,15 0,15 Z M0,5 Q-5,5 -5,0 Q-5,-5 0,-10 Q5,-5 5,0 Q5,5 0,5 Z" class="node-icon"/>
+                                <text y="60" text-anchor="middle" class="svg-text">Biogas</text>
+                            </g>
+                        </svg>
+                    </div>
+
+                    <!-- Controls & Captions -->
+                    <div class="working-controls">
+                        <div class="progress-track" id="cycle-progress">
+                            <div class="progress-segment active"></div>
+                            <div class="progress-segment"></div>
+                            <div class="progress-segment"></div>
+                            <div class="progress-segment"></div>
+                            <div class="progress-segment"></div>
+                        </div>
+
+                        <div class="controls-header">
+                            <div class="stage-info">
+                                <h3 id="stage-title">1. Solar Synthesis</h3>
+                                <p id="stage-desc">Sunlight and water grow crops. Grain is harvested for humans.</p>
+                                <div class="io-indicators">
+                                    <div class="io-box io-in"><span class="io-icon">↓</span> <span id="stage-in">Sunlight, Water</span></div>
+                                    <div class="io-box io-out"><span class="io-icon">↑</span> <span id="stage-out">Grain, Biomass</span></div>
+                                </div>
+                            </div>
+
+                            <div class="btn-group">
+                                <button class="ctrl-btn" id="btn-prev" title="Previous Stage"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg></button>
+                                <button class="ctrl-btn btn-play" id="btn-play" title="Auto-Play"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="play-icon"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg></button>
+                                <button class="ctrl-btn" id="btn-next" title="Next Stage"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- ==========================================
+                 INTERACTIVE SIMULATION (Lab)
+                 ========================================== -->
+            <section id="simulation" class="glass-panel" style="padding: var(--spacing-unit);">
+                <h2>System Balancer Lab</h2>
+                <p>An integrated farm requires balance. If you have too many cows and not enough field to absorb their manure, the system becomes polluted. Adjust the inputs to find the perfect ecological balance.</p>
+
+                <div class="sim-layout">
+                    <div class="sim-controls">
+                        
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Crop Field Area</span>
+                                <span class="slider-val"><span id="val-crops">50</span> Hectares</span>
+                            </div>
+                            <input type="range" id="sim-crops" min="10" max="100" value="50">
+                            <p style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">Absorbs nutrients, provides feed.</p>
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Livestock Count</span>
+                                <span class="slider-val"><span id="val-stock">20</span> Heads</span>
+                            </div>
+                            <input type="range" id="sim-stock" min="5" max="80" value="20">
+                            <p style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">Generates manure (nutrients/waste).</p>
+                        </div>
+
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Pond Volume</span>
+                                <span class="slider-val"><span id="val-pond">30</span> % of Farm</span>
+                            </div>
+                            <input type="range" id="sim-pond" min="0" max="50" value="30">
+                            <p style="font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7;">Acts as a biological buffer.</p>
+                        </div>
+
+                    </div>
+
+                    <div class="sim-output">
+                        
+                        <!-- Visual Balance Seesaw -->
+                        <div class="balance-indicator">
+                            <div class="seesaw-plank" id="seesaw">
+                                <!-- Box representing Waste -->
+                                <div style="position: absolute; left: 10%; bottom: 6px; width: 40px; height: 40px; background: rgba(255,51,102,0.5); border: 2px solid var(--accent-red); display: flex; align-items:center; justify-content:center; border-radius: 4px; font-size: 0.8rem;">Waste</div>
+                                <!-- Box representing Capacity -->
+                                <div style="position: absolute; right: 10%; bottom: 6px; width: 60px; height: 40px; background: rgba(0,255,136,0.5); border: 2px solid var(--accent-green); display: flex; align-items:center; justify-content:center; border-radius: 4px; font-size: 0.8rem;">Absorb</div>
+                            </div>
+                            <div class="seesaw-base"></div>
+                        </div>
+
+                        <div class="metric-card" id="metric-health">
+                            <div class="metric-title">Ecosystem Health Score</div>
+                            <div class="metric-value" id="val-health">85%</div>
+                            <div class="meter-bar"><div class="meter-fill" id="bar-health"></div></div>
+                            <p id="health-desc" style="margin-top: 1rem; font-size: 0.9rem;">Balanced system. Waste is fully utilized.</p>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- ==========================================
+                 FACTS & MISTAKES GRID
+                 ========================================== -->
+            <section style="display: flex; flex-direction: column; gap: 2rem;">
+                
+                <h2>Real-World Context</h2>
+                
+                <div class="card-grid">
+                    <div class="info-card fact-card">
+                        <div class="icon-box" style="color: var(--accent-blue);">💧</div>
+                        <h3>Water Conservation</h3>
+                        <p>IFS can reduce freshwater usage by up to 60% because pond water is reused for irrigation, and soil moisture is retained by agroforestry shading.</p>
+                    </div>
+
+                    <div class="info-card fact-card">
+                        <div class="icon-box" style="color: var(--accent-gold);">⚡</div>
+                        <h3>Energy Independence</h3>
+                        <p>A family farm with just 4-5 cows can generate enough biogas to completely replace LPG for daily cooking and run a small electricity generator.</p>
+                    </div>
+
+                    <div class="info-card mistake-card">
+                        <div class="icon-box" style="color: var(--accent-red);">⚠️</div>
+                        <h3>Common Mistake: Overstocking</h3>
+                        <p>Adding too many animals without increasing crop/pond area leads to nitrogen leaching. The soil cannot absorb the excess manure, polluting local groundwater.</p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 1. Global Intersection Observer for fade-in animations ---
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            document.querySelectorAll('section').forEach(sec => observer.observe(sec));
+
+
+            // --- 2. Navigation Logic ---
+            const navBtns = document.querySelectorAll('.nav-btn');
+            navBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    // Update active state
+                    navBtns.forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    // Scroll to section
+                    const targetId = btn.getAttribute('data-target');
+                    const targetSection = document.getElementById(targetId);
+                    if (targetSection) {
+                        window.scrollTo({
+                            top: targetSection.offsetTop - 20,
+                            behavior: 'smooth'
+                        });
+                    }
+                });
+            });
+
+
+            // --- 3. Components Section Logic (Legend <-> Marker Sync) ---
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+            const svgZones = document.querySelectorAll('.svg-zone');
+
+            function highlightComponent(id) {
+                // reset all
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                svgZones.forEach(z => z.classList.remove('active'));
+
+                // The ID passed could be 'm1' or 'item-crops'. Map them.
+                let markerId, legendId, zoneId;
+
+                if (id.startsWith('m')) {
+                    markerId = id;
+                    legendId = document.getElementById(id).getAttribute('data-target');
+                } else if (id.startsWith('item')) {
+                    legendId = id;
+                    markerId = document.getElementById(id).getAttribute('data-target');
+                }
+
+                if (markerId === 'm1') zoneId = 'zone-crops';
+                if (markerId === 'm2') zoneId = 'zone-livestock';
+                if (markerId === 'm3') zoneId = 'zone-biogas';
+                if (markerId === 'm4') zoneId = 'zone-pond';
+                if (markerId === 'm5') zoneId = 'zone-trees';
+
+                if(markerId) document.getElementById(markerId).classList.add('active');
+                if(legendId) document.getElementById(legendId).classList.add('active');
+                if(zoneId) document.getElementById(zoneId).classList.add('active');
+            }
+
+            markers.forEach(m => {
+                m.addEventListener('mouseenter', () => highlightComponent(m.id));
+                m.addEventListener('click', () => highlightComponent(m.id));
+            });
+
+            legendItems.forEach(l => {
+                l.addEventListener('mouseenter', () => highlightComponent(l.id));
+                l.addEventListener('click', () => highlightComponent(l.id));
+            });
+
+
+            // --- 4. Working Mechanism (Cycle Engine) ---
+            const cycleStages = [
+                {
+                    title: "1. Solar Synthesis",
+                    desc: "Plants convert solar energy into biomass. Edible parts go to humans, residue becomes feed.",
+                    in: "Sunlight, Water, Soil Nutrients",
+                    out: "Grain, Crop Residue",
+                    activeNodes: ['wnode-1'],
+                    animPath: 'none' // Handled separately
+                },
+                {
+                    title: "2. Residue to Feed",
+                    desc: "Crop residue (straw, leaves) is harvested and fed to livestock, converting tough cellulose into protein.",
+                    in: "Crop Residue",
+                    out: "Milk, Meat, Dung",
+                    activeNodes: ['wnode-1', 'wnode-2'],
+                    animPath: 'path1'
+                },
+                {
+                    title: "3. Anaerobic Digestion",
+                    desc: "Livestock waste is collected in an oxygen-free dome. Bacteria break it down into methane and slurry.",
+                    in: "Raw Dung, Water",
+                    out: "Biogas, Bio-Slurry",
+                    activeNodes: ['wnode-2', 'wnode-3'],
+                    animPath: 'path2'
+                },
+                {
+                    title: "4. Energy & Aquaculture",
+                    desc: "Gas powers the home. Slurry flows into the pond, fertilizing aquatic plants and feeding fish.",
+                    in: "Bio-Slurry",
+                    out: "Energy, Fish",
+                    activeNodes: ['wnode-3', 'wnode-1'], // wnode-1 acts as proxy for home/pond here visually for simplicity
+                    animPath: 'path3'
+                },
+                {
+                    title: "5. Nutrient Return",
+                    desc: "Nutrient-rich pond water and bottom mud are applied back to the crop field, completing the cycle.",
+                    in: "Pond Water, Silt",
+                    out: "Fertile Soil",
+                    activeNodes: ['wnode-1'],
+                    animPath: 'path4'
+                }
+            ];
+
+            let currentStage = 0;
+            let isPlaying = false;
+            let cycleInterval;
+
+            const DOM = {
+                title: document.getElementById('stage-title'),
+                desc: document.getElementById('stage-desc'),
+                in: document.getElementById('stage-in'),
+                out: document.getElementById('stage-out'),
+                segments: document.querySelectorAll('.progress-segment'),
+                particlesContainer: document.getElementById('flow-particles-container'),
+                svgPathDefs: {
+                    path1: document.getElementById('path1'),
+                    path2: document.getElementById('path2'),
+                    path3: document.getElementById('path3b') // Slurry to pond
+                }
+            };
+
+            function createParticles(pathId) {
+                DOM.particlesContainer.innerHTML = ''; // clear
+                if(!pathId || pathId === 'none' || pathId === 'path4') return;
+                
+                const pathEl = DOM.svgPathDefs[pathId];
+                if(!pathEl) return;
+
+                // Create 3 animated dots along the path
+                for(let i=0; i<3; i++) {
+                    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    circle.setAttribute("class", "particle active");
+                    
+                    // Simple CSS animation fallback since SVG animateMotion can be buggy across browsers without external libs
+                    // We'll just pulse the nodes for visual effect if complex path animation isn't stable.
+                    // Let's implement a simple dash offset animation on the path instead for reliability.
+                }
+                
+                // Reliable approach: Animate the stroke-dashoffset of the path itself
+                document.querySelectorAll('.flow-path').forEach(p => {
+                    p.style.animation = 'none';
+                    p.style.stroke = 'rgba(255,255,255,0.05)';
+                });
+                
+                if(pathEl) {
+                    pathEl.style.stroke = 'var(--accent-gold)';
+                    // Inject dynamic keyframes style
+                    let style = document.getElementById('dynamic-flow');
+                    if(!style) {
+                        style = document.createElement('style');
+                        style.id = 'dynamic-flow';
+                        document.head.appendChild(style);
+                    }
+                    pathEl.style.strokeDasharray = "10 10";
+                    style.innerHTML = `@keyframes dashFlow { to { stroke-dashoffset: -20; } }`;
+                    pathEl.style.animation = 'dashFlow 1s linear infinite';
+                }
+            }
+
+            function updateStage(index) {
+                const stage = cycleStages[index];
+                
+                // Text
+                DOM.title.textContent = stage.title;
+                DOM.desc.textContent = stage.desc;
+                DOM.in.textContent = stage.in;
+                DOM.out.textContent = stage.out;
+
+                // Progress Bar
+                DOM.segments.forEach((seg, i) => {
+                    seg.classList.remove('active', 'completed');
+                    if (i === index) seg.classList.add('active');
+                    else if (i < index) seg.classList.add('completed');
+                });
+
+                // SVG Nodes
+                document.querySelectorAll('.stage-active').forEach(n => n.classList.remove('stage-active'));
+                stage.activeNodes.forEach(nodeId => {
+                    const node = document.getElementById(nodeId);
+                    if(node) node.classList.add('stage-active');
+                });
+
+                // Path Animation
+                createParticles(stage.animPath);
+            }
+
+            function nextStage() {
+                currentStage = (currentStage + 1) % cycleStages.length;
+                updateStage(currentStage);
+            }
+
+            function prevStage() {
+                currentStage = (currentStage - 1 + cycleStages.length) % cycleStages.length;
+                updateStage(currentStage);
+            }
+
+            function togglePlay() {
+                const btnPlay = document.getElementById('btn-play');
+                const playIcon = document.getElementById('play-icon');
+                
+                isPlaying = !isPlaying;
+                
+                if (isPlaying) {
+                    btnPlay.classList.add('playing');
+                    playIcon.innerHTML = `<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>`;
+                    cycleInterval = setInterval(nextStage, 3500);
+                } else {
+                    btnPlay.classList.remove('playing');
+                    playIcon.innerHTML = `<polygon points="5 3 19 12 5 21 5 3"></polygon>`;
+                    clearInterval(cycleInterval);
+                }
+            }
+
+            document.getElementById('btn-next').addEventListener('click', () => { pauseIfPlaying(); nextStage(); });
+            document.getElementById('btn-prev').addEventListener('click', () => { pauseIfPlaying(); prevStage(); });
+            document.getElementById('btn-play').addEventListener('click', togglePlay);
+
+            function pauseIfPlaying() {
+                if(isPlaying) togglePlay();
+            }
+
+            // Init first stage
+            updateStage(0);
+
+
+            // --- 5. Simulation Logic ---
+            const inputCrops = document.getElementById('sim-crops');
+            const inputStock = document.getElementById('sim-stock');
+            const inputPond = document.getElementById('sim-pond');
+            
+            const valCrops = document.getElementById('val-crops');
+            const valStock = document.getElementById('val-stock');
+            const valPond = document.getElementById('val-pond');
+
+            const healthVal = document.getElementById('val-health');
+            const healthBar = document.getElementById('bar-health');
+            const healthDesc = document.getElementById('health-desc');
+            const metricCard = document.getElementById('metric-health');
+            const seesaw = document.getElementById('seesaw');
+
+            function calculateBalance() {
+                const crops = parseInt(inputCrops.value);
+                const stock = parseInt(inputStock.value);
+                const pond = parseInt(inputPond.value);
+
+                // Update UI numbers
+                valCrops.textContent = crops;
+                valStock.textContent = stock;
+                valPond.textContent = pond;
+
+                // Simple Mathematical Model for Simulation
+                // Waste produced by livestock
+                const wasteLoad = stock * 2.5; 
+                // Capacity to absorb waste (Field + Pond buffer)
+                const absorbCapacity = crops + (pond * 1.5); 
+
+                // Calculate deviation from perfect balance
+                // Perfect balance is when Capacity roughly equals Load
+                let balanceRatio = absorbCapacity / wasteLoad;
+                
+                // Cap ratio for extreme values to prevent weird math
+                if(balanceRatio > 3) balanceRatio = 3; 
+
+                // Health Score (100% is perfect balance ratio of 1.0 to 1.5)
+                let score = 0;
+                let status = 'good';
+                let tiltAngle = 0; // for seesaw
+
+                if (balanceRatio < 0.8) {
+                    // Too much waste
+                    score = Math.max(10, Math.round((balanceRatio / 0.8) * 100));
+                    status = 'bad';
+                    healthDesc.textContent = "CRITICAL: System overloaded. Excess manure is leaching nitrogen and polluting groundwater.";
+                    tiltAngle = -20; // Tilt left (Waste heavy)
+                } else if (balanceRatio >= 0.8 && balanceRatio <= 1.5) {
+                    // Balanced
+                    score = 100 - Math.abs(1.15 - balanceRatio) * 30; // Peak at 1.15
+                    score = Math.min(100, Math.round(score));
+                    status = 'good';
+                    healthDesc.textContent = "OPTIMAL: Waste is fully converted to energy and fertilizer. Closed loop achieved.";
+                    tiltAngle = 0; // Balanced
+                } else {
+                    // Too much land/pond, not enough animals to sustain cycle
+                    score = Math.max(40, Math.round((1.5 / balanceRatio) * 100));
+                    status = 'warning';
+                    healthDesc.textContent = "INEFFICIENT: Underutilized capacity. Need more livestock to generate enough organic fertilizer for this area.";
+                    tiltAngle = 15; // Tilt right (Capacity heavy)
+                }
+
+                // Update UI Visuals
+                healthVal.textContent = score + "%";
+                healthBar.style.width = score + "%";
+                
+                // Color coding
+                metricCard.className = 'metric-card ' + status;
+                let barColor = status === 'good' ? 'var(--accent-green)' : (status === 'warning' ? 'var(--accent-gold)' : 'var(--accent-red)');
+                healthBar.style.backgroundColor = barColor;
+
+                // Animate Seesaw
+                seesaw.style.transform = `rotate(${tiltAngle}deg)`;
+            }
+
+            // Event Listeners for sliders (using input for real-time, handling touch naturally via browser)
+            [inputCrops, inputStock, inputPond].forEach(el => {
+                el.addEventListener('input', calculateBalance);
+            });
+
+            // Initial calculation
+            calculateBalance();
+
+        });
+    </script>
+</body>
+</html>

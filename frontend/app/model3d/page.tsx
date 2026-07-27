@@ -7,6 +7,7 @@ import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import { api } from '@/lib/api'
 import { useGameProgress } from '@/lib/useGameProgress'
+import { useBellaStore } from '@/lib/bellaStore'
 import { useModel3DCache, type CachedModel3D } from '@/components/Model3DEngine/useModel3DCache'
 import Model3DGallery from '@/components/Model3DEngine/Model3DGallery'
 import '@/components/Model3DEngine/Model3DEngine.css'
@@ -56,6 +57,19 @@ function Model3DPageInner() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const { completeMission } = useGameProgress()
   const { getCached, setCached } = useModel3DCache()
+  const { triggerExplanation, isExplaining, requestStopSpeaking } = useBellaStore()
+
+  const explainModel = (topic: string) => {
+    api.bellaExplain(topic, { section: 'model3d', language: useBellaStore.getState().language })
+      .then((data) => {
+        triggerExplanation({
+          topic,
+          text: data.explanation,
+          audioB64: data.audio_b64 ?? null,
+        })
+      })
+      .catch((err) => console.warn('[Model3D] Bella explain failed:', err))
+  }
 
   const startPolling = (id: string, currentObjectName: string, currentCategory: Category) => {
     if (pollRef.current) clearInterval(pollRef.current)
@@ -85,6 +99,7 @@ function Model3DPageInner() {
                 description: newResult.description
               })
               setGalleryKey(prev => prev + 1)
+              explainModel(newResult.object_name)
             } catch {
               if (job.asset_url) {
                 const newResult = {
@@ -101,6 +116,7 @@ function Model3DPageInner() {
                   description: newResult.description
                 })
                 setGalleryKey(prev => prev + 1)
+                explainModel(newResult.object_name)
               }
             }
           }
@@ -139,6 +155,7 @@ function Model3DPageInner() {
       setFromCache(true)
       setLoading(false)
       completeMission('model3d')
+      explainModel(cached.object_name)
       return
     }
 
@@ -225,13 +242,24 @@ function Model3DPageInner() {
       {/* Result */}
       {result && (
         <div className="animate-fadeInUp">
-          {fromCache && (
-            <div className="sim-engine__cache-badge">
-              <span className="sim-engine__cache-badge-icon">⚡</span>
-              <span>Loaded from cache</span>
-              <span className="sim-engine__cache-badge-dot" />
-            </div>
-          )}
+          <div className="flex items-center justify-between mb-2">
+            {fromCache ? (
+              <div className="sim-engine__cache-badge">
+                <span className="sim-engine__cache-badge-icon">⚡</span>
+                <span>Loaded from cache</span>
+                <span className="sim-engine__cache-badge-dot" />
+              </div>
+            ) : <div />}
+            {isExplaining && (
+              <button
+                onClick={requestStopSpeaking}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-300 border border-red-500/30 hover:bg-red-500/30 transition-all"
+              >
+                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+                🔇 Stop Bella
+              </button>
+            )}
+          </div>
           <ModelViewer3D
             gltfUrl={result.asset_url}
             metadata={{ name: result.object_name, description: result.description, object_name: result.object_name }}
@@ -262,6 +290,7 @@ function Model3DPageInner() {
             })
             setFromCache(true)
             setGalleryOpen(false)
+            explainModel(entry.object_name)
             setError(null)
           }}
           onClose={() => setGalleryOpen(false)}

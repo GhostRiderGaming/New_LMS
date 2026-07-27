@@ -90,7 +90,7 @@ export function useSimulationCache() {
       if (!raw) return null
       const parsed: CachedSimulation = JSON.parse(raw)
       // Basic shape validation
-      if (parsed.code && parsed.concept && parsed.createdAt) {
+      if (parsed.code && parsed.concept && parsed.createdAt && parsed.version >= 2) {
         return parsed
       }
       return null
@@ -107,7 +107,7 @@ export function useSimulationCache() {
       concept,
       code,
       createdAt: Date.now(),
-      version: 1,
+      version: 2,
     }
 
     const payload = JSON.stringify(entry)

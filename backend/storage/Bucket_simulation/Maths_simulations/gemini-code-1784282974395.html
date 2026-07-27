@@ -1,0 +1,1095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Area Explorer - Interactive Simulation</title>
+    <style>
+        /* =========================================================
+           DESIGN SYSTEM & THEME
+           ========================================================= */
+        :root {
+            /* Colors */
+            --bg-dark: #07090f;
+            --bg-panel: rgba(15, 20, 35, 0.6);
+            --cyan: #00E5FF;
+            --blue: #4FC3F7;
+            --purple: #8E44FF;
+            --orange: #FFA726;
+            --green: #00E676;
+            --text-main: #ffffff;
+            --text-muted: #a0aabf;
+            --danger: #ff4757;
+            
+            /* Glassmorphism */
+            --glass-bg: rgba(20, 25, 45, 0.45);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            
+            /* Typography */
+            --font-main: 'Inter', 'Segoe UI', 'Poppins', sans-serif;
+            
+            /* Layout */
+            --radius-lg: 16px;
+            --radius-md: 10px;
+            --radius-sm: 6px;
+            --spacing: 20px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-main);
+        }
+
+        body {
+            background: var(--bg-dark);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(142, 68, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(0, 229, 255, 0.08) 0%, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Ambient glowing particles */
+        .particle {
+            position: fixed;
+            border-radius: 50%;
+            background: #fff;
+            filter: blur(8px);
+            opacity: 0.3;
+            animation: float 20s infinite linear;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0) translateX(0); opacity: 0; }
+            10% { opacity: 0.5; }
+            90% { opacity: 0.5; }
+            100% { transform: translateY(-100vh) translateX(100px); opacity: 0; }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing);
+        }
+
+        /* =========================================================
+           TYPOGRAPHY & HEADER
+           ========================================================= */
+        h1, h2, h3 { font-weight: 600; }
+        
+        .header {
+            text-align: center;
+            padding: 40px 0 20px;
+        }
+        
+        .header h1 {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            background: linear-gradient(135deg, var(--cyan), var(--blue), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 229, 255, 0.3);
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* =========================================================
+           GLASSMORPHISM CARDS
+           ========================================================= */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+            padding: var(--spacing);
+            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        }
+        
+        .glass-card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 10px 40px 0 rgba(0, 229, 255, 0.1);
+        }
+
+        /* =========================================================
+           TOP INFO SECTION (Definition, Formulas, Fact)
+           ========================================================= */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--spacing);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 10px;
+        }
+        .card-header h3 {
+            color: var(--cyan);
+            font-size: 1.2rem;
+        }
+
+        /* Mathematical Formulas formatting */
+        .math-display {
+            font-family: 'Cambria Math', 'Times New Roman', serif;
+            font-size: 1.5rem;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 10px;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-sm);
+            margin-bottom: 10px;
+            border-left: 3px solid var(--purple);
+        }
+        .fraction {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: middle;
+            margin: 0 5px;
+        }
+        .fraction .top {
+            border-bottom: 1px solid white;
+            padding: 0 3px;
+        }
+        .fraction .bottom {
+            padding: 0 3px;
+        }
+
+        .fact-text { font-style: italic; color: var(--blue); }
+
+        /* =========================================================
+           MAIN WORKSPACE
+           ========================================================= */
+        .workspace {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: var(--spacing);
+        }
+
+        @media (max-width: 1024px) {
+            .workspace { grid-template-columns: 1fr; }
+        }
+
+        /* Controls Panel */
+        .control-group {
+            margin-bottom: 25px;
+        }
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+        
+        .val-display {
+            color: var(--cyan);
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--cyan);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -6px;
+            box-shadow: 0 0 10px var(--cyan);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+        
+        /* Shape Selector */
+        .shape-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .shape-btn {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            color: var(--text-main);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        .shape-btn.active {
+            background: rgba(0, 229, 255, 0.15);
+            border-color: var(--cyan);
+            color: var(--cyan);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
+        }
+
+        /* Playback Controls */
+        .playback-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .btn-icon {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            color: var(--text-main);
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .btn-icon:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .btn-play { background: rgba(0, 230, 118, 0.2); color: var(--green); }
+        .btn-play:hover { background: rgba(0, 230, 118, 0.4); box-shadow: 0 0 15px rgba(0, 230, 118, 0.4); }
+        .btn-random { background: rgba(255, 167, 38, 0.2); color: var(--orange); }
+        
+        /* Visualization Area */
+        .visual-area {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing);
+        }
+        
+        .canvas-container {
+            width: 100%;
+            position: relative;
+            background: #000;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+            aspect-ratio: 16 / 9;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .canvas-title {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(0,0,0,0.6);
+            padding: 5px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            color: var(--cyan);
+            border-left: 2px solid var(--cyan);
+            z-index: 10;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Live Calculations */
+        .live-calc {
+            font-size: 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.4);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(0, 229, 255, 0.3);
+        }
+        .result-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--green);
+            text-shadow: 0 0 20px rgba(0, 230, 118, 0.4);
+            font-family: 'Cambria Math', serif;
+            transition: color 0.3s, text-shadow 0.3s;
+        }
+        
+        .highlight-change {
+            color: #fff !important;
+            text-shadow: 0 0 30px #fff !important;
+        }
+
+        .warning-msg {
+            display: none;
+            color: var(--danger);
+            font-size: 0.9rem;
+            margin-top: 10px;
+            text-align: right;
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            from { opacity: 0.7; }
+            to { opacity: 1; text-shadow: 0 0 10px var(--danger); }
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+            border-bottom: 1px dotted var(--text-muted);
+        }
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 220px;
+            background-color: #111;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -110px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            border: 1px solid var(--glass-border);
+            font-size: 0.85rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 600px) {
+            .live-calc {
+                flex-direction: column;
+                text-align: center;
+                gap: 10px;
+            }
+            .canvas-container { aspect-ratio: 4 / 3; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- CSS Particles -->
+    <script>
+        for(let i=0; i<15; i++) {
+            let p = document.createElement('div');
+            p.className = 'particle';
+            p.style.width = Math.random()*4 + 2 + 'px';
+            p.style.height = p.style.width;
+            p.style.left = Math.random()*100 + 'vw';
+            p.style.top = Math.random()*100 + 'vh';
+            p.style.animationDuration = (Math.random()*15 + 10) + 's';
+            p.style.animationDelay = (Math.random()*5) + 's';
+            document.body.appendChild(p);
+        }
+    </script>
+
+    <div class="container">
+        
+        <!-- Header -->
+        <header class="header">
+            <h1>Area Explorer</h1>
+            <p class="subtitle">A dynamic laboratory to visualize and understand the concept of area across different geometries.</p>
+        </header>
+
+        <!-- Information Row -->
+        <div class="info-grid">
+            <div class="glass-card">
+                <div class="card-header">
+                    <h3>🔍 Concept Definition</h3>
+                </div>
+                <p><strong>Area</strong> is the quantity that expresses the extent of a two-dimensional region or shape in the plane. It is measured in square units (e.g., m&sup2;, cm&sup2;).</p>
+                <br>
+                <p>Think of it as the amount of paint required to cover a surface with a single coat.</p>
+            </div>
+
+            <div class="glass-card">
+                <div class="card-header">
+                    <h3>📐 Essential Formulas</h3>
+                </div>
+                <div id="formula-rect" class="math-display">
+                    A = w &times; h
+                </div>
+                <div id="formula-circle" class="math-display" style="display:none;">
+                    A = &pi; r&sup2;
+                </div>
+                <div id="formula-tri" class="math-display" style="display:none;">
+                    A = <span class="fraction"><span class="top">1</span><span class="bottom">2</span></span> b h
+                </div>
+                <p style="font-size:0.85rem; color:var(--text-muted); text-align:center;">Select a shape in the workspace below to update.</p>
+            </div>
+
+            <div class="glass-card">
+                <div class="card-header">
+                    <h3>💡 Science Fact</h3>
+                </div>
+                <p class="fact-text" id="random-fact">The concept of area has been used since ancient Babylon to measure plots of land for taxation!</p>
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <div class="workspace">
+            
+            <!-- Controls Panel -->
+            <div class="glass-card controls-panel">
+                <div class="card-header">
+                    <h3>🎛️ Parameters</h3>
+                </div>
+                
+                <div class="shape-selector">
+                    <button class="shape-btn active" data-shape="rectangle">Rectangle</button>
+                    <button class="shape-btn" data-shape="circle">Circle</button>
+                    <button class="shape-btn" data-shape="triangle">Triangle</button>
+                </div>
+
+                <!-- Rectangle Controls -->
+                <div id="ctrl-rectangle" class="shape-controls">
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span class="tooltip">Width (w)<span class="tooltiptext">The horizontal dimension of the rectangle.</span></span>
+                            <span class="val-display" id="val-rect-w">10.0 m</span>
+                        </div>
+                        <input type="range" id="slider-rect-w" min="1" max="20" step="0.1" value="10">
+                    </div>
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span class="tooltip">Height (h)<span class="tooltiptext">The vertical dimension of the rectangle.</span></span>
+                            <span class="val-display" id="val-rect-h">5.0 m</span>
+                        </div>
+                        <input type="range" id="slider-rect-h" min="1" max="20" step="0.1" value="5">
+                    </div>
+                </div>
+
+                <!-- Circle Controls -->
+                <div id="ctrl-circle" class="shape-controls" style="display:none;">
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span class="tooltip">Radius (r)<span class="tooltiptext">Distance from the center to the edge. Area grows exponentially as this increases!</span></span>
+                            <span class="val-display" id="val-circle-r">7.0 m</span>
+                        </div>
+                        <input type="range" id="slider-circle-r" min="1" max="15" step="0.1" value="7">
+                    </div>
+                </div>
+
+                <!-- Triangle Controls -->
+                <div id="ctrl-triangle" class="shape-controls" style="display:none;">
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span class="tooltip">Base (b)<span class="tooltiptext">The bottom edge of the triangle.</span></span>
+                            <span class="val-display" id="val-tri-b">12.0 m</span>
+                        </div>
+                        <input type="range" id="slider-tri-b" min="1" max="20" step="0.1" value="12">
+                    </div>
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span class="tooltip">Height (h)<span class="tooltiptext">Perpendicular distance from base to opposite vertex.</span></span>
+                            <span class="val-display" id="val-tri-h">8.0 m</span>
+                        </div>
+                        <input type="range" id="slider-tri-h" min="1" max="20" step="0.1" value="8">
+                    </div>
+                </div>
+
+                <div class="playback-controls">
+                    <button class="btn-icon btn-play" id="btn-play" title="Play/Pause Animation">▶</button>
+                    <button class="btn-icon" id="btn-reset" title="Reset Values">⏹</button>
+                    <button class="btn-icon btn-random" id="btn-random" title="Randomize Parameters">🎲</button>
+                </div>
+            </div>
+
+            <!-- Visuals & Calculations -->
+            <div class="visual-area">
+                
+                <!-- Live Calc Card -->
+                <div class="glass-card live-calc">
+                    <div>
+                        <div style="color: var(--text-muted); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">Live Calculation</div>
+                        <div id="calc-breakdown" style="font-family: 'Cambria Math', serif; margin-top: 5px; font-size: 1.2rem;">
+                            A = 10.0 &times; 5.0
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div class="result-value" id="calc-result">50.00 m&sup2;</div>
+                        <div class="warning-msg" id="warning-msg">⚠️ High Area Value!</div>
+                    </div>
+                </div>
+
+                <!-- Simulation Canvas -->
+                <div class="canvas-container">
+                    <div class="canvas-title">Visual Simulation (1 unit = 1m)</div>
+                    <canvas id="simCanvas"></canvas>
+                </div>
+                
+                <!-- Graph Canvas -->
+                <div class="canvas-container" style="aspect-ratio: 21/9;">
+                    <div class="canvas-title">Area vs Primary Dimension</div>
+                    <canvas id="graphCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // ==========================================
+        // STATE MANAGEMENT
+        // ==========================================
+        const state = {
+            shape: 'rectangle', // rectangle, circle, triangle
+            rect: { w: 10, h: 5 },
+            circle: { r: 7 },
+            tri: { b: 12, h: 8 },
+            playing: false,
+            animTime: 0,
+            lastArea: 0
+        };
+
+        const facts = [
+            "The concept of area has been used since ancient Babylon to measure plots of land for taxation!",
+            "A circle encloses the largest possible area for a given perimeter compared to any other shape.",
+            "Fractals can have a finite area but an infinite perimeter. Mind bending!",
+            "The surface area of human lungs is roughly equal to a tennis court.",
+            "Integral calculus was largely developed to find the area under irregular curves."
+        ];
+
+        // DOM Elements
+        const DOM = {
+            btns: document.querySelectorAll('.shape-btn'),
+            ctrls: {
+                rectangle: document.getElementById('ctrl-rectangle'),
+                circle: document.getElementById('ctrl-circle'),
+                triangle: document.getElementById('ctrl-triangle')
+            },
+            forms: {
+                rectangle: document.getElementById('formula-rect'),
+                circle: document.getElementById('formula-circle'),
+                triangle: document.getElementById('formula-tri')
+            },
+            sliders: {
+                rectW: document.getElementById('slider-rect-w'),
+                rectH: document.getElementById('slider-rect-h'),
+                circleR: document.getElementById('slider-circle-r'),
+                triB: document.getElementById('slider-tri-b'),
+                triH: document.getElementById('slider-tri-h'),
+            },
+            displays: {
+                rectW: document.getElementById('val-rect-w'),
+                rectH: document.getElementById('val-rect-h'),
+                circleR: document.getElementById('val-circle-r'),
+                triB: document.getElementById('val-tri-b'),
+                triH: document.getElementById('val-tri-h'),
+            },
+            calcBreakdown: document.getElementById('calc-breakdown'),
+            calcResult: document.getElementById('calc-result'),
+            warningMsg: document.getElementById('warning-msg'),
+            btnPlay: document.getElementById('btn-play'),
+            btnReset: document.getElementById('btn-reset'),
+            btnRandom: document.getElementById('btn-random'),
+            fact: document.getElementById('random-fact'),
+            simCanvas: document.getElementById('simCanvas'),
+            graphCanvas: document.getElementById('graphCanvas')
+        };
+
+        const ctxSim = DOM.simCanvas.getContext('2d');
+        const ctxGraph = DOM.graphCanvas.getContext('2d');
+
+        // ==========================================
+        // INITIALIZATION & EVENT LISTENERS
+        // ==========================================
+        function init() {
+            // Resize Canvas based on container size
+            window.addEventListener('resize', resizeCanvases);
+            resizeCanvases();
+
+            // Shape Selection
+            DOM.btns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    DOM.btns.forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    changeShape(e.target.dataset.shape);
+                });
+            });
+
+            // Sliders Input
+            Object.keys(DOM.sliders).forEach(key => {
+                DOM.sliders[key].addEventListener('input', (e) => {
+                    if (state.playing) togglePlay(); // Manual override pauses animation
+                    updateStateFromSliders();
+                    updateUI();
+                });
+            });
+
+            // Controls
+            DOM.btnPlay.addEventListener('click', togglePlay);
+            DOM.btnReset.addEventListener('click', resetValues);
+            DOM.btnRandom.addEventListener('click', randomizeValues);
+            
+            // Random Fact on load
+            DOM.fact.innerText = facts[Math.floor(Math.random() * facts.length)];
+
+            // Start Loop
+            updateUI();
+            requestAnimationFrame(animationLoop);
+        }
+
+        function resizeCanvases() {
+            // High DPI support for sharp canvas text/lines
+            const simRect = DOM.simCanvas.parentElement.getBoundingClientRect();
+            DOM.simCanvas.width = simRect.width * window.devicePixelRatio;
+            DOM.simCanvas.height = simRect.height * window.devicePixelRatio;
+            ctxSim.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            const graphRect = DOM.graphCanvas.parentElement.getBoundingClientRect();
+            DOM.graphCanvas.width = graphRect.width * window.devicePixelRatio;
+            DOM.graphCanvas.height = graphRect.height * window.devicePixelRatio;
+            ctxGraph.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+
+        // ==========================================
+        // LOGIC & DATA UPDATES
+        // ==========================================
+        function changeShape(shapeStr) {
+            state.shape = shapeStr;
+            
+            // Toggle visibility
+            Object.keys(DOM.ctrls).forEach(k => DOM.ctrls[k].style.display = 'none');
+            Object.keys(DOM.forms).forEach(k => DOM.forms[k].style.display = 'none');
+            
+            DOM.ctrls[shapeStr].style.display = 'block';
+            DOM.forms[shapeStr].style.display = 'flex';
+            
+            DOM.fact.innerText = facts[Math.floor(Math.random() * facts.length)];
+            
+            updateSlidersFromState();
+            updateUI();
+        }
+
+        function updateStateFromSliders() {
+            state.rect.w = parseFloat(DOM.sliders.rectW.value);
+            state.rect.h = parseFloat(DOM.sliders.rectH.value);
+            state.circle.r = parseFloat(DOM.sliders.circleR.value);
+            state.tri.b = parseFloat(DOM.sliders.triB.value);
+            state.tri.h = parseFloat(DOM.sliders.triH.value);
+        }
+
+        function updateSlidersFromState() {
+            DOM.sliders.rectW.value = state.rect.w;
+            DOM.sliders.rectH.value = state.rect.h;
+            DOM.sliders.circleR.value = state.circle.r;
+            DOM.sliders.triB.value = state.tri.b;
+            DOM.sliders.triH.value = state.tri.h;
+        }
+
+        function getArea() {
+            if (state.shape === 'rectangle') return state.rect.w * state.rect.h;
+            if (state.shape === 'circle') return Math.PI * Math.pow(state.circle.r, 2);
+            if (state.shape === 'triangle') return 0.5 * state.tri.b * state.tri.h;
+            return 0;
+        }
+
+        function updateUI() {
+            // Update labels
+            DOM.displays.rectW.innerText = state.rect.w.toFixed(1) + ' m';
+            DOM.displays.rectH.innerText = state.rect.h.toFixed(1) + ' m';
+            DOM.displays.circleR.innerText = state.circle.r.toFixed(1) + ' m';
+            DOM.displays.triB.innerText = state.tri.b.toFixed(1) + ' m';
+            DOM.displays.triH.innerText = state.tri.h.toFixed(1) + ' m';
+
+            // Calculate Area
+            let area = getArea();
+            let breakdown = '';
+            
+            if (state.shape === 'rectangle') breakdown = `A = ${state.rect.w.toFixed(1)} &times; ${state.rect.h.toFixed(1)}`;
+            if (state.shape === 'circle') breakdown = `A = &pi; &times; ${state.circle.r.toFixed(1)}&sup2;`;
+            if (state.shape === 'triangle') breakdown = `A = &frac12; &times; ${state.tri.b.toFixed(1)} &times; ${state.tri.h.toFixed(1)}`;
+            
+            DOM.calcBreakdown.innerHTML = breakdown;
+            
+            // Highlight effect if value changed significantly
+            if (Math.abs(area - state.lastArea) > 0.1) {
+                DOM.calcResult.classList.add('highlight-change');
+                setTimeout(() => DOM.calcResult.classList.remove('highlight-change'), 200);
+            }
+            state.lastArea = area;
+            
+            DOM.calcResult.innerHTML = area.toFixed(2) + ' m&sup2;';
+
+            // Warning threshold
+            if (area > 200) DOM.warningMsg.style.display = 'block';
+            else DOM.warningMsg.style.display = 'none';
+        }
+
+        // ==========================================
+        // ANIMATION AND CONTROLS
+        // ==========================================
+        function togglePlay() {
+            state.playing = !state.playing;
+            DOM.btnPlay.innerText = state.playing ? '⏸' : '▶';
+            DOM.btnPlay.style.background = state.playing ? 'rgba(255, 167, 38, 0.2)' : 'rgba(0, 230, 118, 0.2)';
+            DOM.btnPlay.style.color = state.playing ? 'var(--orange)' : 'var(--green)';
+        }
+
+        function resetValues() {
+            state.playing = false;
+            DOM.btnPlay.innerText = '▶';
+            state.rect = { w: 10, h: 5 };
+            state.circle = { r: 7 };
+            state.tri = { b: 12, h: 8 };
+            updateSlidersFromState();
+            updateUI();
+        }
+
+        function randomizeValues() {
+            state.rect.w = (Math.random() * 18 + 2).toFixed(1);
+            state.rect.h = (Math.random() * 18 + 2).toFixed(1);
+            state.circle.r = (Math.random() * 13 + 2).toFixed(1);
+            state.tri.b = (Math.random() * 18 + 2).toFixed(1);
+            state.tri.h = (Math.random() * 18 + 2).toFixed(1);
+            updateSlidersFromState();
+            updateUI();
+        }
+
+        function animationLoop() {
+            if (state.playing) {
+                state.animTime += 0.02;
+                let sinW = (Math.sin(state.animTime) + 1) / 2; // 0 to 1
+                
+                if (state.shape === 'rectangle') {
+                    state.rect.w = 5 + sinW * 15; // 5 to 20
+                } else if (state.shape === 'circle') {
+                    state.circle.r = 3 + sinW * 12; // 3 to 15
+                } else if (state.shape === 'triangle') {
+                    state.tri.b = 5 + sinW * 15; // 5 to 20
+                }
+                updateSlidersFromState();
+                updateUI();
+            }
+
+            drawSim();
+            drawGraph();
+            requestAnimationFrame(animationLoop);
+        }
+
+        // ==========================================
+        // CANVAS RENDERING - SIMULATION
+        // ==========================================
+        function drawSim() {
+            const w = DOM.simCanvas.parentElement.clientWidth;
+            const h = DOM.simCanvas.parentElement.clientHeight;
+            ctxSim.clearRect(0, 0, w, h);
+
+            // Scale logic: 1 unit = pixels
+            const maxUnits = 30; // Canvas view covers 30m width
+            const pixelsPerUnit = w / maxUnits;
+            const centerX = w / 2;
+            const centerY = h / 2;
+
+            // Draw Grid
+            ctxSim.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctxSim.lineWidth = 1;
+            ctxSim.beginPath();
+            for(let i=0; i<w; i+=pixelsPerUnit) {
+                ctxSim.moveTo(i, 0); ctxSim.lineTo(i, h);
+            }
+            for(let i=0; i<h; i+=pixelsPerUnit) {
+                ctxSim.moveTo(0, i); ctxSim.lineTo(w, i);
+            }
+            ctxSim.stroke();
+
+            // Setup Shape Styles
+            ctxSim.shadowColor = 'rgba(0, 229, 255, 0.5)';
+            ctxSim.shadowBlur = 20;
+            ctxSim.lineWidth = 3;
+
+            // Draw based on shape
+            ctxSim.save();
+            ctxSim.translate(centerX, centerY);
+
+            if (state.shape === 'rectangle') {
+                let rw = state.rect.w * pixelsPerUnit;
+                let rh = state.rect.h * pixelsPerUnit;
+                
+                let grad = ctxSim.createLinearGradient(-rw/2, -rh/2, rw/2, rh/2);
+                grad.addColorStop(0, 'rgba(0, 229, 255, 0.6)');
+                grad.addColorStop(1, 'rgba(79, 195, 247, 0.8)');
+                
+                ctxSim.fillStyle = grad;
+                ctxSim.strokeStyle = '#00E5FF';
+                ctxSim.shadowColor = '#00E5FF';
+                
+                ctxSim.beginPath();
+                ctxSim.rect(-rw/2, -rh/2, rw, rh);
+                ctxSim.fill();
+                ctxSim.stroke();
+
+                // Dimension Lines
+                drawDimensionLine(0, rh/2 + 15, state.rect.w.toFixed(1) + 'm (w)', '#fff');
+                drawDimensionLine(rw/2 + 25, 0, state.rect.h.toFixed(1) + 'm (h)', '#fff', true);
+
+            } else if (state.shape === 'circle') {
+                let r = state.circle.r * pixelsPerUnit;
+                
+                let grad = ctxSim.createRadialGradient(0, 0, 0, 0, 0, r);
+                grad.addColorStop(0, 'rgba(142, 68, 255, 0.8)');
+                grad.addColorStop(1, 'rgba(255, 71, 87, 0.6)');
+                
+                ctxSim.fillStyle = grad;
+                ctxSim.strokeStyle = '#8E44FF';
+                ctxSim.shadowColor = '#8E44FF';
+
+                ctxSim.beginPath();
+                ctxSim.arc(0, 0, r, 0, Math.PI * 2);
+                ctxSim.fill();
+                ctxSim.stroke();
+
+                // Radius line
+                ctxSim.beginPath();
+                ctxSim.moveTo(0, 0);
+                ctxSim.lineTo(r, 0);
+                ctxSim.strokeStyle = '#fff';
+                ctxSim.shadowBlur = 0;
+                ctxSim.stroke();
+                
+                ctxSim.fillStyle = '#fff';
+                ctxSim.font = '12px Inter';
+                ctxSim.textAlign = 'center';
+                ctxSim.fillText(`r = ${state.circle.r.toFixed(1)}m`, r/2, -5);
+
+            } else if (state.shape === 'triangle') {
+                let tb = state.tri.b * pixelsPerUnit;
+                let th = state.tri.h * pixelsPerUnit;
+                
+                let grad = ctxSim.createLinearGradient(0, -th/2, 0, th/2);
+                grad.addColorStop(0, 'rgba(255, 167, 38, 0.8)');
+                grad.addColorStop(1, 'rgba(0, 230, 118, 0.6)');
+
+                ctxSim.fillStyle = grad;
+                ctxSim.strokeStyle = '#FFA726';
+                ctxSim.shadowColor = '#FFA726';
+
+                ctxSim.beginPath();
+                ctxSim.moveTo(0, -th/2); // Top vertex
+                ctxSim.lineTo(tb/2, th/2); // Bottom right
+                ctxSim.lineTo(-tb/2, th/2); // Bottom left
+                ctxSim.closePath();
+                ctxSim.fill();
+                ctxSim.stroke();
+
+                // Dimension Lines
+                drawDimensionLine(0, th/2 + 15, state.tri.b.toFixed(1) + 'm (b)', '#fff');
+                drawDimensionLine(0, 0, state.tri.h.toFixed(1) + 'm (h)', '#fff', true);
+                
+                // Height dotted line
+                ctxSim.beginPath();
+                ctxSim.setLineDash([5, 5]);
+                ctxSim.moveTo(0, -th/2);
+                ctxSim.lineTo(0, th/2);
+                ctxSim.stroke();
+                ctxSim.setLineDash([]);
+            }
+            ctxSim.restore();
+        }
+
+        function drawDimensionLine(x, y, text, color, vertical=false) {
+            ctxSim.shadowBlur = 0;
+            ctxSim.fillStyle = color;
+            ctxSim.font = '12px Inter';
+            ctxSim.textAlign = 'center';
+            ctxSim.textBaseline = 'middle';
+            if (vertical) {
+                ctxSim.save();
+                ctxSim.translate(x, y);
+                ctxSim.rotate(-Math.PI/2);
+                ctxSim.fillText(text, 0, 0);
+                ctxSim.restore();
+            } else {
+                ctxSim.fillText(text, x, y);
+            }
+        }
+
+        // ==========================================
+        // CANVAS RENDERING - GRAPH
+        // ==========================================
+        function drawGraph() {
+            const w = DOM.graphCanvas.parentElement.clientWidth;
+            const h = DOM.graphCanvas.parentElement.clientHeight;
+            ctxGraph.clearRect(0, 0, w, h);
+
+            // Determine axes bounds
+            let maxX = 20;
+            let maxY = 400; // max area theoretical for our sliders
+            if (state.shape === 'circle') maxY = Math.PI * 15 * 15; // ~706
+            if (state.shape === 'circle') maxX = 15;
+
+            const padding = 40;
+            const graphW = w - padding * 2;
+            const graphH = h - padding * 2;
+
+            function getMap(vX, vY) {
+                return {
+                    x: padding + (vX / maxX) * graphW,
+                    y: h - padding - (vY / maxY) * graphH
+                };
+            }
+
+            // Draw Grid & Axes
+            ctxGraph.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctxGraph.lineWidth = 1;
+            ctxGraph.beginPath();
+            
+            // Y Grid
+            for(let i=0; i<=5; i++) {
+                let yVal = (maxY / 5) * i;
+                let map = getMap(0, yVal);
+                ctxGraph.moveTo(padding, map.y);
+                ctxGraph.lineTo(w - padding, map.y);
+                
+                ctxGraph.fillStyle = 'rgba(255,255,255,0.5)';
+                ctxGraph.font = '10px Inter';
+                ctxGraph.textAlign = 'right';
+                ctxGraph.textBaseline = 'middle';
+                ctxGraph.fillText(Math.round(yVal), padding - 8, map.y);
+            }
+            
+            // X Grid
+            for(let i=0; i<=5; i++) {
+                let xVal = (maxX / 5) * i;
+                let map = getMap(xVal, 0);
+                ctxGraph.moveTo(map.x, h - padding);
+                ctxGraph.lineTo(map.x, padding);
+                
+                ctxGraph.fillStyle = 'rgba(255,255,255,0.5)';
+                ctxGraph.textAlign = 'center';
+                ctxGraph.textBaseline = 'top';
+                ctxGraph.fillText(xVal.toFixed(1), map.x, h - padding + 8);
+            }
+            ctxGraph.stroke();
+
+            // Axes Labels
+            ctxGraph.fillStyle = 'var(--text-muted)';
+            ctxGraph.font = '12px Inter';
+            ctxGraph.textAlign = 'center';
+            ctxGraph.fillText(state.shape === 'circle' ? 'Radius (m)' : (state.shape === 'triangle' ? 'Base (m)' : 'Width (m)'), w/2, h - 10);
+            
+            ctxGraph.save();
+            ctxGraph.translate(15, h/2);
+            ctxGraph.rotate(-Math.PI/2);
+            ctxGraph.fillText('Area (m²)', 0, 0);
+            ctxGraph.restore();
+
+            // Draw Plot Line
+            let primaryDim = state.shape === 'rectangle' ? state.rect.w : (state.shape === 'circle' ? state.circle.r : state.tri.b);
+            let currentArea = getArea();
+            let color = state.shape === 'rectangle' ? '#00E5FF' : (state.shape === 'circle' ? '#8E44FF' : '#FFA726');
+
+            ctxGraph.beginPath();
+            for(let i=0; i<=maxX; i+=0.5) {
+                let areaAtI = 0;
+                if (state.shape === 'rectangle') areaAtI = i * state.rect.h;
+                if (state.shape === 'circle') areaAtI = Math.PI * i * i;
+                if (state.shape === 'triangle') areaAtI = 0.5 * i * state.tri.h;
+                
+                let pt = getMap(i, areaAtI);
+                if (i === 0) ctxGraph.moveTo(pt.x, pt.y);
+                else ctxGraph.lineTo(pt.x, pt.y);
+            }
+            ctxGraph.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctxGraph.lineWidth = 2;
+            ctxGraph.stroke();
+
+            // Draw Active Path
+            ctxGraph.beginPath();
+            ctxGraph.shadowColor = color;
+            ctxGraph.shadowBlur = 15;
+            for(let i=0; i<=primaryDim; i+=0.5) {
+                let areaAtI = 0;
+                if (state.shape === 'rectangle') areaAtI = i * state.rect.h;
+                if (state.shape === 'circle') areaAtI = Math.PI * i * i;
+                if (state.shape === 'triangle') areaAtI = 0.5 * i * state.tri.h;
+                
+                let pt = getMap(i, areaAtI);
+                if (i === 0) ctxGraph.moveTo(pt.x, pt.y);
+                else ctxGraph.lineTo(pt.x, pt.y);
+            }
+            // Add exact final point
+            let finalPt = getMap(primaryDim, currentArea);
+            ctxGraph.lineTo(finalPt.x, finalPt.y);
+            
+            ctxGraph.strokeStyle = color;
+            ctxGraph.lineWidth = 3;
+            ctxGraph.stroke();
+
+            // Draw Glowing Dot at current value
+            ctxGraph.beginPath();
+            ctxGraph.arc(finalPt.x, finalPt.y, 6, 0, Math.PI*2);
+            ctxGraph.fillStyle = '#fff';
+            ctxGraph.fill();
+            ctxGraph.strokeStyle = color;
+            ctxGraph.lineWidth = 2;
+            ctxGraph.stroke();
+            
+            // Legend
+            ctxGraph.shadowBlur = 0;
+            ctxGraph.fillStyle = color;
+            ctxGraph.textAlign = 'right';
+            ctxGraph.font = 'bold 12px Inter';
+            ctxGraph.fillText(`( ${primaryDim.toFixed(1)}, ${currentArea.toFixed(1)} )`, finalPt.x - 15, finalPt.y - 10);
+        }
+
+        // Initialize application
+        init();
+
+    </script>
+</body>
+</html>

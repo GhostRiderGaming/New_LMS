@@ -163,23 +163,40 @@ _MODEL3D_SYSTEM = (
     "Output ONLY the prompt string — no explanation, no markdown."
 )
 
-_EXPLANATION_SYSTEM = (
-    "You are Bella, an enthusiastic and warm educational tutor with an anime personality. "
-    "A student just generated an educational image about a topic and is looking at it right now. "
-    "\n\n"
-    "YOUR JOB: Explain what the student is SEEING in the image, then teach the concept behind it. "
-    "\n\n"
-    "RULES:\n"
-    "- Start by describing what the image shows (e.g. 'You can see a diagram of...', "
-    "'This illustration shows...', 'In this image...')\n"
-    "- Then explain the concept in 2-3 brief sentences in very simple, clear, and easy-to-understand language\n"
-    "- End with one fun fact or cool detail about the topic\n"
-    "- Speak directly to the student. Be encouraging.\n"
-    "- Use basic language an 8-year-old would understand\n"
-    "- If the image is a real Wikipedia/textbook diagram, reference its labels and structure\n"
-    "- If the image is an AI-generated anime illustration, describe the scene depicted\n"
-    "- Output ONLY the spoken explanation — no markdown, no bullets, no headers, no emojis."
-)
+def _get_explanation_system(language: str | None) -> str:
+    if language == "hindi":
+        return (
+            "You are Bella, an enthusiastic and warm educational tutor with an anime personality. "
+            "You speak in Hinglish — a natural mix of Hindi and English. Use Hindi for conversational parts "
+            "and English for technical terms (e.g. 'Yeh photosynthesis ka process hai jisme plants...'). "
+            "A student just opened a topic in a specific educational module and is looking at it right now. "
+            "\n\n"
+            "YOUR JOB: Explain what the student is SEEING, then teach the concept behind it. "
+            "\n\n"
+            "RULES:\n"
+            "- Start by acknowledging what they are looking at based on the section (e.g. 'Yeh simulation...', 'Is 3D model mein...', 'Yeh scene dekho...')\n"
+            "- Explain the concept in 2-3 brief sentences in very simple, clear, and easy-to-understand Hinglish\n"
+            "- End with one fun fact or cool detail about the topic\n"
+            "- Speak directly to the student. Be encouraging.\n"
+            "- Use basic language a school student would understand\n"
+            "- Output ONLY the spoken explanation — no markdown, no bullets, no headers, no emojis."
+        )
+    else:
+        return (
+            "You are Bella, an enthusiastic and warm educational tutor with an anime personality. "
+            "You speak clearly in English. "
+            "A student just opened a topic in a specific educational module and is looking at it right now. "
+            "\n\n"
+            "YOUR JOB: Explain what the student is SEEING, then teach the concept behind it. "
+            "\n\n"
+            "RULES:\n"
+            "- Start by acknowledging what they are looking at based on the section (e.g. 'This simulation...', 'In this 3D model...', 'Look at this scene...')\n"
+            "- Explain the concept in 2-3 brief sentences in very simple, clear, and easy-to-understand English\n"
+            "- End with one fun fact or cool detail about the topic\n"
+            "- Speak directly to the student. Be encouraging.\n"
+            "- Use basic language a school student would understand\n"
+            "- Output ONLY the spoken explanation — no markdown, no bullets, no headers, no emojis."
+        )
 
 # ---------------------------------------------------------------------------
 # Category → system prompt mapping
@@ -344,14 +361,21 @@ class PromptBuilder:
         if result:
             return result
         return (
-            f"Create a breathtaking, production-ready interactive HTML5 simulation about '{topic}' in the '{category}' category. "
-            f"Act as a Principal SWE with 15+ years of experience. You MUST implement a strict modern design system: "
-            f"Use CSS variables for a sleek dark mode (--bg: #0f172a, panels with rgba(30,41,59,0.7), glassmorphism backdrop-filter, rounded corners, subtle borders). "
-            f"Use system-ui typography and a professional split layout (sidebar for controls/info, main stage for canvas). "
-            f"Custom-style all range sliders and buttons for a premium feel. "
-            f"The canvas must use vibrant, high-contrast graphics and requestAnimationFrame for 60fps smooth animations. "
-            f"Include a dynamic info panel that perfectly explains the concept and updates real-time variables. "
-            f"Ensure absolute visual excellence and a highly intuitive user experience."
+            f"Create a PhET-grade interactive HTML5 simulation about '{topic}' in the '{category}' category. "
+            f"Act as a Principal SWE with 15+ years of experience. You MUST implement: "
+            f"1) Strict two-column CSS grid: left sidebar (340px) with 6 glassmorphism section cards "
+            f"(Title, Definition, Formula, Live Measurements, Controls with custom sliders + Play/Pause + Reset, Did You Know). "
+            f"Right panel (1fr) with full-height HTML5 canvas. "
+            f"2) MAKE THE INVISIBLE VISIBLE: Draw labeled force vectors (gravity=#f472b6, normal=#34d399, friction=#fbbf24) "
+            f"on all objects. Draw velocity (cyan) and acceleration (pink dashed) arrows from object centers. "
+            f"3) ENERGY BAR CHART: Render a live KE vs PE bar chart overlay in the bottom-right corner of the canvas. "
+            f"4) DRAGGABLE OBJECT: At least one canvas object must be draggable with cursor:grab affordance and hover glow. "
+            f"5) MVC CODE: Separate state object, update(dt) for physics (no ctx calls), render() for drawing (no state mutation). "
+            f"6) Canvas: radial gradient background, dot grid, 30-50 ambient floating particles, "
+            f"globalCompositeOperation='lighter' glow effects, fading trails. "
+            f"7) CSS variables: --bg: #060a14, --bg-card: rgba(12,18,36,0.85), --accent: #6366f1, --cyan: #22d3ee. "
+            f"Zero scrollbars on body/html. Responsive mobile stack. "
+            f"The simulation must rival PhET (University of Colorado) in visual quality and educational depth."
         )
 
     async def build_3d_prompt(self, object_name: str, category: str) -> str:
@@ -368,49 +392,61 @@ class PromptBuilder:
             f"Category: {category}. Realistic materials, accurate proportions, clean geometry."
         )
 
-    async def build_explanation_prompt(self, topic: str, image_context: dict | None = None) -> str:
+    async def build_explanation_prompt(self, topic: str, section: str | None = None, image_context: dict | None = None, language: str | None = None) -> str:
         """
         Generate a spoken educational explanation of the topic for Bella's voice narration.
-        Used after image generation in Scene Forge.
-
-        image_context: optional dict with {source, category, caption, prompt}
-        describing the actual generated image so the explanation references it.
+        Used after generating content in any section.
         """
-        # Build a rich user message that tells the LLM what image the student sees
+        # Build a rich user message that tells the LLM what the student sees
         parts = [f"Topic: {topic}"]
 
-        if image_context:
-            source = image_context.get("source", "")
-            category = image_context.get("category", "")
-            caption = image_context.get("caption", "")
-            prompt = image_context.get("prompt", "")
+        if section == 'simulation':
+            parts.append("Context: The student just opened an interactive web simulation about this topic.")
+            parts.append("Instruction: Tell them what they can learn by playing with this simulation.")
+        elif section == 'model3d':
+            parts.append("Context: The student just generated a 3D model of this topic.")
+            parts.append("Instruction: Tell them to rotate and inspect the 3D model, and explain its key features.")
+        elif section == 'story':
+            parts.append("Context: The student just generated an educational story/visual novel about this topic.")
+            parts.append("Instruction: Give a brief teaser of what they will learn by reading the story.")
+        else:
+            # Default or Anime (Scene Forge)
+            if image_context:
+                source = image_context.get("source", "")
+                category = image_context.get("category", "")
+                caption = image_context.get("caption", "")
+                prompt = image_context.get("prompt", "")
 
-            if source == "external":
-                parts.append("Image type: Real educational diagram from Wikipedia/Wikimedia Commons")
-                parts.append("The student is looking at a real textbook-quality diagram, not an AI illustration.")
-                parts.append("Reference the diagram's visual elements (labels, arrows, structure) in your explanation.")
-            else:
-                parts.append("Image type: AI-generated anime-style educational illustration")
-                if prompt:
-                    parts.append(f"The image was generated from this prompt: {prompt}")
-                parts.append("Reference the visual scene depicted in the anime illustration.")
+                if source == "external":
+                    parts.append("Image type: Real educational diagram from Wikipedia/Wikimedia Commons")
+                    parts.append("The student is looking at a real textbook-quality diagram.")
+                else:
+                    parts.append("Image type: AI-generated anime-style educational illustration")
+                    if prompt:
+                        parts.append(f"The image was generated from this prompt: {prompt}")
 
-            if category:
-                parts.append(f"Category: {category}")
-            if caption:
-                parts.append(f"Image caption: {caption}")
+                if category:
+                    parts.append(f"Category: {category}")
+                if caption:
+                    parts.append(f"Image caption: {caption}")
 
         user = "\n".join(parts)
-        result = await self._call(_EXPLANATION_SYSTEM, user, max_tokens=400)
+        result = await self._call(_get_explanation_system(language), user, max_tokens=400)
         if result:
             return result
-        # Fallback — still gives a decent spoken explanation
-        return (
-            f"Great choice! So, {topic} is a really fascinating subject. "
-            f"It's an important concept that scientists and students study to understand "
-            f"how the world works. The image you just generated shows the key elements of {topic}. "
-            f"I'd love to tell you more — try asking me about it using your voice!"
-        )
+        # Fallback
+        if language == "hindi":
+            return (
+                f"Great choice! Toh, {topic} ek bahut hi fascinating subject hai. "
+                f"Isme bahut kuch seekhne ko milta hai. Chalo isko explore karte hain! "
+                f"Agar koi sawaal ho toh mujhse poocho."
+            )
+        else:
+            return (
+                f"Great choice! {topic} is a fascinating subject. "
+                f"There's so much to learn about it. Let's explore it together! "
+                f"If you have any questions, just ask me."
+            )
 
 
 # ---------------------------------------------------------------------------

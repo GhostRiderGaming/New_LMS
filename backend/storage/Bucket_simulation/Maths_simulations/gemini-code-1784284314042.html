@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Volume Dynamics Laboratory</title>
+    <style>
+        /* =========================================================
+           DESIGN SYSTEM & THEME
+           ========================================================= */
+        :root {
+            --bg-dark: #070B14;
+            --bg-grad-1: #0a0f1a;
+            --bg-grad-2: #121c2d;
+            --panel-bg: rgba(18, 25, 40, 0.55);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            
+            --cyan: #00E5FF;
+            --blue: #4FC3F7;
+            --purple: #8E44FF;
+            --orange: #FFA726;
+            --green: #00E676;
+            
+            --text-main: #F8FAFC;
+            --text-muted: #94A3B8;
+            
+            --font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+            
+            --active-color: var(--cyan); /* Dynamically changes via JS */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background: linear-gradient(135deg, var(--bg-grad-1) 0%, var(--bg-grad-2) 100%);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Ambient Glow Background */
+        #particle-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* =========================================================
+           LAYOUT GRID
+           ========================================================= */
+        .app-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            min-height: 100vh;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px 0;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-shadow: 0 0 20px rgba(255,255,255,0.2);
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--active-color);
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: color 0.4s ease;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 350px 1fr 350px;
+            gap: 25px;
+            flex-grow: 1;
+        }
+
+        /* Glassmorphism Panels */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 3px;
+            background: var(--active-color);
+            transition: background 0.4s ease;
+        }
+
+        h2 {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        p {
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        /* =========================================================
+           UI COMPONENTS
+           ========================================================= */
+        
+        /* Shape Selector */
+        .shape-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .shape-btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--text-main);
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .shape-btn:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .shape-btn.active {
+            background: var(--active-color);
+            color: #000;
+            box-shadow: 0 0 15px var(--active-color);
+            border-color: transparent;
+        }
+
+        /* Formula Display (Textbook Style) */
+        .formula-container {
+            background: rgba(0,0,0,0.4);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 1.8rem;
+            font-style: italic;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .math-frac {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            vertical-align: middle;
+            font-size: 0.6em;
+            margin: 0 4px;
+        }
+        
+        .math-frac > span:first-child {
+            border-bottom: 2px solid var(--text-main);
+            width: 100%;
+            text-align: center;
+            padding-bottom: 2px;
+        }
+        .math-frac > span:last-child {
+            padding-top: 2px;
+        }
+
+        /* Interesting Fact */
+        .fact-box {
+            background: rgba(255, 167, 38, 0.1);
+            border-left: 4px solid var(--orange);
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.9rem;
+            color: #ffcc80;
+        }
+
+        /* Canvases */
+        .canvas-container {
+            width: 100%;
+            flex-grow: 1;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.03) 0%, transparent 70%);
+            border-radius: 12px;
+            border: 1px dashed rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            min-height: 400px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0; left: 0;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .ctrl-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            backdrop-filter: blur(5px);
+        }
+
+        .ctrl-btn:hover {
+            background: var(--active-color);
+            color: #000;
+            transform: scale(1.1);
+            box-shadow: 0 0 20px var(--active-color);
+        }
+
+        /* Sliders */
+        .param-group {
+            margin-bottom: 25px;
+        }
+
+        .param-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-weight: 500;
+            align-items: center;
+        }
+
+        .param-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tooltip-icon {
+            display: inline-block;
+            width: 16px; height: 16px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            text-align: center;
+            line-height: 16px;
+            font-size: 11px;
+            cursor: help;
+            position: relative;
+        }
+
+        .tooltip-icon:hover::after {
+            content: attr(data-tip);
+            position: absolute;
+            bottom: 150%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            width: 200px;
+            font-size: 0.8rem;
+            z-index: 100;
+            pointer-events: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            font-weight: normal;
+        }
+
+        .val-badge {
+            background: rgba(255,255,255,0.1);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-family: monospace;
+            color: var(--active-color);
+            font-size: 1.1rem;
+            min-width: 60px;
+            text-align: center;
+            transition: color 0.3s;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        
+        input[type=range]:focus { outline: none; }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--active-color);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px var(--active-color);
+            transition: transform 0.1s;
+        }
+
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.3);
+        }
+
+        /* Live Calculations */
+        .calc-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .calc-card {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .calc-label {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .calc-value {
+            font-family: monospace;
+            font-size: 1.5rem;
+            color: var(--active-color);
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(var(--active-color), 0.5);
+            transition: color 0.3s;
+        }
+
+        .highlight-calc {
+            animation: flash 0.5s ease-out;
+        }
+
+        @keyframes flash {
+            0% { background: var(--active-color); color: #000; }
+            100% { background: transparent; }
+        }
+
+        /* Warnings */
+        .warning-msg {
+            color: #ff5252;
+            font-size: 0.85rem;
+            margin-top: 5px;
+            display: none;
+        }
+
+        /* =========================================================
+           RESPONSIVENESS
+           ========================================================= */
+        @media (max-width: 1200px) {
+            .main-grid {
+                grid-template-columns: 1fr 1fr;
+                grid-template-areas: 
+                    "left right"
+                    "center center";
+            }
+            .left-panel { grid-area: left; }
+            .right-panel { grid-area: right; }
+            .center-panel { grid-area: center; }
+        }
+
+        @media (max-width: 768px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+                grid-template-areas: 
+                    "left"
+                    "center"
+                    "right";
+            }
+            h1 { font-size: 1.8rem; }
+            .canvas-container { min-height: 300px; }
+            .formula-container { font-size: 1.4rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="particle-canvas"></canvas>
+
+    <div class="app-container">
+        <header>
+            <h1>Volume Dynamics Laboratory</h1>
+            <div class="subtitle" id="theme-subtitle">Exploring Spatial Capacity</div>
+        </header>
+
+        <div class="main-grid">
+            
+            <!-- LEFT PANEL: Concepts & Data -->
+            <aside class="glass-panel left-panel">
+                <h2>Concept</h2>
+                <p><strong>Volume</strong> is the quantity of three-dimensional space enclosed by a closed surface. In this simulation, we conceptualize volume by determining how much "liquid energy" a shape can hold.</p>
+
+                <h2>Select Geometry</h2>
+                <div class="shape-selector">
+                    <button class="shape-btn active" data-shape="cube">Cube</button>
+                    <button class="shape-btn" data-shape="sphere">Sphere</button>
+                    <button class="shape-btn" data-shape="cylinder">Cylinder</button>
+                    <button class="shape-btn" data-shape="cone">Cone</button>
+                </div>
+
+                <h2>Mathematical Model</h2>
+                <div class="formula-container" id="formula-display">
+                    <!-- Injected via JS -->
+                </div>
+
+                <div class="fact-box" id="fact-display">
+                    <!-- Injected via JS -->
+                </div>
+            </aside>
+
+            <!-- CENTER PANEL: Simulation Canvas -->
+            <section class="glass-panel center-panel">
+                <h2>Live Simulation</h2>
+                <div class="canvas-container" id="sim-container">
+                    <canvas id="sim-canvas"></canvas>
+                </div>
+
+                <div class="controls">
+                    <button class="ctrl-btn" onclick="togglePlay()" title="Play/Pause">
+                        <span id="play-icon">▶</span>
+                    </button>
+                    <button class="ctrl-btn" onclick="resetSim()" title="Reset">⏹</button>
+                    <button class="ctrl-btn" onclick="randomize()" title="Randomize Parameters">🎲</button>
+                </div>
+
+                <div class="calc-grid">
+                    <div class="calc-card" id="card-volume">
+                        <span class="calc-label">Total Volume (V)</span>
+                        <span class="calc-value" id="val-volume">0.00 u³</span>
+                    </div>
+                    <div class="calc-card" id="card-surface">
+                        <span class="calc-label">Surface Area (SA)</span>
+                        <span class="calc-value" id="val-surface">0.00 u²</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- RIGHT PANEL: Parameters & Graph -->
+            <aside class="glass-panel right-panel">
+                <h2>Parameters</h2>
+                
+                <div class="param-group">
+                    <div class="param-header">
+                        <span class="param-label">
+                            <span id="label-primary">Side Length (s)</span>
+                            <span class="tooltip-icon" data-tip="The primary horizontal dimension of the shape.">?</span>
+                        </span>
+                        <span class="val-badge" id="badge-primary">5.0</span>
+                    </div>
+                    <input type="range" id="slider-primary" min="1" max="10" step="0.1" value="5">
+                </div>
+
+                <div class="param-group" id="group-secondary" style="display: none;">
+                    <div class="param-header">
+                        <span class="param-label">
+                            <span>Height (h)</span>
+                            <span class="tooltip-icon" data-tip="The vertical dimension extending from the base to the apex or top face.">?</span>
+                        </span>
+                        <span class="val-badge" id="badge-secondary">5.0</span>
+                    </div>
+                    <input type="range" id="slider-secondary" min="1" max="10" step="0.1" value="5">
+                    <div class="warning-msg" id="warn-secondary">Height must be > 0</div>
+                </div>
+
+                <h2>Volume Curve</h2>
+                <p style="font-size:0.8rem; color:var(--text-muted); margin-top:-10px; margin-bottom:5px;">
+                    Y-Axis: Volume | X-Axis: <span id="graph-x-label">Side Length</span>
+                </p>
+                <div class="canvas-container" style="min-height: 250px;" id="graph-container">
+                    <canvas id="graph-canvas"></canvas>
+                </div>
+            </aside>
+
+        </div>
+    </div>
+
+    <script>
+        /* =========================================================
+           DATA & STATE MANAGEMENT
+           ========================================================= */
+        const SHAPES = {
+            cube: {
+                name: "Cube",
+                color: "#00E5FF", // Cyan
+                fact: "A cube has the maximum volume for a given surface area among all rectangular prisms.",
+                labelPri: "Side Length (s)",
+                hasSec: false,
+                calcV: (r, h) => Math.pow(r, 3),
+                calcSA: (r, h) => 6 * Math.pow(r, 2),
+                formulaHTML: `V = s<sup>3</sup>`
+            },
+            sphere: {
+                name: "Sphere",
+                color: "#8E44FF", // Purple
+                fact: "For a given surface area, the sphere encloses the absolute maximum possible volume of any shape.",
+                labelPri: "Radius (r)",
+                hasSec: false,
+                calcV: (r, h) => (4/3) * Math.PI * Math.pow(r, 3),
+                calcSA: (r, h) => 4 * Math.PI * Math.pow(r, 2),
+                formulaHTML: `V = <div class="math-frac"><span>4</span><span>3</span></div> &pi; r<sup>3</sup>`
+            },
+            cylinder: {
+                name: "Cylinder",
+                color: "#4FC3F7", // Blue
+                fact: "The volume of a cylinder is exactly 3 times the volume of a cone with the same base and height.",
+                labelPri: "Radius (r)",
+                hasSec: true,
+                calcV: (r, h) => Math.PI * Math.pow(r, 2) * h,
+                calcSA: (r, h) => 2 * Math.PI * r * (r + h),
+                formulaHTML: `V = &pi; r<sup>2</sup> h`
+            },
+            cone: {
+                name: "Cone",
+                color: "#FFA726", // Orange
+                fact: "A cone's volume is exactly one-third of a cylinder that has identical radius and height dimensions.",
+                labelPri: "Radius (r)",
+                hasSec: true,
+                calcV: (r, h) => (1/3) * Math.PI * Math.pow(r, 2) * h,
+                calcSA: (r, h) => Math.PI * r * (r + Math.sqrt(h*h + r*r)),
+                formulaHTML: `V = <div class="math-frac"><span>1</span><span>3</span></div> &pi; r<sup>2</sup> h`
+            }
+        };
+
+        const state = {
+            shape: 'cube',
+            primary: 5.0,
+            secondary: 5.0,
+            fillLevel: 1.0, // 0.0 to 1.0
+            isPlaying: false
+        };
+
+        /* =========================================================
+           DOM ELEMENTS
+           ========================================================= */
+        const root = document.documentElement;
+        const btnShapes = document.querySelectorAll('.shape-btn');
+        const displayFormula = document.getElementById('formula-display');
+        const displayFact = document.getElementById('fact-display');
+        
+        const sliderPri = document.getElementById('slider-primary');
+        const sliderSec = document.getElementById('slider-secondary');
+        const badgePri = document.getElementById('badge-primary');
+        const badgeSec = document.getElementById('badge-secondary');
+        const labelPri = document.getElementById('label-primary');
+        const groupSec = document.getElementById('group-secondary');
+        const graphXLabel = document.getElementById('graph-x-label');
+        
+        const valVolume = document.getElementById('val-volume');
+        const valSurface = document.getElementById('val-surface');
+        const cardVolume = document.getElementById('card-volume');
+        const cardSurface = document.getElementById('card-surface');
+        const playIcon = document.getElementById('play-icon');
+
+        const simCanvas = document.getElementById('sim-canvas');
+        const graphCanvas = document.getElementById('graph-canvas');
+        const particleCanvas = document.getElementById('particle-canvas');
+        const simCtx = simCanvas.getContext('2d');
+        const graphCtx = graphCanvas.getContext('2d');
+        const partCtx = particleCanvas.getContext('2d');
+
+        /* =========================================================
+           INITIALIZATION & EVENT LISTENERS
+           ========================================================= */
+        function init() {
+            setupCanvases();
+            window.addEventListener('resize', setupCanvases);
+            
+            btnShapes.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    btnShapes.forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    setShape(e.target.dataset.shape);
+                });
+            });
+
+            sliderPri.addEventListener('input', (e) => {
+                state.primary = parseFloat(e.target.value);
+                updateUI();
+                if(!state.isPlaying) state.fillLevel = 1.0;
+            });
+
+            sliderSec.addEventListener('input', (e) => {
+                state.secondary = parseFloat(e.target.value);
+                updateUI();
+                if(!state.isPlaying) state.fillLevel = 1.0;
+            });
+
+            setShape('cube');
+            initParticles();
+            requestAnimationFrame(animationLoop);
+        }
+
+        function setupCanvases() {
+            const resize = (canvas, containerId) => {
+                const container = document.getElementById(containerId);
+                const rect = container.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                canvas.ctxScale = dpr;
+            };
+            resize(simCanvas, 'sim-container');
+            resize(graphCanvas, 'graph-container');
+            
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+            
+            drawGraph(); // Force redraw on resize
+        }
+
+        /* =========================================================
+           UI UPDATES
+           ========================================================= */
+        function setShape(shapeKey) {
+            state.shape = shapeKey;
+            const sData = SHAPES[shapeKey];
+            
+            // Theme colors
+            root.style.setProperty('--active-color', sData.color);
+            document.getElementById('theme-subtitle').style.color = sData.color;
+
+            // Content updates
+            displayFormula.innerHTML = sData.formulaHTML;
+            displayFact.innerText = sData.fact;
+            labelPri.innerText = sData.labelPri;
+            graphXLabel.innerText = sData.labelPri;
+
+            // Secondary slider logic
+            if (sData.hasSec) {
+                groupSec.style.display = 'block';
+            } else {
+                groupSec.style.display = 'none';
+            }
+
+            // Reset fill
+            if(!state.isPlaying) state.fillLevel = 1.0;
+            
+            updateUI(true);
+        }
+
+        function updateUI(flash = false) {
+            badgePri.innerText = state.primary.toFixed(1);
+            badgeSec.innerText = state.secondary.toFixed(1);
+
+            const sData = SHAPES[state.shape];
+            const v = sData.calcV(state.primary, state.secondary);
+            const sa = sData.calcSA(state.primary, state.secondary);
+
+            // Format numbers nicely
+            valVolume.innerText = v.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' u³';
+            valSurface.innerText = sa.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' u²';
+
+            if (flash) {
+                cardVolume.classList.remove('highlight-calc');
+                cardSurface.classList.remove('highlight-calc');
+                void cardVolume.offsetWidth; // trigger reflow
+                cardVolume.classList.add('highlight-calc');
+                cardSurface.classList.add('highlight-calc');
+            }
+
+            drawGraph();
+        }
+
+        /* =========================================================
+           CONTROLS
+           ========================================================= */
+        function togglePlay() {
+            state.isPlaying = !state.isPlaying;
+            playIcon.innerText = state.isPlaying ? "⏸" : "▶";
+            if(state.isPlaying && state.fillLevel >= 1.0) {
+                state.fillLevel = 0.0;
+            }
+        }
+
+        function resetSim() {
+            state.isPlaying = false;
+            playIcon.innerText = "▶";
+            state.fillLevel = 0.0;
+        }
+
+        function randomize() {
+            const sData = SHAPES[state.shape];
+            state.primary = (Math.random() * 9 + 1);
+            sliderPri.value = state.primary;
+            if(sData.hasSec) {
+                state.secondary = (Math.random() * 9 + 1);
+                sliderSec.value = state.secondary;
+            }
+            if(!state.isPlaying) state.fillLevel = 1.0;
+            updateUI(true);
+        }
+
+        /* =========================================================
+           SIMULATION RENDERING (2.5D CANVAS MATH)
+           ========================================================= */
+        function drawSimulation() {
+            const ctx = simCtx;
+            const dpr = simCanvas.ctxScale || 1;
+            const w = simCanvas.width / dpr;
+            const h = simCanvas.height / dpr;
+            
+            ctx.save();
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, w, h);
+            
+            const cx = w / 2;
+            const cy = h / 2;
+            
+            // Map parameter limits (max 10) to canvas pixels
+            // A parameter of 10 should comfortably fit in canvas
+            const scaleFactor = Math.min(w, h) / 35; 
+            
+            const r = state.primary * scaleFactor;
+            const sh = state.secondary * scaleFactor;
+            const fill = state.fillLevel;
+            const color = SHAPES[state.shape].color;
+
+            ctx.translate(cx, cy + h*0.1); // slightly lower center
+
+            // 1. Draw outer glass container
+            drawWireframe(ctx, state.shape, r, sh, 'rgba(255,255,255,0.2)');
+
+            // 2. Draw Liquid Fill
+            if (fill > 0.01) {
+                ctx.save();
+                
+                // Establish clip path for the shape
+                buildClipPath(ctx, state.shape, r, sh);
+                ctx.clip();
+
+                // Calculate vertical bounds
+                const bounds = getShapeBounds(state.shape, r, sh);
+                const liquidY = bounds.bottom - (bounds.bottom - bounds.top) * fill;
+
+                // Fill block
+                ctx.fillStyle = hexToRgba(color, 0.4);
+                ctx.fillRect(-w, liquidY, w*2, bounds.bottom - liquidY);
+
+                // Add gradient glow inside liquid
+                const grad = ctx.createLinearGradient(0, bounds.bottom, 0, liquidY);
+                grad.addColorStop(0, hexToRgba(color, 0.1));
+                grad.addColorStop(1, hexToRgba(color, 0.6));
+                ctx.fillStyle = grad;
+                ctx.fillRect(-w, liquidY, w*2, bounds.bottom - liquidY);
+
+                ctx.restore(); // Remove clip
+
+                // 3. Draw Liquid Top Surface (3D depth effect)
+                drawLiquidSurface(ctx, state.shape, r, sh, fill, liquidY, color);
+            }
+            
+            ctx.restore();
+        }
+
+        // --- Geometric Helpers ---
+
+        function buildClipPath(ctx, shape, r, h) {
+            ctx.beginPath();
+            if (shape === 'cube') {
+                // 2.5D projection (Cavalier-ish)
+                const depth = r * 0.5;
+                const fx = -r/2, fy = -r/2;
+                ctx.moveTo(fx, fy);
+                ctx.lineTo(fx + depth, fy - depth);
+                ctx.lineTo(fx + r + depth, fy - depth);
+                ctx.lineTo(fx + r + depth, fy + r - depth);
+                ctx.lineTo(fx + r, fy + r);
+                ctx.lineTo(fx, fy + r);
+            } else if (shape === 'sphere') {
+                ctx.arc(0, 0, r, 0, Math.PI*2);
+            } else if (shape === 'cylinder') {
+                ctx.ellipse(0, -h/2, r, r*0.3, 0, Math.PI, 0); // top back half
+                ctx.lineTo(r, h/2);
+                ctx.ellipse(0, h/2, r, r*0.3, 0, 0, Math.PI); // bottom front half
+                ctx.lineTo(-r, -h/2);
+            } else if (shape === 'cone') {
+                ctx.moveTo(0, -h/2); // apex
+                ctx.lineTo(r, h/2);
+                ctx.ellipse(0, h/2, r, r*0.3, 0, 0, Math.PI);
+            }
+            ctx.closePath();
+        }
+
+        function getShapeBounds(shape, r, h) {
+            if (shape === 'cube') {
+                const depth = r * 0.5;
+                const fy = -r/2;
+                return { top: fy - depth, bottom: fy + r }; 
+            } else if (shape === 'sphere') {
+                return { top: -r, bottom: r };
+            } else { // cylinder, cone
+                return { top: -h/2, bottom: h/2 };
+            }
+        }
+
+        function drawWireframe(ctx, shape, r, h, strokeStyle) {
+            ctx.strokeStyle = strokeStyle;
+            ctx.lineWidth = 1.5;
+            
+            if (shape === 'cube') {
+                const depth = r * 0.5;
+                const fx = -r/2, fy = -r/2;
+                // Front face
+                ctx.strokeRect(fx, fy, r, r);
+                // Back face
+                ctx.strokeRect(fx + depth, fy - depth, r, r);
+                // Connecting lines
+                ctx.beginPath();
+                ctx.moveTo(fx, fy); ctx.lineTo(fx + depth, fy - depth);
+                ctx.moveTo(fx + r, fy); ctx.lineTo(fx + r + depth, fy - depth);
+                ctx.moveTo(fx, fy + r); ctx.lineTo(fx + depth, fy + r - depth);
+                ctx.moveTo(fx + r, fy + r); ctx.lineTo(fx + r + depth, fy + r - depth);
+                ctx.stroke();
+            } else if (shape === 'sphere') {
+                ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI*2); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(0, 0, r, r*0.3, 0, 0, Math.PI*2); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(0, 0, r*0.3, r, 0, 0, Math.PI*2); ctx.stroke();
+            } else if (shape === 'cylinder') {
+                ctx.beginPath(); ctx.ellipse(0, -h/2, r, r*0.3, 0, 0, Math.PI*2); ctx.stroke();
+                ctx.beginPath(); ctx.ellipse(0, h/2, r, r*0.3, 0, 0, Math.PI*2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(-r, -h/2); ctx.lineTo(-r, h/2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(r, -h/2); ctx.lineTo(r, h/2); ctx.stroke();
+            } else if (shape === 'cone') {
+                ctx.beginPath(); ctx.ellipse(0, h/2, r, r*0.3, 0, 0, Math.PI*2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -h/2); ctx.lineTo(-r, h/2); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, -h/2); ctx.lineTo(r, h/2); ctx.stroke();
+            }
+        }
+
+        function drawLiquidSurface(ctx, shape, r, h, fill, liquidY, color) {
+            ctx.fillStyle = hexToRgba(color, 0.85);
+            ctx.strokeStyle = hexToRgba(color, 1.0);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+
+            if (shape === 'cube') {
+                // Surface is a parallelogram at specific y
+                const depth = r * 0.5;
+                const fx = -r/2, fy = -r/2;
+                // liquidY maps to front face Y.
+                // Map global liquidY to front face relative Y:
+                // Global top is fy - depth, bottom is fy + r.
+                // We actually know the fill level. 
+                const y_front = fy + r - (r * fill); 
+                
+                ctx.moveTo(fx, y_front);
+                ctx.lineTo(fx + r, y_front);
+                ctx.lineTo(fx + r + depth, y_front - depth);
+                ctx.lineTo(fx + depth, y_front - depth);
+                ctx.closePath();
+            } else if (shape === 'sphere') {
+                // radius of cross section at height y from center
+                const dy = liquidY; 
+                let r_liq = 0;
+                if(r*r - dy*dy > 0) r_liq = Math.sqrt(r*r - dy*dy);
+                ctx.ellipse(0, liquidY, r_liq, r_liq*0.3, 0, 0, Math.PI*2);
+            } else if (shape === 'cylinder') {
+                ctx.ellipse(0, liquidY, r, r*0.3, 0, 0, Math.PI*2);
+            } else if (shape === 'cone') {
+                const r_liq = r * (1 - fill);
+                ctx.ellipse(0, liquidY, r_liq, r_liq*0.3, 0, 0, Math.PI*2);
+            }
+            
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        function hexToRgba(hex, alpha) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        /* =========================================================
+           GRAPH RENDERING
+           ========================================================= */
+        function drawGraph() {
+            const ctx = graphCtx;
+            const dpr = graphCanvas.ctxScale || 1;
+            const w = graphCanvas.width / dpr;
+            const h = graphCanvas.height / dpr;
+            
+            ctx.save();
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, w, h);
+
+            const pad = { top: 20, right: 20, bottom: 30, left: 50 };
+            const gw = w - pad.left - pad.right;
+            const gh = h - pad.top - pad.bottom;
+
+            const sData = SHAPES[state.shape];
+            const maxPri = 10;
+            // calc max volume keeping secondary constant
+            const maxV = sData.calcV(maxPri, state.secondary); 
+            
+            // Grid lines
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for(let i=0; i<=5; i++) {
+                let y = pad.top + (gh/5)*i;
+                ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + gw, y);
+            }
+            for(let i=0; i<=5; i++) {
+                let x = pad.left + (gw/5)*i;
+                ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + gh);
+            }
+            ctx.stroke();
+
+            // Axes
+            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(pad.left, pad.top);
+            ctx.lineTo(pad.left, pad.top + gh);
+            ctx.lineTo(pad.left + gw, pad.top + gh);
+            ctx.stroke();
+
+            // Labels
+            ctx.fillStyle = 'rgba(255,255,255,0.6)';
+            ctx.font = '10px Inter';
+            ctx.textAlign = 'right';
+            ctx.fillText(Math.round(maxV), pad.left - 5, pad.top + 5);
+            ctx.fillText('0', pad.left - 5, pad.top + gh);
+            
+            ctx.textAlign = 'center';
+            ctx.fillText(maxPri, pad.left + gw, pad.top + gh + 15);
+
+            // Curve Plotting
+            ctx.beginPath();
+            const color = sData.color;
+            
+            let pts = [];
+            for (let px = 0; px <= gw; px += 2) {
+                let priVal = (px / gw) * maxPri;
+                let vol = sData.calcV(priVal, state.secondary);
+                let py = pad.top + gh - (vol / maxV) * gh;
+                pts.push({x: pad.left + px, y: py});
+            }
+
+            ctx.moveTo(pts[0].x, pts[0].y);
+            for(let i=1; i<pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+            
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            // Shaded Area under curve up to current primary
+            const currX = pad.left + (state.primary / maxPri) * gw;
+            const currV = sData.calcV(state.primary, state.secondary);
+            const currY = pad.top + gh - (currV / maxV) * gh;
+
+            ctx.beginPath();
+            ctx.moveTo(pad.left, pad.top + gh);
+            for(let p of pts) {
+                if (p.x <= currX) ctx.lineTo(p.x, p.y);
+            }
+            ctx.lineTo(currX, pad.top + gh);
+            ctx.closePath();
+            
+            let fillGrad = ctx.createLinearGradient(0, pad.top, 0, pad.top+gh);
+            fillGrad.addColorStop(0, hexToRgba(color, 0.4));
+            fillGrad.addColorStop(1, hexToRgba(color, 0.0));
+            ctx.fillStyle = fillGrad;
+            ctx.fill();
+
+            // Current dot
+            ctx.beginPath();
+            ctx.arc(currX, currY, 6, 0, Math.PI*2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Current value tooltip on graph
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText(`V: ${currV.toFixed(1)}`, currX + 10, currY - 10);
+
+            ctx.restore();
+        }
+
+        /* =========================================================
+           PARTICLE ENGINE (AMBIENT BACKGROUND)
+           ========================================================= */
+        const particles = [];
+        function initParticles() {
+            for(let i=0; i<40; i++) {
+                particles.push({
+                    x: Math.random() * window.innerWidth,
+                    y: Math.random() * window.innerHeight,
+                    r: Math.random() * 2 + 1,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() * -1) - 0.2,
+                    alpha: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        function updateParticles() {
+            const w = particleCanvas.width;
+            const h = particleCanvas.height;
+            partCtx.clearRect(0, 0, w, h);
+            
+            partCtx.fillStyle = '#ffffff';
+            for (let p of particles) {
+                p.x += p.vx;
+                p.y += p.vy;
+                
+                if (p.y < 0) {
+                    p.y = h;
+                    p.x = Math.random() * w;
+                }
+                
+                partCtx.globalAlpha = p.alpha;
+                partCtx.beginPath();
+                partCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                partCtx.fill();
+            }
+            partCtx.globalAlpha = 1.0;
+        }
+
+        /* =========================================================
+           MAIN ANIMATION LOOP
+           ========================================================= */
+        let lastTime = 0;
+        function animationLoop(timestamp) {
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+
+            // Update fill animation
+            if (state.isPlaying) {
+                state.fillLevel += 0.01; 
+                if (state.fillLevel > 1.2) { // slight pause at full
+                    state.fillLevel = 0.0;
+                }
+            }
+
+            updateParticles();
+            drawSimulation();
+            
+            requestAnimationFrame(animationLoop);
+        }
+
+        // Run
+        init();
+
+    </script>
+</body>
+</html>

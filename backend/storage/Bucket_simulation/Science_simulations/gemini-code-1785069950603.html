@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceleration Visualizer - Premium Educational Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & THEMING
+           ========================================================================== */
+        :root {
+            /* Core Colors - Sci-Fi / Cyberpunk Dark Theme */
+            --bg-base: #07090f;
+            --bg-surface: rgba(18, 23, 38, 0.6);
+            --bg-surface-light: rgba(30, 38, 60, 0.7);
+            
+            /* Accents */
+            --acc-velocity: #00f0ff;      /* Cyan */
+            --acc-acceleration: #ff2a6d;  /* Neon Magenta/Red */
+            --acc-mass: #b24dff;          /* Purple */
+            --acc-neutral: #a0aec0;
+            --acc-success: #05ffa1;
+
+            /* Typography */
+            --text-main: #ffffff;
+            --text-muted: #94a3b8;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            /* Fluid Typography */
+            --text-xs: clamp(0.75rem, 1vw, 0.875rem);
+            --text-sm: clamp(0.875rem, 1.2vw, 1rem);
+            --text-base: clamp(1rem, 1.5vw, 1.125rem);
+            --text-lg: clamp(1.25rem, 2vw, 1.5rem);
+            --text-xl: clamp(1.5rem, 2.5vw, 2rem);
+            --text-xxl: clamp(2rem, 4vw, 3rem);
+            
+            /* Spacing & Layout */
+            --spacing-xs: clamp(4px, 1vw, 8px);
+            --spacing-sm: clamp(8px, 2vw, 16px);
+            --spacing-md: clamp(16px, 3vw, 24px);
+            --spacing-lg: clamp(24px, 4vw, 40px);
+            --spacing-xl: clamp(40px, 6vw, 64px);
+            
+            --border-radius-sm: 8px;
+            --border-radius-md: 16px;
+            --border-radius-lg: 24px;
+            --border-radius-pill: 9999px;
+
+            /* Effects */
+            --shadow-glow-v: 0 0 15px rgba(0, 240, 255, 0.4);
+            --shadow-glow-a: 0 0 15px rgba(255, 42, 109, 0.4);
+            --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.3);
+            --border-glass: 1px solid rgba(255, 255, 255, 0.08);
+            
+            /* Z-index */
+            --z-bg: -1;
+            --z-base: 1;
+            --z-glass: 10;
+            --z-overlay: 100;
+        }
+
+        /* ==========================================================================
+           2. RESET & BASE STYLES
+           ========================================================================== */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Animated Background Grid & Glows */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: var(--z-bg);
+            background: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.08), transparent 40%),
+                radial-gradient(circle at 85% 30%, rgba(255, 42, 109, 0.08), transparent 40%);
+            background-color: var(--bg-base);
+            pointer-events: none;
+        }
+
+        .ambient-grid {
+            position: absolute;
+            top: 0; left: 0; width: 200%; height: 200%;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
+            animation: gridMove 20s linear infinite;
+        }
+
+        @keyframes gridMove {
+            0% { transform: perspective(500px) rotateX(60deg) translateY(0) translateZ(-200px); }
+            100% { transform: perspective(500px) rotateX(60deg) translateY(50px) translateZ(-200px); }
+        }
+
+        /* ==========================================================================
+           3. TYPOGRAPHY & HEADINGS
+           ========================================================================== */
+        h1, h2, h3, h4 {
+            line-height: 1.2;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #fff, #a0aec0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .gradient-text-velocity { background: linear-gradient(135deg, #fff, var(--acc-velocity)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .gradient-text-accel { background: linear-gradient(135deg, #fff, var(--acc-acceleration)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+        /* ==========================================================================
+           4. LAYOUT & GLASSMORPHISM COMPONENTS
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-md) var(--spacing-lg);
+        }
+
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: var(--border-glass);
+            border-radius: var(--border-radius-md);
+            box-shadow: var(--shadow-glass);
+            padding: var(--spacing-lg);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .glass-panel:hover {
+            box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+        }
+
+        /* Grid Layouts */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-lg); }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--spacing-lg); }
+        
+        .flex-col { display: flex; flex-direction: column; gap: var(--spacing-md); }
+        .flex-row { display: flex; align-items: center; gap: var(--spacing-md); }
+
+        /* Mobile specific backdrop-filter reduction for performance */
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(4px);
+                -webkit-backdrop-filter: blur(4px);
+                padding: var(--spacing-md);
+            }
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* ==========================================================================
+           5. BUTTONS & CONTROLS
+           ========================================================================== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--border-radius-pill);
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.05);
+            color: var(--text-main);
+            font-size: var(--text-sm);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            min-height: 44px; /* Touch target size */
+        }
+
+        .btn:hover {
+            background: rgba(255,255,255,0.15);
+            transform: translateY(-2px);
+        }
+
+        .btn:active { transform: translateY(0); }
+
+        .btn-primary {
+            background: linear-gradient(90deg, var(--acc-velocity), #0099ff);
+            border: none;
+            color: #000;
+            box-shadow: var(--shadow-glow-v);
+        }
+
+        .btn-primary:hover {
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.6);
+            background: linear-gradient(90deg, #33f3ff, #33adff);
+        }
+
+        /* Sliders */
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--text-sm);
+            font-weight: 600;
+        }
+        
+        .val-velocity { color: var(--acc-velocity); }
+        .val-acceleration { color: var(--acc-acceleration); }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 44px; /* Touch target */
+            display: flex;
+            align-items: center;
+        }
+
+        input[type=range]:focus { outline: none; }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            transition: transform 0.1s;
+        }
+        
+        input[type=range]:active::-webkit-slider-thumb {
+            transform: scale(1.3);
+        }
+
+        #slider-v::-webkit-slider-thumb { background: var(--acc-velocity); box-shadow: var(--shadow-glow-v); }
+        #slider-a::-webkit-slider-thumb { background: var(--acc-acceleration); box-shadow: var(--shadow-glow-a); }
+
+        /* ==========================================================================
+           6. DIAGRAM LABELS (MANDATORY PATTERN)
+           ========================================================================== */
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            display: flex;
+            gap: var(--spacing-lg);
+            align-items: flex-start;
+        }
+
+        .diagram-visual {
+            position: relative;
+            flex: 1;
+            min-height: 300px;
+            border-radius: var(--border-radius-md);
+            background: rgba(0,0,0,0.3);
+            border: var(--border-glass);
+            overflow: hidden;
+        }
+
+        .diagram-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .legend-list {
+            flex: 0 0 350px;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-sm);
+            border-radius: var(--border-radius-sm);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item.active {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.2);
+            transform: translateX(5px);
+        }
+
+        .legend-item-v.active { border-color: var(--acc-velocity); background: rgba(0, 240, 255, 0.1); }
+        .legend-item-a.active { border-color: var(--acc-acceleration); background: rgba(255, 42, 109, 0.1); }
+
+        .legend-number {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+            border: 1px solid rgba(255,255,255,0.3);
+            transition: all 0.3s ease;
+        }
+
+        .legend-item.active .legend-number {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+
+        .legend-item-v.active .legend-number { background: var(--acc-velocity); border-color: var(--acc-velocity); }
+        .legend-item-a.active .legend-number { background: var(--acc-acceleration); border-color: var(--acc-acceleration); }
+
+        .legend-text h4 { margin-bottom: 2px; font-size: var(--text-sm); }
+        .legend-text p { font-size: var(--text-xs); color: var(--text-muted); line-height: 1.4; }
+
+        /* Glowing Dots on Illustration */
+        .diagram-dot {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.8);
+            border: 2px solid #fff;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: var(--z-glass);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .diagram-dot::before {
+            content: '';
+            position: absolute;
+            top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.5);
+            animation: pulseDot 2s infinite;
+        }
+
+        .diagram-dot.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: #fff;
+            color: #000;
+        }
+
+        .diagram-dot-v { border-color: var(--acc-velocity); }
+        .diagram-dot-v.active { background: var(--acc-velocity); box-shadow: var(--shadow-glow-v); }
+        .diagram-dot-v::before { border-color: var(--acc-velocity); }
+
+        .diagram-dot-a { border-color: var(--acc-acceleration); }
+        .diagram-dot-a.active { background: var(--acc-acceleration); box-shadow: var(--shadow-glow-a); }
+        .diagram-dot-a::before { border-color: var(--acc-acceleration); }
+
+        @keyframes pulseDot {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        @media (max-width: 1024px) {
+            .diagram-container { flex-direction: column; }
+            .legend-list { flex: none; width: 100%; flex-direction: row; flex-wrap: wrap; }
+            .legend-item { width: calc(50% - var(--spacing-sm) / 2); }
+        }
+        @media (max-width: 600px) {
+            .legend-item { width: 100%; }
+        }
+
+        /* ==========================================================================
+           7. WORKING MECHANISM SECTION (STAGES)
+           ========================================================================== */
+        .stage-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .stage-visual {
+            width: 100%;
+            height: 350px;
+            background: rgba(0,0,0,0.5);
+            border-radius: var(--border-radius-md);
+            border: var(--border-glass);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        .stage-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.02);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--border-radius-pill);
+            border: var(--border-glass);
+        }
+
+        .stage-progress {
+            display: flex;
+            gap: 8px;
+        }
+
+        .progress-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+        }
+        .progress-dot.active {
+            background: var(--acc-velocity);
+            box-shadow: var(--shadow-glow-v);
+            transform: scale(1.2);
+        }
+
+        .stage-info {
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .stage-info h3 {
+            color: var(--acc-velocity);
+            margin-bottom: 4px;
+        }
+
+        /* ==========================================================================
+           8. INTERACTIVE SIMULATION SANDBOX
+           ========================================================================== */
+        .sandbox-layout {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: var(--spacing-lg);
+            height: 500px;
+        }
+
+        .sandbox-viewport {
+            background: #000;
+            border-radius: var(--border-radius-md);
+            border: var(--border-glass);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .sandbox-ui {
+            position: absolute;
+            top: var(--spacing-md);
+            left: var(--spacing-md);
+            pointer-events: none;
+            display: flex;
+            gap: var(--spacing-md);
+        }
+
+        .hud-metric {
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            padding: 8px 12px;
+            border-radius: var(--border-radius-sm);
+            border: 1px solid rgba(255,255,255,0.1);
+            font-family: monospace;
+            font-size: var(--text-lg);
+            display: flex;
+            flex-direction: column;
+        }
+        .hud-metric span { font-size: var(--text-xs); color: var(--text-muted); font-family: var(--font-family); text-transform: uppercase;}
+        
+        .sandbox-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            overflow-y: auto;
+        }
+
+        /* Real-time Graphs */
+        .graph-container {
+            height: 120px;
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--border-radius-sm);
+            border: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+        }
+        .graph-label {
+            position: absolute;
+            top: 4px; left: 8px;
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        @media (max-width: 1024px) {
+            .sandbox-layout { grid-template-columns: 1fr; height: auto; }
+            .sandbox-viewport { height: 400px; }
+        }
+
+        /* ==========================================================================
+           9. MISC SECTIONS (Cards, Info)
+           ========================================================================== */
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: var(--spacing-sm);
+            display: inline-block;
+            background: rgba(255,255,255,0.1);
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .formula-box {
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius-sm);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: var(--text-xl);
+            text-align: center;
+            letter-spacing: 2px;
+            color: var(--acc-velocity);
+            box-shadow: inset 0 0 20px rgba(0, 240, 255, 0.1);
+            margin: var(--spacing-md) 0;
+        }
+
+        .highlight-red { color: var(--acc-acceleration); font-weight: bold; }
+        .highlight-cyan { color: var(--acc-velocity); font-weight: bold; }
+
+        /* Section Spacing */
+        section { padding: var(--spacing-xl) 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        section:last-child { border-bottom: none; }
+        
+        .section-header { text-align: center; margin-bottom: var(--spacing-lg); max-width: 800px; margin-inline: auto;}
+        .section-header p { color: var(--text-muted); margin-top: var(--spacing-sm); font-size: var(--text-lg);}
+
+        header { padding: 15vh 0 10vh; text-align: center; position: relative; }
+        .hero-title { font-size: clamp(3rem, 6vw, 5rem); font-weight: 800; margin-bottom: 1rem; line-height: 1; }
+        
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="ambient-grid"></div>
+    </div>
+
+    <div class="container">
+        <!-- HERO SECTION -->
+        <header>
+            <h1 class="hero-title gradient-text">Acceleration</h1>
+            <p style="font-size: var(--text-xl); color: var(--text-muted); max-width: 600px; margin: 0 auto;">
+                Visualizing the rate of change of velocity.
+            </p>
+        </header>
+
+        <!-- 1. OVERVIEW & COMPONENTS -->
+        <section id="components">
+            <div class="section-header">
+                <h2>The Anatomy of Motion</h2>
+                <p>To understand acceleration, we must look at the vectors acting on an object. Acceleration is not speed; it is how fast speed or direction changes.</p>
+            </div>
+
+            <div class="glass-panel">
+                <div class="diagram-container">
+                    <!-- Visual Area -->
+                    <div class="diagram-visual">
+                        <canvas id="componentsCanvas" class="diagram-canvas"></canvas>
+                        <!-- Glowing Numbered Dots overlayed via JS to ensure exact positioning -->
+                        <div id="dot-1" class="diagram-dot" style="left: 50%; top: 50%;" data-target="leg-1">1</div>
+                        <div id="dot-2" class="diagram-dot diagram-dot-v" style="left: 75%; top: 50%;" data-target="leg-2">2</div>
+                        <div id="dot-3" class="diagram-dot diagram-dot-a" style="left: 30%; top: 65%;" data-target="leg-3">3</div>
+                        <div id="dot-4" class="diagram-dot" style="left: 50%; top: 85%;" data-target="leg-4">4</div>
+                    </div>
+
+                    <!-- Strict Legend List Pattern -->
+                    <div class="legend-list">
+                        <div class="legend-item" id="leg-1" data-target="dot-1">
+                            <div class="legend-number">1</div>
+                            <div class="legend-text">
+                                <h4>The Object (Mass)</h4>
+                                <p>The physical entity in motion. Acceleration affects its state of motion based on forces applied.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item legend-item-v" id="leg-2" data-target="dot-2">
+                            <div class="legend-number">2</div>
+                            <div class="legend-text">
+                                <h4>Velocity Vector (<span class="val-velocity">v</span>)</h4>
+                                <p>Shows current speed and direction. Measured in meters per second (m/s).</p>
+                            </div>
+                        </div>
+                        <div class="legend-item legend-item-a" id="leg-3" data-target="dot-3">
+                            <div class="legend-number">3</div>
+                            <div class="legend-text">
+                                <h4>Acceleration Vector (<span class="val-acceleration">a</span>)</h4>
+                                <p>Shows how velocity is changing. If pointing against velocity, the object slows down.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="leg-4" data-target="dot-4">
+                            <div class="legend-number">4</div>
+                            <div class="legend-text">
+                                <h4>Reference Frame</h4>
+                                <p>The stationary grid used to measure change in position over time.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. WORKING PROCESS (STAGES) - MANDATORY DEDICATED SECTION -->
+        <section id="working">
+            <div class="section-header">
+                <h2>How Acceleration Works</h2>
+                <p>Observe how the acceleration vector (<span class="val-acceleration">Red</span>) influences the velocity vector (<span class="val-velocity">Cyan</span>) over time in this continuous linear sequence.</p>
+            </div>
+
+            <div class="glass-panel stage-container">
+                <div class="stage-visual">
+                    <canvas id="stagesCanvas" class="diagram-canvas"></canvas>
+                </div>
+                
+                <div class="stage-info">
+                    <h3 id="stageTitle">1. Speeding Up (Positive Acceleration)</h3>
+                    <p id="stageDesc">Acceleration pushes in the same direction as current movement. The velocity vector grows longer as speed increases.</p>
+                </div>
+
+                <div class="stage-controls">
+                    <button class="btn" id="btnPrev">← Prev</button>
+                    
+                    <div class="stage-progress" id="stageProgress">
+                        <div class="progress-dot active" data-index="0"></div>
+                        <div class="progress-dot" data-index="1"></div>
+                        <div class="progress-dot" data-index="2"></div>
+                        <div class="progress-dot" data-index="3"></div>
+                    </div>
+
+                    <div style="display:flex; gap: 8px;">
+                        <button class="btn" id="btnAutoPlay">Auto-Play ⏵</button>
+                        <button class="btn" id="btnNext">Next →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. INTERACTIVE SIMULATION -->
+        <section id="simulation">
+            <div class="section-header">
+                <h2>Interactive Sandbox</h2>
+                <p>Experiment with constant acceleration. Adjust the initial velocity and acceleration to see how position and speed change over time.</p>
+            </div>
+
+            <div class="glass-panel sandbox-layout">
+                <div class="sandbox-viewport">
+                    <canvas id="simCanvas" class="diagram-canvas"></canvas>
+                    
+                    <div class="sandbox-ui">
+                        <div class="hud-metric">
+                            <span>Velocity (v)</span>
+                            <div style="color: var(--acc-velocity);"><span id="hudV">0.0</span> m/s</div>
+                        </div>
+                        <div class="hud-metric">
+                            <span>Acceleration (a)</span>
+                            <div style="color: var(--acc-acceleration);"><span id="hudA">0.0</span> m/s²</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sandbox-sidebar">
+                    <div class="glass-panel" style="padding: var(--spacing-sm);">
+                        <div class="control-group" style="margin-bottom: var(--spacing-md);">
+                            <div class="control-header">
+                                <span>Initial Velocity (<span class="val-velocity">v₀</span>)</span>
+                                <span id="valV0">10 m/s</span>
+                            </div>
+                            <input type="range" id="slider-v" min="-30" max="30" value="10" step="1">
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-header">
+                                <span>Acceleration (<span class="val-acceleration">a</span>)</span>
+                                <span id="valA">2 m/s²</span>
+                            </div>
+                            <input type="range" id="slider-a" min="-10" max="10" value="2" step="0.5">
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap: 8px;">
+                        <button class="btn btn-primary" id="btnSimPlay" style="flex:1;">Play</button>
+                        <button class="btn" id="btnSimReset" style="flex:1;">Reset</button>
+                    </div>
+
+                    <!-- Live Graphs -->
+                    <div class="graph-container">
+                        <div class="graph-label">Velocity vs Time</div>
+                        <canvas id="graphV" class="diagram-canvas"></canvas>
+                    </div>
+                    <div class="graph-container">
+                        <div class="graph-label">Distance vs Time</div>
+                        <canvas id="graphD" class="diagram-canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. APPLICATIONS, FACTS & MISTAKES -->
+        <section id="info">
+            <div class="grid-2">
+                
+                <div class="flex-col">
+                    <h2 class="gradient-text">Real-World Applications</h2>
+                    
+                    <div class="glass-panel flex-row">
+                        <div class="card-icon">🎢</div>
+                        <div>
+                            <h4>Roller Coaster Design</h4>
+                            <p class="text-sm text-muted">Engineers calculate centripetal acceleration to ensure loops don't subject riders to dangerous G-forces.</p>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel flex-row">
+                        <div class="card-icon">💥</div>
+                        <div>
+                            <h4>Airbag Sensors</h4>
+                            <p class="text-sm text-muted">Accelerometers detect sudden, extreme negative acceleration (a crash) to trigger airbags in milliseconds.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex-col">
+                    <h2 class="gradient-text">Common Misconceptions</h2>
+                    
+                    <div class="glass-panel" style="border-left: 4px solid var(--acc-acceleration);">
+                        <h4>❌ High speed = High acceleration</h4>
+                        <p class="text-sm text-muted">A commercial jet cruising at 900 km/h has <span class="highlight-cyan">zero</span> acceleration because its speed isn't changing.</p>
+                    </div>
+
+                    <div class="glass-panel" style="border-left: 4px solid var(--acc-velocity);">
+                        <h4>❌ Deceleration is always negative</h4>
+                        <p class="text-sm text-muted">If you are moving backwards (negative velocity), a <span class="highlight-red">positive acceleration</span> will actually slow you down!</p>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- 5. REVISION -->
+        <section id="revision" style="text-align: center; margin-bottom: 5vh;">
+            <div class="glass-panel" style="max-width: 600px; margin: 0 auto;">
+                <h2>Quick Revision</h2>
+                <p>Acceleration is the rate at which velocity changes over time.</p>
+                <div class="formula-box">
+                    a = Δv / Δt
+                </div>
+                <p style="color: var(--text-muted); font-size: var(--text-sm);">
+                    Where <strong>Δv</strong> is change in velocity, and <strong>Δt</strong> is change in time.<br>
+                    Standard unit: Meters per second squared (m/s²).
+                </p>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        /**
+         * Core Graphics Utility for DPI aware canvas
+         */
+        const CanvasUtils = {
+            setupCanvas(canvas) {
+                const ctx = canvas.getContext('2d');
+                const resize = () => {
+                    const rect = canvas.parentElement.getBoundingClientRect();
+                    const dpr = window.devicePixelRatio || 1;
+                    canvas.width = rect.width * dpr;
+                    canvas.height = rect.height * dpr;
+                    ctx.scale(dpr, dpr);
+                    canvas.style.width = `${rect.width}px`;
+                    canvas.style.height = `${rect.height}px`;
+                    return { width: rect.width, height: rect.height };
+                };
+                return { ctx, resize };
+            },
+            
+            drawVectorArrow(ctx, x, y, magnitude, angle, color, glow = true, label = '') {
+                if (magnitude === 0) return;
+                
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(angle);
+                
+                if (glow) {
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = color;
+                }
+
+                const length = Math.abs(magnitude);
+                const dir = magnitude < 0 ? -1 : 1;
+                const headSize = Math.min(10, length * 0.3);
+
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(length * dir, 0);
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = color;
+                ctx.stroke();
+
+                // Arrow head
+                ctx.beginPath();
+                ctx.moveTo(length * dir, 0);
+                ctx.lineTo((length - headSize) * dir, -headSize * 0.6);
+                ctx.lineTo((length - headSize) * dir, headSize * 0.6);
+                ctx.fillStyle = color;
+                ctx.fill();
+
+                if (label) {
+                    ctx.shadowBlur = 0;
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '14px sans-serif';
+                    ctx.fillText(label, (length/2) * dir, -10);
+                }
+
+                ctx.restore();
+            },
+
+            drawSciFiPod(ctx, x, y, scale = 1, thrust = 0) {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.scale(scale, scale);
+
+                // Thrust flame
+                if (thrust !== 0) {
+                    const flameLen = Math.abs(thrust) * 2;
+                    const dir = thrust > 0 ? -1 : 1; // flame opposite to thrust direction
+                    ctx.beginPath();
+                    ctx.moveTo(-40 * dir, 0);
+                    ctx.lineTo((-40 - flameLen) * dir, -10);
+                    ctx.lineTo((-40 - flameLen - 20) * dir, 0);
+                    ctx.lineTo((-40 - flameLen) * dir, 10);
+                    ctx.fillStyle = thrust > 0 ? '#00f0ff' : '#ff2a6d';
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = ctx.fillStyle;
+                    ctx.fill();
+                }
+
+                // Shadow off
+                ctx.shadowBlur = 0;
+
+                // Main body
+                const grad = ctx.createLinearGradient(-30, -20, 30, 20);
+                grad.addColorStop(0, '#2a334d');
+                grad.addColorStop(1, '#121726');
+                
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 40, 15, 0, 0, Math.PI * 2);
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#4a5568';
+                ctx.stroke();
+
+                // Cockpit glow
+                ctx.beginPath();
+                ctx.ellipse(10, -2, 15, 6, 0.2, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(0, 240, 255, 0.6)';
+                ctx.fill();
+
+                ctx.restore();
+            },
+
+            drawGrid(ctx, width, height, offsetX = 0, opacity = 0.1) {
+                ctx.save();
+                ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+                ctx.lineWidth = 1;
+                const gridSize = 50;
+                
+                const startX = (offsetX % gridSize) - gridSize;
+
+                ctx.beginPath();
+                // Vertical lines
+                for (let x = startX; x < width; x += gridSize) {
+                    ctx.moveTo(x, 0); ctx.lineTo(x, height);
+                }
+                // Horizontal lines
+                for (let y = 0; y < height; y += gridSize) {
+                    ctx.moveTo(0, y); ctx.lineTo(width, y);
+                }
+                ctx.stroke();
+                ctx.restore();
+            }
+        };
+
+        /* ==========================================================================
+           COMPONENT 1: STATIC DIAGRAM WITH INTERACTIVE LABELS
+           ========================================================================== */
+        class AnatomyDiagram {
+            constructor() {
+                this.canvas = document.getElementById('componentsCanvas');
+                this.cutils = CanvasUtils.setupCanvas(this.canvas);
+                this.dims = { width: 0, height: 0 };
+                
+                this.bindInteractions();
+                
+                window.addEventListener('resize', () => {
+                    this.dims = this.cutils.resize();
+                    this.draw();
+                });
+                // Initial size & draw
+                this.dims = this.cutils.resize();
+                this.draw();
+            }
+
+            bindInteractions() {
+                const items = document.querySelectorAll('.legend-item, .diagram-dot');
+                
+                items.forEach(el => {
+                    el.addEventListener('mouseenter', () => this.highlight(el.id || el.dataset.target));
+                    el.addEventListener('mouseleave', () => this.clearHighlights());
+                    // Touch support
+                    el.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        this.highlight(el.id || el.dataset.target);
+                    }, {passive: false});
+                });
+            }
+
+            highlight(id) {
+                this.clearHighlights();
+                let targetId = id.startsWith('dot-') ? id.replace('dot-', 'leg-') : id;
+                let dotId = targetId.replace('leg-', 'dot-');
+                
+                const leg = document.getElementById(targetId);
+                const dot = document.getElementById(dotId);
+                if (leg) leg.classList.add('active');
+                if (dot) dot.classList.add('active');
+            }
+
+            clearHighlights() {
+                document.querySelectorAll('.legend-item.active, .diagram-dot.active').forEach(el => el.classList.remove('active'));
+            }
+
+            draw() {
+                const ctx = this.cutils.ctx;
+                const { width, height } = this.dims;
+                ctx.clearRect(0, 0, width, height);
+
+                const cx = width / 2;
+                const cy = height / 2;
+
+                // 4. Grid Frame
+                CanvasUtils.drawGrid(ctx, width, height, 0, 0.2);
+
+                // 1. Mass (Pod)
+                CanvasUtils.drawSciFiPod(ctx, cx, cy, 1.5, 0);
+
+                // 2. Velocity Vector
+                CanvasUtils.drawVectorArrow(ctx, cx + 45, cy, 120, 0, '#00f0ff', true, 'v');
+
+                // 3. Accel Vector
+                CanvasUtils.drawVectorArrow(ctx, cx, cy + 30, -80, 0, '#ff2a6d', true, 'a');
+
+                // Update dot positions logically based on canvas drawing
+                this.updateDotPos('dot-1', cx, cy);
+                this.updateDotPos('dot-2', cx + 105, cy);
+                this.updateDotPos('dot-3', cx - 40, cy + 30);
+                this.updateDotPos('dot-4', width - 40, height - 40);
+            }
+
+            updateDotPos(id, x, y) {
+                const dot = document.getElementById(id);
+                if (dot) {
+                    dot.style.left = `${x}px`;
+                    dot.style.top = `${y}px`;
+                }
+            }
+        }
+
+        /* ==========================================================================
+           COMPONENT 2: WORKING MECHANISM (STAGES)
+           ========================================================================== */
+        class StageManager {
+            constructor() {
+                this.canvas = document.getElementById('stagesCanvas');
+                this.cutils = CanvasUtils.setupCanvas(this.canvas);
+                this.dims = { width: 0, height: 0 };
+                
+                this.stages = [
+                    { title: "1. Speeding Up", desc: "Acceleration (Red) pushes in same direction as Velocity (Cyan). Velocity grows.", a: 40, vTarget: 150 },
+                    { title: "2. Constant Speed", desc: "Acceleration is zero. Velocity remains constant. Object coasts.", a: 0, vTarget: 150 },
+                    { title: "3. Slowing Down", desc: "Acceleration points opposite to velocity (Deceleration). Velocity shrinks.", a: -40, vTarget: 30 },
+                    { title: "4. Changing Direction", desc: "Acceleration points perpendicular. Velocity magnitude is constant, but direction changes.", a: "curve", vTarget: 100 }
+                ];
+                
+                this.currentIndex = 0;
+                this.isPlaying = false;
+                
+                // Anim state
+                this.state = {
+                    x: 50,
+                    v: 50,
+                    a: 0,
+                    angle: 0,
+                    vAngle: 0
+                };
+                
+                this.initDOM();
+                
+                window.addEventListener('resize', () => {
+                    this.dims = this.cutils.resize();
+                });
+                this.dims = this.cutils.resize();
+                
+                this.setStage(0);
+                requestAnimationFrame(this.loop.bind(this));
+            }
+
+            initDOM() {
+                document.getElementById('btnPrev').addEventListener('click', () => this.prev());
+                document.getElementById('btnNext').addEventListener('click', () => this.next());
+                document.getElementById('btnAutoPlay').addEventListener('click', (e) => {
+                    this.isPlaying = !this.isPlaying;
+                    e.target.innerText = this.isPlaying ? "Pause ⏸" : "Auto-Play ⏵";
+                });
+
+                document.querySelectorAll('.progress-dot').forEach((dot, idx) => {
+                    dot.addEventListener('click', () => this.setStage(idx));
+                });
+            }
+
+            setStage(idx) {
+                this.currentIndex = (idx + this.stages.length) % this.stages.length;
+                const stage = this.stages[this.currentIndex];
+                
+                document.getElementById('stageTitle').innerText = stage.title;
+                document.getElementById('stageDesc').innerText = stage.desc;
+                
+                document.querySelectorAll('.progress-dot').forEach((d, i) => {
+                    d.classList.toggle('active', i === this.currentIndex);
+                });
+
+                // Reset position for visualization clarity based on stage
+                if(this.currentIndex === 3) {
+                    this.state.x = this.dims.width / 2;
+                    this.state.y = 50;
+                    this.state.vAngle = 0;
+                    this.state.v = 100;
+                } else {
+                    this.state.x = 100;
+                    this.state.y = this.dims.height / 2;
+                    this.state.vAngle = 0;
+                    // Keep roughly previous v for smooth transition if not jumping
+                }
+            }
+
+            prev() { this.setStage(this.currentIndex - 1); }
+            next() { this.setStage(this.currentIndex + 1); }
+
+            loop(time) {
+                this.updateLogic();
+                this.draw();
+                
+                if (this.isPlaying) {
+                    // Auto advance logic based on x position or curve completion
+                    if (this.currentIndex < 3 && this.state.x > this.dims.width - 150) {
+                        this.next();
+                    } else if (this.currentIndex === 3 && this.state.vAngle > Math.PI/2) {
+                        this.next();
+                    }
+                }
+
+                requestAnimationFrame(this.loop.bind(this));
+            }
+
+            updateLogic() {
+                const targetStage = this.stages[this.currentIndex];
+                
+                if (targetStage.a === "curve") {
+                    // Centripetal logic
+                    this.state.v = targetStage.vTarget; // Constant speed
+                    this.state.vAngle += 0.01; // Turn
+                    this.state.x += Math.cos(this.state.vAngle) * (this.state.v * 0.02);
+                    this.state.y += Math.sin(this.state.vAngle) * (this.state.v * 0.02);
+                } else {
+                    // Linear logic
+                    this.state.y = this.dims.height / 2;
+                    
+                    // Smoothly adjust V towards target
+                    if (this.state.v < targetStage.vTarget) this.state.v += 1;
+                    if (this.state.v > targetStage.vTarget) this.state.v -= 1;
+                    
+                    this.state.a = targetStage.a;
+                    
+                    // Move
+                    this.state.x += this.state.v * 0.02;
+                    
+                    // Wrap around linear
+                    if (this.state.x > this.dims.width + 100 && !this.isPlaying) {
+                        this.state.x = -100;
+                    }
+                }
+            }
+
+            draw() {
+                const ctx = this.cutils.ctx;
+                const { width, height } = this.dims;
+                ctx.clearRect(0, 0, width, height);
+
+                CanvasUtils.drawGrid(ctx, width, height, -this.state.x, 0.1);
+
+                ctx.save();
+                ctx.translate(this.state.x, this.state.y);
+                ctx.rotate(this.state.vAngle);
+
+                // Draw pod
+                const thrustAmt = this.currentIndex === 3 ? 0 : this.state.a;
+                CanvasUtils.drawSciFiPod(ctx, 0, 0, 1.2, thrustAmt);
+
+                // Draw Velocity
+                CanvasUtils.drawVectorArrow(ctx, 40, 0, this.state.v, 0, '#00f0ff', true, 'v');
+
+                // Draw Accel
+                if (this.stages[this.currentIndex].a === "curve") {
+                    // Centripetal points "inward" (down in local space if turning right)
+                    CanvasUtils.drawVectorArrow(ctx, 0, 20, 80, Math.PI/2, '#ff2a6d', true, 'a');
+                } else {
+                    // Linear Accel
+                    CanvasUtils.drawVectorArrow(ctx, 0, -25, this.state.a, 0, '#ff2a6d', true, 'a');
+                }
+
+                ctx.restore();
+                
+                // Particles / Trail effect
+                this.drawTrail(ctx);
+            }
+            
+            drawTrail(ctx) {
+                 // Simple dashed line trail
+                 ctx.save();
+                 ctx.beginPath();
+                 if(this.currentIndex === 3) {
+                     // Arc trail
+                     ctx.arc(this.dims.width/2 + 50, this.dims.height/2, 100, -Math.PI/2, this.state.vAngle - Math.PI/2);
+                 } else {
+                     // Line trail
+                     ctx.moveTo(0, this.dims.height/2);
+                     ctx.lineTo(this.state.x, this.dims.height/2);
+                 }
+                 ctx.setLineDash([10, 15]);
+                 ctx.strokeStyle = 'rgba(0, 240, 255, 0.2)';
+                 ctx.lineWidth = 2;
+                 ctx.stroke();
+                 ctx.restore();
+            }
+        }
+
+        /* ==========================================================================
+           COMPONENT 3: INTERACTIVE SIMULATION SANDBOX
+           ========================================================================== */
+        class SandboxSimulation {
+            constructor() {
+                // Canvases
+                this.cSim = CanvasUtils.setupCanvas(document.getElementById('simCanvas'));
+                this.cGraphV = CanvasUtils.setupCanvas(document.getElementById('graphV'));
+                this.cGraphD = CanvasUtils.setupCanvas(document.getElementById('graphD'));
+                
+                this.dims = { width: 0, height: 0 };
+                
+                // Physics state
+                this.state = {
+                    t: 0,
+                    x: 0,
+                    v: 10,
+                    v0: 10,
+                    a: 2,
+                    history: [] // For graphs
+                };
+                
+                this.isPlaying = false;
+                this.lastTime = 0;
+                
+                this.initDOM();
+                
+                window.addEventListener('resize', () => {
+                    this.dims = this.cSim.resize();
+                    this.cGraphV.resize();
+                    this.cGraphD.resize();
+                });
+                
+                // Initial trigger
+                window.dispatchEvent(new Event('resize'));
+                this.reset();
+                requestAnimationFrame(this.loop.bind(this));
+            }
+
+            initDOM() {
+                const sV = document.getElementById('slider-v');
+                const sA = document.getElementById('slider-a');
+                const vV0 = document.getElementById('valV0');
+                const vA = document.getElementById('valA');
+
+                const updateInputs = () => {
+                    if(this.state.t === 0) {
+                        this.state.v0 = parseFloat(sV.value);
+                        this.state.v = this.state.v0;
+                    }
+                    this.state.a = parseFloat(sA.value);
+                    
+                    vV0.innerText = `${sV.value} m/s`;
+                    vA.innerText = `${sA.value} m/s²`;
+                };
+
+                sV.addEventListener('input', updateInputs);
+                sA.addEventListener('input', updateInputs);
+
+                document.getElementById('btnSimPlay').addEventListener('click', (e) => {
+                    this.isPlaying = !this.isPlaying;
+                    e.target.innerText = this.isPlaying ? "Pause" : "Play";
+                    if (this.isPlaying) this.lastTime = performance.now();
+                });
+
+                document.getElementById('btnSimReset').addEventListener('click', () => this.reset());
+            }
+
+            reset() {
+                this.isPlaying = false;
+                document.getElementById('btnSimPlay').innerText = "Play";
+                this.state.t = 0;
+                this.state.x = 0;
+                this.state.v = parseFloat(document.getElementById('slider-v').value);
+                this.state.history = [{t:0, v:this.state.v, x:0}];
+                this.draw();
+            }
+
+            loop(time) {
+                if (this.isPlaying) {
+                    const dt = (time - this.lastTime) / 1000; // in seconds
+                    this.lastTime = time;
+                    this.updatePhysics(dt);
+                }
+                this.draw();
+                requestAnimationFrame(this.loop.bind(this));
+            }
+
+            updatePhysics(dt) {
+                // Time scaling for visual feel
+                const simSpeed = 1; 
+                const actDt = dt * simSpeed;
+
+                this.state.t += actDt;
+                this.state.v += this.state.a * actDt;
+                this.state.x += this.state.v * actDt;
+
+                // Record history for graphs (limit length)
+                this.state.history.push({ t: this.state.t, v: this.state.v, x: this.state.x });
+                if (this.state.history.length > 200) this.state.history.shift();
+
+                // Update HUD
+                document.getElementById('hudV').innerText = this.state.v.toFixed(1);
+                document.getElementById('hudA').innerText = this.state.a.toFixed(1);
+                
+                // Safety bound to avoid infinite crazy numbers
+                if(Math.abs(this.state.v) > 100) this.isPlaying = false;
+            }
+
+            draw() {
+                this.drawSim();
+                this.drawGraph(this.cGraphV, 'v', '#00f0ff', -50, 100);
+                this.drawGraph(this.cGraphD, 'x', '#b24dff', -100, 500);
+            }
+
+            drawSim() {
+                const ctx = this.cSim.ctx;
+                const { width, height } = this.dims;
+                ctx.clearRect(0, 0, width, height);
+
+                // Camera follows object, so background moves
+                const visualScale = 5; // pixels per meter
+                const camX = this.state.x * visualScale;
+                
+                CanvasUtils.drawGrid(ctx, width, height, -camX, 0.15);
+
+                const cy = height / 2;
+                const cx = width / 2; // Keep object in center horizontally
+
+                // Distance markers on ground
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.font = '10px monospace';
+                for(let i = -20; i < 100; i+=10) {
+                    const screenX = cx + (i * visualScale) - camX;
+                    if(screenX > 0 && screenX < width) {
+                        ctx.fillRect(screenX, cy + 40, 2, 10);
+                        ctx.fillText(`${i}m`, screenX - 10, cy + 65);
+                    }
+                }
+
+                // Draw Object at center
+                CanvasUtils.drawSciFiPod(ctx, cx, cy, 1.2, this.state.a * 10);
+
+                // Draw Vectors scaled down visually
+                CanvasUtils.drawVectorArrow(ctx, cx + 30, cy, this.state.v * 2, 0, '#00f0ff', true);
+                CanvasUtils.drawVectorArrow(ctx, cx, cy - 30, this.state.a * 10, 0, '#ff2a6d', true);
+            }
+
+            drawGraph(cutils, key, color, minVal, maxVal) {
+                const ctx = cutils.ctx;
+                const canvas = ctx.canvas;
+                // Rely on intrinsic size divided by DPR
+                const width = canvas.width / (window.devicePixelRatio || 1);
+                const height = canvas.height / (window.devicePixelRatio || 1);
+
+                ctx.clearRect(0, 0, width, height);
+
+                if (this.state.history.length < 2) return;
+
+                const tMax = this.state.history[this.state.history.length - 1].t;
+                const tMin = Math.max(0, tMax - 10); // Show last 10 seconds
+
+                // Draw Zero Line
+                const zeroY = height - ((0 - minVal) / (maxVal - minVal)) * height;
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.beginPath(); ctx.moveTo(0, zeroY); ctx.lineTo(width, zeroY); ctx.stroke();
+
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                
+                for (let i = 0; i < this.state.history.length; i++) {
+                    const pt = this.state.history[i];
+                    if (pt.t < tMin) continue;
+
+                    const x = ((pt.t - tMin) / 10) * width;
+                    // Clamp values for display
+                    const val = Math.max(minVal, Math.min(maxVal, pt[key]));
+                    const y = height - ((val - minVal) / (maxVal - minVal)) * height;
+
+                    if (i === 0 || pt.t === tMin) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                
+                ctx.stroke();
+                
+                // Glow
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = color;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // Initialize everything when DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            new AnatomyDiagram();
+            new StageManager();
+            new SandboxSimulation();
+        });
+
+    </script>
+</body>
+</html>

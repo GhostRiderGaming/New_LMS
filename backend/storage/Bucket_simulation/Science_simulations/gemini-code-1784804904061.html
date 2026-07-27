@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wastewater Recycling Simulation</title>
+    <style>
+        /* ══════════════════════════════════════
+           VARIABLES & THEMING
+        ══════════════════════════════════════ */
+        :root {
+            /* Colors */
+            --bg-base: #060913;
+            --bg-accent: #0f1629;
+            --glass-bg: rgba(20, 25, 45, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --text-main: #f0f4ff;
+            --text-muted: #94a3b8;
+            
+            /* Educational Color Coding */
+            --color-raw: #b48554;     /* Raw Wastewater */
+            --color-primary: #859666; /* Primary Treatment */
+            --color-bio: #32d74b;     /* Biological active */
+            --color-clean: #0a84ff;   /* Clean Water */
+            --color-uv: #bf5af2;      /* Disinfection */
+            --color-sludge: #6b5a45;  /* Sludge */
+
+            --glow-clean: 0 0 20px rgba(10, 132, 255, 0.4);
+            --glow-bio: 0 0 20px rgba(50, 215, 75, 0.4);
+
+            /* Typography */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 10px;
+
+            /* Easing */
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+            --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* ══════════════════════════════════════
+           RESET & GLOBAL
+        ══════════════════════════════════════ */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(10, 132, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(50, 215, 75, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Ambient animated background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s infinite ease-in-out alternate;
+        }
+        .orb:nth-child(1) { width: 40vw; height: 40vw; background: rgba(10,132,255,0.1); top: -10%; left: -10%; }
+        .orb:nth-child(2) { width: 30vw; height: 30vw; background: rgba(191,90,242,0.08); bottom: -10%; right: -10%; animation-delay: -5s; }
+        .orb:nth-child(3) { width: 35vw; height: 35vw; background: rgba(50,215,75,0.08); top: 40%; left: 50%; animation-duration: 25s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(5%, 10%) scale(1.1); }
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem 5%;
+            display: flex;
+            flex-direction: column;
+            gap: 4rem;
+        }
+
+        h1 { font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 0.5rem; }
+        h2 { font-size: clamp(1.8rem, 3vw, 2.5rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 10px; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; margin-bottom: 0.5rem; color: #fff; }
+        p { font-size: clamp(14px, 1.1vw, 16px); color: var(--text-muted); margin-bottom: 1rem; }
+
+        .highlight-text {
+            background: linear-gradient(90deg, var(--color-clean), #00F0FF);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(10, 132, 255, 0.3);
+        }
+
+        /* ══════════════════════════════════════
+           GLASSMORPHISM UI COMPONENTS
+        ══════════════════════════════════════ */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 24px 48px rgba(0,0,0,0.4), inset 0 1px 0 var(--glass-highlight);
+            padding: clamp(1.5rem, 3vw, 3rem);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+        }
+
+        /* ══════════════════════════════════════
+           LAYOUT GRIDS
+        ══════════════════════════════════════ */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; }
+        
+        /* ══════════════════════════════════════
+           1. HERO SECTION
+        ══════════════════════════════════════ */
+        .hero {
+            text-align: center;
+            padding: 4rem 0 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .hero-badge {
+            background: rgba(10, 132, 255, 0.1);
+            border: 1px solid rgba(10, 132, 255, 0.3);
+            color: var(--color-clean);
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(10, 132, 255, 0.2);
+        }
+
+        /* ══════════════════════════════════════
+           3. MAIN COMPONENTS (MANDATE: SEPARATE LABELS)
+        ══════════════════════════════════════ */
+        .components-section {
+            display: grid;
+            grid-template-columns: 3fr 1.5fr; /* Illustration vs Legend */
+            gap: 2rem;
+            align-items: stretch;
+        }
+
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            padding: 2rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+        }
+
+        .svg-canvas {
+            width: 100%;
+            height: 100%;
+            max-width: 800px;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
+        }
+
+        /* Interactive Markers on SVG */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--bg-accent);
+            border: 2px solid var(--color-clean);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5), 0 0 0 4px rgba(10, 132, 255, 0.1);
+            transition: all 0.3s var(--ease-out-expo);
+            z-index: 10;
+            transform: translate(-50%, -50%);
+        }
+        
+        .marker::after {
+            content: '';
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            border: 1px solid var(--color-clean);
+            animation: pulse-marker 2s infinite;
+        }
+
+        @keyframes pulse-marker {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--color-clean);
+            color: #000;
+            box-shadow: var(--glow-clean);
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            justify-content: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(10, 132, 255, 0.1);
+            border-color: rgba(10, 132, 255, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-num {
+            background: rgba(255,255,255,0.1);
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 12px;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item.active .legend-num {
+            background: var(--color-clean);
+            color: #000;
+            box-shadow: 0 0 10px var(--color-clean);
+        }
+
+        .legend-content h4 { font-size: 15px; margin-bottom: 2px; color: #fff; }
+        .legend-content p { font-size: 13px; margin: 0; line-height: 1.4; }
+
+        /* ══════════════════════════════════════
+           4. WORKING PROCESS (MANDATE: STAGES)
+        ══════════════════════════════════════ */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* Visual Stage Representation */
+        .stage-visual {
+            height: 300px;
+            border-radius: var(--radius-md);
+            background: #03050a;
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        /* Animated particles in working section */
+        .flow-particle {
+            position: absolute;
+            border-radius: 50%;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        /* Stage Information Panel */
+        .stage-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255,255,255,0.03);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .stage-details { flex: 1; }
+        
+        .stage-tag {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+            background: rgba(255,255,255,0.1);
+        }
+
+        .io-indicators {
+            display: flex;
+            gap: 1rem;
+            margin-top: 10px;
+        }
+        
+        .io-badge {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            background: rgba(0,0,0,0.4);
+            padding: 4px 10px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .io-icon { width: 10px; height: 10px; border-radius: 50%; }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: rgba(10, 132, 255, 0.2);
+            border-color: var(--color-clean);
+            color: #fff;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: rgba(10, 132, 255, 0.4);
+            box-shadow: 0 0 15px rgba(10, 132, 255, 0.3);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 6px;
+            margin: 0 15px;
+        }
+
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+        .dot.active {
+            background: var(--color-clean);
+            box-shadow: 0 0 10px var(--color-clean);
+            transform: scale(1.3);
+        }
+
+        /* SVG Working Animation Classes */
+        #working-svg { width: 100%; height: 100%; max-width: 600px; }
+        .w-element { transition: all 0.5s var(--ease-out-expo); opacity: 0.2; filter: grayscale(1); }
+        .w-element.active { opacity: 1; filter: grayscale(0); }
+        .w-flow { stroke-dasharray: 10; animation: flowAnim 1s linear infinite; opacity: 0; }
+        .w-flow.active { opacity: 1; }
+        
+        @keyframes flowAnim { to { stroke-dashoffset: -20; } }
+
+        /* ══════════════════════════════════════
+           5. INTERACTIVE SIMULATION
+        ══════════════════════════════════════ */
+        .sim-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            padding-bottom: 60%; /* Aspect ratio */
+            background: #020306;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,1);
+        }
+
+        #sim-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            background: rgba(255,255,255,0.02);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .slider-group { display: flex; flex-direction: column; gap: 8px; }
+        
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+        #air-slider::-webkit-slider-runnable-track { background: linear-gradient(90deg, rgba(255,255,255,0.1), #fff); }
+        #bio-slider::-webkit-slider-runnable-track { background: linear-gradient(90deg, rgba(255,255,255,0.1), var(--color-bio)); }
+
+        .meter {
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+        .meter-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--color-raw);
+            transition: width 0.3s ease, background-color 0.5s ease;
+        }
+
+        /* ══════════════════════════════════════
+           GRIDS (FACTS, MISTAKES, ETC)
+        ══════════════════════════════════════ */
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            transition: transform 0.3s ease, background 0.3s ease;
+        }
+        .info-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(255,255,255,0.1);
+        }
+        .info-icon {
+            width: 40px; height: 40px;
+            margin-bottom: 1rem;
+            fill: var(--color-clean);
+        }
+        .card-red .info-icon { fill: #ff453a; }
+        .card-green .info-icon { fill: var(--color-bio); }
+
+        /* ══════════════════════════════════════
+           RESPONSIVE (MOBILE RULES)
+        ══════════════════════════════════════ */
+        @media (max-width: 1024px) {
+            .components-section { grid-template-columns: 1fr; }
+            .diagram-container { min-height: 350px; }
+            .sim-container { grid-template-columns: 1fr; }
+            .canvas-wrapper { padding-bottom: 50%; }
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 16px; gap: 2.5rem; }
+            .glass-panel { 
+                padding: 1.2rem; 
+                backdrop-filter: blur(10px); /* Performance */
+                -webkit-backdrop-filter: blur(10px);
+            }
+            .grid-2, .grid-3 { grid-template-columns: 1fr; }
+            
+            /* Sizing discipline */
+            h2 { font-size: clamp(1.3rem, 5vw, 1.6rem); }
+            p { font-size: 14px; }
+            
+            /* Components */
+            .diagram-container { padding: 1rem; min-height: 280px; }
+            
+            /* Working Section */
+            .stage-info { flex-direction: column; align-items: flex-start; gap: 1rem; }
+            .controls { width: 100%; justify-content: space-between; }
+            .progress-dots { margin: 0; }
+            .stage-visual { height: 220px; }
+
+            /* Simulation */
+            .canvas-wrapper { padding-bottom: 65%; }
+            
+            .btn { padding: 12px; justify-content: center; flex: 1; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="orb"></div>
+        <div class="orb"></div>
+        <div class="orb"></div>
+    </div>
+
+    <div class="container">
+        
+        <!-- 1. INTRODUCTION -->
+        <section class="hero">
+            <div class="hero-badge">Environmental Engineering</div>
+            <h1 class="highlight-text">Wastewater Recycling</h1>
+            <p style="max-width: 600px; font-size: 1.1rem;">Explore the physical, biological, and chemical mechanisms that transform municipal waste back into crystal clear water, protecting our ecosystems.</p>
+        </section>
+
+        <!-- 2. OVERVIEW -->
+        <section class="glass-panel">
+            <h2>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-clean)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+                The Hidden Cycle
+            </h2>
+            <div class="grid-2">
+                <div>
+                    <p>Every time water spirals down a drain, its journey isn't over—it's just beginning. Wastewater treatment is essentially <strong>accelerated nature</strong>. We engineer environments that perform the natural water purification cycle in hours instead of weeks.</p>
+                    <p>Without this technology, organic overload would strip oxygen from rivers, causing ecological collapse.</p>
+                </div>
+                <div style="background: rgba(0,0,0,0.2); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; justify-content: center;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;"><span>Global Volume</span> <span style="color:#fff; font-weight:bold;">380 Billion m³/yr</span></div>
+                    <div class="meter"><div class="meter-fill" style="width: 100%; background: #4a5568;"></div></div>
+                    
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px; margin-top: 15px;"><span>Currently Treated</span> <span style="color:var(--color-clean); font-weight:bold;">~20%</span></div>
+                    <div class="meter"><div class="meter-fill" style="width: 20%; background: var(--color-clean);"></div></div>
+                    <p style="font-size: 12px; text-align: right; margin-top: 5px; margin-bottom:0;">We have work to do.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. MAIN COMPONENTS (Strict Label Mandate) -->
+        <section class="glass-panel">
+            <h2>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-clean)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                Anatomy of a Treatment Plant
+            </h2>
+            <p>A modern plant isolates different types of contaminants using specific physics and biology.</p>
+            
+            <div class="components-section">
+                <!-- Visual Left -->
+                <div class="diagram-container" id="plant-diagram">
+                    <!-- Interactive Markers (Absolute positioned by JS) -->
+                    <div class="marker" data-target="item-1" style="left: 15%; top: 60%;">1</div>
+                    <div class="marker" data-target="item-2" style="left: 35%; top: 70%;">2</div>
+                    <div class="marker" data-target="item-3" style="left: 55%; top: 40%;">3</div>
+                    <div class="marker" data-target="item-4" style="left: 75%; top: 70%;">4</div>
+                    <div class="marker" data-target="item-5" style="left: 90%; top: 50%;">5</div>
+
+                    <!-- Complex SVG Illustration -->
+                    <svg class="svg-canvas" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="metal" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#2a3040"/><stop offset="50%" stop-color="#4a5568"/><stop offset="100%" stop-color="#1a202c"/></linearGradient>
+                            <linearGradient id="waterRaw" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#b48554"/><stop offset="100%" stop-color="#6b5a45"/></linearGradient>
+                            <linearGradient id="waterBio" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#859666"/><stop offset="100%" stop-color="#455432"/></linearGradient>
+                            <linearGradient id="waterClean" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a84ff"/><stop offset="100%" stop-color="#004499"/></linearGradient>
+                            
+                            <!-- Tank shape -->
+                            <g id="tank">
+                                <path d="M0 20 Q0 0 20 0 L100 0 Q120 0 120 20 L120 140 Q120 160 100 160 L20 160 Q0 160 0 140 Z" fill="url(#metal)" stroke="#ffffff22" stroke-width="2"/>
+                                <rect x="5" y="5" width="110" height="150" rx="15" fill="#00000066" />
+                            </g>
+                        </defs>
+
+                        <!-- Pipes Network -->
+                        <path d="M -20 200 L 80 200" stroke="url(#metal)" stroke-width="15" fill="none"/>
+                        <path d="M 160 220 L 250 220" stroke="url(#metal)" stroke-width="15" fill="none"/>
+                        <path d="M 330 220 L 410 150" stroke="url(#metal)" stroke-width="15" fill="none"/>
+                        <path d="M 490 150 L 570 220" stroke="url(#metal)" stroke-width="15" fill="none"/>
+                        <path d="M 650 220 L 740 220" stroke="url(#metal)" stroke-width="15" fill="none"/>
+                        <path d="M 760 220 L 820 220" stroke="url(#metal)" stroke-width="15" fill="none"/>
+
+                        <!-- 1. Bar Screen -->
+                        <g transform="translate(60, 140)">
+                            <rect x="0" y="0" width="80" height="100" fill="url(#metal)" rx="10"/>
+                            <rect x="10" y="20" width="60" height="70" fill="url(#waterRaw)"/>
+                            <!-- Grates -->
+                            <line x1="20" y1="20" x2="20" y2="90" stroke="#fff" stroke-width="3" opacity="0.5"/>
+                            <line x1="40" y1="20" x2="40" y2="90" stroke="#fff" stroke-width="3" opacity="0.5"/>
+                            <line x1="60" y1="20" x2="60" y2="90" stroke="#fff" stroke-width="3" opacity="0.5"/>
+                        </g>
+
+                        <!-- 2. Primary Clarifier -->
+                        <g transform="translate(230, 140)">
+                            <use href="#tank" />
+                            <path d="M5 60 L115 60 L115 155 Q115 155 100 155 L20 155 Q5 155 5 140 Z" fill="url(#waterRaw)"/>
+                            <rect x="5" y="140" width="110" height="15" rx="5" fill="var(--color-sludge)"/>
+                            <polygon points="60,20 50,140 70,140" fill="#fff" opacity="0.2"/> <!-- Scraper -->
+                        </g>
+
+                        <!-- 3. Aeration Basin (Bigger) -->
+                        <g transform="translate(390, 70)">
+                            <rect x="0" y="0" width="160" height="160" fill="url(#metal)" rx="20"/>
+                            <rect x="5" y="5" width="150" height="150" rx="15" fill="#00000066" />
+                            <path d="M5 40 L155 40 L155 155 Q155 155 140 155 L20 155 Q5 155 5 140 Z" fill="url(#waterBio)"/>
+                            <!-- Bubbles -->
+                            <circle cx="30" cy="140" r="3" fill="#fff" opacity="0.6"/>
+                            <circle cx="80" cy="120" r="4" fill="#fff" opacity="0.6"/>
+                            <circle cx="130" cy="90" r="2" fill="#fff" opacity="0.6"/>
+                            <circle cx="50" cy="60" r="5" fill="#fff" opacity="0.6"/>
+                        </g>
+
+                        <!-- 4. Secondary Clarifier -->
+                        <g transform="translate(550, 140)">
+                            <use href="#tank" />
+                            <path d="M5 40 L115 40 L115 155 Q115 155 100 155 L20 155 Q5 155 5 140 Z" fill="url(#waterClean)"/>
+                            <rect x="5" y="140" width="110" height="15" rx="5" fill="var(--color-bio)"/> <!-- Return sludge -->
+                            <polygon points="60,20 50,140 70,140" fill="#fff" opacity="0.2"/>
+                        </g>
+
+                        <!-- 5. UV Disinfection -->
+                        <g transform="translate(720, 180)">
+                            <rect x="0" y="0" width="60" height="80" fill="url(#metal)" rx="10"/>
+                            <rect x="5" y="20" width="50" height="40" fill="url(#waterClean)"/>
+                            <!-- UV Lamps -->
+                            <rect x="20" y="10" width="4" height="60" fill="#fff" filter="drop-shadow(0 0 5px var(--color-uv))"/>
+                            <rect x="36" y="10" width="4" height="60" fill="#fff" filter="drop-shadow(0 0 5px var(--color-uv))"/>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Legend Right -->
+                <div class="legend-list" id="component-legend">
+                    <div class="legend-item" id="item-1" data-marker="1">
+                        <div class="legend-num">1</div>
+                        <div class="legend-content">
+                            <h4>Bar Screens</h4>
+                            <p>Physical barrier catching large debris like plastics, rags, and branches before they damage pumps.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-2" data-marker="2">
+                        <div class="legend-num">2</div>
+                        <div class="legend-content">
+                            <h4>Primary Clarifier</h4>
+                            <p>Slows water velocity. Heavy solids sink to form sludge; oils and grease float to the top for skimming.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-3" data-marker="3">
+                        <div class="legend-num">3</div>
+                        <div class="legend-content">
+                            <h4>Aeration Basin</h4>
+                            <p>The biological heart. Oxygen is pumped in to feed microorganisms that consume dissolved organic waste.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-4" data-marker="4">
+                        <div class="legend-num">4</div>
+                        <div class="legend-content">
+                            <h4>Secondary Clarifier</h4>
+                            <p>Microbes clump together ("floc") and settle to the bottom, separating from the now-clear water.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-5" data-marker="5">
+                        <div class="legend-num">5</div>
+                        <div class="legend-content">
+                            <h4>UV Disinfection</h4>
+                            <p>Ultraviolet light alters the DNA of remaining bacteria and viruses, sterilizing the water for safe discharge.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. WORKING PROCESS (Strict Mechanism Mandate) -->
+        <section class="glass-panel">
+            <h2>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-clean)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                The Treatment Sequence
+            </h2>
+            <p>Observe the linear transformation stage by stage. Watch how inputs are systematically altered.</p>
+
+            <div class="working-container">
+                <!-- Dynamic Visual Area -->
+                <div class="stage-visual" id="working-stage-visual">
+                    <!-- SVG Mechanism built dynamically via JS classes -->
+                    <svg id="working-svg" viewBox="0 0 500 200" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Path base -->
+                        <path d="M20 100 L 480 100" stroke="#333" stroke-width="40" stroke-linecap="round" fill="none"/>
+                        
+                        <!-- Segments (will be toggled active) -->
+                        <g id="w-stage-1" class="w-element">
+                            <rect x="60" y="60" width="20" height="80" fill="#666"/>
+                            <rect x="90" y="60" width="20" height="80" fill="#666"/>
+                            <text x="85" y="40" fill="#fff" font-size="12" text-anchor="middle">SCREEN</text>
+                            <path class="w-flow" d="M20 100 L 110 100" stroke="var(--color-raw)" stroke-width="30" fill="none" stroke-linecap="round"/>
+                        </g>
+
+                        <g id="w-stage-2" class="w-element">
+                            <path d="M150 120 L220 120 L200 160 L170 160 Z" fill="var(--color-sludge)"/>
+                            <text x="185" y="40" fill="#fff" font-size="12" text-anchor="middle">SETTLE</text>
+                            <path class="w-flow" d="M110 100 L 220 100" stroke="#9a8160" stroke-width="30" fill="none"/>
+                        </g>
+
+                        <g id="w-stage-3" class="w-element">
+                            <rect x="250" y="60" width="80" height="80" fill="none" stroke="var(--color-bio)" stroke-width="2"/>
+                            <circle cx="270" cy="120" r="4" fill="#fff"/>
+                            <circle cx="290" cy="90" r="3" fill="#fff"/>
+                            <circle cx="310" cy="110" r="5" fill="#fff"/>
+                            <text x="290" y="40" fill="#fff" font-size="12" text-anchor="middle">AERATE</text>
+                            <path class="w-flow" d="M220 100 L 330 100" stroke="var(--color-bio)" stroke-width="30" fill="none"/>
+                        </g>
+
+                        <g id="w-stage-4" class="w-element">
+                            <path d="M350 120 L420 120 L400 160 L370 160 Z" fill="var(--color-bio)"/>
+                            <text x="385" y="40" fill="#fff" font-size="12" text-anchor="middle">CLARIFY</text>
+                            <path class="w-flow" d="M330 100 L 420 100" stroke="#5b9bd5" stroke-width="30" fill="none"/>
+                        </g>
+
+                        <g id="w-stage-5" class="w-element">
+                            <rect x="440" y="70" width="10" height="60" fill="var(--color-uv)" filter="drop-shadow(0 0 5px var(--color-uv))"/>
+                            <text x="460" y="40" fill="#fff" font-size="12" text-anchor="middle">UV</text>
+                            <path class="w-flow" d="M420 100 L 480 100" stroke="var(--color-clean)" stroke-width="30" fill="none" stroke-linecap="round"/>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Info and Controls -->
+                <div class="stage-info">
+                    <div class="stage-details">
+                        <div class="stage-tag" id="w-tag" style="color: var(--color-raw);">Stage 1 / 5</div>
+                        <h3 id="w-title">Preliminary Screening</h3>
+                        <p id="w-desc" style="margin:0;">Large inorganic objects like plastics and rags are physically blocked by metal grates.</p>
+                        
+                        <div class="io-indicators">
+                            <div class="io-badge"><div class="io-icon" id="w-in-color" style="background: var(--color-raw);"></div> IN: <span id="w-in-text">Raw Sewage</span></div>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                            <div class="io-badge"><div class="io-icon" id="w-out-color" style="background: #9a8160;"></div> OUT: <span id="w-out-text">Screened Water</span></div>
+                        </div>
+                    </div>
+
+                    <div class="controls">
+                        <button class="btn" id="btn-prev" disabled>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        
+                        <div class="progress-dots" id="w-dots">
+                            <div class="dot active"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+
+                        <button class="btn" id="btn-next">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                        <button class="btn btn-primary" id="btn-play">Auto-Play</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. INTERACTIVE SIMULATION -->
+        <section class="glass-panel">
+            <h2>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-clean)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/><circle cx="12" cy="12" r="10"/></svg>
+                Bioreactor Simulator
+            </h2>
+            <p>Take control of the Aeration Basin. Microorganisms (green) consume organic waste (brown), but they need dissolved oxygen (bubbles) to survive. Find the balance.</p>
+
+            <div class="sim-container">
+                <!-- Canvas Area -->
+                <div class="canvas-wrapper">
+                    <canvas id="sim-canvas"></canvas>
+                </div>
+
+                <!-- Controls Area -->
+                <div class="sim-controls">
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Air Blower (Oxygen)</span>
+                            <span id="val-air">50%</span>
+                        </div>
+                        <input type="range" id="air-slider" min="0" max="100" value="50">
+                        <p style="font-size: 11px; margin-top:4px;">Powers the diffusers. Costs electricity.</p>
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Returned Microbes</span>
+                            <span id="val-bio">Medium</span>
+                        </div>
+                        <input type="range" id="bio-slider" min="10" max="100" value="50">
+                        <p style="font-size: 11px; margin-top:4px;">Recycling sludge maintains the hungry bacteria population.</p>
+                    </div>
+
+                    <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 10px 0;"></div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Effluent Purity</span>
+                            <span id="val-purity" style="color: var(--color-raw);">Poor</span>
+                        </div>
+                        <div class="meter"><div class="meter-fill" id="meter-purity" style="width: 20%;"></div></div>
+                    </div>
+                    
+                    <div style="font-size: 12px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 3px solid var(--color-clean);" id="sim-feedback">
+                        Increase air to help microbes consume waste faster.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- GRID SECTIONS -->
+        <div class="grid-3">
+            <!-- Facts -->
+            <div class="info-card">
+                <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <h3>Space Recycling</h3>
+                <p>On the ISS, 93% of all wastewater (including sweat and urine) is recycled into drinking water. The system uses a specialized centrifuge distiller.</p>
+            </div>
+            
+            <div class="info-card card-green">
+                <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                <h3>Energy Recovery</h3>
+                <p>Modern plants capture methane gas produced during sludge digestion and burn it to generate electricity, often powering the entire facility.</p>
+            </div>
+
+            <!-- Mistakes -->
+            <div class="info-card card-red">
+                <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                <h3>The "Flushable" Myth</h3>
+                <p>So-called "flushable" wipes do not break down like toilet paper. They weave together with fats in the sewers to form massive, pump-destroying "fatbergs".</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ══════════════════════════════════════
+         JAVASCRIPT LOGIC
+    ══════════════════════════════════════ -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* -----------------------------------------------------------
+               3. COMPONENTS LOGIC (Marker/Legend Interaction)
+            ----------------------------------------------------------- */
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function clearActiveComponents() {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+            }
+
+            function activateComponent(id) {
+                clearActiveComponents();
+                const marker = document.querySelector(`.marker[data-target="${id}"]`);
+                const legend = document.getElementById(id);
+                if(marker) marker.classList.add('active');
+                if(legend) legend.classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => activateComponent(marker.dataset.target));
+                // Touch support
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); activateComponent(marker.dataset.target); });
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => activateComponent(item.id));
+                item.addEventListener('touchstart', (e) => { e.preventDefault(); activateComponent(item.id); });
+            });
+
+
+            /* -----------------------------------------------------------
+               4. WORKING PROCESS LOGIC
+            ----------------------------------------------------------- */
+            const stagesData = [
+                {
+                    title: "Preliminary Screening",
+                    desc: "Large inorganic objects like plastics and rags are physically blocked by metal grates.",
+                    color: "var(--color-raw)",
+                    inText: "Raw Sewage", inColor: "var(--color-raw)",
+                    outText: "Screened Water", outColor: "#9a8160",
+                    svgId: "w-stage-1"
+                },
+                {
+                    title: "Primary Sedimentation",
+                    desc: "Water slows down. Heavy organic solids sink to form sludge, while oils float to be skimmed.",
+                    color: "#9a8160",
+                    inText: "Screened Water", inColor: "#9a8160",
+                    outText: "Clarified Water", outColor: "#7a8a66",
+                    svgId: "w-stage-2"
+                },
+                {
+                    title: "Biological Aeration",
+                    desc: "Oxygen is pumped in. Billions of microorganisms consume dissolved organic pollutants as food.",
+                    color: "var(--color-bio)",
+                    inText: "Dissolved Organics", inColor: "#7a8a66",
+                    outText: "Biomass (Floc)", outColor: "var(--color-bio)",
+                    svgId: "w-stage-3"
+                },
+                {
+                    title: "Secondary Clarification",
+                    desc: "The microorganisms clump together and settle to the bottom, separating from the clear water.",
+                    color: "#5b9bd5",
+                    inText: "Mixed Liquor", inColor: "var(--color-bio)",
+                    outText: "Clear Water", outColor: "#5b9bd5",
+                    svgId: "w-stage-4"
+                },
+                {
+                    title: "UV Disinfection",
+                    desc: "Intense ultraviolet light destroys the DNA of remaining pathogens, making water safe for rivers.",
+                    color: "var(--color-uv)",
+                    inText: "Clear Water", inColor: "#5b9bd5",
+                    outText: "Safe Effluent", outColor: "var(--color-clean)",
+                    svgId: "w-stage-5"
+                }
+            ];
+
+            let currentStage = 0;
+            let autoPlayInterval = null;
+            
+            // DOM Elements
+            const wTitle = document.getElementById('w-title');
+            const wDesc = document.getElementById('w-desc');
+            const wTag = document.getElementById('w-tag');
+            const wInText = document.getElementById('w-in-text');
+            const wInColor = document.getElementById('w-in-color');
+            const wOutText = document.getElementById('w-out-text');
+            const wOutColor = document.getElementById('w-out-color');
+            const wDots = document.querySelectorAll('#w-dots .dot');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnPlay = document.getElementById('btn-play');
+            
+            // SVG Elements
+            const svgElements = document.querySelectorAll('.w-element');
+            const svgFlows = document.querySelectorAll('.w-flow');
+
+            function updateStage(index) {
+                currentStage = index;
+                const data = stagesData[index];
+
+                // Update Text
+                wTitle.textContent = data.title;
+                wDesc.textContent = data.desc;
+                wTag.textContent = `Stage ${index + 1} / 5`;
+                wTag.style.color = data.color;
+                
+                // Update I/O
+                wInText.textContent = data.inText;
+                wInColor.style.background = data.inColor;
+                wOutText.textContent = data.outText;
+                wOutColor.style.background = data.outColor;
+
+                // Update Controls
+                btnPrev.disabled = index === 0;
+                btnNext.disabled = index === stagesData.length - 1;
+                
+                wDots.forEach((dot, i) => {
+                    dot.className = i === index ? 'dot active' : 'dot';
+                });
+
+                // Update SVG Visuals (Morphing/Highlighting)
+                svgElements.forEach(el => el.classList.remove('active'));
+                svgFlows.forEach(el => el.classList.remove('active'));
+                
+                const activeGroup = document.getElementById(data.svgId);
+                if(activeGroup) {
+                    activeGroup.classList.add('active');
+                    const flow = activeGroup.querySelector('.w-flow');
+                    if(flow) flow.classList.add('active');
+                }
+            }
+
+            btnPrev.addEventListener('click', () => { if(currentStage > 0) updateStage(currentStage - 1); stopAutoPlay(); });
+            btnNext.addEventListener('click', () => { if(currentStage < stagesData.length - 1) updateStage(currentStage + 1); stopAutoPlay(); });
+            
+            function stopAutoPlay() {
+                if(autoPlayInterval) {
+                    clearInterval(autoPlayInterval);
+                    autoPlayInterval = null;
+                    btnPlay.textContent = "Auto-Play";
+                    btnPlay.style.background = "";
+                }
+            }
+
+            btnPlay.addEventListener('click', () => {
+                if(autoPlayInterval) {
+                    stopAutoPlay();
+                } else {
+                    btnPlay.textContent = "Pause";
+                    btnPlay.style.background = "rgba(10, 132, 255, 0.4)";
+                    if(currentStage === stagesData.length - 1) updateStage(0); // loop back
+                    autoPlayInterval = setInterval(() => {
+                        if(currentStage < stagesData.length - 1) updateStage(currentStage + 1);
+                        else updateStage(0); // loop
+                    }, 3000);
+                }
+            });
+
+            // Init Working State
+            updateStage(0);
+
+
+            /* -----------------------------------------------------------
+               5. CANVAS SIMULATION LOGIC (Aeration Physics)
+            ----------------------------------------------------------- */
+            const canvas = document.getElementById('sim-canvas');
+            const ctx = canvas.getContext('2d', { alpha: false }); // Optimize
+            
+            // Sliders & UI
+            const airSlider = document.getElementById('air-slider');
+            const bioSlider = document.getElementById('bio-slider');
+            const valAir = document.getElementById('val-air');
+            const valBio = document.getElementById('val-bio');
+            const meterPurity = document.getElementById('meter-purity');
+            const valPurityText = document.getElementById('val-purity');
+            const feedbackText = document.getElementById('sim-feedback');
+
+            let width, height;
+            let particles = [];
+            let bubbles = [];
+            let wasteLevel = 100; // 0 to 100
+            
+            // Parameters driven by UI
+            let params = { air: 50, bio: 50 };
+
+            function resizeCanvas() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                width = rect.width;
+                height = rect.height;
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                ctx.scale(dpr, dpr);
+                initParticles(); // Re-seed on resize
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+            
+            class Microbe {
+                constructor() {
+                    this.x = Math.random() * width;
+                    this.y = Math.random() * height;
+                    this.vx = (Math.random() - 0.5) * 1;
+                    this.vy = (Math.random() - 0.5) * 1;
+                    this.size = 4 + Math.random() * 3;
+                    this.energy = 50; // Needs oxygen
+                }
+                update() {
+                    // Movement influenced by aeration (chaos)
+                    let turbulence = params.air / 100;
+                    this.x += this.vx + (Math.random() - 0.5) * turbulence * 2;
+                    this.y += this.vy + (Math.random() - 0.5) * turbulence * 2;
+                    
+                    // Bounce
+                    if(this.x < 0 || this.x > width) this.vx *= -1;
+                    if(this.y < 0 || this.y > height) this.vy *= -1;
+
+                    // Eat waste logic (happens in main loop for interaction)
+                }
+                draw() {
+                    ctx.beginPath();
+                    // Draw little bacteria pill shape
+                    ctx.roundRect(this.x, this.y, this.size*2, this.size, this.size/2);
+                    ctx.fillStyle = `rgba(50, 215, 75, ${this.energy/100 + 0.2})`; // Green, fades if low energy
+                    ctx.fill();
+                }
+            }
+
+            class Bubble {
+                constructor() {
+                    this.x = Math.random() * width;
+                    this.y = height + 10;
+                    this.speed = 1 + Math.random() * 2 + (params.air / 50);
+                    this.size = 1 + Math.random() * 3;
+                    this.wobble = Math.random() * Math.PI * 2;
+                }
+                update() {
+                    this.y -= this.speed;
+                    this.x += Math.sin(this.wobble) * 1;
+                    this.wobble += 0.1;
+                }
+                draw() {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                    ctx.fill();
+                }
+            }
+
+            function initParticles() {
+                particles = [];
+                // Base microbes depends on bio slider
+                let targetMicrobes = Math.floor((params.bio / 100) * (width * height / 4000));
+                for(let i=0; i<targetMicrobes; i++) particles.push(new Microbe());
+            }
+
+            function updateUI() {
+                valAir.textContent = params.air + '%';
+                let bioLabel = params.bio < 33 ? 'Low' : params.bio < 66 ? 'Medium' : 'High';
+                valBio.textContent = bioLabel;
+
+                // Input events (including touch)
+                airSlider.addEventListener('input', (e) => { params.air = e.target.value; });
+                bioSlider.addEventListener('input', (e) => { 
+                    params.bio = e.target.value; 
+                    initParticles(); // Rebalance population
+                });
+            }
+
+            function drawBackground() {
+                // Background color transitions from Brown (dirty) to Blue (clean) based on wasteLevel
+                // 100 = Brown (#b48554), 0 = Blue (#020306 base, overlay blue)
+                let r = Math.floor(2 + (178 * wasteLevel/100));
+                let g = Math.floor(3 + (129 * wasteLevel/100));
+                let b = Math.floor(6 + (78 * wasteLevel/100));
+                
+                if(wasteLevel < 20) {
+                    b = Math.min(255, b + (20-wasteLevel)*4); // Add blue as it gets very clean
+                }
+
+                ctx.fillStyle = `rgb(${r},${g},${b})`;
+                ctx.fillRect(0, 0, width, height);
+
+                // Draw dirt particles visually if dirty
+                if(wasteLevel > 10) {
+                    ctx.fillStyle = 'rgba(150, 100, 50, 0.2)';
+                    let dirtCount = Math.floor(wasteLevel * 2);
+                    for(let i=0; i<dirtCount; i++) {
+                        ctx.fillRect(Math.random()*width, Math.random()*height, 2, 2);
+                    }
+                }
+            }
+
+            function simLoop() {
+                drawBackground();
+                updateUI();
+
+                // 1. Manage Bubbles (Oxygen supply)
+                let oxygenCapacity = params.air; 
+                if(Math.random() < params.air / 100) {
+                    bubbles.push(new Bubble());
+                }
+
+                for(let i=bubbles.length-1; i>=0; i--) {
+                    bubbles[i].update();
+                    bubbles[i].draw();
+                    if(bubbles[i].y < -10) bubbles.splice(i, 1);
+                }
+
+                // 2. Continuous waste input
+                wasteLevel += 0.2; // City keeps flushing
+
+                // 3. Microbes consume waste
+                let activeMicrobes = 0;
+                particles.forEach(p => {
+                    // Microbes need oxygen to eat. High air = high energy.
+                    if(oxygenCapacity > 20) {
+                        p.energy = Math.min(100, p.energy + (params.air/100));
+                    } else {
+                        p.energy -= 1; // Suffocate
+                    }
+
+                    if(p.energy > 30) {
+                        activeMicrobes++;
+                        // Eating process: if waste exists, reduce it based on microbe count
+                        if(wasteLevel > 0) {
+                            wasteLevel -= 0.005; // Consumption rate per microbe
+                        }
+                    }
+                    
+                    p.update();
+                    p.draw();
+                });
+
+                // Bound waste
+                wasteLevel = Math.max(0, Math.min(100, wasteLevel));
+
+                // Update Purity Meter
+                let purity = 100 - wasteLevel;
+                meterPurity.style.width = purity + '%';
+                
+                if(purity > 80) {
+                    meterPurity.style.background = "var(--color-clean)";
+                    valPurityText.textContent = "Excellent";
+                    valPurityText.style.color = "var(--color-clean)";
+                    feedbackText.innerHTML = "Perfect balance. Water is clear for discharge.";
+                    feedbackText.style.borderLeftColor = "var(--color-clean)";
+                } else if(purity > 40) {
+                    meterPurity.style.background = "#FFB800";
+                    valPurityText.textContent = "Fair";
+                    valPurityText.style.color = "#FFB800";
+                    if(params.air < 40) feedbackText.innerHTML = "Microbes are suffocating. <strong>Increase air.</strong>";
+                    else if(params.bio < 40) feedbackText.innerHTML = "Not enough bacteria to handle the load. <strong>Increase microbes.</strong>";
+                    else feedbackText.innerHTML = "Processing... wait for bacteria to consume the waste.";
+                    feedbackText.style.borderLeftColor = "#FFB800";
+                } else {
+                    meterPurity.style.background = "var(--color-raw)";
+                    valPurityText.textContent = "Poor";
+                    valPurityText.style.color = "var(--color-raw)";
+                    feedbackText.innerHTML = "System failing. High pollution output.";
+                    feedbackText.style.borderLeftColor = "var(--color-raw)";
+                }
+
+                requestAnimationFrame(simLoop);
+            }
+
+            // Init Simulation
+            resizeCanvas();
+            simLoop();
+
+        });
+    </script>
+</body>
+</html>

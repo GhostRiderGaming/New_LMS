@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Osmosis & Diffusion: Cellular Transport Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            --bg-color: #050914;
+            --surface-color: rgba(20, 25, 45, 0.6);
+            --surface-color-light: rgba(40, 50, 80, 0.7);
+            --border-color: rgba(100, 150, 255, 0.2);
+            --text-main: #f0f4ff;
+            --text-muted: #8fa3d4;
+            
+            /* Theme Colors */
+            --water-color: #00e5ff;
+            --water-glow: rgba(0, 229, 255, 0.6);
+            --solute-color: #ff3366;
+            --solute-glow: rgba(255, 51, 102, 0.6);
+            --membrane-color: #ffd700;
+            --accent: #7b2cbf;
+            
+            /* Typography */
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --text-xs: clamp(0.75rem, 1vw, 0.875rem);
+            --text-sm: clamp(0.875rem, 1.2vw, 1rem);
+            --text-base: clamp(1rem, 1.5vw, 1.125rem);
+            --text-lg: clamp(1.25rem, 2vw, 1.5rem);
+            --text-xl: clamp(1.5rem, 3vw, 2.5rem);
+            --text-xxl: clamp(2rem, 5vw, 4rem);
+
+            /* Effects */
+            --glass-blur: blur(16px);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* ==========================================================================
+           RESET & BASE
+           ========================================================================== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, #0a1128 0%, #050914 100%);
+        }
+
+        .blob {
+            position: absolute;
+            filter: blur(80px);
+            opacity: 0.4;
+            border-radius: 50%;
+            animation: float 20s infinite alternate cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .blob-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: rgba(0, 229, 255, 0.15); animation-delay: 0s; }
+        .blob-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: rgba(123, 44, 191, 0.15); animation-delay: -5s; }
+        .blob-3 { top: 40%; left: 60%; width: 40vw; height: 40vw; background: rgba(255, 51, 102, 0.1); animation-delay: -10s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(10%, 10%) scale(1.1); }
+        }
+
+        /* Layout Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 4vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 80px);
+        }
+
+        /* Glassmorphism Utilities */
+        .glass {
+            background: var(--surface-color);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            box-shadow: var(--glass-shadow);
+            padding: clamp(20px, 4vw, 40px);
+        }
+
+        @media (max-width: 768px) {
+            .glass {
+                backdrop-filter: blur(8px); /* Reduce blur on mobile for performance */
+                -webkit-backdrop-filter: blur(8px);
+                border-radius: 16px;
+                padding: 16px;
+            }
+        }
+
+        h1, h2, h3 { line-height: 1.2; font-weight: 700; margin-bottom: 0.5em; }
+        h1 { font-size: var(--text-xxl); background: linear-gradient(135deg, #fff, #8fa3d4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--text-xl); color: #fff; }
+        p { font-size: var(--text-base); color: var(--text-muted); margin-bottom: 1rem; }
+
+        /* ==========================================================================
+           SECTION 1: HERO / INTRO
+           ========================================================================== */
+        .hero {
+            text-align: center;
+            min-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .tagline {
+            font-size: var(--text-lg);
+            color: var(--water-color);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 1rem;
+            font-weight: 600;
+        }
+
+        /* ==========================================================================
+           SECTION 2: COMPONENTS (MANDATORY MARKER SYSTEM)
+           ========================================================================== */
+        .components-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        
+        @media (min-width: 1024px) {
+            .components-grid { grid-template-columns: 3fr 2fr; align-items: center; }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: radial-gradient(circle at center, rgba(30,40,70,0.5), transparent);
+            border-radius: 16px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .illustration-container svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            background: rgba(20, 25, 45, 0.8);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: var(--text-xs);
+            color: #fff;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: var(--transition);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+            z-index: 10;
+        }
+
+        .marker::before {
+            content: ''; position: absolute; top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%; border: 1px solid rgba(255,255,255,0.5);
+            animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .marker.active, .marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--water-color);
+            border-color: #fff;
+            color: #000;
+            box-shadow: 0 0 20px var(--water-glow);
+        }
+        
+        .marker.active::before { display: none; }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            list-style: none;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            border: 1px solid transparent;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.2);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-size: var(--text-xs);
+            flex-shrink: 0;
+            transition: var(--transition);
+        }
+
+        .legend-item.active .legend-badge {
+            background: var(--water-color); color: #000;
+        }
+
+        .legend-text { display: flex; flex-direction: column; }
+        .legend-title { font-weight: 600; font-size: var(--text-sm); color: #fff; }
+        .legend-desc { font-size: var(--text-xs); color: var(--text-muted); }
+
+        /* ==========================================================================
+           SECTION 3: WORKING MECHANISM
+           ========================================================================== */
+        .mechanism-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        
+        @media (min-width: 1024px) {
+            .mechanism-container { grid-template-columns: 1fr 1fr; }
+        }
+
+        .mech-visual {
+            background: #02040a;
+            border-radius: 16px;
+            position: relative;
+            overflow: hidden;
+            aspect-ratio: 4/3;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #mech-canvas {
+            width: 100%; height: 100%; display: block;
+        }
+
+        .mech-overlay {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(4px);
+            font-weight: 600; font-size: var(--text-sm); color: #fff;
+        }
+
+        .mech-controls {
+            display: flex; flex-direction: column; gap: 24px; justify-content: center;
+        }
+
+        .stage-indicator {
+            display: flex; gap: 8px; margin-bottom: 16px;
+        }
+
+        .stage-dot {
+            height: 4px; flex: 1; background: rgba(255,255,255,0.2);
+            border-radius: 2px; transition: var(--transition);
+        }
+
+        .stage-dot.active { background: var(--water-color); box-shadow: 0 0 10px var(--water-glow); }
+        .stage-dot.completed { background: rgba(0, 229, 255, 0.4); }
+
+        .stage-info h3 { color: var(--water-color); margin-bottom: 8px; }
+        
+        .io-particles {
+            display: flex; gap: 16px; margin: 16px 0; padding: 12px;
+            background: rgba(0,0,0,0.2); border-radius: 8px;
+        }
+        .io-item { display: flex; align-items: center; gap: 8px; font-size: var(--text-xs); }
+        .io-icon { width: 12px; height: 12px; border-radius: 50%; }
+        .icon-water { background: var(--water-color); box-shadow: 0 0 5px var(--water-color); }
+        .icon-solute { background: var(--solute-color); box-shadow: 0 0 5px var(--solute-color); }
+
+        .control-buttons { display: flex; gap: 12px; margin-top: 24px; }
+        
+        .btn {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            color: #fff; padding: 12px 24px; border-radius: 8px;
+            font-size: var(--text-sm); font-weight: 600; cursor: pointer;
+            transition: var(--transition); display: flex; align-items: center; gap: 8px;
+        }
+        
+        .btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+        .btn:active:not(:disabled) { transform: translateY(0); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: rgba(0, 229, 255, 0.1); border-color: var(--water-color); color: var(--water-color); }
+        .btn-primary:hover:not(:disabled) { background: rgba(0, 229, 255, 0.2); box-shadow: 0 0 15px rgba(0, 229, 255, 0.3); }
+
+        /* ==========================================================================
+           SECTION 4: SIMULATION LAB
+           ========================================================================== */
+        .sim-layout {
+            display: flex; flex-direction: column; gap: 24px;
+        }
+        @media (min-width: 1024px) {
+            .sim-layout { flex-direction: row; }
+        }
+
+        .sim-canvas-wrapper {
+            flex: 1; background: #000; border-radius: 16px; position: relative;
+            min-height: 400px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden;
+        }
+        
+        #sim-canvas { width: 100%; height: 100%; display: block; }
+
+        .sim-overlay-labels {
+            position: absolute; top: 0; left: 0; width: 100%; padding: 16px;
+            display: flex; justify-content: space-between; pointer-events: none;
+        }
+        .sim-label { font-size: var(--text-sm); font-weight: bold; background: rgba(0,0,0,0.5); padding: 4px 12px; border-radius: 12px; backdrop-filter: blur(4px); }
+
+        .sim-panel {
+            width: 100%; background: rgba(0,0,0,0.2); border-radius: 16px; padding: 24px;
+            display: flex; flex-direction: column; gap: 20px;
+        }
+        @media (min-width: 1024px) {
+            .sim-panel { width: 350px; flex-shrink: 0; }
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-header { display: flex; justify-content: space-between; font-size: var(--text-sm); }
+        
+        /* Premium Range Slider */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; margin: 10px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer;
+            background: rgba(255,255,255,0.1); border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px; width: 20px; border-radius: 50%;
+            background: var(--water-color); cursor: pointer;
+            -webkit-appearance: none; margin-top: -7px;
+            box-shadow: 0 0 10px var(--water-glow); transition: var(--transition);
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        
+        .solute-track::-webkit-slider-thumb { background: var(--solute-color); box-shadow: 0 0 10px var(--solute-glow); }
+
+        .mode-toggle {
+            display: flex; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; margin-bottom: 10px;
+        }
+        .mode-btn {
+            flex: 1; padding: 10px; text-align: center; cursor: pointer; font-size: var(--text-sm);
+            background: transparent; border: none; color: var(--text-muted); transition: var(--transition);
+        }
+        .mode-btn.active {
+            background: rgba(255,255,255,0.1); color: #fff; font-weight: bold;
+        }
+
+        /* ==========================================================================
+           SECTION 5: APPLICATIONS (TONICITY)
+           ========================================================================== */
+        .tonicity-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px;
+        }
+
+        .tonicity-card {
+            background: rgba(0,0,0,0.2); border-radius: 16px; padding: 24px; text-align: center;
+            border: 1px solid rgba(255,255,255,0.05); transition: var(--transition);
+            display: flex; flex-direction: column; align-items: center; gap: 16px;
+        }
+        .tonicity-card:hover { background: rgba(0,0,0,0.4); border-color: rgba(255,255,255,0.1); transform: translateY(-5px); }
+
+        .cell-visual {
+            width: 120px; height: 120px; position: relative;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        /* CSS Drawn Red Blood Cell */
+        .rbc {
+            width: 80px; height: 80px; border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ff4d4d, #cc0000);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 5px 15px rgba(0,0,0,0.3);
+            transition: all 1s ease-in-out;
+            position: relative;
+        }
+        /* Biconcave indent */
+        .rbc::after {
+            content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 40px; height: 40px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(150,0,0,0.6), transparent);
+            filter: blur(2px);
+        }
+
+        /* States */
+        .hypertonic-cell .rbc {
+            width: 60px; height: 60px;
+            border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; /* Shrivel */
+            background: radial-gradient(circle at 30% 30%, #b30000, #660000);
+            animation: shrivel 4s infinite alternate ease-in-out;
+        }
+        .hypotonic-cell .rbc {
+            width: 100px; height: 100px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 30% 30%, #ff6666, #ff1a1a);
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.1), 0 0 30px rgba(255, 102, 102, 0.6);
+        }
+        .hypotonic-cell .rbc::after { width: 20px; height: 20px; opacity: 0.3; } /* Less indent when swollen */
+
+        @keyframes shrivel {
+            0% { border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; transform: rotate(0deg); }
+            100% { border-radius: 60% 40% 30% 70% / 50% 60% 40% 50%; transform: rotate(10deg); }
+        }
+
+        /* Arrows indicating water flow */
+        .water-arrow {
+            position: absolute; width: 2px; height: 20px; background: var(--water-color);
+            opacity: 0;
+        }
+        .water-arrow::after {
+            content: ''; position: absolute; bottom: -2px; left: -4px;
+            border-width: 5px 5px 0; border-style: solid; border-color: var(--water-color) transparent transparent transparent;
+        }
+        
+        /* Hypertonic: Water leaving */
+        .hypertonic-cell .arrow-1 { top: 10px; left: 50%; transform: rotate(180deg); animation: flowOut 1.5s infinite; }
+        .hypertonic-cell .arrow-2 { bottom: 10px; left: 20px; transform: rotate(45deg); animation: flowOut 1.5s infinite 0.5s; }
+        
+        /* Hypotonic: Water entering */
+        .hypotonic-cell .arrow-1 { top: -10px; left: 50%; animation: flowIn 1.5s infinite; }
+        .hypotonic-cell .arrow-2 { bottom: -10px; right: 20px; transform: rotate(-135deg); animation: flowIn 1.5s infinite 0.5s; }
+        
+        /* Isotonic: Both */
+        .isotonic-cell .arrow-1 { top: 0; left: 30px; animation: flowIn 2s infinite; }
+        .isotonic-cell .arrow-2 { bottom: 0; right: 30px; transform: rotate(180deg); animation: flowOut 2s infinite 1s; }
+
+        @keyframes flowOut { 0% { opacity:0; transform: translateY(-10px) rotate(var(--rot, 0deg)); } 50% { opacity:1; } 100% { opacity:0; transform: translateY(15px) rotate(var(--rot, 0deg)); } }
+        @keyframes flowIn { 0% { opacity:0; transform: translateY(15px) rotate(var(--rot, 0deg)); } 50% { opacity:1; } 100% { opacity:0; transform: translateY(-10px) rotate(var(--rot, 0deg)); } }
+
+        .tonicity-title { color: #fff; font-size: var(--text-base); margin-bottom: 4px; }
+        .tonicity-desc { font-size: var(--text-xs); color: var(--text-muted); }
+
+
+        /* ==========================================================================
+           SECTION 6: FACTS & SUMMARY
+           ========================================================================== */
+        .info-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;
+        }
+        
+        .info-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.2) 100%);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 24px; border-radius: 16px;
+        }
+        
+        .info-card h3 { display: flex; align-items: center; gap: 10px; font-size: var(--text-base); color: #fff; margin-bottom: 12px; }
+        .icon-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; background: rgba(255,255,255,0.1); }
+        .fact-icon { color: #ffd700; background: rgba(255, 215, 0, 0.1); }
+        .mistake-icon { color: #ff3366; background: rgba(255, 51, 102, 0.1); }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div class="container">
+        
+        <!-- INTRO -->
+        <header class="hero">
+            <div class="tagline">Cellular Biology</div>
+            <h1>Osmosis & Diffusion</h1>
+            <p style="max-width: 600px; margin: 0 auto; font-size: var(--text-lg);">
+                Explore how life maintains balance. Visualize the invisible dance of molecules moving across the semi-permeable cell membrane.
+            </p>
+        </header>
+
+        <!-- COMPONENTS (MANDATORY MARKER SYSTEM) -->
+        <section class="glass" id="components">
+            <h2>The Gateway: Cell Membrane</h2>
+            <p>Before understanding movement, we must understand the barrier. The membrane is a selectively permeable phospholipid bilayer.</p>
+            
+            <div class="components-grid">
+                
+                <!-- Illustration Area -->
+                <div class="illustration-container">
+                    <!-- SVG Phospholipid Bilayer Illustration -->
+                    <svg viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Linear Gradients for 3D effect -->
+                            <linearGradient id="headGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#4db8ff" />
+                                <stop offset="100%" stop-color="#0066cc" />
+                            </linearGradient>
+                            <linearGradient id="tailGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="rgba(255,215,0,0.8)" />
+                                <stop offset="100%" stop-color="rgba(255,140,0,0.2)" />
+                            </linearGradient>
+                            <linearGradient id="proteinGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#b366ff" />
+                                <stop offset="50%" stop-color="#8c1aff" />
+                                <stop offset="100%" stop-color="#b366ff" />
+                            </linearGradient>
+                            <!-- Drop Shadow for depth -->
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="2" dy="5" stdDeviation="4" flood-color="#000" flood-opacity="0.5"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Drawing the Bilayer (Procedurally generated visual feel via repeated SVG elements) -->
+                        <g id="membrane-group" filter="url(#shadow)">
+                            <!-- Top Layer Heads & Tails -->
+                            <!-- Created multiple using JS below for cleaner code, but putting a few static ones for fallback/structure -->
+                            <g id="lipid-top" transform="translate(0, 150)">
+                                <!-- This will be populated by JS to avoid massive HTML -->
+                            </g>
+                            
+                            <!-- Bottom Layer Heads & Tails -->
+                            <g id="lipid-bottom" transform="translate(0, 350) scale(1, -1)">
+                                <!-- This will be populated by JS -->
+                            </g>
+
+                            <!-- Channel Protein -->
+                            <g id="svg-channel" transform="translate(400, 250)">
+                                <path d="M-40,-120 C-60,-120 -60,-80 -40,-60 L-30,-20 C-20,0 -20,0 -30,20 L-40,60 C-60,80 -60,120 -40,120 L-10,120 C-10,60 -10,-60 -10,-120 Z" fill="url(#proteinGrad)" />
+                                <path d="M40,-120 C60,-120 60,-80 40,-60 L30,-20 C20,0 20,0 30,20 L40,60 C60,80 60,120 40,120 L10,120 C10,60 10,-60 10,-120 Z" fill="url(#proteinGrad)" />
+                                <!-- Inner glow/channel path -->
+                                <rect x="-10" y="-120" width="20" height="240" fill="rgba(0, 229, 255, 0.2)" />
+                                <circle cx="0" cy="0" r="8" fill="#00e5ff" filter="blur(2px)"/>
+                            </g>
+
+                            <!-- Peripheral Protein -->
+                            <ellipse cx="650" cy="380" rx="40" ry="25" fill="#ff66b3" filter="url(#shadow)" id="svg-peripheral"/>
+                            
+                            <!-- Cholesterol -->
+                            <rect x="250" y="200" width="8" height="40" rx="4" fill="#ffd700" id="svg-cholesterol"/>
+                        </g>
+
+                        <!-- Environment Labels -->
+                        <text x="400" y="50" fill="rgba(255,255,255,0.3)" font-size="24" text-anchor="middle" font-family="sans-serif" font-weight="bold">EXTRACELLULAR FLUID</text>
+                        <text x="400" y="470" fill="rgba(255,255,255,0.3)" font-size="24" text-anchor="middle" font-family="sans-serif" font-weight="bold">CYTOPLASM (INTRACELLULAR)</text>
+                    </svg>
+
+                    <!-- HTML Markers over SVG -->
+                    <div class="marker" data-target="lipid-head" style="top: 25%; left: 20%;">1</div>
+                    <div class="marker" data-target="lipid-tail" style="top: 40%; left: 20%;">2</div>
+                    <div class="marker" data-target="channel-protein" style="top: 50%; left: 50%;">3</div>
+                    <div class="marker" data-target="peripheral-protein" style="top: 75%; left: 81%;">4</div>
+                    <div class="marker" data-target="cholesterol" style="top: 45%; left: 31%;">5</div>
+                </div>
+
+                <!-- Legend List (No Overlap) -->
+                <ul class="legend-list" id="component-legend">
+                    <li class="legend-item" data-id="lipid-head">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Hydrophilic Head</span>
+                            <span class="legend-desc">Water-loving phosphate group faces outward.</span>
+                        </div>
+                    </li>
+                    <li class="legend-item" data-id="lipid-tail">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Hydrophobic Tails</span>
+                            <span class="legend-desc">Water-fearing fatty acids create the barrier core.</span>
+                        </div>
+                    </li>
+                    <li class="legend-item" data-id="channel-protein">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Channel Protein</span>
+                            <span class="legend-desc">Tunnel allowing specific molecules (like water) to pass.</span>
+                        </div>
+                    </li>
+                    <li class="legend-item" data-id="peripheral-protein">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Peripheral Protein</span>
+                            <span class="legend-desc">Sits on the surface for signaling and structure.</span>
+                        </div>
+                    </li>
+                    <li class="legend-item" data-id="cholesterol">
+                        <div class="legend-badge">5</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Cholesterol</span>
+                            <span class="legend-desc">Maintains membrane fluidity at different temperatures.</span>
+                        </div>
+                    </li>
+                </ul>
+
+            </div>
+        </section>
+
+        <!-- WORKING MECHANISM (MANDATORY DEDICATED SECTION) -->
+        <section class="glass" id="working">
+            <h2>Mechanism: How Diffusion Works</h2>
+            <p>Diffusion is a continuous flow process driven by kinetic energy. Let's break down the sequence of simple diffusion across a membrane.</p>
+
+            <div class="mechanism-container">
+                <!-- Visual Left -->
+                <div class="mech-visual">
+                    <div class="mech-overlay" id="mech-stage-title">1. Concentration Gradient</div>
+                    <canvas id="mech-canvas"></canvas>
+                </div>
+
+                <!-- Controls & Info Right -->
+                <div class="mech-controls">
+                    
+                    <div class="stage-indicator" id="mech-progress">
+                        <div class="stage-dot active"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                    </div>
+
+                    <div class="stage-info">
+                        <h3 id="mech-heading">Initial State</h3>
+                        <p id="mech-desc">Solute particles are highly concentrated outside the cell. They possess random thermal motion but are constrained.</p>
+                        
+                        <div class="io-particles">
+                            <div class="io-item"><div class="io-icon icon-solute"></div> <span id="mech-input">High Solute (Outside)</span></div>
+                            <span style="color: rgba(255,255,255,0.3)">→</span>
+                            <div class="io-item"><div class="io-icon" style="background: transparent; border: 1px dashed rgba(255,255,255,0.5);"></div> <span id="mech-output">Low Solute (Inside)</span></div>
+                        </div>
+                    </div>
+
+                    <div class="control-buttons">
+                        <button class="btn" id="mech-prev" disabled>← Prev Stage</button>
+                        <button class="btn btn-primary" id="mech-auto">Auto-Play Cycle</button>
+                        <button class="btn" id="mech-next">Next Stage →</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION -->
+        <section class="glass" id="simulation">
+            <h2>Interactive Laboratory</h2>
+            <p>Experiment with variables to see how they affect the rate of diffusion and direction of osmosis.</p>
+            
+            <div class="sim-layout">
+                <!-- Canvas Area -->
+                <div class="sim-canvas-wrapper">
+                    <div class="sim-overlay-labels">
+                        <div class="sim-label">Outside Cell</div>
+                        <div class="sim-label">Inside Cell</div>
+                    </div>
+                    <canvas id="sim-canvas"></canvas>
+                </div>
+
+                <!-- Control Panel -->
+                <div class="sim-panel">
+                    
+                    <div class="mode-toggle">
+                        <button class="mode-btn active" id="mode-diffusion">Diffusion<br><small>(Solute moves)</small></button>
+                        <button class="mode-btn" id="mode-osmosis">Osmosis<br><small>(Water moves)</small></button>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Solute Outside (L)</span>
+                            <span id="val-conc-left">High</span>
+                        </div>
+                        <input type="range" class="solute-track" id="slider-conc-left" min="0" max="100" value="80">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Solute Inside (R)</span>
+                            <span id="val-conc-right">Low</span>
+                        </div>
+                        <input type="range" class="solute-track" id="slider-conc-right" min="0" max="100" value="20">
+                    </div>
+
+                    <div class="control-group" style="margin-top: 10px;">
+                        <div class="control-header">
+                            <span>Temperature (Kinetic Energy)</span>
+                            <span id="val-temp">Normal</span>
+                        </div>
+                        <input type="range" id="slider-temp" min="1" max="10" value="3" style="--water-color: #ff9900;">
+                    </div>
+
+                    <div style="margin-top: auto; display: flex; gap: 10px;">
+                        <button class="btn" id="btn-reset" style="flex: 1; justify-content: center;">Reset Setup</button>
+                        <button class="btn btn-primary" id="btn-sim-play" style="flex: 2; justify-content: center;">▶ Start Reaction</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- APPLICATIONS -->
+        <section class="glass" id="applications">
+            <h2>Real-world Impact: Tonicity in Blood Cells</h2>
+            <p>Osmosis isn't just theory. It dictates whether our red blood cells survive or die based on the fluid surrounding them (tonicity).</p>
+            
+            <div class="tonicity-grid">
+                <!-- Hypertonic -->
+                <div class="tonicity-card hypertonic-cell">
+                    <div class="cell-visual">
+                        <div class="rbc"></div>
+                        <div class="water-arrow arrow-1" style="--rot: 180deg;"></div>
+                        <div class="water-arrow arrow-2" style="--rot: 45deg;"></div>
+                    </div>
+                    <div>
+                        <div class="tonicity-title">Hypertonic Solution</div>
+                        <div class="tonicity-desc">Outside fluid has MORE solute than cell.<br><strong>Result:</strong> Water leaves. Cell shrivels (Crenation).</div>
+                    </div>
+                </div>
+
+                <!-- Isotonic -->
+                <div class="tonicity-card isotonic-cell">
+                    <div class="cell-visual">
+                        <div class="rbc"></div>
+                        <div class="water-arrow arrow-1"></div>
+                        <div class="water-arrow arrow-2" style="--rot: 180deg;"></div>
+                    </div>
+                    <div>
+                        <div class="tonicity-title">Isotonic Solution</div>
+                        <div class="tonicity-desc">Equal solute concentration.<br><strong>Result:</strong> Water flows equally. Normal shape.</div>
+                    </div>
+                </div>
+
+                <!-- Hypotonic -->
+                <div class="tonicity-card hypotonic-cell">
+                    <div class="cell-visual">
+                        <div class="rbc"></div>
+                        <div class="water-arrow arrow-1"></div>
+                        <div class="water-arrow arrow-2" style="--rot: -135deg;"></div>
+                    </div>
+                    <div>
+                        <div class="tonicity-title">Hypotonic Solution</div>
+                        <div class="tonicity-desc">Outside fluid has LESS solute than cell.<br><strong>Result:</strong> Water rushes in. Cell swells and may burst (Lysis).</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FACTS & REVISION -->
+        <section class="glass" id="facts">
+            <h2>Key Takeaways</h2>
+            <div class="info-grid">
+                <div class="info-card">
+                    <h3><div class="icon-circle fact-icon">!</div> Core Principle</h3>
+                    <p>Nature hates a vacuum, and it also hates a gradient. Both diffusion and osmosis are passive attempts by nature to achieve <strong>equilibrium</strong> (balance) without spending energy (ATP).</p>
+                </div>
+                <div class="info-card">
+                    <h3><div class="icon-circle mistake-icon">✕</div> Common Mistake</h3>
+                    <p>People often say "Water moves from low to high concentration in osmosis." This is confusing. Water moves from <strong>high WATER concentration</strong> (low solute) to <strong>low WATER concentration</strong> (high solute).</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 1. Populate Membrane SVG dynamically for clean code ---
+            const topGroup = document.getElementById('lipid-top');
+            const bottomGroup = document.getElementById('lipid-bottom');
+            
+            function createLipid(x) {
+                const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                g.setAttribute("transform", `translate(${x}, 0)`);
+                
+                // Tails
+                const tail1 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                tail1.setAttribute("d", "M-5,15 Q-10,40 -2,65 T-5,100");
+                tail1.setAttribute("fill", "none");
+                tail1.setAttribute("stroke", "url(#tailGrad)");
+                tail1.setAttribute("stroke-width", "4");
+                
+                const tail2 = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                tail2.setAttribute("d", "M5,15 Q10,30 2,55 T8,100");
+                tail2.setAttribute("fill", "none");
+                tail2.setAttribute("stroke", "url(#tailGrad)");
+                tail2.setAttribute("stroke-width", "4");
+                
+                // Head
+                const head = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                head.setAttribute("cx", "0");
+                head.setAttribute("cy", "0");
+                head.setAttribute("r", "15");
+                head.setAttribute("fill", "url(#headGrad)");
+                
+                g.appendChild(tail1); g.appendChild(tail2); g.appendChild(head);
+                return g;
+            }
+
+            // Generate row of lipids, skipping areas for proteins
+            for(let i = 20; i < 800; i += 32) {
+                if (i > 360 && i < 440) continue; // Skip for channel protein
+                topGroup.appendChild(createLipid(i));
+                bottomGroup.appendChild(createLipid(i));
+            }
+
+            // --- 2. Marker & Legend Interaction Logic ---
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function clearActiveComponents() {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+            }
+
+            function activateComponent(id) {
+                clearActiveComponents();
+                const marker = document.querySelector(`.marker[data-target="${id}"]`);
+                const legend = document.querySelector(`.legend-item[data-id="${id}"]`);
+                if(marker) marker.classList.add('active');
+                if(legend) legend.classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => activateComponent(marker.dataset.target));
+                marker.addEventListener('click', () => activateComponent(marker.dataset.target));
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => activateComponent(item.dataset.id));
+                item.addEventListener('click', () => activateComponent(item.dataset.id));
+            });
+            
+            document.querySelector('.components-grid').addEventListener('mouseleave', clearActiveComponents);
+
+            // --- 3. Base Particle Engine for Canvas ---
+            class Particle {
+                constructor(x, y, type, radius, ctx, isMechanism = false) {
+                    this.x = x; this.y = y;
+                    this.type = type; // 'water' or 'solute'
+                    this.radius = radius;
+                    this.ctx = ctx;
+                    this.isMech = isMechanism;
+                    
+                    // Random velocity
+                    const speed = isMechanism ? 1 : 2;
+                    const angle = Math.random() * Math.PI * 2;
+                    this.vx = Math.cos(angle) * speed;
+                    this.vy = Math.sin(angle) * speed;
+                    this.baseSpeed = speed;
+                }
+
+                draw() {
+                    this.ctx.beginPath();
+                    this.ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    
+                    if (this.type === 'water') {
+                        this.ctx.fillStyle = '#00e5ff';
+                        if(!this.isMech) {
+                            this.ctx.shadowBlur = 10;
+                            this.ctx.shadowColor = '#00e5ff';
+                        }
+                    } else {
+                        this.ctx.fillStyle = '#ff3366';
+                        if(!this.isMech) {
+                            this.ctx.shadowBlur = 15;
+                            this.ctx.shadowColor = '#ff3366';
+                        }
+                    }
+                    this.ctx.fill();
+                    this.ctx.shadowBlur = 0; // Reset
+                }
+
+                update(width, height, tempMult = 1) {
+                    this.x += this.vx * tempMult;
+                    this.y += this.vy * tempMult;
+
+                    // Wall collisions
+                    if (this.x - this.radius < 0) { this.x = this.radius; this.vx *= -1; }
+                    if (this.x + this.radius > width) { this.x = width - this.radius; this.vx *= -1; }
+                    if (this.y - this.radius < 0) { this.y = this.radius; this.vy *= -1; }
+                    if (this.y + this.radius > height) { this.y = height - this.radius; this.vy *= -1; }
+                }
+            }
+
+
+            // --- 4. Mechanism Step-by-Step Animation ---
+            const mechState = {
+                stage: 0,
+                isPlaying: false,
+                particles: [],
+                membraneX: 0,
+                animId: null
+            };
+
+            const mCanvas = document.getElementById('mech-canvas');
+            const mCtx = mCanvas.getContext('2d');
+            
+            const stagesData = [
+                {
+                    title: "1. Concentration Gradient",
+                    head: "Initial State",
+                    desc: "Solute particles are highly concentrated outside the cell. They possess random thermal motion but are constrained by the membrane.",
+                    in: "High Solute (Outside)", out: "Empty (Inside)",
+                    setup: (w, h) => {
+                        mechState.particles = [];
+                        // Spawn 50 particles on left side only
+                        for(let i=0; i<50; i++) {
+                            mechState.particles.push(new Particle(
+                                Math.random() * (w/2 - 20) + 10,
+                                Math.random() * (h - 20) + 10,
+                                'solute', 4, mCtx, true
+                            ));
+                            // Force them to be stationary or moving very slowly initially
+                            mechState.particles[i].vx *= 0.2;
+                            mechState.particles[i].vy *= 0.2;
+                        }
+                    }
+                },
+                {
+                    title: "2. Random Motion",
+                    head: "Kinetic Energy",
+                    desc: "Molecules naturally move constantly in random directions. They bump into each other, spreading out to fill available space.",
+                    in: "Thermal Energy", out: "Increased Movement",
+                    setup: (w, h) => {
+                        // Increase speed but still constrain to left
+                        mechState.particles.forEach(p => {
+                            p.vx = (Math.random() > 0.5 ? 1 : -1) * 2;
+                            p.vy = (Math.random() > 0.5 ? 1 : -1) * 2;
+                        });
+                    }
+                },
+                {
+                    title: "3. Membrane Crossing",
+                    head: "Net Movement",
+                    desc: "Because there are more particles on the left, statistically more will bump into membrane gaps and cross to the right.",
+                    in: "Gradient Force", out: "Particles Crossing",
+                    setup: () => {} // Handled in update loop (open membrane)
+                },
+                {
+                    title: "4. Dynamic Equilibrium",
+                    head: "Balance Reached",
+                    desc: "Concentration is equal on both sides. Particles still move back and forth, but the NET change is zero.",
+                    in: "Equal Particles", out: "Zero Net Flow",
+                    setup: (w,h) => {
+                        // Force distribute evenly if skipped to end
+                        let leftCount = 0;
+                        mechState.particles.forEach(p => {
+                            if(leftCount < 25) { p.x = Math.random() * (w/2 - 20) + 10; leftCount++; }
+                            else { p.x = w/2 + 20 + Math.random() * (w/2 - 40); }
+                            p.vx = (Math.random() > 0.5 ? 1 : -1) * 2;
+                        });
+                    }
+                }
+            ];
+
+            function resizeMechCanvas() {
+                const rect = mCanvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                mCanvas.width = rect.width * dpr;
+                mCanvas.height = rect.height * dpr;
+                mCtx.scale(dpr, dpr);
+                mCanvas.style.width = `${rect.width}px`;
+                mCanvas.style.height = `${rect.height}px`;
+                mechState.membraneX = rect.width / 2;
+                if(mechState.particles.length === 0) setMechStage(0);
+            }
+
+            function updateMechUI() {
+                const d = stagesData[mechState.stage];
+                document.getElementById('mech-stage-title').innerText = d.title;
+                document.getElementById('mech-heading').innerText = d.head;
+                document.getElementById('mech-desc').innerText = d.desc;
+                document.getElementById('mech-input').innerText = d.in;
+                document.getElementById('mech-output').innerText = d.out;
+
+                const dots = document.querySelectorAll('.stage-dot');
+                dots.forEach((dot, idx) => {
+                    dot.className = 'stage-dot';
+                    if(idx === mechState.stage) dot.classList.add('active');
+                    if(idx < mechState.stage) dot.classList.add('completed');
+                });
+
+                document.getElementById('mech-prev').disabled = mechState.stage === 0;
+                document.getElementById('mech-next').disabled = mechState.stage === stagesData.length - 1;
+            }
+
+            function setMechStage(index) {
+                mechState.stage = index;
+                const rect = mCanvas.parentElement.getBoundingClientRect();
+                stagesData[index].setup(rect.width, rect.height);
+                updateMechUI();
+            }
+
+            function drawMembrane(ctx, x, height, gapSize, opacity = 1) {
+                ctx.save();
+                ctx.strokeStyle = `rgba(255, 215, 0, ${opacity})`;
+                ctx.lineWidth = 4;
+                ctx.setLineDash([20, gapSize]);
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, height);
+                ctx.stroke();
+                
+                // Glow
+                ctx.strokeStyle = `rgba(255, 215, 0, ${opacity * 0.3})`;
+                ctx.lineWidth = 10;
+                ctx.stroke();
+                ctx.restore();
+            }
+
+            function animateMechanism() {
+                const rect = mCanvas.parentElement.getBoundingClientRect();
+                const w = rect.width; const h = rect.height;
+                mCtx.clearRect(0, 0, w, h);
+
+                // Determine membrane state based on stage
+                let gapSize = 5; // solid
+                let membraneOpacity = 1;
+                
+                if(mechState.stage === 0 || mechState.stage === 1) {
+                    // Impermeable
+                    mechState.particles.forEach(p => {
+                        if (p.x + p.radius > mechState.membraneX - 5 && p.vx > 0) { p.x = mechState.membraneX - 5 - p.radius; p.vx *= -1; }
+                    });
+                } else {
+                    // Permeable (Stages 2 & 3)
+                    gapSize = 30; // dashed
+                }
+
+                drawMembrane(mCtx, mechState.membraneX, h, gapSize, membraneOpacity);
+
+                mechState.particles.forEach(p => {
+                    p.update(w, h);
+                    
+                    // Simple logic: if permeable, ignore membrane collision.
+                    // Visual trick: draw them
+                    p.draw();
+                });
+
+                mechState.animId = requestAnimationFrame(animateMechanism);
+            }
+
+            // Controls
+            document.getElementById('mech-prev').addEventListener('click', () => {
+                if(mechState.stage > 0) setMechStage(mechState.stage - 1);
+            });
+            document.getElementById('mech-next').addEventListener('click', () => {
+                if(mechState.stage < stagesData.length - 1) setMechStage(mechState.stage + 1);
+            });
+            
+            let autoInterval;
+            document.getElementById('mech-auto').addEventListener('click', (e) => {
+                const btn = e.target;
+                if(mechState.isPlaying) {
+                    clearInterval(autoInterval);
+                    btn.innerText = "Auto-Play Cycle";
+                    btn.classList.remove('active');
+                } else {
+                    btn.innerText = "Stop Auto-Play";
+                    btn.classList.add('active');
+                    if(mechState.stage === 3) setMechStage(0);
+                    autoInterval = setInterval(() => {
+                        if(mechState.stage < 3) setMechStage(mechState.stage + 1);
+                        else setMechStage(0);
+                    }, 4000);
+                }
+                mechState.isPlaying = !mechState.isPlaying;
+            });
+
+            // Init Mechanism
+            resizeMechCanvas();
+            setMechStage(0);
+            animateMechanism();
+
+
+            // --- 5. Main Interactive Simulation ---
+            const simState = {
+                mode: 'diffusion', // 'diffusion' or 'osmosis'
+                isRunning: false,
+                particles: [],
+                tempMult: 1,
+                membraneX: 0,
+                animId: null
+            };
+
+            const sCanvas = document.getElementById('sim-canvas');
+            const sCtx = sCanvas.getContext('2d');
+            
+            // UI Elements
+            const sConcL = document.getElementById('slider-conc-left');
+            const sConcR = document.getElementById('slider-conc-right');
+            const sTemp = document.getElementById('slider-temp');
+            const btnPlay = document.getElementById('btn-sim-play');
+            const btnReset = document.getElementById('btn-sim-reset');
+            const modeDiff = document.getElementById('mode-diffusion');
+            const modeOsm = document.getElementById('mode-osmosis');
+
+            function resizeSimCanvas() {
+                const rect = sCanvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                sCanvas.width = rect.width * dpr;
+                sCanvas.height = rect.height * dpr;
+                sCtx.scale(dpr, dpr);
+                sCanvas.style.width = `${rect.width}px`;
+                sCanvas.style.height = `${rect.height}px`;
+                simState.membraneX = rect.width / 2;
+                if(!simState.isRunning && simState.particles.length === 0) initSimulation();
+            }
+
+            function initSimulation() {
+                const rect = sCanvas.parentElement.getBoundingClientRect();
+                const w = rect.width; const h = rect.height;
+                simState.particles = [];
+                simState.tempMult = parseInt(sTemp.value) * 0.5;
+
+                const leftConc = parseInt(sConcL.value);
+                const rightConc = parseInt(sConcR.value);
+
+                // Mapping concentration to particle counts
+                // If Osmosis mode: Left/Right dictates solute. Water fills the inverse.
+                
+                let numSoluteL = leftConc;
+                let numSoluteR = rightConc;
+                let numWaterL = simState.mode === 'osmosis' ? 100 - leftConc : 0;
+                let numWaterR = simState.mode === 'osmosis' ? 100 - rightConc : 0;
+
+                // Spawn Left
+                for(let i=0; i<numSoluteL; i++) simState.particles.push(new Particle(Math.random()*(w/2 - 20)+10, Math.random()*(h - 20)+10, 'solute', 6, sCtx));
+                for(let i=0; i<numWaterL; i++) simState.particles.push(new Particle(Math.random()*(w/2 - 20)+10, Math.random()*(h - 20)+10, 'water', 3, sCtx));
+                
+                // Spawn Right
+                for(let i=0; i<numSoluteR; i++) simState.particles.push(new Particle(w/2 + 20 + Math.random()*(w/2 - 40), Math.random()*(h - 20)+10, 'solute', 6, sCtx));
+                for(let i=0; i<numWaterR; i++) simState.particles.push(new Particle(w/2 + 20 + Math.random()*(w/2 - 40), Math.random()*(h - 20)+10, 'water', 3, sCtx));
+                
+                drawSimStatic();
+            }
+
+            function drawSimStatic() {
+                if(simState.isRunning) return;
+                const rect = sCanvas.parentElement.getBoundingClientRect();
+                sCtx.clearRect(0, 0, rect.width, rect.height);
+                drawMembrane(sCtx, simState.membraneX, rect.height, 5, 0.5); // Closed initially
+                simState.particles.forEach(p => p.draw());
+            }
+
+            function animateSimulation() {
+                if(!simState.isRunning) return;
+                const rect = sCanvas.parentElement.getBoundingClientRect();
+                const w = rect.width; const h = rect.height;
+                sCtx.clearRect(0, 0, w, h);
+
+                // Membrane Logic
+                // Diffusion: Solute can cross
+                // Osmosis: Only Water can cross. Solute bounces.
+                const gapSize = 25;
+                drawMembrane(sCtx, simState.membraneX, h, gapSize, 1);
+
+                simState.particles.forEach(p => {
+                    p.update(w, h, simState.tempMult);
+                    
+                    // Membrane Collision Logic
+                    if (p.x > simState.membraneX - p.radius && p.x < simState.membraneX + p.radius) {
+                        let canPass = false;
+                        if(simState.mode === 'diffusion') canPass = true; // Everything passes
+                        if(simState.mode === 'osmosis' && p.type === 'water') canPass = true; // Only water
+                        
+                        if(!canPass) {
+                            // Bounce back
+                            if(p.vx > 0) p.x = simState.membraneX - p.radius - 1;
+                            else p.x = simState.membraneX + p.radius + 1;
+                            p.vx *= -1;
+                        }
+                    }
+                    
+                    p.draw();
+                });
+
+                simState.animId = requestAnimationFrame(animateSimulation);
+            }
+
+            // Sim UI Events
+            sConcL.addEventListener('input', (e) => { document.getElementById('val-conc-left').innerText = e.target.value + '%'; if(!simState.isRunning) initSimulation(); });
+            sConcR.addEventListener('input', (e) => { document.getElementById('val-conc-right').innerText = e.target.value + '%'; if(!simState.isRunning) initSimulation(); });
+            sTemp.addEventListener('input', (e) => { 
+                let v = parseInt(e.target.value);
+                document.getElementById('val-temp').innerText = v < 4 ? "Low" : (v < 7 ? "Normal" : "High");
+                simState.tempMult = v * 0.5; 
+            });
+
+            modeDiff.addEventListener('click', () => {
+                simState.mode = 'diffusion';
+                modeDiff.classList.add('active'); modeOsm.classList.remove('active');
+                simState.isRunning = false; btnPlay.innerText = "▶ Start Reaction";
+                initSimulation();
+            });
+            
+            modeOsm.addEventListener('click', () => {
+                simState.mode = 'osmosis';
+                modeOsm.classList.add('active'); modeDiff.classList.remove('active');
+                simState.isRunning = false; btnPlay.innerText = "▶ Start Reaction";
+                initSimulation();
+            });
+
+            document.getElementById('btn-reset').addEventListener('click', () => {
+                simState.isRunning = false;
+                btnPlay.innerText = "▶ Start Reaction";
+                cancelAnimationFrame(simState.animId);
+                initSimulation();
+            });
+
+            btnPlay.addEventListener('click', () => {
+                if(simState.isRunning) {
+                    simState.isRunning = false;
+                    btnPlay.innerText = "▶ Resume";
+                } else {
+                    simState.isRunning = true;
+                    btnPlay.innerText = "❚❚ Pause";
+                    animateSimulation();
+                }
+            });
+
+
+            // --- Global Resize Handler (Debounced) ---
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    resizeMechCanvas();
+                    if(mechState.isPlaying) { /* continues */ }
+                    else { setMechStage(mechState.stage); animateMechanism(); } // Redraw static
+                    
+                    resizeSimCanvas();
+                    if(simState.isRunning) { /* continues */ }
+                    else { drawSimStatic(); }
+                }, 250);
+            });
+
+            // Initial setup
+            resizeMechCanvas();
+            resizeSimCanvas();
+        });
+    </script>
+</body>
+</html>

@@ -19,7 +19,7 @@ export default function GameHUD() {
   const [hoveredItem, setHoveredItem] = useState<string | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { progress } = useGameProgress()
-  const { appearance, setAppearance } = useBellaStore()
+  const { appearance, setAppearance, language, setLanguage } = useBellaStore()
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
@@ -129,6 +129,22 @@ export default function GameHUD() {
                   <option value="/live2d/model2/base/Alexia.model3.json" className="bg-bg-card text-white">Alexia</option>
                   <option value="/live2d/model3/base/march 7th.model3.json" className="bg-bg-card text-white">March 7th</option>
                   <option value="/live2d/model4/base/free.model3.json" className="bg-bg-card text-white">Eara (Free)</option>
+                </select>
+              </div>
+            )}
+
+            {/* Language Selector */}
+            {mounted && (
+              <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-bg-card border border-border">
+                <span className="text-[10px] text-slate-400">Lang:</span>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="bg-transparent text-[10px] text-white outline-none cursor-pointer"
+                >
+                  <option value="english" className="bg-bg-card text-white">English (US)</option>
+                  <option value="indian-english" className="bg-bg-card text-white">Indian English</option>
+                  <option value="hindi" className="bg-bg-card text-white">Hindi / Hinglish</option>
                 </select>
               </div>
             )}

@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Newton's Third Law | Interactive Physics Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEMING
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-base: #05050A;
+            --bg-surface: rgba(20, 22, 35, 0.4);
+            --bg-panel: rgba(255, 255, 255, 0.03);
+            
+            /* Thematic Physics Colors */
+            --action-color: #00E5FF; /* Cyan */
+            --action-glow: rgba(0, 229, 255, 0.5);
+            --reaction-color: #FF0055; /* Magenta */
+            --reaction-glow: rgba(255, 0, 85, 0.5);
+            --mass-color: #8B949E;
+            
+            /* UI Colors */
+            --text-main: #F0F6FC;
+            --text-muted: #8B949E;
+            --border-light: rgba(255, 255, 255, 0.1);
+            --border-glow: rgba(255, 255, 255, 0.2);
+            
+            /* Typography (Fluid) */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --text-xs: clamp(0.75rem, 1vw, 0.875rem);
+            --text-sm: clamp(0.875rem, 1.2vw, 1rem);
+            --text-base: clamp(1rem, 1.5vw, 1.125rem);
+            --text-lg: clamp(1.25rem, 2vw, 1.5rem);
+            --text-xl: clamp(1.5rem, 3vw, 2.5rem);
+            --text-display: clamp(2.5rem, 6vw, 4.5rem);
+            
+            /* Metrics */
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-pill: 9999px;
+            --spacing-sm: clamp(0.5rem, 2vw, 1rem);
+            --spacing-md: clamp(1rem, 3vw, 2rem);
+            --spacing-lg: clamp(2rem, 5vw, 4rem);
+            
+            /* Effects */
+            --glass-blur: blur(20px);
+            --shadow-soft: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --transition-smooth: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* ==========================================================================
+           RESET & GLOBAL
+           ========================================================================== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(255, 0, 85, 0.05), transparent 25%);
+            background-attachment: fixed;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+        h1, h2, h3, h4 { font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+        p { color: var(--text-muted); }
+        
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-md);
+        }
+
+        /* ==========================================================================
+           GLASSMORPHISM UTILITIES
+           ========================================================================== */
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-soft);
+        }
+
+        .highlight-text-action { color: var(--action-color); text-shadow: 0 0 10px var(--action-glow); }
+        .highlight-text-reaction { color: var(--reaction-color); text-shadow: 0 0 10px var(--reaction-glow); }
+
+        /* ==========================================================================
+           NAVIGATION
+           ========================================================================== */
+        nav {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+            padding: 8px;
+            border-radius: var(--radius-pill);
+        }
+        
+        nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: var(--text-xs);
+            padding: 8px 16px;
+            border-radius: var(--radius-pill);
+            transition: var(--transition-smooth);
+            font-weight: 500;
+        }
+
+        nav a:hover, nav a.active {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-main);
+        }
+
+        @media (max-width: 768px) {
+            nav { display: none; } /* Hide on mobile to save space */
+        }
+
+        /* ==========================================================================
+           SECTIONS
+           ========================================================================== */
+        section {
+            min-height: 100vh;
+            padding: calc(var(--spacing-lg) * 2) 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: var(--spacing-lg);
+        }
+
+        .section-title {
+            font-size: var(--text-xl);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        #hero {
+            align-items: center;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .hero-title {
+            font-size: var(--text-display);
+            background: linear-gradient(135deg, var(--text-main) 0%, var(--text-muted) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: var(--spacing-sm);
+            z-index: 2;
+        }
+
+        .hero-subtitle {
+            font-size: var(--text-lg);
+            max-width: 800px;
+            margin: 0 auto var(--spacing-lg);
+            z-index: 2;
+        }
+
+        .hero-visual {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            height: 300px;
+            margin: 0 auto;
+            z-index: 1;
+        }
+
+        /* ==========================================================================
+           ANATOMY / DIAGRAM WITH LEGEND MANDATE
+           ========================================================================== */
+        .anatomy-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+            align-items: center;
+        }
+
+        @media (min-width: 1024px) {
+            .anatomy-grid { grid-template-columns: 3fr 2fr; }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            aspect-ratio: 16/9;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .illustration-container svg {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        /* Numbered Markers */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--bg-surface);
+            border: 2px solid var(--text-muted);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: var(--text-sm);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transform: translate(-50%, -50%);
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.1);
+            border-color: var(--text-main);
+            box-shadow: 0 0 15px rgba(255,255,255,0.3);
+        }
+
+        .marker[data-type="action"].active { border-color: var(--action-color); box-shadow: 0 0 20px var(--action-glow); color: var(--action-color);}
+        .marker[data-type="reaction"].active { border-color: var(--reaction-color); box-shadow: 0 0 20px var(--reaction-glow); color: var(--reaction-color);}
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.05);
+            border-color: var(--border-light);
+            transform: translateX(4px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: var(--text-xs);
+        }
+
+        .legend-item.active[data-type="action"] .legend-badge { background: var(--action-color); color: #000; box-shadow: 0 0 10px var(--action-glow);}
+        .legend-item.active[data-type="reaction"] .legend-badge { background: var(--reaction-color); color: #000; box-shadow: 0 0 10px var(--reaction-glow);}
+
+        .legend-content h4 { font-size: var(--text-base); margin-bottom: 4px; color: var(--text-main); }
+        .legend-content p { font-size: var(--text-sm); margin: 0; }
+
+        /* ==========================================================================
+           WORKING PROCESS (Interactive Sequence Mandate)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .stage-visual {
+            width: 100%;
+            height: 40vh;
+            min-height: 300px;
+            background: #0A0C14;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-light);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* SVG Sequence Elements */
+        .seq-obj { transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .seq-vector { transition: all 0.5s ease; opacity: 0; stroke-dasharray: 200; stroke-dashoffset: 200; }
+        .seq-vector.active { opacity: 1; stroke-dashoffset: 0; }
+        
+        .stage-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            gap: 16px;
+        }
+
+        .stage-title { font-size: var(--text-lg); color: var(--text-main); }
+        .stage-desc { font-size: var(--text-base); max-width: 600px; }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: rgba(0,0,0,0.5);
+            padding: 12px 24px;
+            border-radius: var(--radius-pill);
+            border: 1px solid var(--border-light);
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition-smooth);
+        }
+        
+        .btn-icon:hover { background: rgba(255,255,255,0.1); }
+        .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-smooth);
+        }
+        .dot.active { background: var(--text-main); transform: scale(1.5); }
+
+        /* ==========================================================================
+           SIMULATION LAB (Canvas & Controls)
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+        }
+
+        @media (min-width: 1024px) {
+            .sim-grid { grid-template-columns: 300px 1fr; } /* Controls | Canvas */
+        }
+
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            padding: var(--spacing-md);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--text-sm);
+        }
+        .control-header span:last-child { font-family: monospace; color: var(--text-main); }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--text-main);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+        
+        /* Thematic slider coloring */
+        #forceSlider::-webkit-slider-thumb { background: #fff; box-shadow: 0 0 15px rgba(255,255,255,0.5); }
+        #massASlider::-webkit-slider-thumb { background: var(--action-color); box-shadow: 0 0 10px var(--action-glow); }
+        #massBSlider::-webkit-slider-thumb { background: var(--reaction-color); box-shadow: 0 0 10px var(--reaction-glow); }
+
+        .canvas-container {
+            width: 100%;
+            height: 60vh;
+            min-height: 400px;
+            position: relative;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: #02040A;
+            border: 1px solid var(--border-light);
+        }
+
+        canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+        .canvas-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+        }
+        
+        .sim-data-box {
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+            min-width: 140px;
+        }
+        .data-val { font-family: monospace; font-size: var(--text-lg); font-weight: bold; }
+        .data-label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); }
+
+        .btn-primary {
+            background: var(--text-main);
+            color: var(--bg-base);
+            border: none;
+            padding: 12px 24px;
+            border-radius: var(--radius-pill);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            width: 100%;
+            font-size: var(--text-base);
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(255,255,255,0.2); }
+
+        /* ==========================================================================
+           GRID SECTIONS (Apps, Facts, Mistakes)
+           ========================================================================== */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .card {
+            padding: var(--spacing-md);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+        }
+        
+        .card-icon svg { width: 28px; height: 28px; fill: var(--text-main); }
+        .card-title { font-size: var(--text-lg); color: var(--text-main); }
+        
+        .mistake-card { border-color: rgba(255, 0, 85, 0.3); }
+        .mistake-card .card-icon { background: rgba(255, 0, 85, 0.1); }
+        .mistake-card .card-icon svg { fill: var(--reaction-color); }
+        
+        .fact-card { border-color: rgba(0, 229, 255, 0.3); }
+        .fact-card .card-icon { background: rgba(0, 229, 255, 0.1); }
+        .fact-card .card-icon svg { fill: var(--action-color); }
+
+        /* ==========================================================================
+           SVG DEFS & STYLES (Inline Graphics)
+           ========================================================================== */
+        .svg-def { display: none; }
+        
+        /* Arrows */
+        .vector-action { stroke: var(--action-color); stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 5px var(--action-glow)); }
+        .vector-reaction { stroke: var(--reaction-color); stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 5px var(--reaction-glow)); }
+        
+        footer {
+            text-align: center;
+            padding: var(--spacing-lg) 0;
+            border-top: 1px solid var(--border-light);
+            margin-top: var(--spacing-lg);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SVG Definitions for reuse across the app -->
+    <svg class="svg-def">
+        <defs>
+            <marker id="arrow-action" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#00E5FF" />
+            </marker>
+            <marker id="arrow-reaction" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#FF0055" />
+            </marker>
+            <marker id="arrow-white" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#FFFFFF" />
+            </marker>
+            
+            <!-- Metallic Gradients -->
+            <linearGradient id="metal-dark" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#2a323d" />
+                <stop offset="50%" stop-color="#1a1e24" />
+                <stop offset="100%" stop-color="#0d1117" />
+            </linearGradient>
+            <linearGradient id="metal-light" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#4b5563" />
+                <stop offset="100%" stop-color="#374151" />
+            </linearGradient>
+            
+            <!-- Glow Filters -->
+            <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <filter id="glow-magenta" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+        </defs>
+    </svg>
+
+    <!-- Glass Navigation -->
+    <nav class="glass-panel">
+        <a href="#hero" class="active">Intro</a>
+        <a href="#anatomy">Anatomy</a>
+        <a href="#working">Mechanism</a>
+        <a href="#simulation">Simulation</a>
+        <a href="#applications">Applications</a>
+    </nav>
+
+    <!-- 1. HERO SECTION -->
+    <section id="hero">
+        <div class="container">
+            <h1 class="hero-title">Newton's Third Law</h1>
+            <p class="hero-subtitle">"For every <span class="highlight-text-action">action</span>, there is an equal and opposite <span class="highlight-text-reaction">reaction</span>."</p>
+            
+            <div class="hero-visual">
+                <!-- Abstract Force Pair Animation -->
+                <svg width="100%" height="100%" viewBox="0 0 600 300">
+                    <!-- Central connection -->
+                    <circle cx="300" cy="150" r="40" fill="var(--bg-surface)" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+                    <circle cx="300" cy="150" r="10" fill="#fff" />
+                    
+                    <!-- Action Side (Right) -->
+                    <g id="hero-action-group">
+                        <line x1="320" y1="150" x2="480" y2="150" class="vector-action" marker-end="url(#arrow-action)" />
+                        <text x="400" y="130" fill="var(--action-color)" font-family="system-ui" font-size="14" font-weight="bold" text-anchor="middle" filter="url(#glow-cyan)">ACTION FORCE</text>
+                        <circle cx="500" cy="150" r="15" fill="var(--action-color)" filter="url(#glow-cyan)"/>
+                    </g>
+                    
+                    <!-- Reaction Side (Left) -->
+                    <g id="hero-reaction-group">
+                        <line x1="280" y1="150" x2="120" y2="150" class="vector-reaction" marker-end="url(#arrow-reaction)" />
+                        <text x="200" y="130" fill="var(--reaction-color)" font-family="system-ui" font-size="14" font-weight="bold" text-anchor="middle" filter="url(#glow-magenta)">REACTION FORCE</text>
+                        <circle cx="100" cy="150" r="15" fill="var(--reaction-color)" filter="url(#glow-magenta)"/>
+                    </g>
+                </svg>
+            </div>
+            <p style="max-width: 600px; margin: 0 auto;">Forces never exist alone. They always occur in pairs applied to two different interacting objects.</p>
+        </div>
+    </section>
+
+    <!-- 2. ANATOMY OF A FORCE PAIR (Mandatory Markers) -->
+    <section id="anatomy">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Anatomy of an Interaction</h2>
+                <p>Examining a spacecraft thruster in a vacuum. Hover or tap markers to explore components.</p>
+            </div>
+
+            <div class="anatomy-grid">
+                <!-- Illustration Side -->
+                <div class="illustration-container glass-panel">
+                    <svg viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+                        <!-- Spacecraft Body -->
+                        <path d="M -100 150 L 300 150 L 350 200 L 350 300 L 300 350 L -100 350 Z" fill="url(#metal-dark)" stroke="rgba(255,255,255,0.1)"/>
+                        <!-- Fuel Lines / Details -->
+                        <rect x="100" y="200" width="150" height="10" fill="url(#metal-light)" rx="5"/>
+                        <rect x="100" y="290" width="150" height="10" fill="url(#metal-light)" rx="5"/>
+                        
+                        <!-- Thruster Nozzle -->
+                        <path d="M 350 200 C 400 200, 420 180, 450 160 L 450 340 C 420 320, 400 300, 350 300 Z" fill="url(#metal-light)" stroke="#555" stroke-width="2"/>
+                        
+                        <!-- Exhaust Plume (Action) -->
+                        <path id="plume" d="M 450 170 Q 600 120, 750 200 Q 800 250, 750 300 Q 600 380, 450 330 Z" fill="rgba(0, 229, 255, 0.1)" />
+                        <path id="plume-core" d="M 450 210 Q 550 180, 650 230 Q 700 250, 650 270 Q 550 320, 450 290 Z" fill="rgba(0, 229, 255, 0.4)" filter="url(#glow-cyan)"/>
+                        
+                        <!-- Force Vectors -->
+                        <g id="anatomy-vectors">
+                            <!-- Action Vector (Gas pushed out) -->
+                            <line x1="480" y1="250" x2="680" y2="250" class="vector-action" marker-end="url(#arrow-action)" />
+                            <!-- Reaction Vector (Ship pushed forward) -->
+                            <line x1="320" y1="250" x2="120" y2="250" class="vector-reaction" marker-end="url(#arrow-reaction)" />
+                        </g>
+                    </svg>
+
+                    <!-- Absolute Markers placed over SVG visually -->
+                    <div class="marker" data-id="1" style="top: 50%; left: 15%;">1</div> <!-- Spacecraft Body -->
+                    <div class="marker" data-id="2" style="top: 50%; left: 45%;">2</div> <!-- Nozzle -->
+                    <div class="marker" data-id="3" style="top: 50%; left: 75%;" data-type="action">3</div> <!-- Exhaust -->
+                    <div class="marker" data-id="4" style="top: 60%; left: 30%;" data-type="reaction">4</div> <!-- Reaction Force -->
+                </div>
+
+                <!-- Legend Side -->
+                <div class="legend-list">
+                    <div class="legend-item glass-panel" data-id="1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Object A (Spacecraft)</h4>
+                            <p>The primary mass. It exerts a force on the gas to expel it from the engine.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item glass-panel" data-id="2">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4>Interaction Point</h4>
+                            <p>The combustion chamber and nozzle where the expansion of gas creates pressure.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item glass-panel" data-id="3" data-type="action">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4>Action: Expelled Gas (Object B)</h4>
+                            <p>The spacecraft pushes the exhaust gas backward with immense force. ($F_{A \text{ on } B}$)</p>
+                        </div>
+                    </div>
+                    <div class="legend-item glass-panel" data-id="4" data-type="reaction">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-content">
+                            <h4>Reaction: Forward Thrust</h4>
+                            <p>Simultaneously, the gas pushes the spacecraft forward with the exact same amount of force. ($F_{B \text{ on } A}$)</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. WORKING PROCESS (Mandatory Linear Sequence) -->
+    <section id="working">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Mechanism: The Push-Off</h2>
+                <p>A linear sequence demonstrating a skater pushing off a rigid wall. Watch how forces develop and motion results.</p>
+            </div>
+
+            <div class="working-container glass-panel" style="padding: var(--spacing-md);">
+                
+                <!-- SVG Sequence Visual -->
+                <div class="stage-visual">
+                    <svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet" style="width:100%; height:100%;">
+                        <!-- Environment -->
+                        <line x1="0" y1="350" x2="800" y2="350" stroke="#333" stroke-width="4"/> <!-- Ground -->
+                        <rect x="650" y="100" width="100" height="250" fill="url(#metal-dark)"/> <!-- Wall (Object B) -->
+                        <path d="M 650 100 L 630 80 L 730 80 L 750 100 Z" fill="#444"/> <!-- Wall top perspective -->
+                        
+                        <!-- Skater Group (Object A) -->
+                        <g id="seq-skater" class="seq-obj" transform="translate(450, 0)">
+                            <!-- Skateboard -->
+                            <rect x="0" y="330" width="120" height="10" rx="5" fill="#eab308"/>
+                            <circle cx="20" cy="345" r="8" fill="#aaa"/>
+                            <circle cx="100" cy="345" r="8" fill="#aaa"/>
+                            
+                            <!-- Body (Geometric) -->
+                            <rect x="40" y="200" width="40" height="90" rx="10" fill="url(#metal-light)"/>
+                            <circle cx="60" cy="170" r="20" fill="#fff"/>
+                            <!-- Legs -->
+                            <path d="M 50 280 L 30 330" stroke="url(#metal-light)" stroke-width="12" stroke-linecap="round"/>
+                            <path d="M 70 280 L 90 330" stroke="url(#metal-light)" stroke-width="12" stroke-linecap="round"/>
+                            
+                            <!-- Arm (Animates) -->
+                            <g id="seq-arm" class="seq-obj" transform="rotate(0, 70, 210)">
+                                <path d="M 70 210 L 150 210" stroke="#fff" stroke-width="10" stroke-linecap="round"/>
+                                <!-- Hand / Contact point glow -->
+                                <circle id="seq-contact" cx="150" cy="210" r="10" fill="transparent" />
+                            </g>
+                        </g>
+
+                        <!-- Force Vectors -->
+                        <!-- Action: Skater pushing Wall (Right) -->
+                        <line id="seq-vec-action" x1="610" y1="210" x2="710" y2="210" class="vector-action seq-vector" marker-end="url(#arrow-action)" />
+                        <!-- Reaction: Wall pushing Skater (Left) -->
+                        <line id="seq-vec-reaction" x1="610" y1="210" x2="510" y2="210" class="vector-reaction seq-vector" marker-end="url(#arrow-reaction)" />
+                        
+                        <!-- Motion Vector -->
+                        <line id="seq-vec-motion" x1="450" y1="120" x2="350" y2="120" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-dasharray="5,5" class="seq-vector" marker-end="url(#arrow-white)" />
+                    </svg>
+                </div>
+
+                <!-- Info & Controls -->
+                <div class="stage-info">
+                    <h3 class="stage-title" id="seq-title">1. Preparation</h3>
+                    <p class="stage-desc" id="seq-desc">The skater approaches the rigid wall. No horizontal forces are acting yet. System is at rest relative to the wall.</p>
+                    
+                    <div class="controls">
+                        <button class="btn-icon" id="seq-prev" aria-label="Previous Stage">
+                            <svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+                        </button>
+                        
+                        <div class="progress-dots" id="seq-dots">
+                            <div class="dot active"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+
+                        <button class="btn-icon" id="seq-next" aria-label="Next Stage">
+                            <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+                        </button>
+                        
+                        <!-- Divider -->
+                        <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.2); margin: 0 8px;"></div>
+                        
+                        <button class="btn-icon" id="seq-play" aria-label="Auto Play">
+                            <svg viewBox="0 0 24 24" id="icon-play"><path d="M8 5v14l11-7z"/></svg>
+                            <svg viewBox="0 0 24 24" id="icon-pause" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. INTERACTIVE SIMULATION (Canvas Physics) -->
+    <section id="simulation">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Zero-G Pod Physics Lab</h2>
+                <p>Investigate how equal forces result in different accelerations ($a = F/m$) depending on an object's mass.</p>
+            </div>
+
+            <div class="sim-grid glass-panel">
+                <!-- Controls Sidebar -->
+                <div class="controls-panel" style="border-right: 1px solid var(--border-light);">
+                    <h3 style="margin-bottom: 16px;">System Parameters</h3>
+                    
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Push Force (Spring)</span>
+                            <span id="val-force">500 N</span>
+                        </div>
+                        <input type="range" id="forceSlider" min="100" max="1000" value="500" step="10">
+                    </div>
+
+                    <div style="height: 1px; background: var(--border-light); margin: 16px 0;"></div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span style="color: var(--action-color);">Mass A (Left Pod)</span>
+                            <span id="val-massA" style="color: var(--action-color);">50 kg</span>
+                        </div>
+                        <input type="range" id="massASlider" min="10" max="200" value="50" step="5">
+                    </div>
+
+                    <div class="control-group" style="margin-top: 16px;">
+                        <div class="control-header">
+                            <span style="color: var(--reaction-color);">Mass B (Right Pod)</span>
+                            <span id="val-massB" style="color: var(--reaction-color);">100 kg</span>
+                        </div>
+                        <input type="range" id="massBSlider" min="10" max="200" value="100" step="5">
+                    </div>
+
+                    <div style="flex-grow: 1;"></div>
+                    
+                    <button class="btn-primary" id="btn-trigger" style="margin-bottom: 12px;">Trigger Mechanism</button>
+                    <button class="btn-primary" id="btn-reset" style="background: rgba(255,255,255,0.1); color: var(--text-main);">Reset Positions</button>
+                </div>
+
+                <!-- Canvas Area -->
+                <div class="canvas-container" id="canvasWrapper">
+                    <div class="canvas-overlay">
+                        <div class="sim-data-box" style="border-left: 3px solid var(--action-color);">
+                            <div class="data-label">Pod A Accel</div>
+                            <div class="data-val" id="data-accelA" style="color: var(--action-color);">0.0 m/s²</div>
+                        </div>
+                        <div class="sim-data-box" style="border-right: 3px solid var(--reaction-color); text-align: right;">
+                            <div class="data-label">Pod B Accel</div>
+                            <div class="data-val" id="data-accelB" style="color: var(--reaction-color);">0.0 m/s²</div>
+                        </div>
+                    </div>
+                    <canvas id="simCanvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. REAL WORLD APPLICATIONS -->
+    <section id="applications" style="min-height: auto; padding-top: var(--spacing-lg);">
+        <div class="container">
+            <h2 class="section-title">Everyday Applications</h2>
+            <div class="cards-grid" style="margin-top: var(--spacing-md);">
+                
+                <div class="card glass-panel">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24"><path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7"/></svg>
+                    </div>
+                    <h3 class="card-title">Walking</h3>
+                    <p>When you walk, your foot pushes backward against the ground (<span class="highlight-text-action">Action</span>). The ground pushes your foot forward with equal force (<span class="highlight-text-reaction">Reaction</span>).</p>
+                </div>
+
+                <div class="card glass-panel">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24"><path d="M19.34 9.1L22.5 12l-3.16 2.9-.66-.66L20.5 12l-1.82-1.64.66-.66M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2.5-4h5l3.5-6h-12z"/></svg>
+                    </div>
+                    <h3 class="card-title">Helicopters</h3>
+                    <p>The rotors push a massive volume of air downward (<span class="highlight-text-action">Action</span>). The air pushes back upward on the rotors, creating lift (<span class="highlight-text-reaction">Reaction</span>).</p>
+                </div>
+
+                <div class="card glass-panel">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24"><path d="M21 11h-3V4a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v7H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zM8 5h8v6H8V5zm12 13H4v-5h16v5z"/></svg>
+                    </div>
+                    <h3 class="card-title">Firearms (Recoil)</h3>
+                    <p>Expanding gas pushes the bullet rapidly forward out the barrel (<span class="highlight-text-action">Action</span>). The gas simultaneously pushes the gun backward into the shooter's shoulder (<span class="highlight-text-reaction">Reaction</span>).</p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- 6. FACTS & MISTAKES -->
+    <section id="facts" style="min-height: auto; padding: var(--spacing-lg) 0;">
+        <div class="container">
+            <div class="cards-grid">
+                
+                <div class="card glass-panel mistake-card">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                    </div>
+                    <h3 class="card-title">Common Mistake</h3>
+                    <p><strong>"If action and reaction are equal and opposite, shouldn't they cancel out, resulting in no motion?"</strong></p>
+                    <p style="color: #fff;">Correction: They do <em>not</em> cancel out because they act on <strong>different objects</strong>. The skater pushes the wall; the wall pushes the skater. You only calculate the net force on <em>one</em> object at a time to find its acceleration.</p>
+                </div>
+
+                <div class="card glass-panel fact-card">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6A4.997 4.997 0 0 1 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>
+                    </div>
+                    <h3 class="card-title">Fascinating Fact</h3>
+                    <p>When you drop a pen, gravity pulls the pen down toward the Earth (<span class="highlight-text-action">Action</span>). According to the third law, the pen exerts an equal gravitational force pulling the entire Earth upward (<span class="highlight-text-reaction">Reaction</span>)! The Earth's mass is just so massive that its resulting acceleration is unmeasurably small.</p>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>Interactive Physics Simulation — Designed for deep visual understanding.</p>
+        </div>
+    </footer>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* --- 1. NAVIGATION HIGHLIGHTING --- */
+            const sections = document.querySelectorAll('section');
+            const navLinks = document.querySelectorAll('nav a');
+            
+            window.addEventListener('scroll', () => {
+                let current = '';
+                sections.forEach(section => {
+                    const sectionTop = section.offsetTop;
+                    if (scrollY >= sectionTop - 200) {
+                        current = section.getAttribute('id');
+                    }
+                });
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    if (link.getAttribute('href').includes(current)) {
+                        link.classList.add('active');
+                    }
+                });
+            });
+
+            /* --- 2. ANATOMY MARKER & LEGEND LOGIC --- */
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function activateAnatomy(id) {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                
+                const m = document.querySelector(`.marker[data-id="${id}"]`);
+                const l = document.querySelector(`.legend-item[data-id="${id}"]`);
+                
+                if (m) m.classList.add('active');
+                if (l) l.classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => activateAnatomy(marker.dataset.id));
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); activateAnatomy(marker.dataset.id); }, {passive: false});
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => activateAnatomy(item.dataset.id));
+            });
+
+
+            /* --- 3. WORKING PROCESS (LINEAR SEQUENCE) LOGIC --- */
+            const stages = [
+                {
+                    title: "1. Preparation",
+                    desc: "Skater approaches the wall. System is at rest. No horizontal contact forces exist.",
+                    armRotation: 0, skaterX: 450, actionOp: 0, reactionOp: 0, motionOp: 0, glow: 'transparent'
+                },
+                {
+                    title: "2. Contact & Build Up",
+                    desc: "Arm extends, making contact. Muscles begin to exert force against the rigid structure.",
+                    armRotation: 15, skaterX: 450, actionOp: 0.5, reactionOp: 0, motionOp: 0, glow: 'rgba(255,255,255,0.5)'
+                },
+                {
+                    title: "3. The Interaction (Force Pair)",
+                    desc: "The skater pushes the wall (Action - Cyan). SIMULTANEOUSLY, the wall pushes back on the skater with equal force (Reaction - Magenta).",
+                    armRotation: 30, skaterX: 450, actionOp: 1, reactionOp: 1, motionOp: 0, glow: 'var(--action-color)'
+                },
+                {
+                    title: "4. Resulting Motion",
+                    desc: "The wall doesn't move (infinite mass). The reaction force acting on the skater causes them to accelerate backward.",
+                    armRotation: 0, skaterX: 300, actionOp: 0, reactionOp: 0, motionOp: 1, glow: 'transparent'
+                }
+            ];
+
+            let currentStage = 0;
+            let seqAutoPlayInterval = null;
+
+            // DOM Elements
+            const domSkater = document.getElementById('seq-skater');
+            const domArm = document.getElementById('seq-arm');
+            const domContact = document.getElementById('seq-contact');
+            const vecAction = document.getElementById('seq-vec-action');
+            const vecReaction = document.getElementById('seq-vec-reaction');
+            const vecMotion = document.getElementById('seq-vec-motion');
+            const txtTitle = document.getElementById('seq-title');
+            const txtDesc = document.getElementById('seq-desc');
+            const dots = document.querySelectorAll('#seq-dots .dot');
+
+            function updateSequence(index) {
+                if(index < 0) index = 0;
+                if(index > stages.length - 1) index = stages.length - 1;
+                currentStage = index;
+
+                const stage = stages[currentStage];
+
+                // Update Text
+                txtTitle.textContent = stage.title;
+                txtDesc.textContent = stage.desc;
+
+                // Update SVGs
+                domSkater.setAttribute('transform', `translate(${stage.skaterX}, 0)`);
+                domArm.setAttribute('transform', `rotate(${stage.armRotation}, 70, 210)`);
+                domContact.setAttribute('fill', stage.glow);
+                
+                if (stage.actionOp > 0) { vecAction.classList.add('active'); vecAction.style.opacity = stage.actionOp; } 
+                else { vecAction.classList.remove('active'); vecAction.style.opacity = 0; }
+
+                if (stage.reactionOp > 0) { vecReaction.classList.add('active'); vecReaction.style.opacity = stage.reactionOp; } 
+                else { vecReaction.classList.remove('active'); vecReaction.style.opacity = 0; }
+
+                if (stage.motionOp > 0) { vecMotion.classList.add('active'); vecMotion.style.opacity = 1; } 
+                else { vecMotion.classList.remove('active'); vecMotion.style.opacity = 0; }
+
+                // Update Dots
+                dots.forEach((dot, i) => {
+                    dot.classList.toggle('active', i === currentStage);
+                });
+            }
+
+            document.getElementById('seq-prev').addEventListener('click', () => { stopAutoPlay(); updateSequence(currentStage - 1); });
+            document.getElementById('seq-next').addEventListener('click', () => { stopAutoPlay(); updateSequence(currentStage + 1); });
+            
+            const btnPlay = document.getElementById('seq-play');
+            const iconPlay = document.getElementById('icon-play');
+            const iconPause = document.getElementById('icon-pause');
+
+            function toggleAutoPlay() {
+                if (seqAutoPlayInterval) { stopAutoPlay(); } 
+                else {
+                    iconPlay.style.display = 'none'; iconPause.style.display = 'block';
+                    if(currentStage === stages.length - 1) updateSequence(0); // reset if at end
+                    seqAutoPlayInterval = setInterval(() => {
+                        let next = currentStage + 1;
+                        if (next >= stages.length) next = 0;
+                        updateSequence(next);
+                    }, 2000);
+                }
+            }
+
+            function stopAutoPlay() {
+                if (seqAutoPlayInterval) {
+                    clearInterval(seqAutoPlayInterval);
+                    seqAutoPlayInterval = null;
+                    iconPlay.style.display = 'block'; iconPause.style.display = 'none';
+                }
+            }
+
+            btnPlay.addEventListener('click', toggleAutoPlay);
+            updateSequence(0); // Init
+
+
+            /* --- 4. CANVAS PHYSICS SIMULATION LOGIC --- */
+            const canvasWrapper = document.getElementById('canvasWrapper');
+            const canvas = document.getElementById('simCanvas');
+            const ctx = canvas.getContext('2d');
+
+            // UI Elements
+            const sldForce = document.getElementById('forceSlider');
+            const sldMassA = document.getElementById('massASlider');
+            const sldMassB = document.getElementById('massBSlider');
+            
+            const valForce = document.getElementById('val-force');
+            const valMassA = document.getElementById('val-massA');
+            const valMassB = document.getElementById('val-massB');
+            
+            const outAccelA = document.getElementById('data-accelA');
+            const outAccelB = document.getElementById('data-accelB');
+            
+            const btnTrigger = document.getElementById('btn-trigger');
+            const btnReset = document.getElementById('btn-reset');
+
+            // Physics State
+            let sim = {
+                width: 0, height: 0,
+                force: 500, // Newtons
+                isActive: false,
+                time: 0,
+                dt: 0.016, // approx 60fps
+                scale: 10, // pixels per meter
+                
+                podA: { mass: 50, x: 0, v: 0, a: 0, w: 80, h: 80, color: '#00E5FF', glow: 'rgba(0, 229, 255, 0.4)' },
+                podB: { mass: 100, x: 0, v: 0, a: 0, w: 100, h: 100, color: '#FF0055', glow: 'rgba(255, 0, 85, 0.4)' },
+                
+                particles: []
+            };
+
+            function resizeCanvas() {
+                const rect = canvasWrapper.getBoundingClientRect();
+                sim.width = rect.width;
+                sim.height = rect.height;
+                
+                // Handle high-DPI displays for crisp rendering
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = sim.width * dpr;
+                canvas.height = sim.height * dpr;
+                ctx.scale(dpr, dpr);
+                
+                resetSimulation();
+            }
+
+            function updateUI() {
+                sim.force = parseFloat(sldForce.value);
+                sim.podA.mass = parseFloat(sldMassA.value);
+                sim.podB.mass = parseFloat(sldMassB.value);
+                
+                // Adjust visual size based on mass (square root scaling to represent volume roughly)
+                sim.podA.w = 40 + Math.sqrt(sim.podA.mass) * 5;
+                sim.podA.h = sim.podA.w;
+                sim.podB.w = 40 + Math.sqrt(sim.podB.mass) * 5;
+                sim.podB.h = sim.podB.w;
+
+                valForce.textContent = sim.force + " N";
+                valMassA.textContent = sim.podA.mass + " kg";
+                valMassB.textContent = sim.podB.mass + " kg";
+
+                if(!sim.isActive) {
+                    resetSimulation(); // Keep centered while adjusting
+                }
+            }
+
+            function resetSimulation() {
+                sim.isActive = false;
+                sim.time = 0;
+                // Center positions initially, touching
+                let gap = 20; // space for spring mechanism
+                sim.podA.x = (sim.width / 2) - (sim.podA.w / 2) - (gap / 2);
+                sim.podA.v = 0;
+                sim.podA.a = 0;
+                
+                sim.podB.x = (sim.width / 2) + (sim.podB.w / 2) + (gap / 2);
+                sim.podB.v = 0;
+                sim.podB.a = 0;
+                
+                sim.particles = [];
+                outAccelA.textContent = "0.0 m/s²";
+                outAccelB.textContent = "0.0 m/s²";
+                btnTrigger.textContent = "Trigger Mechanism";
+                btnTrigger.style.background = "var(--text-main)";
+            }
+
+            function triggerSimulation() {
+                if(sim.isActive) return;
+                sim.isActive = true;
+                
+                // Newton's Second & Third Law Calculation
+                // Force applied is equal and opposite.
+                // a = F/m
+                sim.podA.a = sim.force / sim.podA.mass; // Magnitude
+                sim.podB.a = sim.force / sim.podB.mass; // Magnitude
+
+                outAccelA.textContent = sim.podA.a.toFixed(1) + " m/s²";
+                outAccelB.textContent = sim.podB.a.toFixed(1) + " m/s²";
+                
+                btnTrigger.textContent = "Mechanism Active";
+                btnTrigger.style.background = "#333";
+
+                createSparks();
+            }
+
+            function createSparks() {
+                for(let i=0; i<30; i++) {
+                    sim.particles.push({
+                        x: sim.width/2,
+                        y: sim.height/2,
+                        vx: (Math.random() - 0.5) * 400,
+                        vy: (Math.random() - 0.5) * 400,
+                        life: 1.0,
+                        color: Math.random() > 0.5 ? '#fff' : '#ffea00'
+                    });
+                }
+            }
+
+            // Input Listeners
+            [sldForce, sldMassA, sldMassB].forEach(el => {
+                el.addEventListener('input', updateUI);
+                el.addEventListener('touchmove', updateUI, {passive: true});
+            });
+            btnTrigger.addEventListener('click', triggerSimulation);
+            btnReset.addEventListener('click', resetSimulation);
+
+            // Drawing Utilities
+            function drawRoundRect(x, y, w, h, r, color) {
+                ctx.beginPath();
+                ctx.moveTo(x + r, y);
+                ctx.lineTo(x + w - r, y);
+                ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+                ctx.lineTo(x + w, y + h - r);
+                ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+                ctx.lineTo(x + r, y + h);
+                ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+                ctx.lineTo(x, y + r);
+                ctx.quadraticCurveTo(x, y, x + r, y);
+                ctx.closePath();
+                ctx.fillStyle = color;
+                ctx.fill();
+                
+                // Inner highlight
+                ctx.strokeStyle = "rgba(255,255,255,0.2)";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            function drawArrow(fromX, fromY, toX, toY, color, width) {
+                const headlen = 10 * (width/3); // scale head with width
+                const dx = toX - fromX;
+                const dy = toY - fromY;
+                const angle = Math.atan2(dy, dx);
+                
+                ctx.beginPath();
+                ctx.moveTo(fromX, fromY);
+                ctx.lineTo(toX, toY);
+                ctx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
+                ctx.moveTo(toX, toY);
+                ctx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+                
+                ctx.strokeStyle = color;
+                ctx.lineWidth = width;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.stroke();
+            }
+
+            function render() {
+                // Clear background
+                ctx.clearRect(0, 0, sim.width, sim.height);
+                
+                // Draw Grid
+                ctx.strokeStyle = "rgba(255,255,255,0.03)";
+                ctx.lineWidth = 1;
+                for(let i=0; i<sim.width; i+=50) {
+                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, sim.height); ctx.stroke();
+                }
+                for(let i=0; i<sim.height; i+=50) {
+                    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(sim.width, i); ctx.stroke();
+                }
+
+                // Physics Update
+                if(sim.isActive) {
+                    // Force applies for a short duration (e.g., 0.5s of spring uncoiling)
+                    if(sim.time < 0.5) {
+                        // Accelerate (Left is negative direction, Right is positive)
+                        sim.podA.v -= sim.podA.a * sim.dt;
+                        sim.podB.v += sim.podB.a * sim.dt;
+                    }
+                    sim.time += sim.dt;
+
+                    // Update Position (scale to pixels)
+                    sim.podA.x += sim.podA.v * sim.scale * sim.dt;
+                    sim.podB.x += sim.podB.v * sim.scale * sim.dt;
+
+                    // Update Particles
+                    for(let i=sim.particles.length-1; i>=0; i--) {
+                        let p = sim.particles[i];
+                        p.x += p.vx * sim.dt;
+                        p.y += p.vy * sim.dt;
+                        p.life -= sim.dt * 2;
+                        if(p.life <= 0) sim.particles.splice(i, 1);
+                    }
+                }
+
+                const cy = sim.height / 2;
+
+                // Draw Center mechanism (Spring)
+                if(!sim.isActive || sim.time < 0.5) {
+                    ctx.beginPath();
+                    ctx.moveTo(sim.podA.x + sim.podA.w/2, cy);
+                    // Zig zag spring
+                    let x1 = sim.podA.x + sim.podA.w/2;
+                    let x2 = sim.podB.x - sim.podB.w/2;
+                    let dist = x2 - x1;
+                    if(dist > 0) {
+                        let steps = 5;
+                        let stepW = dist / steps;
+                        for(let i=1; i<=steps; i++) {
+                            ctx.lineTo(x1 + stepW*(i - 0.5), cy + (i%2==0?10:-10));
+                            ctx.lineTo(x1 + stepW*i, cy);
+                        }
+                    }
+                    ctx.strokeStyle = "#888";
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+
+                // Draw Pod A
+                ctx.shadowColor = sim.podA.glow;
+                ctx.shadowBlur = 20;
+                drawRoundRect(sim.podA.x - sim.podA.w/2, cy - sim.podA.h/2, sim.podA.w, sim.podA.h, 12, "#1a1e24");
+                ctx.shadowBlur = 0; // reset
+                // Mass Label
+                ctx.fillStyle = "#fff";
+                ctx.font = "14px monospace";
+                ctx.textAlign = "center";
+                ctx.fillText(sim.podA.mass + "kg", sim.podA.x, cy + 5);
+
+                // Draw Pod B
+                ctx.shadowColor = sim.podB.glow;
+                ctx.shadowBlur = 20;
+                drawRoundRect(sim.podB.x - sim.podB.w/2, cy - sim.podB.h/2, sim.podB.w, sim.podB.h, 12, "#1a1e24");
+                ctx.shadowBlur = 0;
+                // Mass Label
+                ctx.fillStyle = "#fff";
+                ctx.fillText(sim.podB.mass + "kg", sim.podB.x, cy + 5);
+
+                // Draw Force/Accel Vectors
+                if(sim.isActive && sim.time < 0.5) {
+                    // Force Vectors (Equal length based on force)
+                    let vecLen = 30 + (sim.force / 1000) * 100;
+                    // Force on A (to left)
+                    drawArrow(sim.podA.x + sim.podA.w/2 + 20, cy - 40, sim.podA.x + sim.podA.w/2 + 20 - vecLen, cy - 40, sim.podA.color, 4);
+                    ctx.fillStyle = sim.podA.color; ctx.fillText("F = " + sim.force + "N", sim.podA.x + sim.podA.w/2 + 20 - vecLen/2, cy - 50);
+                    
+                    // Force on B (to right)
+                    drawArrow(sim.podB.x - sim.podB.w/2 - 20, cy - 40, sim.podB.x - sim.podB.w/2 - 20 + vecLen, cy - 40, sim.podB.color, 4);
+                    ctx.fillStyle = sim.podB.color; ctx.fillText("F = " + sim.force + "N", sim.podB.x - sim.podB.w/2 - 20 + vecLen/2, cy - 50);
+                } else if (sim.isActive) {
+                    // Velocity vectors (Different lengths based on acceleration history)
+                    let vLenA = Math.abs(sim.podA.v) * 2;
+                    let vLenB = Math.abs(sim.podB.v) * 2;
+                    
+                    if(sim.podA.x > 50) { // Keep on screen roughly
+                        drawArrow(sim.podA.x, cy + sim.podA.h/2 + 20, sim.podA.x - vLenA, cy + sim.podA.h/2 + 20, "#fff", 2);
+                        ctx.fillStyle = "#fff"; ctx.fillText("v = " + Math.abs(sim.podA.v).toFixed(1) + " m/s", sim.podA.x - vLenA/2, cy + sim.podA.h/2 + 40);
+                    }
+                    if(sim.podB.x < sim.width - 50) {
+                        drawArrow(sim.podB.x, cy + sim.podB.h/2 + 20, sim.podB.x + vLenB, cy + sim.podB.h/2 + 20, "#fff", 2);
+                        ctx.fillStyle = "#fff"; ctx.fillText("v = " + Math.abs(sim.podB.v).toFixed(1) + " m/s", sim.podB.x + vLenB/2, cy + sim.podB.h/2 + 40);
+                    }
+                }
+
+                // Draw Particles
+                sim.particles.forEach(p => {
+                    ctx.globalAlpha = p.life;
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI*2); ctx.fill();
+                });
+                ctx.globalAlpha = 1.0;
+
+                requestAnimationFrame(render);
+            }
+
+            // Init Canvas
+            window.addEventListener('resize', resizeCanvas);
+            window.addEventListener('orientationchange', resizeCanvas);
+            
+            // Setup init state
+            setTimeout(() => {
+                resizeCanvas();
+                updateUI();
+                render(); // Start loop
+            }, 100);
+        });
+    </script>
+</body>
+</html>

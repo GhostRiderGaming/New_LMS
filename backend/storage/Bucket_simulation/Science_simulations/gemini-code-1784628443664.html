@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Disease Transmission Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & BASE SETUP
+           ========================================================================== */
+        :root {
+            /* Colors */
+            --bg-base: #07090F;
+            --bg-panel: rgba(18, 22, 35, 0.6);
+            --bg-panel-light: rgba(30, 38, 60, 0.7);
+            
+            --text-main: #FFFFFF;
+            --text-muted: #8E9BB0;
+            
+            --accent-cyan: #00F0FF;
+            --accent-magenta: #FF0055;
+            --accent-green: #00FF66;
+            --accent-purple: #9D00FF;
+            --accent-yellow: #FFD600;
+            
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(0, 240, 255, 0.3);
+            
+            /* Typography */
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            
+            /* Layout & Spacing */
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-pill: 9999px;
+            
+            --spacing-xs: clamp(4px, 1vw, 8px);
+            --spacing-sm: clamp(8px, 1.5vw, 16px);
+            --spacing-md: clamp(16px, 2.5vw, 24px);
+            --spacing-lg: clamp(24px, 4vw, 40px);
+            --spacing-xl: clamp(40px, 8vw, 80px);
+            
+            /* Effects */
+            --glass-blur: blur(24px);
+            --shadow-glow-cyan: 0 0 20px rgba(0, 240, 255, 0.2);
+            --shadow-glow-magenta: 0 0 20px rgba(255, 0, 85, 0.3);
+            --shadow-panel: 0 8px 32px rgba(0, 0, 0, 0.5);
+            
+            /* Transitions */
+            --trans-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --trans-smooth: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Ambient Background Canvas */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2rem, 5vw, 4rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.5rem, 3.5vw, 2.5rem); font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; margin-bottom: var(--spacing-sm); }
+        h3 { font-size: clamp(1.1rem, 2vw, 1.5rem); font-weight: 500; }
+        p { font-size: clamp(0.9rem, 1.2vw, 1.125rem); color: var(--text-muted); }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, var(--text-main) 0%, var(--text-muted) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .text-cyan { color: var(--accent-cyan); }
+        .text-magenta { color: var(--accent-magenta); }
+        
+        /* ==========================================================================
+           2. LAYOUT & COMPONENTS
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-md);
+        }
+
+        section {
+            padding: var(--spacing-xl) 0;
+            position: relative;
+        }
+
+        /* Glassmorphism Panels */
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            box-shadow: var(--shadow-panel);
+            transition: border-color var(--trans-fast);
+        }
+
+        /* Buttons & Controls */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 24px;
+            border-radius: var(--radius-pill);
+            font-size: clamp(0.9rem, 1vw, 1rem);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--trans-fast);
+            border: none;
+            outline: none;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid var(--accent-cyan);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+        }
+        .btn-primary:hover {
+            background: rgba(0, 240, 255, 0.2);
+            box-shadow: var(--shadow-glow-cyan);
+            transform: translateY(-2px);
+        }
+
+        .btn-icon {
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            border-radius: 50%;
+            background: var(--bg-panel-light);
+            color: var(--text-main);
+            border: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-icon:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--text-main);
+        }
+        .btn-icon:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        /* Form Controls */
+        .control-group {
+            margin-bottom: var(--spacing-md);
+        }
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--text-main);
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: var(--bg-panel-light);
+            border-radius: 2px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        /* Badge/Marker */
+        .marker-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all var(--trans-fast);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            border: 2px solid var(--bg-base);
+        }
+
+        /* ==========================================================================
+           3. SPECIFIC SECTIONS
+           ========================================================================== */
+        
+        /* Hero */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding-top: 10vh;
+        }
+        .hero-badge {
+            background: rgba(0, 240, 255, 0.05);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            color: var(--accent-cyan);
+            padding: 6px 16px;
+            border-radius: var(--radius-pill);
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: var(--spacing-sm);
+            display: inline-block;
+            backdrop-filter: blur(4px);
+        }
+        .hero p { max-width: 600px; margin: var(--spacing-md) auto; }
+
+        /* Grid Layouts */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+        }
+        @media (min-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr 1fr; }
+        }
+
+        /* --- Section: Modes of Transmission (Legend Pattern) --- */
+        .split-legend-layout {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+        @media (min-width: 1024px) {
+            .split-legend-layout {
+                flex-direction: row;
+                align-items: center;
+            }
+        }
+        
+        .visual-area {
+            flex: 1.5;
+            position: relative;
+            min-height: 300px;
+            background: radial-gradient(circle at center, rgba(30, 38, 60, 0.5) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--spacing-md);
+        }
+        .visual-area svg {
+            width: 100%;
+            height: 100%;
+            max-width: 500px;
+            overflow: visible;
+        }
+
+        .legend-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all var(--trans-fast);
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.05);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(5px);
+        }
+        .legend-item .marker-badge {
+            background: var(--bg-panel-light);
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .legend-item.active .marker-badge {
+            background: var(--accent-cyan);
+            color: var(--bg-base);
+            box-shadow: var(--shadow-glow-cyan);
+        }
+        .legend-item-text h4 { font-size: 1rem; color: var(--text-main); margin-bottom: 2px; }
+        .legend-item-text p { font-size: 0.85rem; margin: 0; }
+
+        /* SVG Interactive Elements */
+        .svg-marker {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .svg-marker circle.outer { fill: rgba(0, 240, 255, 0.1); stroke: rgba(0, 240, 255, 0.5); stroke-width: 1.5; }
+        .svg-marker circle.inner { fill: var(--bg-panel); }
+        .svg-marker text { fill: var(--text-muted); font-size: 12px; font-weight: bold; text-anchor: middle; dominant-baseline: central; font-family: var(--font-sans); }
+        
+        .svg-marker:hover, .svg-marker.active {
+            filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.8));
+        }
+        .svg-marker.active circle.outer { fill: rgba(0, 240, 255, 0.3); stroke: var(--accent-cyan); }
+        .svg-marker.active circle.inner { fill: var(--accent-cyan); }
+        .svg-marker.active text { fill: var(--bg-base); }
+        
+        .path-line { stroke-dasharray: 4 4; animation: march 20s linear infinite; }
+        @keyframes march { to { stroke-dashoffset: -100; } }
+
+        /* --- Section: Working Mechanism (Chain of Infection) --- */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+        .mechanism-viewer {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #04060A; /* Darker back for contrast */
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid var(--border-subtle);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+        @media (max-width: 768px) {
+            .mechanism-viewer { aspect-ratio: 4/3; }
+        }
+
+        .mechanism-stage {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .mechanism-stage.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        /* Stage Text Overlay */
+        .stage-info {
+            position: absolute;
+            bottom: var(--spacing-md);
+            left: var(--spacing-md);
+            right: var(--spacing-md);
+            background: rgba(10, 15, 25, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 16px 24px;
+            border-radius: var(--radius-sm);
+            border-left: 4px solid var(--accent-cyan);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .stage-title { font-size: 1.1rem; font-weight: 600; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 1px;}
+        .stage-desc { font-size: 0.9rem; color: var(--text-main); margin:0;}
+
+        /* Controls */
+        .mechanism-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-panel-light);
+            padding: 12px 24px;
+            border-radius: var(--radius-pill);
+        }
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--border-subtle);
+            transition: all var(--trans-fast);
+        }
+        .dot.active { background: var(--accent-cyan); box-shadow: 0 0 10px var(--accent-cyan); }
+        .control-btns { display: flex; gap: 12px; }
+
+        /* Specific SVG Animations inside stages */
+        .pulse-slow { animation: pulse 3s infinite ease-in-out; }
+        .float-slow { animation: float 6s infinite ease-in-out; }
+        .particle-flow { animation: flowRight 2s infinite linear; }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); filter: drop-shadow(0 0 5px rgba(255,0,85,0.2));}
+            50% { transform: scale(1.05); filter: drop-shadow(0 0 20px rgba(255,0,85,0.6));}
+            100% { transform: scale(1); filter: drop-shadow(0 0 5px rgba(255,0,85,0.2));}
+        }
+        @keyframes float {
+            0% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0); }
+        }
+        @keyframes flowRight {
+            0% { transform: translateX(0) scale(0); opacity: 0; }
+            20% { transform: translateX(20px) scale(1); opacity: 1; }
+            80% { transform: translateX(80px) scale(1); opacity: 1; }
+            100% { transform: translateX(100px) scale(0); opacity: 0; }
+        }
+
+        /* --- Section: Interactive Simulation (SIR) --- */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+            height: 100%;
+        }
+        @media (min-width: 1024px) {
+            .sim-layout { grid-template-columns: 300px 1fr; }
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            height: 100%;
+        }
+        
+        .sim-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: var(--spacing-sm);
+            text-align: center;
+        }
+        .stat-box {
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-sm);
+            padding: 8px;
+        }
+        .stat-val { font-size: 1.2rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .stat-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); }
+        
+        .c-sus { color: var(--accent-cyan); }
+        .c-inf { color: var(--accent-magenta); }
+        .c-rec { color: var(--accent-green); }
+
+        .sim-visual {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            min-height: 500px;
+        }
+        .sim-canvas-container {
+            flex: 1;
+            background: #04060A;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-subtle);
+            overflow: hidden;
+            position: relative;
+        }
+        #sim-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .chart-container {
+            height: 120px;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-subtle);
+            padding: 8px;
+            position: relative;
+        }
+        #chart-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* --- Section: Facts & Misconceptions --- */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+        .card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            transition: transform var(--trans-fast), background var(--trans-fast);
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(255,255,255,0.1);
+        }
+        .card-icon {
+            width: 40px; height: 40px;
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--accent-cyan);
+            border-radius: var(--radius-sm);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 16px;
+        }
+        .card.myth .card-icon {
+            background: rgba(255, 0, 85, 0.1);
+            color: var(--accent-magenta);
+        }
+
+        /* Utilities */
+        .visually-hidden {
+            position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;
+        }
+        svg defs { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Global SVG Definitions for Filters and Gradients -->
+    <svg width="0" height="0" class="visually-hidden">
+        <defs>
+            <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <filter id="glow-magenta" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="8" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <filter id="drop-shadow-soft" x="-10%" y="-10%" width="130%" height="130%">
+                <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#000000" flood-opacity="0.6"/>
+            </filter>
+            
+            <radialGradient id="virus-grad" cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stop-color="#FF3377"/>
+                <stop offset="100%" stop-color="#990033"/>
+            </radialGradient>
+            
+            <linearGradient id="host-healthy" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00F0FF" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="#0055FF" stop-opacity="0.2"/>
+            </linearGradient>
+
+            <linearGradient id="host-infected" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#FF0055" stop-opacity="0.8"/>
+                <stop offset="100%" stop-color="#550000" stop-opacity="0.2"/>
+            </linearGradient>
+            
+            <radialGradient id="cell-grad" cx="50%" cy="50%" r="50%">
+                <stop offset="60%" stop-color="#1A1B41"/>
+                <stop offset="100%" stop-color="#0B0F19"/>
+            </radialGradient>
+        </defs>
+    </svg>
+
+    <main class="container">
+        
+        <!-- HERO -->
+        <section class="hero">
+            <div class="hero-badge">Epidemiology Visualization</div>
+            <h1>Disease <span class="gradient-text">Transmission</span></h1>
+            <p>Explore how pathogens spread through populations, the biological mechanisms at play, and simulate interventions in real-time.</p>
+            <button class="btn btn-primary" onclick="document.getElementById('simulation').scrollIntoView({behavior: 'smooth'})">
+                Run Simulation
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </button>
+        </section>
+
+        <!-- MODES OF TRANSMISSION -->
+        <section id="components">
+            <h2>Modes of Transmission</h2>
+            <p>Pathogens utilize different vehicles and vectors to move from reservoir to host.</p>
+            
+            <div class="glass-panel mt-lg">
+                <div class="split-legend-layout">
+                    <!-- Visual Area with SVG and Markers -->
+                    <div class="visual-area">
+                        <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
+                            <!-- Background Grid/Glow -->
+                            <circle cx="200" cy="200" r="150" fill="url(#cell-grad)" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+                            
+                            <!-- Central stylized abstract "Host" -->
+                            <g filter="url(#drop-shadow-soft)">
+                                <path d="M200 130 C220 130, 240 150, 240 180 C240 210, 210 240, 200 270 C190 240, 160 210, 160 180 C160 150, 180 130, 200 130 Z" fill="url(#host-healthy)" stroke="var(--accent-cyan)" stroke-width="2"/>
+                                <!-- Inner abstract structure -->
+                                <circle cx="200" cy="170" r="15" fill="rgba(255,255,255,0.2)"/>
+                            </g>
+
+                            <!-- Path 1: Droplet (Top Right) -->
+                            <g>
+                                <path class="path-line" d="M 230 150 Q 300 100 330 150" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+                                <circle cx="270" cy="130" r="4" fill="var(--accent-cyan)" opacity="0.6"/>
+                                <circle cx="290" cy="140" r="6" fill="var(--accent-cyan)" opacity="0.8"/>
+                                <circle cx="310" cy="155" r="3" fill="var(--accent-cyan)" opacity="0.5"/>
+                                <!-- Marker -->
+                                <g class="svg-marker" data-target="m-droplet" transform="translate(340, 140)">
+                                    <circle class="outer" cx="0" cy="0" r="14"/>
+                                    <circle class="inner" cx="0" cy="0" r="10"/>
+                                    <text x="0" y="1">1</text>
+                                </g>
+                            </g>
+
+                            <!-- Path 2: Airborne (Right) -->
+                            <g>
+                                <path class="path-line" d="M 245 180 L 350 180" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+                                <g fill="rgba(255,255,255,0.5)">
+                                    <circle cx="280" cy="175" r="1.5"/>
+                                    <circle cx="290" cy="185" r="2"/>
+                                    <circle cx="310" cy="178" r="1"/>
+                                    <circle cx="330" cy="182" r="1.5"/>
+                                </g>
+                                <g class="svg-marker" data-target="m-airborne" transform="translate(360, 180)">
+                                    <circle class="outer" cx="0" cy="0" r="14"/>
+                                    <circle class="inner" cx="0" cy="0" r="10"/>
+                                    <text x="0" y="1">2</text>
+                                </g>
+                            </g>
+
+                            <!-- Path 3: Direct Contact (Bottom Right) -->
+                            <g>
+                                <path class="path-line" d="M 220 230 Q 280 280 320 250" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+                                <!-- Stylized abstract hands touching -->
+                                <path d="M 280 240 C 290 230, 300 240, 290 250 Z" fill="var(--accent-cyan)" opacity="0.4"/>
+                                <path d="M 300 240 C 290 230, 280 240, 290 250 Z" fill="var(--accent-magenta)" opacity="0.4"/>
+                                <g class="svg-marker" data-target="m-contact" transform="translate(330, 260)">
+                                    <circle class="outer" cx="0" cy="0" r="14"/>
+                                    <circle class="inner" cx="0" cy="0" r="10"/>
+                                    <text x="0" y="1">3</text>
+                                </g>
+                            </g>
+
+                            <!-- Path 4: Vector-borne (Top Left) -->
+                            <g>
+                                <path class="path-line" d="M 170 150 Q 100 100 80 160" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+                                <!-- Abstract mosquito/bug -->
+                                <g transform="translate(110, 120) rotate(-30)">
+                                    <ellipse cx="0" cy="0" rx="8" ry="3" fill="var(--text-muted)"/>
+                                    <path d="M -2 -3 Q 5 -10 12 -3" fill="none" stroke="rgba(255,255,255,0.4)"/>
+                                    <path d="M -2 3 Q 5 10 12 3" fill="none" stroke="rgba(255,255,255,0.4)"/>
+                                    <line x1="-8" y1="0" x2="-15" y2="0" stroke="var(--accent-magenta)" stroke-width="1.5"/>
+                                </g>
+                                <g class="svg-marker" data-target="m-vector" transform="translate(60, 170)">
+                                    <circle class="outer" cx="0" cy="0" r="14"/>
+                                    <circle class="inner" cx="0" cy="0" r="10"/>
+                                    <text x="0" y="1">4</text>
+                                </g>
+                            </g>
+
+                            <!-- Path 5: Vehicle-borne (Bottom Left) -->
+                            <g>
+                                <path class="path-line" d="M 180 230 Q 120 280 80 240" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+                                <!-- Abstract water/food (waves/blocks) -->
+                                <path d="M 110 250 Q 120 240 130 250 T 150 250" fill="none" stroke="var(--accent-cyan)" stroke-width="2" opacity="0.6"/>
+                                <rect x="120" y="260" width="8" height="8" fill="var(--text-muted)" rx="2"/>
+                                <g class="svg-marker" data-target="m-vehicle" transform="translate(60, 230)">
+                                    <circle class="outer" cx="0" cy="0" r="14"/>
+                                    <circle class="inner" cx="0" cy="0" r="10"/>
+                                    <text x="0" y="1">5</text>
+                                </g>
+                            </g>
+                        </svg>
+                    </div>
+
+                    <!-- Legend List -->
+                    <div class="legend-area">
+                        <div class="legend-item" id="m-droplet">
+                            <div class="marker-badge">1</div>
+                            <div class="legend-item-text">
+                                <h4>Droplet Transmission</h4>
+                                <p>Large respiratory particles (>5μm) traveling short distances (sneezing, coughing).</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="m-airborne">
+                            <div class="marker-badge">2</div>
+                            <div class="legend-item-text">
+                                <h4>Airborne Transmission</h4>
+                                <p>Aerosolized particles (<5μm) suspended in air for long periods, travelling far.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="m-contact">
+                            <div class="marker-badge">3</div>
+                            <div class="legend-item-text">
+                                <h4>Direct Contact</h4>
+                                <p>Physical transfer via skin-to-skin contact or kissing.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="m-vector">
+                            <div class="marker-badge">4</div>
+                            <div class="legend-item-text">
+                                <h4>Vector-borne</h4>
+                                <p>Living organisms (mosquitoes, ticks) carrying pathogens between hosts.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="m-vehicle">
+                            <div class="marker-badge">5</div>
+                            <div class="legend-item-text">
+                                <h4>Vehicle-borne (Fomites)</h4>
+                                <p>Inanimate objects, contaminated water, or food spreading the disease.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING PROCESS (CHAIN OF INFECTION) -->
+        <section id="mechanism">
+            <h2>The Chain of Infection</h2>
+            <p>Transmission is a sequential process. Breaking any single link halts the spread of the disease.</p>
+            
+            <div class="glass-panel mechanism-container mt-lg">
+                <!-- Visual Viewer -->
+                <div class="mechanism-viewer" id="chain-viewer">
+                    
+                    <!-- Stage 1: Agent -->
+                    <div class="mechanism-stage active" id="stage-0">
+                        <svg viewBox="0 0 400 300" width="100%" height="100%">
+                            <!-- Complex pulsing virus -->
+                            <g transform="translate(200, 150)" class="pulse-slow">
+                                <circle cx="0" cy="0" r="40" fill="url(#virus-grad)" filter="url(#glow-magenta)"/>
+                                <!-- Spikes -->
+                                <g stroke="rgba(255,255,255,0.6)" stroke-width="3" stroke-linecap="round">
+                                    <line x1="0" y1="-40" x2="0" y2="-55"/> <circle cx="0" cy="-55" r="4" fill="var(--accent-magenta)"/>
+                                    <line x1="0" y1="40" x2="0" y2="55"/> <circle cx="0" cy="55" r="4" fill="var(--accent-magenta)"/>
+                                    <line x1="-40" y1="0" x2="-55" y2="0"/> <circle cx="-55" cy="0" r="4" fill="var(--accent-magenta)"/>
+                                    <line x1="40" y1="0" x2="55" y2="0"/> <circle cx="55" cy="0" r="4" fill="var(--accent-magenta)"/>
+                                    
+                                    <line x1="-28" y1="-28" x2="-40" y2="-40"/> <circle cx="-40" cy="-40" r="3" fill="var(--accent-magenta)"/>
+                                    <line x1="28" y1="28" x2="40" y2="40"/> <circle cx="40" cy="40" r="3" fill="var(--accent-magenta)"/>
+                                    <line x1="-28" y1="28" x2="-40" y2="40"/> <circle cx="-40" cy="40" r="3" fill="var(--accent-magenta)"/>
+                                    <line x1="28" y1="-28" x2="40" y2="-40"/> <circle cx="40" cy="-40" r="3" fill="var(--accent-magenta)"/>
+                                </g>
+                                <!-- Inner core -->
+                                <path d="M-15 -10 Q 0 -20 15 -10 T 15 15 T -15 15 Z" fill="rgba(0,0,0,0.4)"/>
+                            </g>
+                        </svg>
+                        <div class="stage-info">
+                            <span class="stage-title">1. Infectious Agent</span>
+                            <p class="stage-desc">The pathogen (virus, bacteria, fungus) with characteristics like virulence and infectious dose.</p>
+                        </div>
+                    </div>
+
+                    <!-- Stage 2: Reservoir -->
+                    <div class="mechanism-stage" id="stage-1">
+                        <svg viewBox="0 0 400 300" width="100%" height="100%">
+                            <!-- Infected Host -->
+                            <g transform="translate(200, 150)">
+                                <path d="M0 -60 C 40 -60, 60 -20, 60 20 C 60 60, 30 100, 0 120 C -30 100, -60 60, -60 20 C -60 -20, -40 -60, 0 -60 Z" fill="url(#host-infected)" filter="url(#glow-magenta)"/>
+                                <!-- Internal agents multiplying -->
+                                <circle cx="-20" cy="10" r="5" fill="var(--accent-magenta)" class="pulse-slow"/>
+                                <circle cx="15" cy="-10" r="3" fill="var(--accent-magenta)" class="pulse-slow" style="animation-delay: 0.5s"/>
+                                <circle cx="10" cy="40" r="6" fill="var(--accent-magenta)" class="pulse-slow" style="animation-delay: 1s"/>
+                                <circle cx="-10" cy="50" r="4" fill="var(--accent-magenta)" class="pulse-slow" style="animation-delay: 0.2s"/>
+                            </g>
+                        </svg>
+                        <div class="stage-info">
+                            <span class="stage-title">2. Reservoir</span>
+                            <p class="stage-desc">The environment where the agent lives and multiplies (human, animal, water).</p>
+                        </div>
+                    </div>
+
+                    <!-- Stage 3: Portal of Exit -->
+                    <div class="mechanism-stage" id="stage-2">
+                        <svg viewBox="0 0 400 300" width="100%" height="100%">
+                            <g transform="translate(100, 150)">
+                                <!-- Host profile (half) -->
+                                <path d="M-50 -60 C 0 -60, 20 -20, 20 0 L 20 40 C 20 70, -20 100, -50 120 Z" fill="url(#host-infected)"/>
+                                <!-- Exit path -->
+                                <path d="M15 -10 Q 50 -10 80 10" fill="none" stroke="var(--border-highlight)" stroke-width="4" stroke-dasharray="4 4" class="path-line"/>
+                                <!-- Particles escaping -->
+                                <g class="particle-flow">
+                                    <circle cx="30" cy="-5" r="4" fill="var(--accent-magenta)" filter="url(#glow-magenta)"/>
+                                    <circle cx="45" cy="5" r="2" fill="var(--accent-magenta)"/>
+                                    <circle cx="60" cy="0" r="3" fill="var(--accent-magenta)"/>
+                                </g>
+                            </g>
+                        </svg>
+                        <div class="stage-info">
+                            <span class="stage-title">3. Portal of Exit</span>
+                            <p class="stage-desc">The path by which the pathogen leaves the reservoir (respiratory tract, blood).</p>
+                        </div>
+                    </div>
+
+                    <!-- Stage 4: Transmission -->
+                    <div class="mechanism-stage" id="stage-3">
+                        <svg viewBox="0 0 400 300" width="100%" height="100%">
+                            <!-- Environment space -->
+                            <rect width="400" height="300" fill="transparent"/>
+                            <!-- Particles traveling through air/space -->
+                            <g class="float-slow">
+                                <path d="M50 150 Q 200 50 350 150" fill="none" stroke="rgba(255,0,85,0.2)" stroke-width="2"/>
+                                <g transform="translate(150, 100)">
+                                    <circle cx="0" cy="0" r="8" fill="var(--accent-magenta)" filter="url(#glow-magenta)"/>
+                                    <circle cx="-15" cy="15" r="4" fill="var(--accent-magenta)"/>
+                                    <circle cx="20" cy="10" r="3" fill="var(--accent-magenta)"/>
+                                </g>
+                            </g>
+                            <g class="float-slow" style="animation-delay: 2s; animation-duration: 8s;">
+                                <path d="M50 200 Q 200 280 350 200" fill="none" stroke="rgba(255,0,85,0.1)" stroke-width="2"/>
+                                <circle cx="220" cy="230" r="5" fill="var(--accent-magenta)"/>
+                            </g>
+                        </svg>
+                        <div class="stage-info">
+                            <span class="stage-title">4. Mode of Transmission</span>
+                            <p class="stage-desc">The mechanism of transfer (droplet, airborne, vector) bridging the gap.</p>
+                        </div>
+                    </div>
+
+                    <!-- Stage 5: Portal of Entry -->
+                    <div class="mechanism-stage" id="stage-4">
+                        <svg viewBox="0 0 400 300" width="100%" height="100%">
+                            <g transform="translate(300, 150)">
+                                <!-- Healthy Host profile (half, facing left) -->
+                                <path d="M50 -60 C 0 -60, -20 -20, -20 0 L -20 40 C -20 70, 20 100, 50 120 Z" fill="url(#host-healthy)"/>
+                                <!-- Entry path -->
+                                <path d="M-80 0 Q -50 -10 -15 -5" fill="none" stroke="var(--accent-cyan)" stroke-width="4" stroke-dasharray="4 4" class="path-line"/>
+                                <!-- Particles entering -->
+                                <g class="particle-flow" style="animation-direction: reverse;">
+                                    <circle cx="-60" cy="5" r="3" fill="var(--accent-magenta)"/>
+                                    <circle cx="-40" cy="-5" r="5" fill="var(--accent-magenta)" filter="url(#glow-magenta)"/>
+                                    <circle cx="-25" cy="0" r="2" fill="var(--accent-magenta)"/>
+                                </g>
+                            </g>
+                        </svg>
+                        <div class="stage-info">
+                            <span class="stage-title">5. Portal of Entry</span>
+                            <p class="stage-desc">How the agent enters the new host (inhalation, broken skin, ingestion).</p>
+                        </div>
+                    </div>
+
+                    <!-- Stage 6: Susceptible Host -->
+                    <div class="mechanism-stage" id="stage-5">
+                        <svg viewBox="0 0 400 300" width="100%" height="100%">
+                            <g transform="translate(200, 150)">
+                                <!-- Host transitioning from Cyan to Magenta -->
+                                <path id="final-host" d="M0 -60 C 40 -60, 60 -20, 60 20 C 60 60, 30 100, 0 120 C -30 100, -60 60, -60 20 C -60 -20, -40 -60, 0 -60 Z" fill="url(#host-healthy)"/>
+                                
+                                <!-- Infection spreading visualization (css animation will trigger on active) -->
+                                <circle cx="0" cy="0" r="0" fill="url(#host-infected)" opacity="0" id="infection-spread">
+                                    <animate attributeName="r" values="0; 120" dur="2s" begin="stage-5-active.begin" fill="freeze" />
+                                    <animate attributeName="opacity" values="0; 1" dur="1s" begin="stage-5-active.begin" fill="freeze" />
+                                </circle>
+                                <!-- Dummy element to trigger animation -->
+                                <animate id="stage-5-active" begin="indefinite" dur="0.1s"/>
+                            </g>
+                        </svg>
+                        <div class="stage-info">
+                            <span class="stage-title">6. Susceptible Host</span>
+                            <p class="stage-desc">A person lacking immunity. Once infected, they become the new Reservoir, restarting the cycle.</p>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Controls -->
+                <div class="mechanism-controls">
+                    <div class="progress-dots" id="chain-dots">
+                        <!-- Generated by JS -->
+                    </div>
+                    <div class="control-btns">
+                        <button class="btn-icon" id="btn-prev" aria-label="Previous step">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        <button class="btn-icon" id="btn-play" aria-label="Auto play">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-play"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="icon-pause" style="display:none;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                        </button>
+                        <button class="btn-icon" id="btn-next" aria-label="Next step">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION (SIR MODEL) -->
+        <section id="simulation">
+            <h2>Population Simulation (SIR Model)</h2>
+            <p>Observe how varying transmission dynamics affect the spread within a closed population.</p>
+            
+            <div class="glass-panel sim-layout mt-lg">
+                <!-- Left: Controls & Stats -->
+                <div class="sim-controls">
+                    
+                    <div class="sim-stats">
+                        <div class="stat-box">
+                            <div class="stat-val c-sus" id="stat-s">99</div>
+                            <div class="stat-label">Susceptible</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-val c-inf" id="stat-i">1</div>
+                            <div class="stat-label">Infected</div>
+                        </div>
+                        <div class="stat-box">
+                            <div class="stat-val c-rec" id="stat-r">0</div>
+                            <div class="stat-label">Recovered</div>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <label>Transmission Probability</label>
+                            <span id="val-trans">40%</span>
+                        </div>
+                        <input type="range" id="slider-trans" min="0" max="100" value="40">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <label>Recovery Time</label>
+                            <span id="val-rec">8s</span>
+                        </div>
+                        <input type="range" id="slider-rec" min="2" max="20" value="8">
+                    </div>
+                    
+                    <div class="control-group">
+                        <div class="control-header">
+                            <label>Social Distancing (Speed)</label>
+                            <span id="val-dist">Off</span>
+                        </div>
+                        <input type="range" id="slider-dist" min="0" max="100" value="0">
+                    </div>
+
+                    <div style="margin-top: auto; display: flex; gap: 8px;">
+                        <button class="btn btn-primary" id="btn-reset-sim" style="flex:1;">Restart Outbreak</button>
+                    </div>
+                </div>
+
+                <!-- Right: Visuals -->
+                <div class="sim-visual">
+                    <div class="sim-canvas-container" id="canvas-container">
+                        <canvas id="sim-canvas"></canvas>
+                    </div>
+                    
+                    <!-- Real-time Chart -->
+                    <div class="chart-container">
+                        <canvas id="chart-canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FACTS & MYTHS -->
+        <section>
+            <h2>Epidemiology Fundamentals</h2>
+            
+            <div class="cards-grid mt-lg">
+                <div class="card">
+                    <div class="card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <h3>R0 (R-Naught)</h3>
+                    <p>The basic reproduction number indicates how contagious a disease is. An R0 of 2 means one infected person will, on average, infect two others in a fully susceptible population.</p>
+                </div>
+                
+                <div class="card">
+                    <div class="card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </div>
+                    <h3>Herd Immunity</h3>
+                    <p>When a large portion of a community becomes immune (via infection or vaccination), the spread is unlikely, providing indirect protection to those who aren't immune.</p>
+                </div>
+
+                <div class="card myth">
+                    <div class="card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                    </div>
+                    <h3>Common Myth</h3>
+                    <p>"Viruses always evolve to become less deadly." While often true as dead hosts don't spread disease, evolution only optimizes for transmission. If high viral load increases spread, virulence may remain high.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        /**
+         * Ambient Background Particle Engine
+         */
+        const BgEngine = (function() {
+            const canvas = document.getElementById('bg-canvas');
+            const ctx = canvas.getContext('2d', { alpha: false });
+            let width, height;
+            let particles = [];
+            
+            function resize() {
+                width = window.innerWidth;
+                height = window.innerHeight;
+                canvas.width = width * window.devicePixelRatio;
+                canvas.height = height * window.devicePixelRatio;
+                ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                initParticles();
+            }
+
+            function initParticles() {
+                particles = [];
+                const count = window.innerWidth < 768 ? 20 : 40; // Fewer on mobile
+                for(let i=0; i<count; i++) {
+                    particles.push({
+                        x: Math.random() * width,
+                        y: Math.random() * height,
+                        r: Math.random() * 4 + 1,
+                        vx: (Math.random() - 0.5) * 0.3,
+                        vy: (Math.random() - 0.5) * 0.3,
+                        hue: Math.random() > 0.5 ? 190 : 280, // Cyan or Purple tones
+                        alpha: Math.random() * 0.3 + 0.1
+                    });
+                }
+            }
+
+            function draw() {
+                // Clear with base color
+                ctx.fillStyle = '#07090F';
+                ctx.fillRect(0, 0, width, height);
+                
+                // Draw slight vignette
+                const grd = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, width*0.7);
+                grd.addColorStop(0, 'rgba(18, 22, 35, 0.4)');
+                grd.addColorStop(1, 'transparent');
+                ctx.fillStyle = grd;
+                ctx.fillRect(0, 0, width, height);
+
+                ctx.globalCompositeOperation = 'screen';
+                
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    
+                    if(p.x < 0) p.x = width;
+                    if(p.x > width) p.x = 0;
+                    if(p.y < 0) p.y = height;
+                    if(p.y > height) p.y = 0;
+
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                    ctx.fillStyle = `hsla(${p.hue}, 80%, 60%, ${p.alpha})`;
+                    ctx.shadowBlur = p.r * 3;
+                    ctx.shadowColor = `hsla(${p.hue}, 100%, 50%, ${p.alpha})`;
+                    ctx.fill();
+                });
+                
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.shadowBlur = 0;
+                
+                requestAnimationFrame(draw);
+            }
+
+            window.addEventListener('resize', resize);
+            resize();
+            draw();
+        })();
+
+        /**
+         * SVG Legend Interaction (Modes of Transmission)
+         */
+        (function() {
+            const markers = document.querySelectorAll('.svg-marker');
+            const legends = document.querySelectorAll('.legend-item');
+            
+            function clearActive() {
+                markers.forEach(m => m.classList.remove('active'));
+                legends.forEach(l => l.classList.remove('active'));
+            }
+
+            function activateTarget(id) {
+                clearActive();
+                const marker = document.querySelector(`.svg-marker[data-target="${id}"]`);
+                const legend = document.getElementById(id);
+                if(marker) marker.classList.add('active');
+                if(legend) {
+                    legend.classList.add('active');
+                    // Mobile: scroll legend into view if triggered via svg
+                    if(window.innerWidth < 1024) {
+                        legend.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                }
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => activateTarget(marker.dataset.target));
+                marker.addEventListener('click', () => activateTarget(marker.dataset.target));
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); activateTarget(marker.dataset.target); }, {passive: false});
+            });
+
+            legends.forEach(legend => {
+                legend.addEventListener('mouseenter', () => activateTarget(legend.id));
+                legend.addEventListener('click', () => activateTarget(legend.id));
+            });
+        })();
+
+        /**
+         * Chain of Infection Process Mechanism (Stages)
+         */
+        const ProcessEngine = (function() {
+            const stages = document.querySelectorAll('.mechanism-stage');
+            const dotsContainer = document.getElementById('chain-dots');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnPlay = document.getElementById('btn-play');
+            const iconPlay = btnPlay.querySelector('.icon-play');
+            const iconPause = btnPlay.querySelector('.icon-pause');
+            
+            let current = 0;
+            let total = stages.length;
+            let autoPlayTimer = null;
+            let isPlaying = false;
+
+            // Generate dots
+            for(let i=0; i<total; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'dot' + (i===0 ? ' active' : '');
+                dot.addEventListener('click', () => goto(i));
+                dotsContainer.appendChild(dot);
+            }
+            const dots = document.querySelectorAll('.dot');
+
+            function updateUI() {
+                // Stages
+                stages.forEach((el, index) => {
+                    if(index === current) {
+                        el.classList.add('active');
+                        // Trigger specific SVG animations dynamically if needed
+                        if(index === 5) {
+                            const anim = document.getElementById('stage-5-active');
+                            if(anim) anim.beginElement();
+                        }
+                    } else {
+                        el.classList.remove('active');
+                    }
+                });
+                // Dots
+                dots.forEach((dot, i) => dot.classList.toggle('active', i === current));
+                // Buttons
+                btnPrev.disabled = current === 0;
+                btnNext.disabled = current === total - 1;
+            }
+
+            function goto(index) {
+                if(index < 0 || index >= total) return;
+                current = index;
+                updateUI();
+                if(isPlaying && current === total - 1) togglePlay(); // stop at end
+            }
+
+            function next() { goto(current + 1); }
+            function prev() { goto(current - 1); }
+
+            function togglePlay() {
+                isPlaying = !isPlaying;
+                if(isPlaying) {
+                    iconPlay.style.display = 'none';
+                    iconPause.style.display = 'block';
+                    if(current === total - 1) current = -1; // restart if at end
+                    next(); // move immediately
+                    autoPlayTimer = setInterval(() => {
+                        if(current < total - 1) next();
+                        else togglePlay(); // auto stop
+                    }, 3000);
+                } else {
+                    iconPlay.style.display = 'block';
+                    iconPause.style.display = 'none';
+                    clearInterval(autoPlayTimer);
+                }
+            }
+
+            btnNext.addEventListener('click', () => { if(isPlaying) togglePlay(); next(); });
+            btnPrev.addEventListener('click', () => { if(isPlaying) togglePlay(); prev(); });
+            btnPlay.addEventListener('click', togglePlay);
+
+            updateUI(); // Init
+        })();
+
+        /**
+         * SIR Interactive Simulation Canvas
+         */
+        const SimEngine = (function() {
+            const container = document.getElementById('canvas-container');
+            const canvas = document.getElementById('sim-canvas');
+            const ctx = canvas.getContext('2d', { alpha: false });
+            
+            const chartCanvas = document.getElementById('chart-canvas');
+            const chartCtx = chartCanvas.getContext('2d');
+
+            // UI Elements
+            const sliderTrans = document.getElementById('slider-trans');
+            const valTrans = document.getElementById('val-trans');
+            const sliderRec = document.getElementById('slider-rec');
+            const valRec = document.getElementById('val-rec');
+            const sliderDist = document.getElementById('slider-dist');
+            const valDist = document.getElementById('val-dist');
+            const btnReset = document.getElementById('btn-reset-sim');
+            
+            const statS = document.getElementById('stat-s');
+            const statI = document.getElementById('stat-i');
+            const statR = document.getElementById('stat-r');
+
+            // Sim Parameters
+            const POPULATION = 150; // Fixed for visual consistency
+            const RADIUS = window.innerWidth < 768 ? 3 : 5;
+            const BASE_SPEED = window.innerWidth < 768 ? 1 : 2;
+            
+            // State
+            let particles = [];
+            let history = []; // for chart
+            let simFrame = 0;
+            let width, height;
+            let isRunning = true;
+            
+            // Dynamic Params from UI
+            let transProb = parseInt(sliderTrans.value) / 100;
+            let recTime = parseInt(sliderRec.value) * 60; // frames (assuming 60fps)
+            let distFactor = parseInt(sliderDist.value) / 100; // 0 to 1
+
+            // Colors
+            const COLOR_S = '#00F0FF';
+            const COLOR_I = '#FF0055';
+            const COLOR_R = '#00FF66';
+
+            class Particle {
+                constructor(x, y, state) {
+                    this.x = x;
+                    this.y = y;
+                    const angle = Math.random() * Math.PI * 2;
+                    this.baseVx = Math.cos(angle) * BASE_SPEED;
+                    this.baseVy = Math.sin(angle) * BASE_SPEED;
+                    this.vx = this.baseVx;
+                    this.vy = this.baseVy;
+                    this.state = state; // 0:S, 1:I, 2:R
+                    this.infectedTime = 0;
+                    this.r = RADIUS;
+                }
+
+                updateSpeed() {
+                    // Apply social distancing
+                    const speedMod = 1 - (distFactor * 0.9); // max 90% slow down
+                    this.vx = this.baseVx * speedMod;
+                    this.vy = this.baseVy * speedMod;
+                }
+
+                move() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+
+                    // Bounce
+                    if (this.x < this.r) { this.x = this.r; this.vx *= -1; this.baseVx *= -1;}
+                    if (this.x > width - this.r) { this.x = width - this.r; this.vx *= -1; this.baseVx *= -1;}
+                    if (this.y < this.r) { this.y = this.r; this.vy *= -1; this.baseVy *= -1;}
+                    if (this.y > height - this.r) { this.y = height - this.r; this.vy *= -1; this.baseVy *= -1;}
+
+                    if (this.state === 1) {
+                        this.infectedTime++;
+                        if (this.infectedTime > recTime) {
+                            this.state = 2; // Recovered
+                        }
+                    }
+                }
+
+                draw() {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+                    
+                    if (this.state === 0) {
+                        ctx.fillStyle = COLOR_S;
+                        ctx.shadowBlur = 5;
+                        ctx.shadowColor = COLOR_S;
+                    } else if (this.state === 1) {
+                        ctx.fillStyle = COLOR_I;
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = COLOR_I;
+                        // pulse effect for infected
+                        const pulse = Math.sin(simFrame * 0.1) * 2;
+                        ctx.arc(this.x, this.y, this.r + pulse > 0 ? this.r + pulse : this.r, 0, Math.PI * 2);
+                    } else {
+                        ctx.fillStyle = COLOR_R;
+                        ctx.shadowBlur = 2;
+                        ctx.shadowColor = COLOR_R;
+                    }
+                    ctx.fill();
+                }
+            }
+
+            function resize() {
+                const rect = container.getBoundingClientRect();
+                width = rect.width;
+                height = rect.height;
+                
+                canvas.width = width * window.devicePixelRatio;
+                canvas.height = height * window.devicePixelRatio;
+                ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+                const cRect = chartCanvas.parentElement.getBoundingClientRect();
+                chartCanvas.width = cRect.width * window.devicePixelRatio;
+                chartCanvas.height = cRect.height * window.devicePixelRatio;
+                chartCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                
+                // Don't reset sim on resize, just ensure particles stay in bounds
+                particles.forEach(p => {
+                    if(p.x > width) p.x = width - p.r;
+                    if(p.y > height) p.y = height - p.r;
+                });
+            }
+
+            function initSim() {
+                particles = [];
+                history = [];
+                simFrame = 0;
+                
+                // 1 initially infected, rest susceptible
+                for(let i=0; i<POPULATION; i++) {
+                    const state = i === 0 ? 1 : 0;
+                    const p = new Particle(
+                        Math.random() * (width - RADIUS*2) + RADIUS,
+                        Math.random() * (height - RADIUS*2) + RADIUS,
+                        state
+                    );
+                    p.updateSpeed();
+                    particles.push(p);
+                }
+                updateStats();
+            }
+
+            function checkCollisions() {
+                // Simple O(N^2) is fine for N=150
+                for(let i=0; i<particles.length; i++) {
+                    for(let j=i+1; j<particles.length; j++) {
+                        const p1 = particles[i];
+                        const p2 = particles[j];
+                        
+                        // Distance check
+                        const dx = p1.x - p2.x;
+                        const dy = p1.y - p2.y;
+                        const distSq = dx*dx + dy*dy;
+                        const minDist = p1.r + p2.r;
+                        
+                        if(distSq < minDist * minDist) {
+                            // Infection Logic
+                            if((p1.state === 1 && p2.state === 0) || (p1.state === 0 && p2.state === 1)) {
+                                if(Math.random() < transProb) {
+                                    p1.state = 1;
+                                    p2.state = 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            function updateStats() {
+                let s=0, i=0, r=0;
+                particles.forEach(p => {
+                    if(p.state === 0) s++;
+                    else if(p.state === 1) i++;
+                    else r++;
+                });
+
+                statS.textContent = s;
+                statI.textContent = i;
+                statR.textContent = r;
+
+                // Record history every few frames for chart
+                if(simFrame % 5 === 0) {
+                    history.push({s, i, r});
+                    // limit history to prevent memory leak and squishing
+                    if(history.length > 500) {
+                        // subsample or just shift (shift creates moving window)
+                        // For a full epidemic curve, we let it squeeze.
+                    }
+                }
+            }
+
+            function drawChart() {
+                const cw = chartCanvas.width / window.devicePixelRatio;
+                const ch = chartCanvas.height / window.devicePixelRatio;
+                
+                chartCtx.clearRect(0,0, cw, ch);
+                
+                if(history.length === 0) return;
+
+                const step = cw / Math.max(200, history.length); // Draw width scaling
+                
+                // Helper to draw filled area
+                function drawArea(key, color, stackedOn = null) {
+                    chartCtx.beginPath();
+                    chartCtx.moveTo(0, ch);
+                    
+                    history.forEach((data, index) => {
+                        const x = index * step;
+                        const val = data[key];
+                        const baseOffset = stackedOn ? data[stackedOn] : 0;
+                        const y = ch - ((val + baseOffset) / POPULATION) * ch;
+                        chartCtx.lineTo(x, y);
+                    });
+                    
+                    chartCtx.lineTo(history.length * step, ch);
+                    chartCtx.lineTo(0, ch);
+                    chartCtx.fillStyle = color;
+                    chartCtx.fill();
+                }
+
+                // Stacked Area: S (bottom), I (middle), R (top) ... actually stacking S, then S+I, then S+I+R=total
+                // Better approach: draw R first (full height), then S+I, then I.
+                // Let's do simple lines for clarity instead of stacked areas which can confuse.
+                
+                function drawLine(key, color) {
+                    chartCtx.beginPath();
+                    chartCtx.strokeStyle = color;
+                    chartCtx.lineWidth = 2;
+                    history.forEach((data, index) => {
+                        const x = index * step;
+                        const y = ch - (data[key] / POPULATION) * ch;
+                        if(index === 0) chartCtx.moveTo(x,y);
+                        else chartCtx.lineTo(x,y);
+                    });
+                    chartCtx.stroke();
+                }
+
+                drawLine('s', COLOR_S);
+                drawLine('r', COLOR_R);
+                drawLine('i', COLOR_I); // draw infected last so it's on top
+            }
+
+            function loop() {
+                if(!isRunning) return;
+
+                // Canvas trailing effect
+                ctx.fillStyle = 'rgba(4, 6, 10, 0.4)'; // Dark background with opacity for trails
+                ctx.fillRect(0, 0, width, height);
+                ctx.globalCompositeOperation = 'lighter'; // neon blending
+
+                particles.forEach(p => p.move());
+                checkCollisions();
+                particles.forEach(p => p.draw());
+                
+                ctx.globalCompositeOperation = 'source-over';
+                
+                updateStats();
+                drawChart();
+
+                simFrame++;
+                requestAnimationFrame(loop);
+            }
+
+            // Event Listeners for UI
+            sliderTrans.addEventListener('input', (e) => {
+                transProb = e.target.value / 100;
+                valTrans.textContent = e.target.value + '%';
+            });
+            sliderRec.addEventListener('input', (e) => {
+                recTime = e.target.value * 60;
+                valRec.textContent = e.target.value + 's';
+            });
+            sliderDist.addEventListener('input', (e) => {
+                distFactor = e.target.value / 100;
+                valDist.textContent = e.target.value > 0 ? e.target.value + '%' : 'Off';
+                particles.forEach(p => p.updateSpeed());
+            });
+            
+            btnReset.addEventListener('click', () => {
+                initSim();
+            });
+
+            window.addEventListener('resize', resize);
+            
+            // Initialization
+            // Small delay to ensure CSS layout is done
+            setTimeout(() => {
+                resize();
+                initSim();
+                loop();
+            }, 100);
+
+        })();
+
+    </script>
+</body>
+</html>

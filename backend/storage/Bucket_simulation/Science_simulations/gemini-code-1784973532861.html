@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Trait Inheritance | Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           RESET & CORE VARIABLES
+           ========================================================================== */
+        :root {
+            --bg-base: #050914;
+            --bg-surface: rgba(15, 23, 42, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            --accent-cyan: #00f0ff;
+            --accent-magenta: #ff003c;
+            --accent-purple: #b026ff;
+            --accent-green: #39ff14;
+            --accent-yellow: #ffd700;
+
+            --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+
+            --glow-cyan: 0 0 20px rgba(0, 240, 255, 0.3);
+            --glow-magenta: 0 0 20px rgba(255, 0, 60, 0.3);
+            --glow-purple: 0 0 20px rgba(176, 38, 255, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* Ambient Background */
+        #ambient-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2rem, 5vw, 4rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 600; letter-spacing: -0.01em; margin-bottom: 1rem;}
+        h3 { font-size: clamp(1.2rem, 2vw, 1.8rem); font-weight: 500; }
+        p { font-size: clamp(0.9rem, 1.5vw, 1.1rem); line-height: 1.6; color: var(--text-muted); }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Layout & Glassmorphism */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 5vw;
+        }
+
+        section {
+            padding: 10vh 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+        }
+
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 var(--glass-highlight);
+            padding: clamp(1.5rem, 3vw, 3rem);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        }
+
+        /* ==========================================================================
+           COMPONENTS: HERO SECTION
+           ========================================================================== */
+        .hero-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            align-items: center;
+            height: 100%;
+        }
+
+        #dna-hero-canvas {
+            width: 100%;
+            height: 60vh;
+            min-height: 400px;
+            filter: drop-shadow(0 0 30px rgba(0, 240, 255, 0.2));
+        }
+
+        .tagline {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            color: var(--accent-cyan);
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 1.5rem;
+        }
+
+        /* ==========================================================================
+           COMPONENTS: DIAGRAM & LEGEND (MANDATORY RULE IMPLEMENTATION)
+           ========================================================================== */
+        .diagram-container {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 2rem;
+            align-items: center;
+            margin-top: 2rem;
+        }
+
+        .svg-canvas {
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            position: relative;
+        }
+
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.1);
+            border-color: rgba(0, 240, 255, 0.4);
+            transform: translateX(10px);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .marker-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-base);
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1rem;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .legend-item.active .marker-badge {
+            background: var(--accent-cyan);
+            color: var(--bg-base);
+            box-shadow: 0 0 20px var(--accent-cyan);
+        }
+
+        .legend-text h4 { color: var(--text-main); font-size: 1.1rem; margin-bottom: 0.2rem; }
+        .legend-text p { font-size: 0.85rem; margin: 0; }
+
+        /* SVG Inner markers */
+        .svg-marker {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .svg-marker circle.pulse {
+            transform-origin: center;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        .svg-marker.active circle.bg {
+            fill: var(--accent-cyan);
+        }
+        .svg-marker.active text {
+            fill: var(--bg-base);
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+
+        /* ==========================================================================
+           COMPONENTS: WORKING MECHANISM
+           ========================================================================== */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .mech-visual {
+            width: 100%;
+            height: 50vh;
+            min-height: 400px;
+            background: radial-gradient(circle at center, rgba(30,40,70,0.5) 0%, rgba(5,9,20,0) 70%);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #mech-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .mech-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            background: rgba(0,0,0,0.2);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+        }
+
+        .mech-caption {
+            text-align: center;
+            min-height: 60px;
+        }
+        .mech-caption h3 { color: var(--accent-cyan); margin-bottom: 0.5rem; }
+
+        .progress-bar {
+            display: flex;
+            gap: 0.5rem;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .progress-dot {
+            flex: 1;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .progress-dot.active { background: var(--accent-cyan); box-shadow: var(--glow-cyan); }
+        .progress-dot.completed { background: rgba(0, 240, 255, 0.4); }
+
+        .control-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        button {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 0.8rem 1.5rem;
+            border-radius: 20px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+        button.primary { background: var(--accent-purple); border-color: var(--accent-purple); }
+        button.primary:hover { box-shadow: var(--glow-purple); background: #c54bff; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* ==========================================================================
+           COMPONENTS: SIMULATION (PUNNETT SQUARE)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .parent-selector {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--glass-border);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+        }
+
+        .parent-selector h4 {
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .allele-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .allele-btn {
+            flex: 1;
+            padding: 0.8rem;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+            background: transparent;
+            color: var(--text-muted);
+            font-weight: bold;
+            font-size: 1.2rem;
+            transition: all 0.2s;
+        }
+
+        .allele-btn.selected {
+            background: rgba(176, 38, 255, 0.2);
+            border-color: var(--accent-purple);
+            color: var(--text-main);
+            box-shadow: var(--glow-purple);
+        }
+
+        .punnett-board {
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid var(--glass-border);
+            position: relative;
+        }
+
+        .punnett-grid {
+            display: grid;
+            grid-template-columns: 40px 1fr 1fr;
+            grid-template-rows: 40px 1fr 1fr;
+            gap: 10px;
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 1/1;
+        }
+
+        .grid-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.5rem;
+            color: var(--accent-cyan);
+        }
+
+        .grid-cell {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s ease;
+        }
+
+        .grid-cell.highlight {
+            border-color: var(--accent-purple);
+            box-shadow: inset 0 0 20px rgba(176, 38, 255, 0.2);
+        }
+
+        .cell-genotype {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: rgba(255,255,255,0.8);
+            z-index: 2;
+            background: rgba(0,0,0,0.5);
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        /* SVG Flower visualization inside cells */
+        .flower-viz {
+            width: 80%;
+            height: 80%;
+            transition: transform 0.3s ease;
+            filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5));
+        }
+        
+        .grid-cell:hover .flower-viz { transform: scale(1.1); }
+
+        .stats-panel {
+            margin-top: 2rem;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            background: rgba(255,255,255,0.02);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+        }
+
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .stat-val { font-size: 1.5rem; font-weight: bold; color: var(--accent-cyan); }
+        .stat-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; }
+
+
+        /* ==========================================================================
+           COMPONENTS: INFO GRIDS (Apps, Facts, etc)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--glass-border);
+            padding: 1.5rem;
+            border-radius: var(--radius-md);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .info-card:hover {
+            background: rgba(255,255,255,0.05);
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .icon-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(0, 240, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            color: var(--accent-cyan);
+        }
+
+        .info-card h4 { margin-bottom: 0.5rem; font-size: 1.2rem; }
+        .info-card p { font-size: 0.95rem; }
+
+        /* Specific card tints */
+        .card-magenta .icon-wrapper { background: rgba(255, 0, 60, 0.1); color: var(--accent-magenta); }
+        .card-green .icon-wrapper { background: rgba(57, 255, 20, 0.1); color: var(--accent-green); }
+
+        /* ==========================================================================
+           RESPONSIVE RULES (MANDATORY)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .hero-layout { grid-template-columns: 1fr; text-align: center; }
+            #dna-hero-canvas { height: 40vh; }
+            .diagram-container { grid-template-columns: 1fr; }
+            .sim-layout { grid-template-columns: 1fr; }
+            .sim-controls { flex-direction: row; }
+            .parent-selector { flex: 1; }
+        }
+
+        @media (max-width: 768px) {
+            section { padding: 8vh 0; }
+            .glass-panel { padding: 1.5rem; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+            
+            .sim-controls { flex-direction: column; gap: 1rem; }
+            .punnett-board { padding: 1rem; }
+            .punnett-grid { gap: 5px; grid-template-columns: 30px 1fr 1fr; grid-template-rows: 30px 1fr 1fr; }
+            .grid-header { font-size: 1rem; }
+            .cell-genotype { font-size: 0.9rem; top: 5px; left: 5px; padding: 2px 5px;}
+            
+            .mech-controls { padding: 1rem; }
+            .control-buttons { flex-wrap: wrap; justify-content: center; }
+            .mech-visual { height: 40vh; min-height: 300px; }
+            
+            .legend-item { padding: 0.75rem; }
+            .marker-badge { width: 24px; height: 24px; font-size: 0.8rem; }
+        }
+
+        /* SVG Definitions Hide */
+        .svg-defs { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="ambient-canvas"></canvas>
+
+    <!-- Shared SVG Definitions -->
+    <svg class="svg-defs">
+        <defs>
+            <!-- Glowing Lumaflower for Punnett Square -->
+            <g id="luma-flower">
+                <g filter="url(#glow)">
+                    <!-- Back petals -->
+                    <path class="petal-color" d="M50 50 C 20 20, 30 -10, 50 10 C 70 -10, 80 20, 50 50" opacity="0.8"/>
+                    <path class="petal-color" d="M50 50 C 80 20, 110 30, 90 50 C 110 70, 80 80, 50 50" opacity="0.8"/>
+                    <path class="petal-color" d="M50 50 C 80 80, 70 110, 50 90 C 30 110, 20 80, 50 50" opacity="0.8"/>
+                    <path class="petal-color" d="M50 50 C 20 80, -10 70, 10 50 C -10 30, 20 20, 50 50" opacity="0.8"/>
+                    
+                    <!-- Front petals -->
+                    <path class="petal-color" d="M50 50 C 35 15, 65 15, 50 50" />
+                    <path class="petal-color" d="M50 50 C 85 35, 85 65, 50 50" />
+                    <path class="petal-color" d="M50 50 C 65 85, 35 85, 50 50" />
+                    <path class="petal-color" d="M50 50 C 15 65, 15 35, 50 50" />
+                </g>
+                <!-- Center Core -->
+                <circle cx="50" cy="50" r="10" fill="#fff" filter="url(#glow-white)"/>
+                <circle cx="50" cy="50" r="5" fill="#e0f7fa"/>
+                
+                <!-- Glowing styles controlled via CSS vars injected in JS -->
+            </g>
+
+            <!-- Filters -->
+            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <filter id="glow-white" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+        </defs>
+    </svg>
+
+    <div class="container">
+        
+        <!-- SECTION 1: HERO -->
+        <section id="intro">
+            <div class="glass-panel hero-layout">
+                <div>
+                    <span class="tagline">Interactive Genetics</span>
+                    <h1>Trait <br><span class="gradient-text">Inheritance</span></h1>
+                    <p style="margin-top: 1.5rem; font-size: 1.2rem;">
+                        How does life pass its blueprint from one generation to the next? 
+                        Explore the microscopic code that shapes every living thing—from the color of a flower's petals to the shape of your eyes.
+                    </p>
+                </div>
+                <div style="position: relative; width: 100%; height: 100%;">
+                    <canvas id="dna-hero-canvas"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: COMPONENTS (Strict Layout Rules) -->
+        <section id="components">
+            <h2>The Architecture of Traits</h2>
+            <p>To understand inheritance, we must zoom inside a cell and look at the physical structures that carry data.</p>
+            
+            <div class="glass-panel diagram-container">
+                <!-- SVG Visual with Interactive Markers (NO FLOATING LABELS) -->
+                <div class="svg-canvas" id="components-visual">
+                    <svg viewBox="0 0 800 600" width="100%" height="100%">
+                        <!-- Definitions for gradients -->
+                        <defs>
+                            <radialGradient id="cellGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="rgba(0, 240, 255, 0.1)"/>
+                                <stop offset="100%" stop-color="rgba(0, 240, 255, 0.02)"/>
+                            </radialGradient>
+                            <linearGradient id="dnaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#b026ff"/>
+                                <stop offset="100%" stop-color="#00f0ff"/>
+                            </linearGradient>
+                        </defs>
+
+                        <!-- Abstract background structures -->
+                        <!-- Cell Body -->
+                        <path d="M 100 300 C 100 150, 250 100, 400 100 C 550 100, 700 150, 700 300 C 700 450, 550 500, 400 500 C 250 500, 100 450, 100 300 Z" fill="url(#cellGrad)" stroke="rgba(0, 240, 255, 0.3)" stroke-width="2" stroke-dasharray="10 5"/>
+                        
+                        <!-- Nucleus -->
+                        <circle cx="250" cy="300" r="120" fill="rgba(176, 38, 255, 0.1)" stroke="rgba(176, 38, 255, 0.5)" stroke-width="3"/>
+                        <circle cx="250" cy="300" r="100" fill="transparent" stroke="rgba(176, 38, 255, 0.2)" stroke-width="1" stroke-dasharray="4 4"/>
+                        
+                        <!-- Chromosome -->
+                        <g transform="translate(420, 200) scale(1.5)" filter="url(#glow)">
+                            <path d="M 20 20 Q 30 50, 40 40 Q 50 30, 80 20 Q 60 50, 50 60 Q 80 80, 50 90 Q 40 70, 30 60 Q 20 90, 10 80 Q 30 60, 40 50 Q 10 20, 20 20 Z" fill="#00f0ff" opacity="0.6"/>
+                            <circle cx="40" cy="55" r="5" fill="#fff"/> <!-- Centromere -->
+                        </g>
+
+                        <!-- DNA Strand leading to Gene -->
+                        <path d="M 500 320 Q 550 450, 750 400" fill="transparent" stroke="url(#dnaGrad)" stroke-width="12" stroke-linecap="round" opacity="0.5"/>
+                        <!-- Stylized Helix overlay -->
+                        <path d="M 500 320 Q 530 380, 560 360 T 620 380 T 680 390 T 750 400" fill="transparent" stroke="#fff" stroke-width="2" opacity="0.8"/>
+                        
+                        <!-- Gene Highlight -->
+                        <line x1="600" y1="355" x2="650" y2="368" stroke="#39ff14" stroke-width="16" stroke-linecap="round" filter="url(#glow)"/>
+
+                        <!-- Connection Lines -->
+                        <path d="M 280 220 L 450 250" fill="transparent" stroke="rgba(255,255,255,0.2)" stroke-dasharray="5 5"/>
+                        <path d="M 520 310 L 580 350" fill="transparent" stroke="rgba(255,255,255,0.2)" stroke-dasharray="5 5"/>
+
+                        <!-- MARKERS (Tightly coupled with JS legend logic) -->
+                        <g class="svg-marker" data-target="item-cell" transform="translate(150, 450)">
+                            <circle class="pulse" r="16" fill="transparent" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <circle class="bg" r="14" fill="var(--bg-base)" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <text x="0" y="5" text-anchor="middle" fill="var(--accent-cyan)" font-weight="bold" font-family="sans-serif">1</text>
+                        </g>
+                        <g class="svg-marker" data-target="item-nucleus" transform="translate(250, 300)">
+                            <circle class="pulse" r="16" fill="transparent" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <circle class="bg" r="14" fill="var(--bg-base)" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <text x="0" y="5" text-anchor="middle" fill="var(--accent-cyan)" font-weight="bold" font-family="sans-serif">2</text>
+                        </g>
+                        <g class="svg-marker" data-target="item-chromosome" transform="translate(480, 270)">
+                            <circle class="pulse" r="16" fill="transparent" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <circle class="bg" r="14" fill="var(--bg-base)" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <text x="0" y="5" text-anchor="middle" fill="var(--accent-cyan)" font-weight="bold" font-family="sans-serif">3</text>
+                        </g>
+                        <g class="svg-marker" data-target="item-dna" transform="translate(540, 400)">
+                            <circle class="pulse" r="16" fill="transparent" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <circle class="bg" r="14" fill="var(--bg-base)" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <text x="0" y="5" text-anchor="middle" fill="var(--accent-cyan)" font-weight="bold" font-family="sans-serif">4</text>
+                        </g>
+                        <g class="svg-marker" data-target="item-gene" transform="translate(625, 330)">
+                            <circle class="pulse" r="16" fill="transparent" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <circle class="bg" r="14" fill="var(--bg-base)" stroke="var(--accent-cyan)" stroke-width="2"/>
+                            <text x="0" y="5" text-anchor="middle" fill="var(--accent-cyan)" font-weight="bold" font-family="sans-serif">5</text>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Legend List (Normal flow, guaranteed no overlap) -->
+                <div class="legend-list">
+                    <div class="legend-item" id="item-cell" data-target="item-cell">
+                        <div class="marker-badge">1</div>
+                        <div class="legend-text">
+                            <h4>The Cell</h4>
+                            <p>The basic building block of all living things.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-nucleus" data-target="item-nucleus">
+                        <div class="marker-badge">2</div>
+                        <div class="legend-text">
+                            <h4>Nucleus</h4>
+                            <p>The control center. It protects the genetic material.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-chromosome" data-target="item-chromosome">
+                        <div class="marker-badge">3</div>
+                        <div class="legend-text">
+                            <h4>Chromosome</h4>
+                            <p>Tightly packed structures of DNA. Humans have 46.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-dna" data-target="item-dna">
+                        <div class="marker-badge">4</div>
+                        <div class="legend-text">
+                            <h4>DNA (Double Helix)</h4>
+                            <p>The molecule carrying the code. Made of chemical base pairs.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-gene" data-target="item-gene">
+                        <div class="marker-badge">5</div>
+                        <div class="legend-text">
+                            <h4>Gene / Allele</h4>
+                            <p>A specific segment of DNA that codes for a specific trait.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: WORKING MECHANISM (Mandatory Rule) -->
+        <section id="working">
+            <h2>The Mechanism: Passing it On</h2>
+            <p>How do traits actually move from parent to offspring? It's a continuous sequence of copying, splitting, and recombining.</p>
+            
+            <div class="glass-panel mechanism-container">
+                
+                <!-- Visual Canvas for Animation -->
+                <div class="mech-visual">
+                    <canvas id="mech-canvas"></canvas>
+                </div>
+
+                <!-- Controls & Caption -->
+                <div class="mech-controls">
+                    <div class="mech-caption" id="mech-caption-box">
+                        <h3 id="mech-title">1. Parent Cells</h3>
+                        <p id="mech-desc">Each parent carries two copies (alleles) of every gene in their normal diploid cells.</p>
+                    </div>
+
+                    <div class="progress-bar" id="mech-progress">
+                        <div class="progress-dot active" onclick="mechApp.setStep(0)"></div>
+                        <div class="progress-dot" onclick="mechApp.setStep(1)"></div>
+                        <div class="progress-dot" onclick="mechApp.setStep(2)"></div>
+                        <div class="progress-dot" onclick="mechApp.setStep(3)"></div>
+                        <div class="progress-dot" onclick="mechApp.setStep(4)"></div>
+                    </div>
+
+                    <div class="control-buttons">
+                        <button id="mech-prev">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                            Prev
+                        </button>
+                        <button id="mech-play" class="primary">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9V3z"/></svg>
+                            Auto-Play
+                        </button>
+                        <button id="mech-next">
+                            Next
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: INTERACTIVE SIMULATION -->
+        <section id="simulation">
+            <h2>The Genetic Cross (Punnett Square)</h2>
+            <p>Predict the traits of offspring using Mendel's laws. Let's breed a fictional "Lumaflower".<br>
+            <span style="color: var(--accent-magenta);">Dominant (L):</span> Magenta Petals. <span style="color: var(--accent-cyan);">Recessive (l):</span> Cyan Petals.</p>
+
+            <div class="glass-panel sim-layout">
+                <!-- Controls -->
+                <div class="sim-controls">
+                    <div class="parent-selector">
+                        <h4>Parent 1 (Top)</h4>
+                        <div class="allele-group" id="p1-selector">
+                            <button class="allele-btn selected" data-val="LL">LL (Magenta)</button>
+                            <button class="allele-btn" data-val="Ll">Ll (Magenta)</button>
+                            <button class="allele-btn" data-val="ll">ll (Cyan)</button>
+                        </div>
+                    </div>
+                    <div class="parent-selector">
+                        <h4>Parent 2 (Side)</h4>
+                        <div class="allele-group" id="p2-selector">
+                            <button class="allele-btn" data-val="LL">LL (Magenta)</button>
+                            <button class="allele-btn selected" data-val="Ll">Ll (Magenta)</button>
+                            <button class="allele-btn" data-val="ll">ll (Cyan)</button>
+                        </div>
+                    </div>
+
+                    <div class="stats-panel">
+                        <div class="stat-item">
+                            <span class="stat-val" id="stat-magenta" style="color: var(--accent-magenta);">75%</span>
+                            <span class="stat-label">Magenta</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-val" id="stat-cyan" style="color: var(--accent-cyan);">25%</span>
+                            <span class="stat-label">Cyan</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Visualization Board -->
+                <div class="punnett-board">
+                    <div class="punnett-grid" id="punnett-grid">
+                        <!-- Top left empty -->
+                        <div></div>
+                        <!-- Top Headers (P1) -->
+                        <div class="grid-header" id="h-top-1">L</div>
+                        <div class="grid-header" id="h-top-2">L</div>
+                        
+                        <!-- Row 1 -->
+                        <div class="grid-header" id="h-side-1">L</div>
+                        <div class="grid-cell" id="cell-00"></div>
+                        <div class="grid-cell" id="cell-01"></div>
+
+                        <!-- Row 2 -->
+                        <div class="grid-header" id="h-side-2">l</div>
+                        <div class="grid-cell" id="cell-10"></div>
+                        <div class="grid-cell" id="cell-11"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5: EXTRA INFO -->
+        <section id="info">
+            <h2>Beyond the Basics</h2>
+            
+            <div class="info-grid">
+                <div class="info-card card-magenta">
+                    <div class="icon-wrapper">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    </div>
+                    <h4>Real-World Application</h4>
+                    <p><strong>CRISPR Gene Editing:</strong> Scientists can now act like biological word processors, finding specific flawed alleles causing diseases and replacing them with healthy versions, forever changing the inheritance line.</p>
+                </div>
+                
+                <div class="info-card card-green">
+                    <div class="icon-wrapper">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                    </div>
+                    <h4>Fascinating Fact</h4>
+                    <p>Humans share about <strong>50% of their DNA with bananas!</strong> This doesn't mean we are half banana; it means the fundamental housekeeping genes for cell survival evolved early and haven't changed much.</p>
+                </div>
+
+                <div class="info-card">
+                    <div class="icon-wrapper">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </div>
+                    <h4>Common Mistake</h4>
+                    <p><strong>"Dominant means stronger/better."</strong> False. Dominant just means it masks the recessive allele if both are present. Having extra fingers (Polydactyly) is a dominant trait, but it's rare in the population.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        // ---------------------------------------------------------
+        // UTILITIES & SETUP
+        // ---------------------------------------------------------
+        const DPI = window.devicePixelRatio || 1;
+
+        function setupCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            function resize() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                canvas.width = rect.width * DPI;
+                canvas.height = rect.height * DPI;
+                ctx.scale(DPI, DPI);
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
+            }
+            
+            window.addEventListener('resize', resize);
+            resize();
+            return { canvas, ctx, resize };
+        }
+
+        // ---------------------------------------------------------
+        // 1. AMBIENT BACKGROUND PARTICLES
+        // ---------------------------------------------------------
+        const ambient = setupCanvas('ambient-canvas');
+        const particles = [];
+        for(let i=0; i<50; i++) {
+            particles.push({
+                x: Math.random() * window.innerWidth,
+                y: Math.random() * window.innerHeight,
+                r: Math.random() * 2 + 0.5,
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5,
+                alpha: Math.random() * 0.5
+            });
+        }
+
+        function drawAmbient() {
+            ambient.ctx.clearRect(0, 0, ambient.canvas.width/DPI, ambient.canvas.height/DPI);
+            ambient.ctx.fillStyle = '#00f0ff';
+            
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                if(p.x < 0) p.x = window.innerWidth;
+                if(p.x > window.innerWidth) p.x = 0;
+                if(p.y < 0) p.y = window.innerHeight;
+                if(p.y > window.innerHeight) p.y = 0;
+
+                ambient.ctx.globalAlpha = p.alpha;
+                ambient.ctx.beginPath();
+                ambient.ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ambient.ctx.fill();
+            });
+            ambient.ctx.globalAlpha = 1;
+            requestAnimationFrame(drawAmbient);
+        }
+        drawAmbient();
+
+        // ---------------------------------------------------------
+        // 2. HERO DNA ANIMATION (3D Math Simulation)
+        // ---------------------------------------------------------
+        const hero = setupCanvas('dna-hero-canvas');
+        let dnaTime = 0;
+
+        function drawDNA() {
+            const w = hero.canvas.width / DPI;
+            const h = hero.canvas.height / DPI;
+            const ctx = hero.ctx;
+
+            ctx.clearRect(0, 0, w, h);
+            
+            const centerX = w / 2;
+            const centerY = h / 2;
+            const numBases = Math.floor(w / 30) + 5; // Responsive count
+            const spacing = w / (numBases - 2);
+            const amplitude = h * 0.25;
+            const frequency = 0.015;
+            
+            dnaTime += 0.02;
+
+            // Z-sorting logic for 3D illusion
+            let nodes = [];
+            
+            for (let i = 0; i < numBases; i++) {
+                const x = (i - 1) * spacing;
+                const angle = i * 0.5 + dnaTime;
+                
+                const y1 = Math.sin(angle) * amplitude;
+                const z1 = Math.cos(angle);
+                
+                const y2 = Math.sin(angle + Math.PI) * amplitude;
+                const z2 = Math.cos(angle + Math.PI);
+
+                nodes.push({ x: x, y: centerY + y1, z: z1, type: 'strand1', color: '#00f0ff' });
+                nodes.push({ x: x, y: centerY + y2, z: z2, type: 'strand2', color: '#b026ff' });
+                nodes.push({ x: x, y1: centerY + y1, y2: centerY + y2, z: (z1+z2)/2, type: 'link' });
+            }
+
+            nodes.sort((a, b) => a.z - b.z); // Draw back to front
+
+            nodes.forEach(n => {
+                const scale = (n.z + 2) / 3; // depth scale
+                const alpha = (n.z + 1.5) / 2.5;
+
+                ctx.globalAlpha = Math.max(0.1, alpha);
+
+                if (n.type === 'link') {
+                    ctx.beginPath();
+                    ctx.moveTo(n.x, n.y1);
+                    ctx.lineTo(n.x, n.y2);
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${0.2 * scale})`;
+                    ctx.lineWidth = 2 * scale;
+                    ctx.stroke();
+                } else {
+                    ctx.beginPath();
+                    ctx.arc(n.x, n.y, 4 * scale, 0, Math.PI * 2);
+                    ctx.fillStyle = n.color;
+                    ctx.shadowBlur = 15 * scale;
+                    ctx.shadowColor = n.color;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            });
+
+            requestAnimationFrame(drawDNA);
+        }
+        drawDNA();
+
+        // ---------------------------------------------------------
+        // 3. DIAGRAM LEGEND INTERACTION (Sync Markers & List)
+        // ---------------------------------------------------------
+        const legendItems = document.querySelectorAll('.legend-item');
+        const svgMarkers = document.querySelectorAll('.svg-marker');
+
+        function activateLegend(targetId) {
+            legendItems.forEach(el => el.classList.remove('active'));
+            svgMarkers.forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(targetId).classList.add('active');
+            document.querySelector(`.svg-marker[data-target="${targetId}"]`).classList.add('active');
+        }
+
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => activateLegend(item.dataset.target));
+            item.addEventListener('click', () => activateLegend(item.dataset.target));
+        });
+
+        svgMarkers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => activateLegend(marker.dataset.target));
+            marker.addEventListener('click', () => activateLegend(marker.dataset.target));
+        });
+
+
+        // ---------------------------------------------------------
+        // 4. WORKING MECHANISM CONTROLLER & ANIMATION
+        // ---------------------------------------------------------
+        const mech = setupCanvas('mech-canvas');
+        
+        const mechSteps = [
+            { title: "1. Parent Cell", desc: "A standard diploid cell contains pairs of chromosomes. One from mom, one from dad." },
+            { title: "2. DNA Replication", desc: "Before splitting, the cell duplicates its DNA, forming X-shaped chromosomes." },
+            { title: "3. Meiosis (Splitting)", desc: "The cell divides twice. Homologous chromosomes separate, then chromatids separate." },
+            { title: "4. Gametes (Sex Cells)", desc: "Results in haploid cells (sperm/egg) carrying only ONE allele for every trait." },
+            { title: "5. Fertilization", desc: "Gametes combine. The offspring now has a new, unique pair of alleles." }
+        ];
+
+        class MechanismApp {
+            constructor() {
+                this.step = 0;
+                this.animProgress = 0; 
+                this.isPlaying = false;
+                this.lastTime = 0;
+                
+                // DOM Elements
+                this.titleEl = document.getElementById('mech-title');
+                this.descEl = document.getElementById('mech-desc');
+                this.dots = document.querySelectorAll('.progress-dot');
+                this.prevBtn = document.getElementById('mech-prev');
+                this.nextBtn = document.getElementById('mech-next');
+                this.playBtn = document.getElementById('mech-play');
+
+                // Events
+                this.prevBtn.addEventListener('click', () => this.setStep(this.step - 1));
+                this.nextBtn.addEventListener('click', () => this.setStep(this.step + 1));
+                this.playBtn.addEventListener('click', () => this.togglePlay());
+
+                this.updateUI();
+                requestAnimationFrame((t) => this.render(t));
+            }
+
+            setStep(n) {
+                if(n < 0 || n >= mechSteps.length) return;
+                this.step = n;
+                this.animProgress = 0; // reset animation for new step
+                this.updateUI();
+                if(this.isPlaying) this.togglePlay(); // pause on manual interaction
+            }
+
+            togglePlay() {
+                this.isPlaying = !this.isPlaying;
+                this.playBtn.innerHTML = this.isPlaying ? 
+                    `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause` : 
+                    `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9V3z"/></svg> Auto-Play`;
+            }
+
+            updateUI() {
+                this.titleEl.textContent = mechSteps[this.step].title;
+                this.descEl.textContent = mechSteps[this.step].desc;
+                
+                this.dots.forEach((dot, i) => {
+                    dot.classList.remove('active', 'completed');
+                    if(i === this.step) dot.classList.add('active');
+                    else if(i < this.step) dot.classList.add('completed');
+                });
+
+                this.prevBtn.disabled = (this.step === 0);
+                this.nextBtn.disabled = (this.step === mechSteps.length - 1);
+            }
+
+            // Drawing helpers for canvas
+            drawCell(ctx, x, y, radius, alpha=1) {
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI*2);
+                ctx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(0, 240, 255, 0.05)';
+                ctx.fill();
+            }
+
+            drawChromosome(ctx, x, y, type, color, scale, isX = false) {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.scale(scale, scale);
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = color;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+
+                if(isX) {
+                    ctx.beginPath(); ctx.moveTo(-10, -15); ctx.lineTo(10, 15); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(10, -15); ctx.lineTo(-10, 15); ctx.stroke();
+                    ctx.beginPath(); ctx.arc(0,0, 3, 0, Math.PI*2); ctx.fillStyle='#fff'; ctx.fill();
+                } else {
+                    ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(0, 15); ctx.stroke();
+                }
+                ctx.restore();
+            }
+
+            // Lerp function for smooth animation
+            lerp(start, end, amt) {
+                return (1 - amt) * start + amt * end;
+            }
+
+            render(timestamp) {
+                const dt = (timestamp - this.lastTime) / 1000;
+                this.lastTime = timestamp;
+
+                if(this.isPlaying) {
+                    this.animProgress += dt * 0.3; // Speed
+                    if(this.animProgress >= 1) {
+                        this.animProgress = 0;
+                        if(this.step < mechSteps.length - 1) {
+                            this.step++;
+                            this.updateUI();
+                        } else {
+                            this.step = 0; // Loop
+                            this.updateUI();
+                        }
+                    }
+                } else {
+                    // Ease towards 1 if stopped
+                    this.animProgress += (1 - this.animProgress) * 0.1;
+                }
+
+                const ctx = mech.ctx;
+                const w = mech.canvas.width / DPI;
+                const h = mech.canvas.height / DPI;
+                const cx = w/2;
+                const cy = h/2;
+
+                ctx.clearRect(0, 0, w, h);
+                const p = Math.min(this.animProgress, 1);
+
+                // Common colors
+                const cMom = '#ff003c';
+                const cDad = '#00f0ff';
+
+                if (this.step === 0) {
+                    // 1. Parent Cell (Diploid, single strands)
+                    this.drawCell(ctx, cx, cy, 80);
+                    this.drawChromosome(ctx, cx - 20, cy, 'I', cMom, 1, false);
+                    this.drawChromosome(ctx, cx + 20, cy, 'I', cDad, 1, false);
+                } 
+                else if (this.step === 1) {
+                    // 2. Replication (Morph I to X)
+                    this.drawCell(ctx, cx, cy, 80);
+                    // Fade out I, Fade in X based on progress
+                    const isX = p > 0.5;
+                    const scale = 1 + Math.sin(p * Math.PI)*0.2; // slight pulse
+                    this.drawChromosome(ctx, cx - 20, cy, 'X', cMom, scale, isX);
+                    this.drawChromosome(ctx, cx + 20, cy, 'X', cDad, scale, isX);
+                }
+                else if (this.step === 2) {
+                    // 3. Meiosis (Splitting apart)
+                    // Move cell apart
+                    const dist = p * 100;
+                    this.drawCell(ctx, cx - dist, cy, 60, 1-p*0.5);
+                    this.drawCell(ctx, cx + dist, cy, 60, 1-p*0.5);
+                    
+                    this.drawChromosome(ctx, cx - 20 - dist, cy, 'X', cMom, 0.8, true);
+                    this.drawChromosome(ctx, cx + 20 + dist, cy, 'X', cDad, 0.8, true);
+                }
+                else if (this.step === 3) {
+                    // 4. Gametes (4 haploid cells, showing 2 for space)
+                    const dist = 100;
+                    this.drawCell(ctx, cx - dist, cy - 30, 40);
+                    this.drawCell(ctx, cx - dist, cy + 30, 40);
+                    this.drawChromosome(ctx, cx - dist, cy - 30, 'I', cMom, 0.6, false);
+                    this.drawChromosome(ctx, cx - dist, cy + 30, 'I', cMom, 0.6, false);
+                    
+                    this.drawCell(ctx, cx + dist, cy, 40); // Dad sperm
+                    this.drawChromosome(ctx, cx + dist, cy, 'I', cDad, 0.6, false);
+                    // Add tail for sperm
+                    ctx.beginPath(); ctx.moveTo(cx+dist+15, cy); ctx.lineTo(cx+dist+40, cy + Math.sin(timestamp*0.01)*5);
+                    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=2; ctx.stroke();
+                }
+                else if (this.step === 4) {
+                    // 5. Fertilization (Sperm meets egg)
+                    const targetX = cx;
+                    const startMom = cx - 100;
+                    const startDad = cx + 100;
+                    
+                    const curMomX = this.lerp(startMom, targetX, p);
+                    const curDadX = this.lerp(startDad, targetX, p);
+                    
+                    // Egg
+                    this.drawCell(ctx, curMomX, cy, 60 + p*20);
+                    this.drawChromosome(ctx, curMomX - 10*p, cy, 'I', cMom, 0.8, false);
+                    
+                    // Sperm arriving
+                    if(p < 0.8) {
+                        this.drawCell(ctx, curDadX, cy, 20*(1-p), 1-p);
+                        this.drawChromosome(ctx, curDadX, cy, 'I', cDad, 0.8, false);
+                    } else {
+                        // Combined inside zygote
+                        this.drawChromosome(ctx, cx + 10, cy, 'I', cDad, 0.8, false);
+                        // Zygote glow
+                        ctx.beginPath(); ctx.arc(cx, cy, 80, 0, Math.PI*2);
+                        ctx.fillStyle = `rgba(176, 38, 255, ${(p-0.8)})`; ctx.fill();
+                    }
+                }
+
+                requestAnimationFrame((t) => this.render(t));
+            }
+        }
+
+        const mechApp = new MechanismApp();
+
+
+        // ---------------------------------------------------------
+        // 5. PUNNETT SQUARE SIMULATION
+        // ---------------------------------------------------------
+        
+        let p1Genotype = 'LL';
+        let p2Genotype = 'Ll';
+
+        const p1Buttons = document.querySelectorAll('#p1-selector .allele-btn');
+        const p2Buttons = document.querySelectorAll('#p2-selector .allele-btn');
+
+        function generateFlowerSVG(genotype) {
+            // Determine phenotype. L is dominant Magenta.
+            const isMagenta = genotype.includes('L');
+            const colorClass = isMagenta ? 'magenta' : 'cyan';
+            const colorHex = isMagenta ? '#ff003c' : '#00f0ff';
+            const glowHex = isMagenta ? 'rgba(255,0,60,0.5)' : 'rgba(0,240,255,0.5)';
+
+            return `
+                <div class="cell-genotype">${genotype}</div>
+                <svg class="flower-viz" viewBox="0 0 100 100" style="
+                    --petal-fill: ${colorHex}; 
+                    filter: drop-shadow(0 0 10px ${glowHex});
+                ">
+                    <use href="#luma-flower" fill="${colorHex}"></use>
+                </svg>
+            `;
+        }
+
+        function updatePunnettSquare() {
+            // 1. Update Headers
+            const a1 = p1Genotype[0];
+            const a2 = p1Genotype[1];
+            const b1 = p2Genotype[0];
+            const b2 = p2Genotype[1];
+
+            document.getElementById('h-top-1').textContent = a1;
+            document.getElementById('h-top-2').textContent = a2;
+            document.getElementById('h-side-1').textContent = b1;
+            document.getElementById('h-side-2').textContent = b2;
+
+            // 2. Calculate Combinations (Sort so Dominant is always first, e.g., 'lL' -> 'Ll')
+            const crosses = [
+                [a1, b1], [a2, b1],
+                [a1, b2], [a2, b2]
+            ];
+
+            let magentaCount = 0;
+            let cyanCount = 0;
+
+            crosses.forEach((cross, index) => {
+                // Sort alleles: 'L' comes before 'l' due to ASCII, reverse ensures uppercase first.
+                cross.sort().reverse(); 
+                const genStr = cross.join('');
+                
+                if(genStr.includes('L')) magentaCount++;
+                else cyanCount++;
+
+                const cellId = `cell-${Math.floor(index/2)}${index%2}`;
+                const cell = document.getElementById(cellId);
+                
+                // Animate change
+                cell.style.opacity = 0;
+                cell.style.transform = 'scale(0.8)';
+                
+                setTimeout(() => {
+                    cell.innerHTML = generateFlowerSVG(genStr);
+                    cell.style.opacity = 1;
+                    cell.style.transform = 'scale(1)';
+                    
+                    // Add highlight effect if homozygous recessive (just for visual pop)
+                    if(genStr === 'll') cell.classList.add('highlight');
+                    else cell.classList.remove('highlight');
+                }, 200);
+            });
+
+            // 3. Update Stats
+            document.getElementById('stat-magenta').textContent = `${(magentaCount/4)*100}%`;
+            document.getElementById('stat-cyan').textContent = `${(cyanCount/4)*100}%`;
+        }
+
+        // Event Listeners for Selectors
+        p1Buttons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                p1Buttons.forEach(b => b.classList.remove('selected'));
+                e.target.classList.add('selected');
+                p1Genotype = e.target.dataset.val;
+                updatePunnettSquare();
+            });
+        });
+
+        p2Buttons.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                p2Buttons.forEach(b => b.classList.remove('selected'));
+                e.target.classList.add('selected');
+                p2Genotype = e.target.dataset.val;
+                updatePunnettSquare();
+            });
+        });
+
+        // Initial render
+        updatePunnettSquare();
+
+    </script>
+</body>
+</html>

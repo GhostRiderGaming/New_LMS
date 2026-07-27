@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Electrolysis & Electroplating | Premium Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & FOUNDATION
+           ========================================================================== */
+        :root {
+            --bg-base: #030712;
+            --bg-surface: rgba(17, 24, 39, 0.7);
+            --bg-glass: rgba(31, 41, 55, 0.4);
+            
+            --neon-blue: #00f0ff;
+            --neon-purple: #8b5cf6;
+            --copper: #f59e0b;
+            --silver: #e5e7eb;
+            --danger: #ef4444;
+            --success: #10b981;
+            
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            
+            --glow-blue: 0 0 20px rgba(0, 240, 255, 0.3);
+            --glow-copper: 0 0 20px rgba(245, 158, 11, 0.3);
+            
+            --border-glass: 1px solid rgba(255, 255, 255, 0.08);
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Fluid Typography */
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+        h2 { font-size: clamp(2rem, 4vw, 3rem); font-weight: 700; letter-spacing: -0.01em; }
+        h3 { font-size: clamp(1.25rem, 2.5vw, 1.75rem); font-weight: 600; }
+        p { font-size: clamp(1rem, 1.2vw, 1.125rem); color: var(--text-muted); }
+        .text-gradient {
+            background: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+            background: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+        }
+        .grid-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.5;
+            transform: perspective(500px) rotateX(60deg) translateY(-100px) scale(3);
+            animation: gridMove 20s linear infinite;
+        }
+        @keyframes gridMove {
+            0% { transform: perspective(500px) rotateX(60deg) translateY(0) scale(3); }
+            100% { transform: perspective(500px) rotateX(60deg) translateY(50px) scale(3); }
+        }
+
+        /* Layout & Containers */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(20px, 4vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 100px);
+        }
+
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: clamp(20px, 4vw, 40px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        }
+
+        /* Hero Section */
+        .hero {
+            text-align: center;
+            padding: 8vh 0 4vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        .badge {
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--neon-blue);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 240, 255, 0.2);
+            font-size: 0.875rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* ==========================================================================
+           DIAGRAM & MARKER SYSTEM (MANDATORY RULE IMPLEMENTATION)
+           ========================================================================== */
+        .diagram-layout {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 30px;
+            align-items: center;
+        }
+        
+        @media (max-width: 1024px) {
+            .diagram-layout { grid-template-columns: 1fr; }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: radial-gradient(circle at center, rgba(0,240,255,0.05), transparent 70%);
+            border-radius: var(--radius-md);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .illustration-container svg {
+            width: 100%;
+            height: auto;
+            max-height: 600px;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--bg-surface);
+            border: 2px solid var(--neon-blue);
+            color: var(--neon-blue);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0,240,255,0.4);
+            transition: var(--transition-smooth);
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        .marker::before {
+            content: ''; position: absolute; width: 100%; height: 100%;
+            border-radius: 50%; border: 1px solid var(--neon-blue);
+            animation: pulse 2s infinite;
+        }
+        .marker:hover, .marker.active {
+            background: var(--neon-blue);
+            color: var(--bg-base);
+            transform: translate(-50%, -50%) scale(1.2);
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.1);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(5px);
+        }
+        .legend-num {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: rgba(0, 240, 255, 0.2);
+            color: var(--neon-blue);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .legend-content h4 { color: white; margin-bottom: 4px; font-size: 1.1rem; }
+        .legend-content p { font-size: 0.9rem; margin: 0; line-height: 1.4; }
+
+        /* ==========================================================================
+           WORKING MECHANISM (STAGE-BY-STAGE)
+           ========================================================================== */
+        .working-stage-container {
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+        
+        .stage-visual {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            background: #000;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: var(--border-glass);
+        }
+
+        .controls-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            padding: 16px 24px;
+            border-radius: 100px;
+            border: var(--border-glass);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 30px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+        .btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        .btn-primary { background: var(--neon-blue); color: var(--bg-base); }
+        .btn-primary:hover { background: #00c0cc; box-shadow: var(--glow-blue); }
+        
+        .progress-dots { display: flex; gap: 8px; }
+        .dot {
+            width: 12px; height: 12px; border-radius: 50%;
+            background: rgba(255,255,255,0.2); transition: 0.3s;
+            cursor: pointer;
+        }
+        .dot.active { background: var(--neon-blue); box-shadow: var(--glow-blue); transform: scale(1.3); }
+
+        .stage-info {
+            text-align: center;
+            min-height: 80px;
+        }
+        .stage-info h3 { color: var(--neon-blue); margin-bottom: 8px; font-size: 1.5rem;}
+        
+        /* Mechanism Animations */
+        #mech-svg { width: 100%; height: 100%; }
+        
+        .anim-hide { opacity: 0; transition: opacity 0.5s; }
+        .anim-show { opacity: 1; transition: opacity 0.5s; }
+        
+        /* Electrons moving along wire */
+        .electron { fill: var(--neon-blue); filter: drop-shadow(0 0 5px var(--neon-blue)); }
+        
+        /* Ions in solution */
+        .ion-cu { fill: var(--copper); filter: drop-shadow(0 0 5px var(--copper)); font-size: 14px; font-family: monospace; font-weight: bold;}
+        .ion-so4 { fill: var(--danger); font-size: 12px; font-family: monospace; }
+        
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (CANVAS)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr 3fr;
+            gap: 30px;
+        }
+        @media (max-width: 1024px) { .sim-layout { grid-template-columns: 1fr; } }
+        
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            background: rgba(0,0,0,0.2);
+            padding: 24px;
+            border-radius: var(--radius-md);
+        }
+        
+        .control-group { display: flex; flex-direction: column; gap: 10px; }
+        .control-header { display: flex; justify-content: space-between; font-weight: 600; }
+        .control-val { color: var(--neon-blue); font-variant-numeric: tabular-nums; }
+        
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: var(--neon-blue);
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: var(--glow-blue);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+        
+        .canvas-container {
+            width: 100%;
+            height: 500px;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            position: relative;
+            background: #050a10;
+            border: var(--border-glass);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Stats Overlay on Canvas */
+        .sim-stats {
+            position: absolute;
+            top: 20px; left: 20px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            padding: 12px 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            gap: 20px;
+        }
+        .stat-box p { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+        .stat-box strong { font-size: 1.5rem; color: var(--neon-blue); font-variant-numeric: tabular-nums;}
+        .stat-box.copper strong { color: var(--copper); }
+
+        /* ==========================================================================
+           CARDS & GRID SECTIONS
+           ========================================================================== */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+        .card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 24px;
+            border-radius: var(--radius-md);
+            transition: var(--transition-smooth);
+            height: 100%;
+        }
+        .card:hover {
+            background: rgba(255,255,255,0.05);
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.1);
+        }
+        .card-icon {
+            width: 48px; height: 48px;
+            background: rgba(0, 240, 255, 0.1);
+            border-radius: 12px;
+            display: flex; justify-content: center; align-items: center;
+            margin-bottom: 20px; color: var(--neon-blue);
+        }
+        .card.mistake .card-icon { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
+        .card.fact .card-icon { background: rgba(139, 92, 246, 0.1); color: var(--neon-purple); }
+
+        /* Utilities */
+        .flex-center { display: flex; justify-content: center; align-items: center; }
+        .mb-1 { margin-bottom: 8px; }
+        .mb-2 { margin-bottom: 16px; }
+        .mb-4 { margin-bottom: 32px; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Animated Background -->
+    <div class="ambient-bg">
+        <div class="grid-overlay"></div>
+    </div>
+
+    <div class="container">
+        
+        <!-- 1. HERO / INTRODUCTION -->
+        <header class="hero">
+            <div class="badge">Interactive Physics & Chemistry</div>
+            <h1>Electrolysis & <br><span class="text-gradient">Electroplating</span></h1>
+            <p style="max-width: 600px;">Explore how electrical energy drives non-spontaneous chemical reactions. Witness the atomic dance of ions migrating through fluids to coat objects in pure metal.</p>
+        </header>
+
+        <!-- 2. COMPONENTS SECTION -->
+        <section class="glass-panel" id="components">
+            <h2 class="mb-4">System Components</h2>
+            <div class="diagram-layout">
+                
+                <!-- SVG Diagram with Markers -->
+                <div class="illustration-container" id="components-diagram">
+                    <svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="glass-grad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.3)"/>
+                                <stop offset="10%" stop-color="rgba(255,255,255,0.05)"/>
+                                <stop offset="90%" stop-color="rgba(255,255,255,0.05)"/>
+                                <stop offset="100%" stop-color="rgba(255,255,255,0.2)"/>
+                            </linearGradient>
+                            <linearGradient id="liquid-grad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="rgba(0, 200, 255, 0.4)"/>
+                                <stop offset="100%" stop-color="rgba(0, 100, 255, 0.8)"/>
+                            </linearGradient>
+                            <linearGradient id="copper-grad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#b45309"/>
+                                <stop offset="30%" stop-color="#f59e0b"/>
+                                <stop offset="70%" stop-color="#d97706"/>
+                                <stop offset="100%" stop-color="#78350f"/>
+                            </linearGradient>
+                            <linearGradient id="silver-grad" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#9ca3af"/>
+                                <stop offset="50%" stop-color="#f3f4f6"/>
+                                <stop offset="100%" stop-color="#4b5563"/>
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+
+                        <!-- Circuit / Wires -->
+                        <path d="M 400 100 L 400 150 M 300 125 L 250 125 L 250 250 M 500 125 L 550 125 L 550 250" stroke="rgba(255,255,255,0.5)" stroke-width="4" fill="none"/>
+                        <path d="M 250 250 L 250 350" stroke="#f59e0b" stroke-width="6" fill="none" />
+                        <path d="M 550 250 L 550 300" stroke="#e5e7eb" stroke-width="4" fill="none" />
+
+                        <!-- Power Supply (Battery) -->
+                        <rect x="300" y="80" width="200" height="90" rx="10" fill="#1f2937" stroke="#374151" stroke-width="3"/>
+                        <rect x="300" y="80" width="200" height="20" rx="10" fill="#374151"/>
+                        <text x="400" y="145" fill="white" font-family="sans-serif" font-size="24" font-weight="bold" text-anchor="middle">DC POWER</text>
+                        <!-- Terminals -->
+                        <rect x="280" y="115" width="20" height="20" fill="#ef4444"/>
+                        <text x="270" y="110" fill="#ef4444" font-size="30" font-weight="bold">+</text>
+                        <rect x="500" y="115" width="20" height="20" fill="#3b82f6"/>
+                        <text x="530" y="105" fill="#3b82f6" font-size="40" font-weight="bold">-</text>
+
+                        <!-- Beaker Liquid -->
+                        <path d="M 170 300 L 630 300 Q 630 310 630 530 Q 630 550 610 550 L 190 550 Q 170 550 170 530 Z" fill="url(#liquid-grad)"/>
+                        
+                        <!-- Anode (Copper Plate) -->
+                        <rect x="220" y="250" width="60" height="250" rx="5" fill="url(#copper-grad)"/>
+                        
+                        <!-- Cathode (Key shape) -->
+                        <g transform="translate(550, 350)">
+                            <circle cx="0" cy="-30" r="20" fill="url(#silver-grad)"/>
+                            <circle cx="0" cy="-30" r="10" fill="#111827"/>
+                            <rect x="-8" y="-10" width="16" height="120" rx="2" fill="url(#silver-grad)"/>
+                            <rect x="8" y="70" width="25" height="12" rx="2" fill="url(#silver-grad)"/>
+                            <rect x="8" y="90" width="15" height="12" rx="2" fill="url(#silver-grad)"/>
+                        </g>
+
+                        <!-- Beaker Glass (Front) -->
+                        <path d="M 150 200 L 150 530 Q 150 570 190 570 L 610 570 Q 650 570 650 530 L 650 200" fill="none" stroke="url(#glass-grad)" stroke-width="12" stroke-linecap="round"/>
+                        <path d="M 150 200 L 150 530 Q 150 570 190 570 L 610 570 Q 650 570 650 530 L 650 200" fill="rgba(255,255,255,0.05)" stroke="none" pointer-events="none"/>
+                    </svg>
+
+                    <!-- Markers (Positioned via inline style percentages to scale perfectly) -->
+                    <div class="marker" data-target="item-1" style="top: 20%; left: 50%;">1</div>
+                    <div class="marker" data-target="item-2" style="top: 60%; left: 31%;">2</div>
+                    <div class="marker" data-target="item-3" style="top: 60%; left: 69%;">3</div>
+                    <div class="marker" data-target="item-4" style="top: 75%; left: 50%;">4</div>
+                </div>
+
+                <!-- Legend List (Mandatory Pattern) -->
+                <div class="legend-list">
+                    <div class="legend-item" id="item-1" onmouseenter="highlightMarker('item-1')" onmouseleave="resetMarkers()">
+                        <div class="legend-num">1</div>
+                        <div class="legend-content">
+                            <h4>DC Power Supply</h4>
+                            <p>Provides the electron "push" (voltage). Must be Direct Current (DC) to maintain consistent polarity.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-2" onmouseenter="highlightMarker('item-2')" onmouseleave="resetMarkers()">
+                        <div class="legend-num">2</div>
+                        <div class="legend-content">
+                            <h4>Anode (+)</h4>
+                            <p>The pure source metal (e.g., Copper). It oxidizes, dissolving into the solution as positive ions.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-3" onmouseenter="highlightMarker('item-3')" onmouseleave="resetMarkers()">
+                        <div class="legend-num">3</div>
+                        <div class="legend-content">
+                            <h4>Cathode (-)</h4>
+                            <p>The object to be plated. It receives electrons, attracting positive metal ions which turn into solid metal on its surface.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-4" onmouseenter="highlightMarker('item-4')" onmouseleave="resetMarkers()">
+                        <div class="legend-num">4</div>
+                        <div class="legend-content">
+                            <h4>Electrolyte</h4>
+                            <p>A conductive liquid containing dissolved salts of the plating metal, allowing ion transport.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- 3. WORKING MECHANISM -->
+        <section class="glass-panel" id="working">
+            <h2 class="mb-4">The Mechanism: Stage by Stage</h2>
+            
+            <div class="working-stage-container">
+                
+                <!-- Mechanism Visual SVG -->
+                <div class="stage-visual">
+                    <svg id="mech-svg" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid meet">
+                        <!-- Background Setup -->
+                        <rect width="100%" height="100%" fill="#050a10"/>
+                        
+                        <!-- Wires & Battery -->
+                        <path d="M 250 150 L 250 50 L 750 50 L 750 150" stroke="#334155" stroke-width="8" fill="none"/>
+                        <rect x="400" y="20" width="200" height="60" rx="10" fill="#1e293b"/>
+                        <text x="500" y="55" fill="white" font-size="20" font-family="sans-serif" text-anchor="middle">Power Supply</text>
+                        
+                        <!-- Tank -->
+                        <path d="M 150 120 L 150 450 Q 150 480 180 480 L 820 480 Q 850 480 850 450 L 850 120" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="6"/>
+                        <rect x="153" y="180" width="694" height="297" fill="rgba(0, 150, 255, 0.15)"/>
+                        
+                        <!-- Electrodes -->
+                        <!-- Anode (+) -->
+                        <rect id="mech-anode" x="220" y="150" width="60" height="280" fill="url(#copper-grad)"/>
+                        <text x="250" y="140" fill="#ef4444" font-size="24" font-weight="bold" text-anchor="middle">ANODE (+)</text>
+                        
+                        <!-- Cathode (-) -->
+                        <rect id="mech-cathode" x="720" y="150" width="60" height="280" fill="url(#silver-grad)"/>
+                        <text x="750" y="140" fill="#3b82f6" font-size="24" font-weight="bold" text-anchor="middle">CATHODE (-)</text>
+                        
+                        <!-- Dynamic Elements Container (Controlled via JS) -->
+                        <g id="dynamic-layer"></g>
+                    </svg>
+                </div>
+
+                <div class="stage-info">
+                    <h3 id="stage-title">1. System Inactive</h3>
+                    <p id="stage-desc">The circuit is open. The copper plate (anode) and steel object (cathode) sit in the copper sulfate electrolyte solution. No reaction occurs.</p>
+                </div>
+
+                <!-- Controls -->
+                <div class="controls-bar">
+                    <button class="btn" onclick="prevStage()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Previous
+                    </button>
+                    
+                    <div class="progress-dots" id="stage-dots">
+                        <div class="dot active" onclick="goToStage(0)"></div>
+                        <div class="dot" onclick="goToStage(1)"></div>
+                        <div class="dot" onclick="goToStage(2)"></div>
+                        <div class="dot" onclick="goToStage(3)"></div>
+                        <div class="dot" onclick="goToStage(4)"></div>
+                    </div>
+                    
+                    <div style="display:flex; gap:12px;">
+                        <button class="btn" id="btn-autoplay" onclick="toggleAutoPlay()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="icon-play"><polygon points="5 3 19 12 5 21 5 3"/></svg> 
+                            <span id="text-autoplay">Auto-Play</span>
+                        </button>
+                        <button class="btn btn-primary" onclick="nextStage()">
+                            Next <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. INTERACTIVE SIMULATION -->
+        <section class="glass-panel" id="simulation">
+            <h2 class="mb-2">Interactive Physics Lab</h2>
+            <p class="mb-4">Adjust the voltage to observe how the electrical force dictates the rate of ion migration and deposition thickness. (Real-time particle simulation).</p>
+            
+            <div class="sim-layout">
+                <!-- Controls -->
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Voltage (Drive Force)</span>
+                            <span class="control-val" id="val-voltage">5.0 V</span>
+                        </div>
+                        <input type="range" id="slider-voltage" min="0" max="12" step="0.5" value="5">
+                        <p style="font-size: 0.8rem; margin-top: 5px;">Higher voltage accelerates electrons and pulls ions faster across the solution.</p>
+                    </div>
+                    
+                    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 12px;">
+                        <button class="btn btn-primary" style="justify-content:center; width: 100%" id="sim-toggle" onclick="toggleSim()">
+                            Start Simulation
+                        </button>
+                        <button class="btn" style="justify-content:center; width: 100%" onclick="resetSim()">
+                            Reset Object
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Canvas -->
+                <div class="canvas-container">
+                    <canvas id="sim-canvas"></canvas>
+                    <div class="sim-stats">
+                        <div class="stat-box">
+                            <p>Current</p>
+                            <strong id="stat-current">0.0 A</strong>
+                        </div>
+                        <div class="stat-box copper">
+                            <p>Plating Thickness</p>
+                            <strong id="stat-thickness">0.00 µm</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. CRITICAL INSIGHTS -->
+        <section class="grid-3">
+            <div class="card fact">
+                <div class="card-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                </div>
+                <h3>Faraday's Laws</h3>
+                <p>The mass of the substance deposited is directly proportional to the total electrical charge passed through the electrolyte. (More current + more time = thicker plating).</p>
+            </div>
+            
+            <div class="card mistake">
+                <div class="card-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                </div>
+                <h3>Reversing Polarity</h3>
+                <p>Connecting the target object to the positive terminal turns it into the anode. Instead of getting plated, your valuable object will dissolve into the acid!</p>
+            </div>
+            
+            <div class="card">
+                <div class="card-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                </div>
+                <h3>Real Applications</h3>
+                <p>Used to prevent rust (galvanization), purify metals (refining copper to 99.99% for wiring), and create beautiful jewelry (gold/silver plating).</p>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        /* ----------------------------------------------------------------------
+           1. COMPONENT LEGEND INTERACTION
+           ---------------------------------------------------------------------- */
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => highlightMarker(marker.dataset.target));
+            marker.addEventListener('mouseleave', resetMarkers);
+            // Touch support for mobile
+            marker.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                highlightMarker(marker.dataset.target);
+            });
+        });
+
+        function highlightMarker(targetId) {
+            resetMarkers();
+            // Highlight legend
+            const item = document.getElementById(targetId);
+            if(item) item.classList.add('active');
+            
+            // Highlight marker
+            const marker = document.querySelector(`.marker[data-target="${targetId}"]`);
+            if(marker) marker.classList.add('active');
+        }
+
+        function resetMarkers() {
+            legendItems.forEach(item => item.classList.remove('active'));
+            markers.forEach(m => m.classList.remove('active'));
+        }
+
+
+        /* ----------------------------------------------------------------------
+           2. WORKING MECHANISM (STAGE BY STAGE)
+           ---------------------------------------------------------------------- */
+        const stages = [
+            {
+                title: "1. System Idle",
+                desc: "No voltage is applied. The copper anode and the object (cathode) rest in a copper sulfate ($CuSO_4$) solution. The ions wander randomly.",
+                render: (layer) => {
+                    layer.innerHTML = drawStaticIons();
+                }
+            },
+            {
+                title: "2. Power On (Electron Flow)",
+                desc: "The battery creates a potential difference. Electrons are powerfully pumped from the anode, through the wire, towards the cathode.",
+                render: (layer) => {
+                    layer.innerHTML = drawStaticIons() + drawElectronsWire();
+                }
+            },
+            {
+                title: "3. Oxidation at Anode",
+                desc: "Stripped of electrons, solid Copper atoms at the Anode become positive $Cu^{2+}$ ions and dissolve into the electrolyte. $(Cu \\rightarrow Cu^{2+} + 2e^-)$",
+                render: (layer) => {
+                    layer.innerHTML = drawElectronsWire() + drawOxidation();
+                }
+            },
+            {
+                title: "4. Ion Migration",
+                desc: "The electric field drives positive $Cu^{2+}$ cations toward the negative cathode, while negative sulfate anions move toward the anode.",
+                render: (layer) => {
+                    layer.innerHTML = drawElectronsWire() + drawMigration();
+                }
+            },
+            {
+                title: "5. Reduction & Deposition",
+                desc: "At the cathode, $Cu^{2+}$ ions receive 2 electrons from the wire and become solid Copper atoms, bonding to the surface. $(Cu^{2+} + 2e^- \\rightarrow Cu)$",
+                render: (layer) => {
+                    layer.innerHTML = drawElectronsWire() + drawDeposition();
+                    // Glow effect on cathode
+                    layer.innerHTML += `<rect x="715" y="145" width="70" height="290" fill="none" stroke="rgba(245, 158, 11, 0.8)" stroke-width="6" filter="url(#glow)"/>`;
+                }
+            }
+        ];
+
+        let currentStageIndex = 0;
+        let mechanismAutoPlay = null;
+        const dynamicLayer = document.getElementById('dynamic-layer');
+        const titleEl = document.getElementById('stage-title');
+        const descEl = document.getElementById('stage-desc');
+        const dots = document.querySelectorAll('.dot');
+        
+        // Setup SVG filters for glow once
+        const svgDef = `<defs>
+            <filter id="svgGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur1" />
+                <feMerge><feMergeNode in="blur1"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+        </defs>`;
+        document.getElementById('mech-svg').insertAdjacentHTML('afterbegin', svgDef);
+
+        function updateStageUI() {
+            const stage = stages[currentStageIndex];
+            
+            // Format text (simple bolding for formulas)
+            let formattedDesc = stage.desc.replace(/\$(.*?)\$/g, '<strong style="color:var(--neon-blue); letter-spacing:1px;">$1</strong>');
+            
+            // Fade transition
+            titleEl.style.opacity = 0;
+            descEl.style.opacity = 0;
+            dynamicLayer.style.opacity = 0;
+            
+            setTimeout(() => {
+                titleEl.innerHTML = stage.title;
+                descEl.innerHTML = formattedDesc;
+                
+                // Clear and render SVG layer
+                dynamicLayer.innerHTML = '';
+                stage.render(dynamicLayer);
+                
+                titleEl.style.opacity = 1;
+                descEl.style.opacity = 1;
+                dynamicLayer.style.opacity = 1;
+            }, 250);
+
+            // Update dots
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentStageIndex);
+            });
+        }
+
+        function nextStage() {
+            currentStageIndex = (currentStageIndex + 1) % stages.length;
+            updateStageUI();
+        }
+
+        function prevStage() {
+            currentStageIndex = (currentStageIndex - 1 + stages.length) % stages.length;
+            updateStageUI();
+        }
+
+        function goToStage(index) {
+            currentStageIndex = index;
+            updateStageUI();
+            if(mechanismAutoPlay) toggleAutoPlay(); // Stop autoplay if manual interaction
+        }
+
+        function toggleAutoPlay() {
+            const btnText = document.getElementById('text-autoplay');
+            const icon = document.getElementById('icon-play');
+            
+            if (mechanismAutoPlay) {
+                clearInterval(mechanismAutoPlay);
+                mechanismAutoPlay = null;
+                btnText.textContent = "Auto-Play";
+                icon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+            } else {
+                nextStage();
+                mechanismAutoPlay = setInterval(nextStage, 4000);
+                btnText.textContent = "Pause";
+                icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+            }
+        }
+
+        // --- SVG Animation Generators for Mechanism ---
+        function drawStaticIons() {
+            let html = '';
+            for(let i=0; i<15; i++) {
+                let x = 300 + Math.random() * 400;
+                let y = 200 + Math.random() * 250;
+                let isCu = Math.random() > 0.5;
+                html += `<circle cx="${x}" cy="${y}" r="12" fill="${isCu ? 'var(--copper)' : 'var(--danger)'}" opacity="0.6"/>`;
+                html += `<text x="${x}" y="${y+4}" fill="white" font-size="10" text-anchor="middle" font-weight="bold">${isCu ? 'Cu²⁺' : 'SO₄²⁻'}</text>`;
+            }
+            return html;
+        }
+
+        function drawElectronsWire() {
+            let html = '';
+            // Flow 1: Anode to Battery
+            html += `<circle r="6" fill="#00f0ff" filter="url(#svgGlow)">
+                        <animateMotion path="M 250 150 L 250 50 L 400 50" dur="1s" repeatCount="indefinite" />
+                     </circle>`;
+            html += `<circle r="6" fill="#00f0ff" filter="url(#svgGlow)">
+                        <animateMotion path="M 250 150 L 250 50 L 400 50" dur="1s" begin="0.5s" repeatCount="indefinite" />
+                     </circle>`;
+            // Flow 2: Battery to Cathode
+            html += `<circle r="6" fill="#00f0ff" filter="url(#svgGlow)">
+                        <animateMotion path="M 600 50 L 750 50 L 750 150" dur="1s" repeatCount="indefinite" />
+                     </circle>`;
+            html += `<circle r="6" fill="#00f0ff" filter="url(#svgGlow)">
+                        <animateMotion path="M 600 50 L 750 50 L 750 150" dur="1s" begin="0.5s" repeatCount="indefinite" />
+                     </circle>`;
+            return html;
+        }
+
+        function drawOxidation() {
+            let html = '';
+            // Ions detaching from anode
+            for(let i=0; i<4; i++) {
+                let y = 200 + (i * 60);
+                html += `<g>
+                            <animateTransform attributeName="transform" type="translate" from="0 0" to="80 0" dur="2s" repeatCount="indefinite" />
+                            <animate attributeName="opacity" values="1;1;0" dur="2s" repeatCount="indefinite" />
+                            <circle cx="280" cy="${y}" r="14" fill="var(--copper)" filter="url(#svgGlow)"/>
+                            <text x="280" y="${y+5}" fill="white" font-size="12" text-anchor="middle" font-weight="bold">Cu²⁺</text>
+                         </g>`;
+            }
+            return html + drawStaticIons(); // Background ions
+        }
+
+        function drawMigration() {
+            let html = '';
+            // Cu ions moving Right
+            for(let i=0; i<8; i++) {
+                let sy = 180 + Math.random() * 280;
+                let sx = 250 + Math.random() * 200;
+                html += `<g>
+                            <animateTransform attributeName="transform" type="translate" from="${sx} ${sy}" to="${sx + 300} ${sy}" dur="${2 + Math.random()}s" repeatCount="indefinite" />
+                            <circle cx="0" cy="0" r="14" fill="var(--copper)" filter="url(#svgGlow)"/>
+                            <text x="0" y="5" fill="white" font-size="12" text-anchor="middle" font-weight="bold">Cu²⁺</text>
+                         </g>`;
+            }
+            // SO4 ions moving Left
+            for(let i=0; i<5; i++) {
+                let sy = 180 + Math.random() * 280;
+                let sx = 750 - Math.random() * 200;
+                html += `<g>
+                            <animateTransform attributeName="transform" type="translate" from="${sx} ${sy}" to="${sx - 300} ${sy}" dur="${2.5 + Math.random()}s" repeatCount="indefinite" />
+                            <circle cx="0" cy="0" r="14" fill="var(--danger)" opacity="0.8"/>
+                            <text x="0" y="4" fill="white" font-size="10" text-anchor="middle" font-weight="bold">SO₄²⁻</text>
+                         </g>`;
+            }
+            return html;
+        }
+
+        function drawDeposition() {
+            let html = '';
+            // Ions arriving at cathode
+            for(let i=0; i<5; i++) {
+                let y = 180 + (i * 60);
+                html += `<g>
+                            <animateTransform attributeName="transform" type="translate" from="600 ${y}" to="710 ${y}" dur="1.5s" repeatCount="indefinite" />
+                            <animate attributeName="opacity" values="0;1;0" dur="1.5s" repeatCount="indefinite" />
+                            <circle cx="0" cy="0" r="14" fill="var(--copper)" filter="url(#svgGlow)"/>
+                            <text x="0" y="5" fill="white" font-size="12" text-anchor="middle" font-weight="bold">Cu²⁺</text>
+                         </g>`;
+            }
+            return html;
+        }
+
+        // Init Stage 0
+        updateStageUI();
+
+
+        /* ----------------------------------------------------------------------
+           3. INTERACTIVE SIMULATION (CANVAS)
+           ---------------------------------------------------------------------- */
+        const canvas = document.getElementById('sim-canvas');
+        const ctx = canvas.getContext('2d');
+        const voltageSlider = document.getElementById('slider-voltage');
+        const voltageText = document.getElementById('val-voltage');
+        const statCurrent = document.getElementById('stat-current');
+        const statThickness = document.getElementById('stat-thickness');
+        
+        let simRunning = false;
+        let animFrame;
+        let simVoltage = 5.0;
+        let platingThickness = 0;
+        let particles = [];
+        
+        // Colors
+        const colLiquid = 'rgba(0, 150, 255, 0.2)';
+        const colAnode = '#f59e0b';
+        const colCathodeBase = '#9ca3af';
+        
+        // Responsive Canvas Setup
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        // orientation change handled by resize in modern browsers, but explicitly:
+        window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+
+        class Particle {
+            constructor(w, h, type) {
+                this.cw = w; this.ch = h;
+                this.type = type; // 'cu' or 'so4'
+                this.reset();
+                this.x = Math.random() * w; // Random start across canvas
+            }
+            reset() {
+                // Determine boundaries based on current canvas size
+                const anodeRight = this.cw * 0.25 + 40;
+                const cathodeLeft = this.cw * 0.75 - 40;
+                
+                if(this.type === 'cu') {
+                    // Start near anode
+                    this.x = anodeRight + Math.random() * 20;
+                } else {
+                    // Start near cathode
+                    this.x = cathodeLeft - Math.random() * 20;
+                }
+                this.y = this.ch * 0.3 + Math.random() * (this.ch * 0.6);
+                
+                // Base speed randomized slightly
+                this.baseSpeed = 0.5 + Math.random() * 0.5;
+            }
+            update(v) {
+                if(!simRunning || v === 0) {
+                    // Brownian motion when off
+                    this.x += (Math.random() - 0.5) * 0.5;
+                    this.y += (Math.random() - 0.5) * 0.5;
+                    return;
+                }
+
+                // Speed factor based on voltage
+                const speed = this.baseSpeed * (v / 5);
+                
+                if(this.type === 'cu') {
+                    this.x += speed;
+                    // Arrived at cathode
+                    if(this.x > this.cw * 0.75 - 20) {
+                        platingThickness += 0.001 * (v/12); // Higher V plates faster
+                        this.reset();
+                    }
+                } else {
+                    this.x -= speed * 0.6; // SO4 moves slower
+                    // Arrived at anode
+                    if(this.x < this.cw * 0.25 + 20) {
+                        this.reset();
+                    }
+                }
+                
+                // Add slight vertical wobble
+                this.y += Math.sin(Date.now() / 200 + this.x) * 0.5;
+            }
+            draw(ctx) {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 6, 0, Math.PI * 2);
+                if(this.type === 'cu') {
+                    ctx.fillStyle = '#f59e0b';
+                    ctx.shadowColor = '#f59e0b';
+                    ctx.shadowBlur = 10;
+                } else {
+                    ctx.fillStyle = '#ef4444';
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                }
+                ctx.fill();
+                
+                // Label
+                ctx.fillStyle = 'white';
+                ctx.font = '8px monospace';
+                ctx.shadowBlur = 0;
+                ctx.textAlign = 'center';
+                ctx.fillText(this.type==='cu'? '+' : '-', this.x, this.y+2);
+            }
+        }
+
+        function initSim() {
+            resizeCanvas();
+            particles = [];
+            // Logical width/height to seed particles
+            const w = canvas.width / (window.devicePixelRatio || 1);
+            const h = canvas.height / (window.devicePixelRatio || 1);
+            
+            for(let i=0; i<40; i++) particles.push(new Particle(w, h, 'cu'));
+            for(let i=0; i<20; i++) particles.push(new Particle(w, h, 'so4'));
+            
+            renderSim();
+        }
+
+        function renderSim() {
+            const rect = canvas.getBoundingClientRect();
+            const w = rect.width;
+            const h = rect.height;
+            
+            // Clear
+            ctx.clearRect(0, 0, w, h);
+            
+            // Draw Liquid
+            ctx.fillStyle = colLiquid;
+            ctx.fillRect(w * 0.1, h * 0.2, w * 0.8, h * 0.8);
+            
+            // Draw Anode (Left)
+            const anodeX = w * 0.25 - 20;
+            ctx.fillStyle = colAnode;
+            // Make anode thinner as plating progresses (conservation of mass visual)
+            const anodeW = Math.max(10, 40 - (platingThickness * 10));
+            ctx.fillRect(anodeX, h * 0.1, anodeW, h * 0.8);
+            
+            // Draw Cathode (Right) Base
+            const cathX = w * 0.75 - 20;
+            ctx.fillStyle = colCathodeBase;
+            ctx.fillRect(cathX, h * 0.1, 40, h * 0.8);
+            
+            // Draw Plating Layer on Cathode
+            if(platingThickness > 0) {
+                ctx.fillStyle = colAnode; // Copper color
+                ctx.shadowColor = '#f59e0b';
+                ctx.shadowBlur = 15;
+                // Draw a slightly wider rect over the base
+                const pThick = Math.min(20, platingThickness * 10);
+                ctx.fillRect(cathX - pThick/2, h * 0.1, 40 + pThick, h * 0.8);
+                ctx.shadowBlur = 0; // reset
+            }
+
+            // Draw Wires
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(anodeX + 20, h * 0.1);
+            ctx.lineTo(anodeX + 20, 20);
+            ctx.lineTo(w / 2 - 40, 20);
+            ctx.stroke();
+            
+            ctx.beginPath();
+            ctx.moveTo(cathX + 20, h * 0.1);
+            ctx.lineTo(cathX + 20, 20);
+            ctx.lineTo(w / 2 + 40, 20);
+            ctx.stroke();
+
+            // Draw Power Source
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(w/2 - 40, 5, 80, 30);
+            ctx.fillStyle = 'white';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(simVoltage.toFixed(1) + 'V', w/2, 25);
+
+            // Update & Draw Particles
+            particles.forEach(p => {
+                p.cw = w; p.ch = h; // Keep updated with resize
+                p.update(simVoltage);
+                p.draw(ctx);
+            });
+
+            // Update UI Stats
+            let current = simRunning ? (simVoltage * 0.8).toFixed(1) : "0.0";
+            statCurrent.innerText = current + " A";
+            statThickness.innerText = platingThickness.toFixed(2) + " µm";
+
+            animFrame = requestAnimationFrame(renderSim);
+        }
+
+        // Controls interactions
+        voltageSlider.addEventListener('input', (e) => {
+            simVoltage = parseFloat(e.target.value);
+            voltageText.innerText = simVoltage.toFixed(1) + " V";
+        });
+        
+        // Handle touch on slider explicitly for some older mobile browsers (though native range usually works)
+        voltageSlider.addEventListener('touchmove', (e) => {
+            e.stopPropagation(); // prevent page scroll when sliding
+        }, {passive: false});
+
+        function toggleSim() {
+            const btn = document.getElementById('sim-toggle');
+            simRunning = !simRunning;
+            if(simRunning) {
+                btn.innerText = "Pause Simulation";
+                btn.classList.remove('btn-primary');
+                btn.style.background = 'rgba(255,255,255,0.2)';
+            } else {
+                btn.innerText = "Resume Simulation";
+                btn.classList.add('btn-primary');
+                btn.style.background = ''; // restore css
+            }
+        }
+
+        function resetSim() {
+            platingThickness = 0;
+            if(!simRunning) {
+                // Re-render once to clear visual
+                renderSim();
+                cancelAnimationFrame(animFrame); 
+            }
+            // reposition particles
+            const w = canvas.width / (window.devicePixelRatio || 1);
+            const h = canvas.height / (window.devicePixelRatio || 1);
+            particles.forEach(p => p.reset());
+        }
+
+        // Initialize Everything
+        window.addEventListener('load', () => {
+            initSim();
+            // Start paused
+            cancelAnimationFrame(animFrame);
+            // Render first frame static
+            renderSim(); 
+            cancelAnimationFrame(animFrame);
+        });
+
+    </script>
+</body>
+</html>

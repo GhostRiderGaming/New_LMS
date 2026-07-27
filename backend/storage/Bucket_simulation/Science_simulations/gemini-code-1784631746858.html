@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surface Roughness Simulation</title>
+    <style>
+        :root {
+            --bg-base: #050508;
+            --bg-glass: rgba(15, 20, 35, 0.6);
+            --bg-glass-heavy: rgba(25, 30, 45, 0.8);
+            --border-glass: rgba(0, 255, 255, 0.15);
+            --text-main: #f0f4f8;
+            --text-muted: #8a9bb0;
+            --accent-cyan: #00f0ff;
+            --accent-magenta: #ff0055;
+            --accent-blue: #0066ff;
+            --accent-yellow: #ffcc00;
+            --gradient-cyan-blue: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            --shadow-cyan: 0 0 20px rgba(0, 240, 255, 0.3);
+            --shadow-magenta: 0 0 20px rgba(255, 0, 85, 0.3);
+            
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --spacing-xs: clamp(4px, 1vw, 8px);
+            --spacing-sm: clamp(8px, 2vw, 16px);
+            --spacing-md: clamp(16px, 3vw, 24px);
+            --spacing-lg: clamp(24px, 5vw, 48px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-main);
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 102, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(0, 240, 255, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; line-height: 1.1; margin-bottom: var(--spacing-sm); }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 700; margin-bottom: var(--spacing-md); }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; margin-bottom: var(--spacing-sm); color: var(--accent-cyan); }
+        p { font-size: clamp(0.9rem, 1.2vw, 1.1rem); color: var(--text-muted); margin-bottom: var(--spacing-md); }
+        
+        .gradient-text {
+            background: var(--gradient-cyan-blue);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: inline-block;
+        }
+
+        /* Layout */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-lg) var(--spacing-md);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        .section {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            position: relative;
+            z-index: 1;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-md);
+            align-items: center;
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* Glassmorphism Cards */
+        .glass-card {
+            background: var(--bg-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-md);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        @media (max-width: 768px) {
+            .glass-card { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+        }
+
+        /* Canvas Wrapper */
+        .canvas-container {
+            width: 100%;
+            position: relative;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #0a0c10;
+            border: 1px solid rgba(255,255,255,0.05);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+            min-height: 240px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .canvas-spacer {
+            padding-top: 56.25%; /* 16:9 Aspect Ratio */
+        }
+
+        @media (max-width: 768px) {
+            .canvas-spacer { padding-top: 75%; /* 4:3 on mobile */ }
+        }
+
+        /* Markers & Legends (Mandatory Design Pattern) */
+        .diagram-layout {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        @media (min-width: 1024px) {
+            .diagram-layout { flex-direction: row; align-items: stretch; }
+            .diagram-visual { flex: 2; position: relative; }
+            .diagram-legend { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+        }
+
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transform: translate(-50%, -50%);
+            box-shadow: var(--shadow-cyan);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            z-index: 10;
+            border: 2px solid #fff;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: #fff;
+            color: var(--accent-cyan);
+            box-shadow: 0 0 30px #fff;
+        }
+
+        /* Marker Color Variations */
+        .marker.c-magenta { background: var(--accent-magenta); box-shadow: var(--shadow-magenta); }
+        .marker.c-magenta:hover, .marker.c-magenta.active { color: var(--accent-magenta); background: #fff; }
+        
+        .marker.c-blue { background: var(--accent-blue); box-shadow: 0 0 20px rgba(0, 102, 255, 0.5); }
+        .marker.c-blue:hover, .marker.c-blue.active { color: var(--accent-blue); background: #fff; }
+
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            list-style: none;
+        }
+
+        .legend-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-sm);
+            padding: var(--spacing-sm);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.1);
+            border-color: var(--accent-cyan);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }
+
+        .legend-text strong {
+            display: block;
+            color: var(--text-main);
+            font-size: 1rem;
+        }
+
+        .legend-text span {
+            display: block;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        /* Controls (Working Process & Sim) */
+        .controls-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.4);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+            flex-wrap: wrap;
+            gap: var(--spacing-sm);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+            font-size: clamp(0.8rem, 1vw, 1rem);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background: rgba(0, 240, 255, 0.15);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            box-shadow: var(--shadow-cyan);
+        }
+
+        button.active {
+            background: var(--accent-cyan);
+            color: #000;
+            border-color: var(--accent-cyan);
+        }
+
+        /* Progress Dots */
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+
+        .dot.active {
+            background: var(--accent-cyan);
+            box-shadow: var(--shadow-cyan);
+            transform: scale(1.3);
+        }
+
+        /* Stage Info Overlay */
+        .stage-info {
+            position: absolute;
+            top: var(--spacing-sm);
+            left: var(--spacing-sm);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-sm);
+            border-left: 3px solid var(--accent-cyan);
+            max-width: 60%;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .stage-title { font-weight: 700; color: var(--accent-cyan); font-size: 1.1rem; }
+        .stage-desc { font-size: 0.9rem; color: #ddd; margin: 0; }
+
+        /* Sim Controls Overlay */
+        .sim-overlay {
+            position: absolute;
+            bottom: var(--spacing-sm);
+            right: var(--spacing-sm);
+            background: rgba(10, 12, 16, 0.85);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            z-index: 5;
+            min-width: 250px;
+        }
+
+        .metric-display {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--accent-magenta);
+            line-height: 1;
+            text-shadow: var(--shadow-magenta);
+        }
+
+        .metric-unit { font-size: 1rem; color: var(--text-muted); }
+
+        .slider-container { display: flex; flex-direction: column; gap: 4px; }
+        .slider-container label { font-size: 0.85rem; color: var(--text-muted); display: flex; justify-content: space-between;}
+        
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: rgba(255,255,255,0.1);
+            height: 6px;
+            border-radius: 3px;
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            box-shadow: var(--shadow-cyan);
+        }
+
+        /* UI Pills */
+        .pill-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .pill {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .pill:hover, .pill.active { background: var(--accent-magenta); color: #fff; border-color: var(--accent-magenta); box-shadow: var(--shadow-magenta);}
+
+        /* Facts Grid */
+        .facts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--spacing-md); }
+        .fact-card {
+            background: rgba(255,255,255,0.02);
+            border-left: 2px solid var(--accent-blue);
+            padding: var(--spacing-sm);
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+        }
+        .fact-card h4 { margin-bottom: 4px; color: var(--text-main); }
+        .fact-card p { font-size: 0.85rem; margin: 0; }
+
+        /* Animation utilities */
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        .pulsing { animation: pulse 2s infinite ease-in-out; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <header class="section">
+        <h1>Surface <span class="gradient-text">Roughness</span></h1>
+        <p>A microscopic journey into manufactured surfaces. What feels smooth to human touch is often a jagged mountain range at the microscopic level. Understanding this topography is critical for engineering, friction, and sealing.</p>
+    </header>
+
+    <!-- Overview (Macro vs Micro) -->
+    <section class="section glass-card">
+        <h2>The Microscopic Reality</h2>
+        <p>Hover or tap over the "smooth" metal cylinder to reveal its true surface profile under extreme magnification.</p>
+        
+        <div class="canvas-container" id="overview-container">
+            <div class="canvas-spacer"></div>
+            <canvas id="canvas-overview"></canvas>
+        </div>
+    </section>
+
+    <!-- Components Diagram -->
+    <section class="section glass-card">
+        <h2>Stylus Profilometer Components</h2>
+        <p>How do we measure these microscopic peaks and valleys? We use a precision instrument that physically traces the surface, similar to a record player needle.</p>
+        
+        <div class="diagram-layout">
+            <div class="diagram-visual canvas-container" id="components-container">
+                <div class="canvas-spacer" style="padding-top: 60%;"></div>
+                <canvas id="canvas-components"></canvas>
+                <!-- Markers mapped via JS to ensure exact coordinates relative to canvas -->
+                <div id="markers-container"></div>
+            </div>
+            
+            <div class="diagram-legend">
+                <ul class="legend-list" id="components-legend">
+                    <!-- Populated by JS -->
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Working Process -->
+    <section class="section glass-card">
+        <h2>How Measurement Works</h2>
+        <p>The continuous flow of mechanical displacement into a digital roughness profile.</p>
+        
+        <div class="canvas-container" id="working-container">
+            <div class="canvas-spacer" style="padding-top: 45%;"></div>
+            <canvas id="canvas-working"></canvas>
+            
+            <div class="stage-info" id="working-stage-info">
+                <div class="stage-title">Stage 1: Setup</div>
+                <p class="stage-desc">Stylus rests on surface</p>
+            </div>
+        </div>
+        
+        <div class="controls-bar">
+            <div class="btn-group">
+                <button id="btn-prev">◄ Prev</button>
+                <button id="btn-next">Next ►</button>
+            </div>
+            <div class="progress-dots" id="working-dots">
+                <!-- Populated by JS -->
+            </div>
+            <button id="btn-autoplay" class="active">Auto-Play Cycle</button>
+        </div>
+    </section>
+
+    <!-- Interactive Simulator -->
+    <section class="section glass-card">
+        <h2>Interactive Machining Simulator</h2>
+        <p>Different manufacturing processes leave distinct geometric signatures (feed marks, tears, grit trails). Adjust the process to see how it affects the Ra (Average Roughness) value.</p>
+        
+        <div class="canvas-container" id="sim-container">
+            <div class="canvas-spacer"></div>
+            <canvas id="canvas-sim"></canvas>
+            
+            <div class="sim-overlay">
+                <div class="metric-display">
+                    <div>
+                        <div style="font-size: 0.9rem; color: #8a9bb0; text-transform: uppercase; letter-spacing: 1px;">Ra Value</div>
+                        <div style="font-size: 0.75rem; color: #556;">Arithmetic Average</div>
+                    </div>
+                    <div>
+                        <span class="metric-value" id="sim-ra-val">3.2</span>
+                        <span class="metric-unit">µm</span>
+                    </div>
+                </div>
+                
+                <div class="metric-display" style="border: none; padding-top: 8px;">
+                    <div>
+                        <div style="font-size: 0.8rem; color: #8a9bb0;">Rz (Max Height)</div>
+                    </div>
+                    <div>
+                        <span class="metric-value" id="sim-rz-val" style="font-size: 1.5rem; color: var(--accent-cyan);">14.5</span>
+                        <span class="metric-unit">µm</span>
+                    </div>
+                </div>
+
+                <div style="margin-top: 12px;">
+                    <label style="font-size: 0.85rem; color: var(--text-muted);">Select Manufacturing Process:</label>
+                    <div class="pill-group" id="sim-processes">
+                        <div class="pill" data-process="casting">Casting</div>
+                        <div class="pill active" data-process="turning">Turning</div>
+                        <div class="pill" data-process="grinding">Grinding</div>
+                        <div class="pill" data-process="polishing">Polishing</div>
+                    </div>
+                </div>
+                
+                <div class="slider-container" style="margin-top: 12px;">
+                    <label><span>Animation Speed</span> <span id="speed-val">1x</span></label>
+                    <input type="range" id="sim-speed" min="0.1" max="3" step="0.1" value="1">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Facts & Applications -->
+    <section class="section glass-card">
+        <h2>Why It Matters</h2>
+        <div class="facts-grid">
+            <div class="fact-card">
+                <h4 style="color: var(--accent-cyan)">Engine Cylinders (Cross-hatching)</h4>
+                <p>They are intentionally made rough (Ra ~1µm) with a cross-hatch pattern so microscopic valleys hold lubricating oil. If perfectly smooth, engines would seize.</p>
+            </div>
+            <div class="fact-card">
+                <h4 style="color: var(--accent-magenta)">Medical Implants</h4>
+                <p>Hip joint replacements need a mirror finish (Ra < 0.05µm) to prevent wear, while the bone-anchoring side is made highly rough to encourage bone tissue ingrowth.</p>
+            </div>
+            <div class="fact-card">
+                <h4 style="color: var(--accent-blue)">Aerospace Hydraulics</h4>
+                <p>Seals require specific roughness. Too smooth, and the seal scrapes off all fluid (dry friction). Too rough, and fluid leaks through the deep valleys.</p>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+/**
+ * Core Canvas & Utility System
+ */
+class CanvasController {
+    constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d', { alpha: false }); // Optimize
+        this.width = 0;
+        this.height = 0;
+        this.dpr = window.devicePixelRatio || 1;
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+    }
+
+    resize() {
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        this.width = rect.width;
+        this.height = rect.height;
+        this.canvas.width = this.width * this.dpr;
+        this.canvas.height = this.height * this.dpr;
+        this.ctx.scale(this.dpr, this.dpr);
+    }
+    
+    clear(color = '#0a0c10') {
+        this.ctx.fillStyle = color;
+        this.ctx.fillRect(0, 0, this.width, this.height);
+    }
+
+    drawLine(x1, y1, x2, y2, color, width = 2) {
+        this.ctx.beginPath();
+        this.ctx.moveTo(x1, y1);
+        this.ctx.lineTo(x2, y2);
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = width;
+        this.ctx.stroke();
+    }
+}
+
+// Global easing functions
+const Easing = {
+    easeInOutQuad: t => t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+    easeOutCubic: t => (--t) * t * t + 1,
+    linear: t => t
+};
+
+/**
+ * 1. Overview Animation (Macro vs Micro)
+ */
+class OverviewApp extends CanvasController {
+    constructor() {
+        super('canvas-overview');
+        this.mouseX = this.width / 2;
+        this.mouseY = this.height / 2;
+        this.targetMouseX = this.mouseX;
+        this.targetMouseY = this.mouseY;
+        this.isHovering = false;
+        
+        // Generate a fixed noisy surface for the microscopic view
+        this.microProfile = [];
+        this.generateProfile();
+
+        this.canvas.addEventListener('mousemove', (e) => {
+            const rect = this.canvas.getBoundingClientRect();
+            this.targetMouseX = e.clientX - rect.left;
+            this.targetMouseY = e.clientY - rect.top;
+            this.isHovering = true;
+        });
+        this.canvas.addEventListener('mouseleave', () => {
+            this.targetMouseX = this.width / 2;
+            this.targetMouseY = this.height / 2;
+            this.isHovering = false;
+        });
+        
+        // Touch support
+        this.canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const rect = this.canvas.getBoundingClientRect();
+            this.targetMouseX = e.touches[0].clientX - rect.left;
+            this.targetMouseY = e.touches[0].clientY - rect.top;
+            this.isHovering = true;
+        }, {passive: false});
+        this.canvas.addEventListener('touchend', () => this.isHovering = false);
+    }
+
+    generateProfile() {
+        this.microProfile = [];
+        let seed = 0;
+        for(let i = 0; i < 2000; i++) {
+            // Mix of sine waves + noise for realistic roughness
+            let val = Math.sin(i*0.05)*15 + Math.sin(i*0.12)*8 + (Math.random()*6 - 3);
+            this.microProfile.push(val);
+        }
+    }
+
+    draw() {
+        this.clear('#05070a');
+        const ctx = this.ctx;
+        
+        // Smooth mouse following
+        this.mouseX += (this.targetMouseX - this.mouseX) * 0.1;
+        this.mouseY += (this.targetMouseY - this.mouseY) * 0.1;
+
+        // Draw Macro Object (A shiny metal cylinder)
+        const cy = this.height * 0.6;
+        const cHeight = this.height * 0.4;
+        
+        const grad = ctx.createLinearGradient(0, cy - cHeight/2, 0, cy + cHeight/2);
+        grad.addColorStop(0, '#2a2d34');
+        grad.addColorStop(0.2, '#6b7280');
+        grad.addColorStop(0.5, '#e5e7eb');
+        grad.addColorStop(0.8, '#374151');
+        grad.addColorStop(1, '#111827');
+
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, cy - cHeight/2, this.width, cHeight);
+        
+        // Cylinder perspective lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.lineWidth = 1;
+        for(let i=0; i<this.width; i+=40) {
+            ctx.beginPath();
+            ctx.moveTo(i, cy - cHeight/2);
+            ctx.lineTo(i, cy + cHeight/2);
+            ctx.stroke();
+        }
+
+        // Draw Magnifying Glass (Lens)
+        const radius = this.isHovering ? Math.min(this.width, this.height) * 0.35 : Math.min(this.width, this.height) * 0.25;
+        
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(this.mouseX, this.mouseY, radius, 0, Math.PI*2);
+        ctx.clip(); // Mask everything inside the lens
+        
+        // Lens Background (Darker, grid)
+        ctx.fillStyle = '#0a0d14';
+        ctx.fill();
+        
+        // Grid in lens
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.1)';
+        ctx.lineWidth = 1;
+        const gridStep = 20;
+        for(let x = (this.mouseX - radius)%gridStep; x < this.mouseX + radius; x+=gridStep) {
+            ctx.beginPath(); ctx.moveTo(x, this.mouseY-radius); ctx.lineTo(x, this.mouseY+radius); ctx.stroke();
+        }
+        for(let y = (this.mouseY - radius)%gridStep; y < this.mouseY + radius; y+=gridStep) {
+            ctx.beginPath(); ctx.moveTo(this.mouseX-radius, y); ctx.lineTo(this.mouseX+radius, y); ctx.stroke();
+        }
+
+        // Draw Microscopic Profile inside lens
+        const zoomFactor = 3;
+        ctx.beginPath();
+        const startX = this.mouseX - radius;
+        const endX = this.mouseX + radius;
+        
+        // Calculate offset based on mouse position to pan the profile
+        const profileOffset = Math.floor(this.mouseX * 2); 
+        
+        for(let x = startX; x <= endX; x++) {
+            let dataIdx = Math.floor((x - startX + profileOffset) / zoomFactor) % this.microProfile.length;
+            if(dataIdx < 0) dataIdx += this.microProfile.length;
+            let y = this.mouseY + this.microProfile[dataIdx] * zoomFactor;
+            
+            if(x === startX) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        
+        // Fill under profile
+        ctx.lineTo(endX, this.mouseY + radius);
+        ctx.lineTo(startX, this.mouseY + radius);
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
+        ctx.fill();
+
+        ctx.restore(); // End clipping
+
+        // Draw Magnifying Glass Border & Glow
+        ctx.beginPath();
+        ctx.arc(this.mouseX, this.mouseY, radius, 0, Math.PI*2);
+        ctx.strokeStyle = 'rgba(0, 240, 255, 0.8)';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 30;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Lens highlights
+        ctx.beginPath();
+        ctx.arc(this.mouseX - radius*0.3, this.mouseY - radius*0.3, radius*0.4, 0, Math.PI*2);
+        const hGrad = ctx.createRadialGradient(
+            this.mouseX - radius*0.3, this.mouseY - radius*0.3, 0,
+            this.mouseX - radius*0.3, this.mouseY - radius*0.3, radius*0.4
+        );
+        hGrad.addColorStop(0, 'rgba(255,255,255,0.2)');
+        hGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = hGrad;
+        ctx.fill();
+        
+        // Text Hint
+        if(!this.isHovering) {
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.font = '16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText("Move over surface to magnify", this.width/2, this.height/2 + radius + 30);
+        }
+    }
+}
+
+/**
+ * 2. Components Diagram App
+ */
+const componentsData = [
+    { id: 1, name: "Diamond Stylus", desc: "2-10µm radius tip that physically traces valleys.", color: "c-magenta" },
+    { id: 2, name: "Skid / Datum", desc: "Rests on peaks to provide a reference line.", color: "c-cyan" },
+    { id: 3, name: "Cantilever Arm", desc: "Transfers vertical micro-movements.", color: "c-cyan" },
+    { id: 4, name: "Transducer Coil", desc: "Converts mechanical motion into electrical signals.", color: "c-blue" }
+];
+
+class ComponentsApp extends CanvasController {
+    constructor() {
+        super('canvas-components');
+        this.buildLegend();
+        this.activeId = null;
+        this.pulsePhase = 0;
+    }
+
+    buildLegend() {
+        const list = document.getElementById('components-legend');
+        const markersContainer = document.getElementById('markers-container');
+        list.innerHTML = '';
+        markersContainer.innerHTML = '';
+
+        componentsData.forEach(comp => {
+            // Legend Item
+            const li = document.createElement('li');
+            li.className = 'legend-item';
+            li.innerHTML = `
+                <div class="legend-badge" style="background: var(--accent-${comp.color.split('-')[1]})">${comp.id}</div>
+                <div class="legend-text">
+                    <strong>${comp.name}</strong>
+                    <span>${comp.desc}</span>
+                </div>
+            `;
+            
+            // Marker Element
+            const marker = document.createElement('div');
+            marker.className = `marker ${comp.color}`;
+            marker.id = `marker-${comp.id}`;
+            marker.textContent = comp.id;
+
+            // Hover interactions
+            const enter = () => { this.activeId = comp.id; li.classList.add('active'); marker.classList.add('active'); };
+            const leave = () => { this.activeId = null; li.classList.remove('active'); marker.classList.remove('active'); };
+
+            li.addEventListener('mouseenter', enter);
+            li.addEventListener('mouseleave', leave);
+            marker.addEventListener('mouseenter', enter);
+            marker.addEventListener('mouseleave', leave);
+
+            list.appendChild(li);
+            markersContainer.appendChild(marker);
+        });
+    }
+
+    positionMarkers() {
+        // Map abstract canvas coordinates to CSS absolute positions
+        const mapMarker = (id, normX, normY) => {
+            const marker = document.getElementById(`marker-${id}`);
+            if(marker) {
+                marker.style.left = `${normX * 100}%`;
+                marker.style.top = `${normY * 100}%`;
+            }
+        };
+        // Specific positions for the drawing
+        mapMarker(1, 0.45, 0.72); // Tip
+        mapMarker(2, 0.55, 0.68); // Skid
+        mapMarker(3, 0.65, 0.45); // Arm
+        mapMarker(4, 0.85, 0.40); // Coil
+    }
+
+    draw() {
+        this.clear('#080a0f');
+        const ctx = this.ctx;
+        this.pulsePhase += 0.05;
+
+        // Proportions
+        const cx = this.width * 0.45;
+        const cy = this.height * 0.7; // Surface height
+        
+        // Draw Rough Surface
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        for(let x=0; x<this.width; x+=5) {
+            let y = cy + Math.sin(x*0.05)*10 + Math.sin(x*0.1)*5;
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo(this.width, this.height);
+        ctx.lineTo(0, this.height);
+        ctx.fillStyle = '#2a3040';
+        ctx.fill();
+        ctx.strokeStyle = '#4b5563';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 3. Cantilever Arm
+        ctx.save();
+        const armColor = this.activeId === 3 ? '#00f0ff' : '#6b7280';
+        if(this.activeId === 3) { ctx.shadowColor = '#00f0ff'; ctx.shadowBlur = 15; }
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 20); // Above tip
+        ctx.lineTo(cx + this.width*0.4, cy - 80); // Up to coil
+        ctx.lineWidth = 12;
+        ctx.lineCap = 'round';
+        ctx.strokeStyle = armColor;
+        ctx.stroke();
+        
+        // Pivot point
+        ctx.beginPath();
+        ctx.arc(cx + this.width*0.2, cy - 50, 8, 0, Math.PI*2);
+        ctx.fillStyle = '#111827';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = armColor;
+        ctx.stroke();
+        ctx.restore();
+
+        // 2. Skid (Reference)
+        ctx.save();
+        const skidColor = this.activeId === 2 ? '#00f0ff' : '#9ca3af';
+        if(this.activeId === 2) { ctx.shadowColor = '#00f0ff'; ctx.shadowBlur = 15; }
+        ctx.beginPath();
+        ctx.arc(cx + 60, cy - 5, 20, 0, Math.PI, true); // Semi circle resting on surface
+        ctx.fillStyle = '#374151';
+        ctx.fill();
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = skidColor;
+        ctx.stroke();
+        // Connecting rod to main housing
+        ctx.beginPath();
+        ctx.moveTo(cx + 60, cy - 25);
+        ctx.lineTo(cx + 60, cy - 100);
+        ctx.lineWidth = 8;
+        ctx.stroke();
+        ctx.restore();
+
+        // 1. Diamond Stylus
+        ctx.save();
+        const tipColor = this.activeId === 1 ? '#ff0055' : '#f3f4f6';
+        if(this.activeId === 1) { ctx.shadowColor = '#ff0055'; ctx.shadowBlur = 20; }
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - 25);
+        ctx.lineTo(cx - 5, cy - 5);
+        ctx.lineTo(cx, cy + 2); // Tip point penetrating valley slightly
+        ctx.lineTo(cx + 5, cy - 5);
+        ctx.closePath();
+        ctx.fillStyle = tipColor;
+        ctx.fill();
+        ctx.restore();
+
+        // 4. Transducer Coil
+        ctx.save();
+        const coilColor = this.activeId === 4 ? '#0066ff' : '#4b5563';
+        if(this.activeId === 4) { ctx.shadowColor = '#0066ff'; ctx.shadowBlur = 20; }
+        
+        const coilX = cx + this.width*0.4;
+        const coilY = cy - 80;
+        
+        // Core
+        ctx.fillStyle = '#111827';
+        ctx.fillRect(coilX - 15, coilY - 40, 30, 80);
+        ctx.strokeStyle = coilColor;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(coilX - 15, coilY - 40, 30, 80);
+        
+        // Windings
+        ctx.strokeStyle = '#fbbf24'; // Copper
+        ctx.lineWidth = 4;
+        for(let i=0; i<6; i++) {
+            ctx.beginPath();
+            ctx.moveTo(coilX - 15, coilY - 30 + i*12);
+            ctx.lineTo(coilX + 15, coilY - 25 + i*12);
+            ctx.stroke();
+        }
+
+        // Magnetic Field lines if active
+        if(this.activeId === 4) {
+            ctx.strokeStyle = `rgba(0, 102, 255, ${0.3 + Math.sin(this.pulsePhase)*0.2})`;
+            ctx.lineWidth = 2;
+            ctx.setLineDash([5, 5]);
+            for(let i=1; i<=3; i++) {
+                ctx.beginPath();
+                ctx.ellipse(coilX, coilY, 40 + i*10, 60 + i*15, 0, 0, Math.PI*2);
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
+        }
+        ctx.restore();
+
+        this.positionMarkers();
+    }
+}
+
+/**
+ * 3. Working Process (Linear Stages)
+ */
+const workingStages = [
+    { title: "Stage 1: Setup", desc: "Instrument aligns with surface. Skid sets the reference line." },
+    { title: "Stage 2: Traversal", desc: "Motor drives stylus horizontally across the evaluation length." },
+    { title: "Stage 3: Sensing", desc: "Stylus moves up/down. Transducer generates analog voltage." },
+    { title: "Stage 4: Calculation", desc: "Signal is digitized. Profile graph and Ra value are generated." }
+];
+
+class WorkingApp extends CanvasController {
+    constructor() {
+        super('canvas-working');
+        this.currentStage = 0;
+        this.isAutoPlaying = true;
+        this.time = 0;
+        this.profilePoints = [];
+        this.generateSurface();
+        this.initUI();
+    }
+
+    generateSurface() {
+        this.profilePoints = [];
+        for(let x=0; x<=1000; x+=2) {
+            // Complex surface
+            let y = Math.sin(x*0.02)*8 + Math.sin(x*0.07)*4 + (Math.random()*2-1);
+            this.profilePoints.push({x, y});
+        }
+    }
+
+    initUI() {
+        const dotsContainer = document.getElementById('working-dots');
+        workingStages.forEach((_, i) => {
+            const dot = document.createElement('div');
+            dot.className = `dot ${i === 0 ? 'active' : ''}`;
+            dotsContainer.appendChild(dot);
+        });
+
+        document.getElementById('btn-prev').addEventListener('click', () => { this.setStage(this.currentStage - 1); this.stopAutoPlay(); });
+        document.getElementById('btn-next').addEventListener('click', () => { this.setStage(this.currentStage + 1); this.stopAutoPlay(); });
+        
+        const autoBtn = document.getElementById('btn-autoplay');
+        autoBtn.addEventListener('click', () => {
+            this.isAutoPlaying = !this.isAutoPlaying;
+            autoBtn.classList.toggle('active', this.isAutoPlaying);
+        });
+    }
+
+    stopAutoPlay() {
+        this.isAutoPlaying = false;
+        document.getElementById('btn-autoplay').classList.remove('active');
+    }
+
+    setStage(index) {
+        if(index < 0) index = workingStages.length - 1;
+        if(index >= workingStages.length) index = 0;
+        this.currentStage = index;
+        
+        // Update UI
+        document.getElementById('working-stage-info').innerHTML = `
+            <div class="stage-title">${workingStages[index].title}</div>
+            <p class="stage-desc">${workingStages[index].desc}</p>
+        `;
+        
+        const dots = document.querySelectorAll('#working-dots .dot');
+        dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
+        
+        // Reset timing for animations relative to stage
+        this.time = 0;
+    }
+
+    draw() {
+        this.clear('#080b12');
+        const ctx = this.ctx;
+        this.time += 0.016; // Approx 60fps
+
+        if(this.isAutoPlaying && this.time > 4) {
+            this.setStage(this.currentStage + 1);
+        }
+
+        const cy = this.height * 0.7;
+        const startX = this.width * 0.1;
+        const endX = this.width * 0.9;
+        const travelDist = endX - startX;
+
+        // Draw Base Surface (Always visible)
+        ctx.beginPath();
+        ctx.moveTo(startX, cy + 50);
+        ctx.lineTo(startX, cy + this.profilePoints[0].y);
+        for(let p of this.profilePoints) {
+            let px = startX + (p.x/1000)*travelDist;
+            ctx.lineTo(px, cy + p.y);
+        }
+        ctx.lineTo(endX, cy + 50);
+        ctx.fillStyle = '#1f2937';
+        ctx.fill();
+        ctx.strokeStyle = '#4b5563';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Stage Animations
+        
+        let stylusX = startX;
+        let pIndex = 0;
+        let stylusY = cy + this.profilePoints[0].y;
+
+        if (this.currentStage === 0) {
+            // Setup: Blinking target on start position
+            ctx.beginPath();
+            ctx.arc(startX, stylusY, 15, 0, Math.PI*2);
+            ctx.fillStyle = `rgba(0, 240, 255, ${Math.abs(Math.sin(this.time*5)) * 0.5})`;
+            ctx.fill();
+            ctx.strokeStyle = '#00f0ff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Draw mean line placeholder
+            ctx.beginPath(); ctx.moveTo(startX, cy); ctx.lineTo(endX, cy);
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.setLineDash([5, 5]);
+            ctx.stroke(); ctx.setLineDash([]);
+        } 
+        else if (this.currentStage >= 1) {
+            // Traversal & beyond: Stylus moves
+            let progress = 1;
+            if(this.currentStage === 1) progress = Easing.easeInOutQuad(Math.min(this.time / 3, 1)); // 3 sec to cross
+            
+            stylusX = startX + travelDist * progress;
+            // Find y matching X
+            let mappedX = progress * 1000;
+            for(let i=0; i<this.profilePoints.length-1; i++) {
+                if(mappedX >= this.profilePoints[i].x && mappedX <= this.profilePoints[i+1].x) {
+                    stylusY = cy + this.profilePoints[i].y;
+                    pIndex = i;
+                    break;
+                }
+            }
+
+            // Draw glowing trail (The read profile) up in the "digital" space
+            const graphY = this.height * 0.3;
+            
+            if(this.currentStage >= 2) {
+                // Signal transmission visual (particles moving up from stylus)
+                if(Math.random() > 0.5) {
+                    ctx.beginPath();
+                    ctx.arc(stylusX, stylusY - Math.random()*100, 2, 0, Math.PI*2);
+                    ctx.fillStyle = '#00f0ff';
+                    ctx.fill();
+                }
+
+                // Draw extracted graph
+                ctx.beginPath();
+                ctx.moveTo(startX, graphY + this.profilePoints[0].y * 2); // 2x magnification on graph
+                for(let i=0; i<=pIndex; i++) {
+                    let px = startX + (this.profilePoints[i].x/1000)*travelDist;
+                    ctx.lineTo(px, graphY + this.profilePoints[i].y * 2);
+                }
+                ctx.strokeStyle = '#00f0ff';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                
+                // Glow
+                ctx.shadowColor = '#00f0ff';
+                ctx.shadowBlur = 10;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            }
+
+            if(this.currentStage === 3) {
+                // Calculation visual
+                // Mean line
+                ctx.beginPath(); ctx.moveTo(startX, graphY); ctx.lineTo(endX, graphY);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                // Highlight area (Ra calculation)
+                ctx.globalCompositeOperation = 'lighter';
+                ctx.beginPath();
+                ctx.moveTo(startX, graphY);
+                for(let i=0; i<this.profilePoints.length; i++) {
+                    let px = startX + (this.profilePoints[i].x/1000)*travelDist;
+                    ctx.lineTo(px, graphY + this.profilePoints[i].y * 2);
+                }
+                ctx.lineTo(endX, graphY);
+                ctx.fillStyle = `rgba(0, 240, 255, ${0.1 + Math.sin(this.time*3)*0.05})`;
+                ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
+
+                // Floating data text
+                ctx.fillStyle = '#ff0055';
+                ctx.font = 'bold 20px sans-serif';
+                ctx.fillText(`Ra = ∫|Z(x)|dx ≈ 3.2 µm`, endX - 200, graphY - 40);
+            }
+        }
+
+        // Draw Stylus Geometry (Follows stylusX, stylusY)
+        ctx.save();
+        ctx.translate(stylusX, stylusY);
+        // Diamond tip
+        ctx.beginPath();
+        ctx.moveTo(0, 0); ctx.lineTo(-8, -15); ctx.lineTo(-4, -40); ctx.lineTo(4, -40); ctx.lineTo(8, -15);
+        ctx.closePath();
+        ctx.fillStyle = '#f3f4f6';
+        ctx.fill();
+        ctx.strokeStyle = '#9ca3af';
+        ctx.stroke();
+        // Arm connecting
+        ctx.beginPath(); ctx.moveTo(0, -35); ctx.lineTo(this.width*0.2, -50);
+        ctx.lineWidth = 4; ctx.stroke();
+        ctx.restore();
+    }
+}
+
+/**
+ * 4. Interactive Simulator
+ */
+const processData = {
+    'casting': { amp: 15, freq: 0.02, noise: 5, raBase: 12.5, rzBase: 50.0 },
+    'turning': { amp: 8, freq: 0.2, noise: 1, raBase: 3.2, rzBase: 14.5 },
+    'grinding': { amp: 2, freq: 0.1, noise: 2, raBase: 0.8, rzBase: 4.0 },
+    'polishing': { amp: 0.5, freq: 0.05, noise: 0.2, raBase: 0.1, rzBase: 0.5 }
+};
+
+class SimulatorApp extends CanvasController {
+    constructor() {
+        super('canvas-sim');
+        this.process = 'turning';
+        this.speed = 1;
+        this.offset = 0; // For continuous scrolling
+        this.profileBuffer = [];
+        this.initUI();
+    }
+
+    initUI() {
+        document.querySelectorAll('#sim-processes .pill').forEach(pill => {
+            pill.addEventListener('click', (e) => {
+                document.querySelectorAll('#sim-processes .pill').forEach(p => p.classList.remove('active'));
+                e.target.classList.add('active');
+                this.process = e.target.dataset.process;
+                this.updateMetrics();
+            });
+        });
+
+        const speedSlider = document.getElementById('sim-speed');
+        speedSlider.addEventListener('input', (e) => {
+            this.speed = parseFloat(e.target.value);
+            document.getElementById('speed-val').textContent = this.speed.toFixed(1) + 'x';
+        });
+        
+        this.updateMetrics();
+    }
+
+    updateMetrics() {
+        const data = processData[this.process];
+        // Add tiny random variance to feel live
+        const ra = (data.raBase + (Math.random()*0.1 - 0.05)).toFixed(2);
+        const rz = (data.rzBase + (Math.random()*0.5 - 0.25)).toFixed(1);
+        document.getElementById('sim-ra-val').textContent = ra;
+        document.getElementById('sim-rz-val').textContent = rz;
+    }
+
+    // Mathematical surface generation based on process
+    getSurfaceY(x) {
+        const p = processData[this.process];
+        let y = 0;
+        
+        if (this.process === 'turning') {
+            // Distinct periodic feed marks (scallops)
+            y = Math.abs(Math.sin(x * p.freq)) * p.amp * -1 + (p.amp/2); 
+            y += (Math.random() - 0.5) * p.noise;
+        } 
+        else if (this.process === 'casting') {
+            // Random chaotic bumps
+            y = Math.sin(x * p.freq) * p.amp;
+            y += Math.sin(x * p.freq * 3.1) * (p.amp * 0.5);
+            y += (Math.random() - 0.5) * p.noise;
+        }
+        else {
+            // Grinding/Polishing (more random, tighter frequency)
+            y = Math.sin(x * p.freq) * p.amp;
+            y += (Math.random() - 0.5) * p.noise;
+        }
+        return y;
+    }
+
+    draw() {
+        this.clear('#050508');
+        const ctx = this.ctx;
+        
+        this.offset += 2 * this.speed;
+        if(Math.random() < 0.1) this.updateMetrics(); // Flicker numbers occasionally
+
+        const cy = this.height * 0.75; // Surface baseline
+        const graphY = this.height * 0.35; // Profile graph baseline
+        
+        // 1. Draw live moving surface
+        ctx.beginPath();
+        ctx.moveTo(0, this.height);
+        
+        let surfacePoints = [];
+        for(let x=0; x<=this.width; x+=3) {
+            let globalX = x + this.offset;
+            let y = cy + this.getSurfaceY(globalX);
+            surfacePoints.push({x, y: this.getSurfaceY(globalX)});
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo(this.width, this.height);
+        
+        // Gradient fill for surface
+        const surfGrad = ctx.createLinearGradient(0, cy, 0, this.height);
+        surfGrad.addColorStop(0, '#2a2d34');
+        surfGrad.addColorStop(1, '#0f1115');
+        ctx.fillStyle = surfGrad;
+        ctx.fill();
+        ctx.strokeStyle = '#6b7280';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 2. Draw Stylus (Fixed X, moving Y)
+        const stylusX = this.width * 0.2;
+        // Interpolate exactly where stylus hits
+        let sY = cy;
+        let rawY = 0;
+        for(let i=0; i<surfacePoints.length-1; i++) {
+            if(stylusX >= surfacePoints[i].x && stylusX <= surfacePoints[i+1].x) {
+                rawY = surfacePoints[i].y;
+                sY = cy + rawY;
+                break;
+            }
+        }
+
+        // Draw Tip
+        ctx.save();
+        ctx.translate(stylusX, sY);
+        ctx.beginPath();
+        ctx.moveTo(0, 0); ctx.lineTo(-10, -20); ctx.lineTo(-5, -60); ctx.lineTo(5, -60); ctx.lineTo(10, -20);
+        ctx.closePath();
+        ctx.fillStyle = '#ff0055';
+        ctx.fill();
+        ctx.shadowColor = '#ff0055';
+        ctx.shadowBlur = 15;
+        ctx.fill();
+        ctx.restore();
+        
+        // Laser beam connecting tip to graph
+        ctx.beginPath();
+        ctx.moveTo(stylusX, sY - 60);
+        ctx.lineTo(stylusX, graphY);
+        ctx.strokeStyle = 'rgba(255, 0, 85, 0.3)';
+        ctx.setLineDash([5, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // 3. Draw Live Graph (Past data sliding left)
+        const mag = this.process === 'casting' ? 1.5 : (this.process === 'turning' ? 3 : (this.process === 'grinding' ? 10 : 30));
+        
+        ctx.beginPath();
+        // Mean line
+        ctx.moveTo(0, graphY); ctx.lineTo(this.width, graphY);
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.beginPath();
+        // We only plot from stylusX backwards (to the left) to show history
+        let started = false;
+        for(let i=0; i<surfacePoints.length; i++) {
+            if(surfacePoints[i].x <= stylusX) {
+                let px = surfacePoints[i].x;
+                let py = graphY + surfacePoints[i].y * mag; // Magnified!
+                if(!started) { ctx.moveTo(px, py); started = true; }
+                else ctx.lineTo(px, py);
+            }
+        }
+        
+        ctx.strokeStyle = '#00f0ff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.shadowColor = '#00f0ff';
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Ra Area Shading
+        ctx.lineTo(stylusX, graphY);
+        ctx.lineTo(0, graphY);
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.15)';
+        ctx.fill();
+        
+        // Grid lines for scale
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.beginPath();
+        for(let i=1; i<=3; i++) {
+            ctx.moveTo(0, graphY - i*20); ctx.lineTo(stylusX, graphY - i*20);
+            ctx.moveTo(0, graphY + i*20); ctx.lineTo(stylusX, graphY + i*20);
+        }
+        ctx.stroke();
+    }
+}
+
+/**
+ * Main Application Boot & Loop
+ */
+const apps = [];
+
+function init() {
+    apps.push(new OverviewApp());
+    apps.push(new ComponentsApp());
+    apps.push(new WorkingApp());
+    apps.push(new SimulatorApp());
+    
+    // Start RAF loop
+    requestAnimationFrame(renderLoop);
+}
+
+function renderLoop() {
+    // Only render apps that are visible in the viewport to save resources
+    apps.forEach(app => {
+        const rect = app.canvas.getBoundingClientRect();
+        const isVisible = (rect.top < window.innerHeight && rect.bottom > 0);
+        if (isVisible) {
+            app.draw();
+        }
+    });
+    requestAnimationFrame(renderLoop);
+}
+
+// Boot when DOM ready
+document.addEventListener('DOMContentLoaded', init);
+
+</script>
+</body>
+</html>

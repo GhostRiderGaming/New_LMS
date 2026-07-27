@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Smart Irrigation Planner Simulation</title>
+    <style>
+        /* ==========================================================================
+           GLOBAL VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-base: #0f172a;
+            --bg-gradient: radial-gradient(circle at top right, #1e293b, #0f172a);
+            --glass-bg: rgba(30, 41, 59, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            --primary: #38bdf8;
+            --primary-glow: rgba(56, 189, 248, 0.5);
+            --success: #34d399;
+            --warning: #fbbf24;
+            --danger: #f87171;
+            --earth: #8b5a2b;
+            --water: #0ea5e9;
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background: var(--bg-gradient);
+            background-attachment: fixed;
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s infinite alternate linear;
+        }
+        .orb-1 { width: 40vw; height: 40vw; background: rgba(56, 189, 248, 0.15); top: -10%; left: -10%; }
+        .orb-2 { width: 50vw; height: 50vw; background: rgba(52, 211, 153, 0.1); bottom: -20%; right: -10%; animation-delay: -5s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(5%, 10%) scale(1.1); }
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 800; letter-spacing: -1px; margin-bottom: 0.5rem; background: linear-gradient(to right, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 700; margin-bottom: 1.5rem; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; margin-bottom: 1rem; color: var(--primary); }
+        p { font-size: clamp(0.9rem, 1.5vw, 1.1rem); color: var(--text-muted); margin-bottom: 1rem; }
+
+        /* Layout Container */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 4vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 80px);
+        }
+
+        /* Glassmorphism Classes */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+            padding: clamp(20px, 3vw, 40px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ==========================================================================
+           SECTION 1: HERO & INTRODUCTION
+           ========================================================================== */
+        .hero {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+        
+        .hero-visual {
+            width: 100%;
+            aspect-ratio: 4/3;
+            border-radius: var(--radius-md);
+            background: linear-gradient(to bottom, #0ea5e920, #0f172a);
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        .hero-svg {
+            width: 90%;
+            height: 90%;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+        }
+
+        /* Animations for Hero SVG */
+        @keyframes sun-pulse {
+            0% { filter: drop-shadow(0 0 10px var(--warning)); }
+            50% { filter: drop-shadow(0 0 30px var(--warning)); }
+            100% { filter: drop-shadow(0 0 10px var(--warning)); }
+        }
+        .anim-sun { animation: sun-pulse 4s infinite ease-in-out; transform-origin: center; }
+        
+        @keyframes water-flow {
+            to { stroke-dashoffset: -40; }
+        }
+        .anim-water-pipe {
+            stroke-dasharray: 10 10;
+            animation: water-flow 1s linear infinite;
+        }
+        
+        @keyframes grow {
+            0% { transform: scaleY(0.8); }
+            50% { transform: scaleY(1.05); }
+            100% { transform: scaleY(1); }
+        }
+        .anim-plant { transform-origin: bottom; animation: grow 3s ease-out forwards; }
+
+        /* ==========================================================================
+           SECTION 2: COMPONENTS (MARKER / LEGEND PATTERN)
+           ========================================================================== */
+        .components-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: #1e293b;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .diagram-svg {
+            width: 100%;
+            height: auto;
+            max-height: 500px;
+        }
+
+        /* Markers on Diagram */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--primary);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--primary-glow);
+            transition: var(--transition);
+            z-index: 10;
+            transform: translate(-50%, -50%);
+        }
+        
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--primary);
+            opacity: 0.5;
+            z-index: -1;
+            animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: #fff;
+            color: var(--primary);
+            box-shadow: 0 0 25px var(--primary);
+        }
+        .marker:hover::before, .marker.active::before { display: none; }
+
+        /* Marker Positioning (Percentages for responsiveness) */
+        #m1 { top: 70%; left: 15%; } /* Source */
+        #m2 { top: 65%; left: 30%; } /* Pump */
+        #m3 { top: 65%; left: 45%; } /* Filter */
+        #m4 { top: 40%; left: 60%; } /* Valve/Controller */
+        #m5 { top: 75%; left: 80%; } /* Emitter */
+        #m6 { top: 30%; left: 85%; } /* Sensor */
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(56, 189, 248, 0.1);
+            border-color: var(--primary);
+            transform: translateX(5px);
+        }
+
+        .legend-num {
+            width: 24px;
+            height: 24px;
+            background: var(--glass-border);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--text-main);
+        }
+        .legend-item.active .legend-num {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .legend-text strong {
+            display: block;
+            font-size: 1rem;
+            color: var(--text-main);
+        }
+        .legend-text span {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           SECTION 3: WORKING PROCESS (SMART CYCLE)
+           ========================================================================== */
+        .working-section {
+            text-align: center;
+        }
+
+        .cycle-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            margin-top: 24px;
+        }
+
+        .stage-visual {
+            width: 100%;
+            max-width: 600px;
+            aspect-ratio: 16/9;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* SVG based morphing visuals */
+        .stage-svg { width: 100%; height: 100%; position: absolute; top:0; left:0; opacity: 0; transition: opacity 0.5s ease; }
+        .stage-svg.active { opacity: 1; z-index: 2; }
+
+        /* specific stage animations */
+        .sensor-wave { animation: ping 2s cubic-bezier(0, 0, 0.2, 1) infinite; }
+        @keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+        
+        .data-stream { stroke-dasharray: 5 5; animation: flow-up 1s linear infinite; }
+        @keyframes flow-up { to { stroke-dashoffset: -10; } }
+
+        .gear-spin { transform-origin: center; animation: spin 4s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .rain-drop { animation: rain-fall 1.5s linear infinite; }
+        @keyframes rain-fall { 0% { transform: translateY(-10px); opacity:0;} 50% {opacity:1;} 100% { transform: translateY(40px); opacity:0; } }
+
+        .stage-info {
+            min-height: 80px;
+        }
+        .stage-info h4 { font-size: 1.5rem; color: var(--primary); margin-bottom: 8px; }
+        
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: rgba(255,255,255,0.05);
+            padding: 8px 16px;
+            border-radius: 30px;
+        }
+
+        .btn-ctrl {
+            background: none;
+            border: none;
+            color: var(--text-main);
+            font-size: 1.2rem;
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: var(--transition);
+        }
+        .btn-ctrl:hover { background: var(--glass-border); color: var(--primary); }
+        
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--glass-border); transition: var(--transition); }
+        .dot.active { background: var(--primary); transform: scale(1.3); box-shadow: 0 0 10px var(--primary-glow); }
+
+        /* ==========================================================================
+           SECTION 4: INTERACTIVE SIMULATION (CANVAS)
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 24px;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-group label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .custom-select {
+            appearance: none;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            outline: none;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: inherit;
+        }
+        .custom-select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-glow); }
+        .custom-select option { background: var(--bg-base); }
+
+        .btn-action {
+            background: var(--primary);
+            color: #0f172a;
+            border: none;
+            padding: 14px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: var(--transition);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+        }
+        .btn-action:hover {
+            background: #7dd3fc;
+            box-shadow: 0 0 20px var(--primary-glow);
+            transform: translateY(-2px);
+        }
+        .btn-action:active { transform: translateY(0); }
+
+        .sim-visual-area {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .canvas-container {
+            width: 100%;
+            height: 400px;
+            background: linear-gradient(to bottom, #87CEEB 0%, #87CEEB 40%, #8b5a2b 40%, #3e2723 100%);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Overlay metrics on canvas */
+        .sim-metrics {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .metric { display: flex; justify-content: space-between; gap: 20px; font-size: 0.9rem;}
+        .metric-label { color: var(--text-muted); }
+        .metric-val { font-weight: bold; color: var(--text-main); }
+        .val-good { color: var(--success); }
+        .val-bad { color: var(--danger); }
+
+        /* ==========================================================================
+           SECTION 5 & 6: GRIDS (Applications, Mistakes)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            transition: var(--transition);
+        }
+        .info-card:hover {
+            background: rgba(255,255,255,0.05);
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .icon-wrapper {
+            width: 48px;
+            height: 48px;
+            background: rgba(56, 189, 248, 0.1);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 16px;
+            color: var(--primary);
+        }
+
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .comp-card { padding: 20px; border-radius: var(--radius-md); border: 1px solid; }
+        .comp-bad { background: rgba(248, 113, 113, 0.05); border-color: rgba(248, 113, 113, 0.2); }
+        .comp-good { background: rgba(52, 211, 153, 0.05); border-color: rgba(52, 211, 153, 0.2); }
+        .comp-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-weight: bold; }
+        .comp-bad .comp-header { color: var(--danger); }
+        .comp-good .comp-header { color: var(--success); }
+
+        /* ==========================================================================
+           RESPONSIVE RULES (MANDATORY)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .components-grid { grid-template-columns: 1fr; }
+            .sim-grid { grid-template-columns: 1fr; }
+            .diagram-container { min-height: 400px; }
+            #m1 { top: 75%; left: 10%; }
+            #m4 { top: 35%; left: 60%; }
+        }
+
+        @media (max-width: 768px) {
+            .hero { grid-template-columns: 1fr; }
+            .container { padding: 16px; gap: 40px; }
+            .glass-panel { padding: 20px; }
+            .comparison-grid { grid-template-columns: 1fr; }
+            .canvas-container { height: 300px; }
+            
+            /* Simplify styling for low-end mobile */
+            .glass-panel { backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); }
+            .orb { display: none; }
+            
+            /* Legend stacks below illustration natively due to grid-template-columns: 1fr */
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient animated background -->
+    <div class="ambient-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+
+    <div class="container">
+        
+        <!-- HEADER & HERO -->
+        <header class="glass-panel hero">
+            <div class="hero-text">
+                <h1>Precision<br>Irrigation</h1>
+                <p>Water is life. In agriculture, it's also math. Discover how smart technology calculates exact crop water needs based on soil, weather, and plant biology to grow more while wasting nothing.</p>
+            </div>
+            <div class="hero-visual">
+                <svg class="hero-svg" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Background / Sky is handled by CSS gradient -->
+                    <!-- Sun -->
+                    <circle cx="330" cy="60" r="30" fill="#fbbf24" class="anim-sun" />
+                    <!-- Distant Hills -->
+                    <path d="M0 200 Q 100 150 200 200 T 400 180 L 400 300 L 0 300 Z" fill="#1e293b" opacity="0.8"/>
+                    <!-- Farm Field Base -->
+                    <path d="M0 220 L 400 200 L 400 300 L 0 300 Z" fill="#8b5a2b" opacity="0.6"/>
+                    <!-- Crop Rows (Perspective) -->
+                    <path d="M 50 300 L 150 210 L 170 210 L 100 300 Z" fill="#34d399" opacity="0.7"/>
+                    <path d="M 150 300 L 210 210 L 230 210 L 200 300 Z" fill="#34d399" opacity="0.7"/>
+                    <path d="M 250 300 L 270 210 L 290 210 L 300 300 Z" fill="#34d399" opacity="0.7"/>
+                    
+                    <!-- Water Tank -->
+                    <rect x="20" y="160" width="40" height="60" rx="5" fill="#94a3b8" />
+                    <rect x="15" y="155" width="50" height="10" rx="2" fill="#64748b" />
+                    <path d="M 20 200 L 60 200" stroke="#0ea5e9" stroke-width="20" opacity="0.3"/>
+                    
+                    <!-- Main Pipe & Emitters -->
+                    <path d="M 60 210 L 350 210" stroke="#64748b" stroke-width="4" stroke-linecap="round"/>
+                    <path d="M 60 210 L 350 210" stroke="#0ea5e9" stroke-width="2" class="anim-water-pipe"/>
+                    
+                    <!-- Plants & Water Drops -->
+                    <g transform="translate(160, 210)">
+                        <path d="M0 0 Q -10 -20 -5 -30 Q 0 -20 0 0" fill="#34d399" class="anim-plant"/>
+                        <path d="M0 0 Q 10 -15 5 -25 Q 0 -15 0 0" fill="#10b981" class="anim-plant" style="animation-delay: 0.2s"/>
+                        <!-- Drop -->
+                        <circle cx="0" cy="5" r="2" fill="#0ea5e9">
+                            <animate attributeName="cy" values="0; 10; 0" dur="1.5s" repeatCount="indefinite"/>
+                            <animate attributeName="opacity" values="1; 0; 0" dur="1.5s" repeatCount="indefinite"/>
+                        </circle>
+                    </g>
+                    <g transform="translate(220, 210)">
+                        <path d="M0 0 Q -10 -20 -5 -30 Q 0 -20 0 0" fill="#34d399" class="anim-plant" style="animation-delay: 0.1s"/>
+                        <path d="M0 0 Q 10 -15 5 -25 Q 0 -15 0 0" fill="#10b981" class="anim-plant" style="animation-delay: 0.3s"/>
+                        <!-- Drop -->
+                        <circle cx="0" cy="5" r="2" fill="#0ea5e9">
+                            <animate attributeName="cy" values="0; 10; 0" dur="1.5s" repeatCount="indefinite" begin="0.5s"/>
+                            <animate attributeName="opacity" values="1; 0; 0" dur="1.5s" repeatCount="indefinite" begin="0.5s"/>
+                        </circle>
+                    </g>
+                    
+                    <!-- Tech Sensor -->
+                    <rect x="270" y="180" width="4" height="30" fill="#94a3b8"/>
+                    <circle cx="272" cy="180" r="6" fill="#38bdf8">
+                        <animate attributeName="r" values="6; 10; 6" dur="2s" repeatCount="indefinite"/>
+                        <animate attributeName="opacity" values="1; 0.5; 1" dur="2s" repeatCount="indefinite"/>
+                    </circle>
+                </svg>
+            </div>
+        </header>
+
+        <!-- SECTION 2: COMPONENTS -->
+        <section class="glass-panel">
+            <h2>Anatomy of a Smart System</h2>
+            <p>A precision drip irrigation system works like a circulatory system, moving exact amounts of water from source to root.</p>
+            
+            <div class="components-grid">
+                <!-- Visual -->
+                <div class="diagram-container">
+                    <svg class="diagram-svg" viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="soil" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#8b5a2b" />
+                                <stop offset="100%" stop-color="#3e2723" />
+                            </linearGradient>
+                            <linearGradient id="pipe" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#94a3b8" />
+                                <stop offset="50%" stop-color="#cbd5e1" />
+                                <stop offset="100%" stop-color="#475569" />
+                            </linearGradient>
+                        </defs>
+                        
+                        <!-- Soil Cross Section -->
+                        <rect x="0" y="250" width="800" height="150" fill="url(#soil)" />
+                        
+                        <!-- Water Source (Well/Pond) -->
+                        <path d="M 50 250 L 50 380 Q 100 400 150 380 L 150 250 Z" fill="#0ea5e9" opacity="0.6"/>
+                        <path d="M 50 250 Q 100 260 150 250 Q 100 240 50 250" fill="#38bdf8" opacity="0.8"/>
+                        
+                        <!-- Intake Pipe -->
+                        <rect x="90" y="180" width="20" height="150" fill="url(#pipe)" />
+                        
+                        <!-- Pump -->
+                        <rect x="70" y="130" width="60" height="50" rx="10" fill="#ef4444" />
+                        <rect x="60" y="145" width="20" height="20" fill="#b91c1c" />
+                        <circle cx="100" cy="155" r="15" fill="#fca5a5" />
+                        
+                        <!-- Main Pipe to Filter -->
+                        <rect x="130" y="145" width="100" height="20" fill="url(#pipe)" />
+                        
+                        <!-- Filter Station -->
+                        <rect x="230" y="100" width="50" height="100" rx="25" fill="#3b82f6" />
+                        <rect x="240" y="110" width="30" height="80" rx="15" fill="#1d4ed8" />
+                        <path d="M 230 155 L 280 155" stroke="#93c5fd" stroke-width="2" stroke-dasharray="4"/>
+                        
+                        <!-- Pipe to Valve -->
+                        <rect x="280" y="145" width="100" height="20" fill="url(#pipe)" />
+                        
+                        <!-- Control Valve & Controller -->
+                        <rect x="380" y="130" width="40" height="50" fill="#10b981" />
+                        <circle cx="400" cy="120" r="15" fill="#059669" />
+                        <!-- Controller Box -->
+                        <rect x="375" y="50" width="50" height="60" rx="5" fill="#f8fafc" />
+                        <rect x="385" y="60" width="30" height="20" fill="#0f172a" />
+                        <!-- Wire -->
+                        <path d="M 400 110 L 400 120" stroke="#f8fafc" stroke-width="2"/>
+                        <path d="M 425 80 L 600 80 L 600 200" stroke="#f8fafc" stroke-width="2" stroke-dasharray="4"/>
+                        
+                        <!-- Lateral Pipe on surface -->
+                        <rect x="420" y="240" width="380" height="15" fill="#1e293b" />
+                        
+                        <!-- Plant & Root Zone -->
+                        <g transform="translate(600, 240)">
+                            <!-- Plant -->
+                            <path d="M 0 0 Q -20 -40 -10 -80 Q 0 -40 0 0" fill="#34d399"/>
+                            <path d="M 0 0 Q 20 -30 15 -60 Q 0 -30 0 0" fill="#10b981"/>
+                            <!-- Roots -->
+                            <path d="M 0 0 Q -10 30 -20 50 M 0 0 Q 10 40 20 60 M 0 0 L 0 70" stroke="#d4d4d8" stroke-width="2" fill="none" opacity="0.6"/>
+                            <!-- Emitter -->
+                            <rect x="-8" y="-10" width="16" height="10" fill="#ef4444" />
+                            <!-- Wet Bulb (Moisture in soil) -->
+                            <ellipse cx="0" cy="40" rx="40" ry="50" fill="#0ea5e9" opacity="0.3" filter="blur(5px)" />
+                        </g>
+
+                        <!-- Sensor in Soil -->
+                        <g transform="translate(500, 280)">
+                            <rect x="0" y="0" width="10" height="40" fill="#94a3b8" />
+                            <circle cx="5" cy="40" r="8" fill="#38bdf8" />
+                            <!-- Wire up -->
+                            <path d="M 5 0 L 5 -80 L 425 -80" stroke="#f8fafc" stroke-width="2" stroke-dasharray="4"/>
+                        </g>
+                    </svg>
+
+                    <!-- Interactive Markers -->
+                    <div class="marker" id="m1" data-target="leg1">1</div>
+                    <div class="marker" id="m2" data-target="leg2">2</div>
+                    <div class="marker" id="m3" data-target="leg3">3</div>
+                    <div class="marker" id="m4" data-target="leg4">4</div>
+                    <div class="marker" id="m5" data-target="leg5">5</div>
+                    <div class="marker" id="m6" data-target="leg6">6</div>
+                </div>
+
+                <!-- Legend -->
+                <div class="legend-list">
+                    <div class="legend-item" id="leg1" data-target="m1">
+                        <div class="legend-num">1</div>
+                        <div class="legend-text">
+                            <strong>Water Source</strong>
+                            <span>Provides baseline supply (well, reservoir, or city line).</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg2" data-target="m2">
+                        <div class="legend-num">2</div>
+                        <div class="legend-text">
+                            <strong>Pump Station</strong>
+                            <span>Pressurizes the system to ensure uniform flow downstream.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg3" data-target="m3">
+                        <div class="legend-num">3</div>
+                        <div class="legend-text">
+                            <strong>Filtration</strong>
+                            <span>Crucial for drip systems to prevent tiny emitters from clogging.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg4" data-target="m4">
+                        <div class="legend-num">4</div>
+                        <div class="legend-text">
+                            <strong>Controller & Valve</strong>
+                            <span>The "brain" opens the valve based on programmed schedules or sensor data.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg5" data-target="m5">
+                        <div class="legend-num">5</div>
+                        <div class="legend-text">
+                            <strong>Drip Emitter</strong>
+                            <span>Releases precise volumes of water (e.g., 2 liters/hour) directly to roots.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg6" data-target="m6">
+                        <div class="legend-num">6</div>
+                        <div class="legend-text">
+                            <strong>Moisture Sensor</strong>
+                            <span>Provides real-time soil feedback to the controller to prevent overwatering.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: WORKING PROCESS -->
+        <section class="glass-panel working-section">
+            <h2>The "Smart" Calculation Cycle</h2>
+            <p>How does a planner actually know <em>when</em> and <em>how much</em> to water? It's a continuous mathematical loop.</p>
+            
+            <div class="cycle-container">
+                <!-- Visual Area -->
+                <div class="stage-visual">
+                    <!-- Stage 1: Sensing -->
+                    <svg class="stage-svg active" id="stage-svg-0" viewBox="0 0 600 300">
+                        <!-- Sun & Thermometer -->
+                        <circle cx="150" cy="100" r="40" fill="#fbbf24" class="sensor-wave" opacity="0.5"/>
+                        <circle cx="150" cy="100" r="30" fill="#fbbf24" />
+                        <rect x="280" y="80" width="10" height="60" rx="5" fill="#f87171" />
+                        <circle cx="285" cy="150" r="15" fill="#f87171" />
+                        <!-- Soil Probe -->
+                        <path d="M 450 150 L 450 200" stroke="#38bdf8" stroke-width="4"/>
+                        <circle cx="450" cy="200" r="10" fill="#38bdf8" class="sensor-wave"/>
+                        <!-- Data lines flowing to center -->
+                        <path d="M 150 130 Q 300 250 300 250" stroke="#fff" stroke-width="2" class="data-stream" fill="none"/>
+                        <path d="M 285 165 Q 300 250 300 250" stroke="#fff" stroke-width="2" class="data-stream" fill="none"/>
+                        <path d="M 450 210 Q 300 250 300 250" stroke="#fff" stroke-width="2" class="data-stream" fill="none"/>
+                        <circle cx="300" cy="250" r="20" fill="#10b981"/>
+                    </svg>
+
+                    <!-- Stage 2: ET Calculation -->
+                    <svg class="stage-svg" id="stage-svg-1" viewBox="0 0 600 300">
+                        <text x="300" y="80" fill="#fff" font-size="24" text-anchor="middle" font-weight="bold">Evapotranspiration (ET)</text>
+                        <!-- Plant losing water -->
+                        <path d="M 300 250 Q 250 150 300 150 Q 350 150 300 250" fill="#34d399"/>
+                        <!-- Upward arrows (Evaporation & Transpiration) -->
+                        <path d="M 270 140 L 270 100 M 270 100 L 260 110 M 270 100 L 280 110" stroke="#0ea5e9" stroke-width="3" fill="none" class="data-stream"/>
+                        <path d="M 330 140 L 330 100 M 330 100 L 320 110 M 330 100 L 340 110" stroke="#0ea5e9" stroke-width="3" fill="none" class="data-stream" style="animation-delay: 0.5s"/>
+                        <!-- Math / Gears -->
+                        <g transform="translate(150, 150) scale(0.5)" class="gear-spin">
+                            <path d="M20 0 L 30 10 L 40 0 L 50 20 L 40 30 L 50 40 L 30 50 L 20 40 L 10 50 L 0 30 L 10 20 L 0 10 Z" fill="#94a3b8"/>
+                            <circle cx="25" cy="25" r="10" fill="#0f172a"/>
+                        </g>
+                        <text x="450" y="150" fill="#fff" font-size="30" font-family="monospace">Need: 5mm</text>
+                    </svg>
+
+                    <!-- Stage 3: Scheduling -->
+                    <svg class="stage-svg" id="stage-svg-2" viewBox="0 0 600 300">
+                        <!-- Clock/Calendar -->
+                        <circle cx="300" cy="150" r="80" stroke="#38bdf8" stroke-width="4" fill="none"/>
+                        <path d="M 300 150 L 300 90" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
+                        <path d="M 300 150 L 340 150" stroke="#fff" stroke-width="4" stroke-linecap="round">
+                            <animateTransform attributeName="transform" type="rotate" from="0 300 150" to="360 300 150" dur="5s" repeatCount="indefinite"/>
+                        </path>
+                        <!-- Blocks on timeline -->
+                        <rect x="100" y="250" width="400" height="10" fill="#1e293b" rx="5"/>
+                        <rect x="200" y="245" width="50" height="20" fill="#0ea5e9" rx="5">
+                             <animate attributeName="opacity" values="0.5; 1; 0.5" dur="1s" repeatCount="indefinite"/>
+                        </rect>
+                        <text x="225" y="280" fill="#fff" font-size="14" text-anchor="middle">04:00 AM</text>
+                    </svg>
+
+                    <!-- Stage 4: Precision Application -->
+                    <svg class="stage-svg" id="stage-svg-3" viewBox="0 0 600 300">
+                        <rect x="0" y="250" width="600" height="50" fill="#8b5a2b"/>
+                        <path d="M 100 250 L 500 250" stroke="#1e293b" stroke-width="15"/>
+                        
+                        <!-- Plant -->
+                        <path d="M 300 240 Q 280 180 300 120 Q 320 180 300 240" fill="#34d399"/>
+                        
+                        <!-- Drops exactly at root -->
+                        <circle cx="300" cy="255" r="4" fill="#0ea5e9" class="rain-drop"/>
+                        <circle cx="300" cy="255" r="4" fill="#0ea5e9" class="rain-drop" style="animation-delay: 0.5s"/>
+                        <circle cx="300" cy="255" r="4" fill="#0ea5e9" class="rain-drop" style="animation-delay: 1s"/>
+                        
+                        <!-- Expanding moisture bulb -->
+                        <ellipse cx="300" cy="275" rx="30" ry="20" fill="#0ea5e9" opacity="0.4">
+                            <animate attributeName="rx" values="10; 60" dur="2s" fill="freeze" />
+                            <animate attributeName="ry" values="10; 40" dur="2s" fill="freeze" />
+                        </ellipse>
+                    </svg>
+                </div>
+
+                <!-- Info & Controls -->
+                <div class="stage-info">
+                    <h4 id="stage-title">1. Data Collection</h4>
+                    <p id="stage-desc">Sensors constantly monitor soil moisture, temperature, humidity, and solar radiation.</p>
+                </div>
+
+                <div class="controls">
+                    <button class="btn-ctrl" id="btn-prev" aria-label="Previous Stage">◀</button>
+                    <div class="progress-dots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    <button class="btn-ctrl" id="btn-next" aria-label="Next Stage">▶</button>
+                    <button class="btn-ctrl" id="btn-play" style="margin-left: 16px;">⏸</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: INTERACTIVE SIMULATION -->
+        <section class="glass-panel">
+            <h2>Irrigation Simulator</h2>
+            <p>See how different methods affect plant health, water usage, and deep percolation based on soil type. <strong>Try Flood vs. Drip in Sandy soil.</strong></p>
+            
+            <div class="sim-grid">
+                <!-- Controls -->
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <label>Soil Type</label>
+                        <select class="custom-select" id="sim-soil">
+                            <option value="sand">Sandy (Fast Drainage)</option>
+                            <option value="loam" selected>Loam (Balanced)</option>
+                            <option value="clay">Clay (Slow Drainage)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>Crop Type</label>
+                        <select class="custom-select" id="sim-crop">
+                            <option value="lettuce">Lettuce (Shallow Roots)</option>
+                            <option value="corn" selected>Corn (Medium Roots)</option>
+                            <option value="tomato">Tomato (Deep Roots)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-group">
+                        <label>Irrigation Method</label>
+                        <select class="custom-select" id="sim-method">
+                            <option value="flood">Flood (Surface)</option>
+                            <option value="sprinkler">Sprinkler (Overhead)</option>
+                            <option value="drip" selected>Drip (Precision)</option>
+                        </select>
+                    </div>
+
+                    <button class="btn-action" id="btn-irrigate">Run Irrigation Cycle</button>
+                    <button class="btn-action" id="btn-reset" style="background: rgba(255,255,255,0.1); color: var(--text-main); margin-top: 0;">Reset Farm</button>
+                </div>
+
+                <!-- Visual Output (Canvas) -->
+                <div class="sim-visual-area">
+                    <div class="canvas-container" id="canvas-wrapper">
+                        <canvas id="sim-canvas"></canvas>
+                        
+                        <div class="sim-metrics">
+                            <div class="metric">
+                                <span class="metric-label">Plant Health:</span>
+                                <span class="metric-val" id="val-health">100%</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Water Applied:</span>
+                                <span class="metric-val" id="val-water">0 L</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Water Wasted:</span>
+                                <span class="metric-val" id="val-waste">0 L</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5: REAL WORLD IMPACT -->
+        <section class="glass-panel">
+            <h2>Why This Matters</h2>
+            <div class="info-grid">
+                <div class="info-card">
+                    <div class="icon-wrapper">💧</div>
+                    <h3>Water Conservation</h3>
+                    <p>Agriculture uses ~70% of global freshwater. Transitioning from flood to smart drip systems can reduce water usage by up to <strong>50%</strong>.</p>
+                </div>
+                <div class="info-card">
+                    <div class="icon-wrapper">🌱</div>
+                    <h3>Increased Yields</h3>
+                    <p>Plants thrive on consistency. Eliminating the extreme stress cycle of "drought-then-flood" increases crop yields by 20-40%.</p>
+                </div>
+                <div class="info-card">
+                    <div class="icon-wrapper">🌍</div>
+                    <h3>Fertilizer Efficiency</h3>
+                    <p><strong>Fertigation</strong> (injecting fertilizer into drip lines) ensures nutrients reach roots directly, preventing chemical runoff into rivers.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 6: COMMON MISTAKES -->
+        <section class="glass-panel">
+            <h2>Traditional vs. Precision</h2>
+            <div class="comparison-grid">
+                <div class="comp-card comp-bad">
+                    <div class="comp-header">
+                        <span>❌ Traditional Mistake</span>
+                    </div>
+                    <h3>Watering at Noon</h3>
+                    <p>Using overhead sprinklers during the hottest part of the day results in up to <strong>30% evaporation loss</strong> before water even hits the ground. Wind also causes uneven distribution.</p>
+                </div>
+                <div class="comp-card comp-good">
+                    <div class="comp-header">
+                        <span>✅ Smart Solution</span>
+                    </div>
+                    <h3>Pre-Dawn Drip</h3>
+                    <p>Smart controllers schedule watering between 2 AM and 5 AM. Evaporation is minimal, wind is low, and water is applied directly to the soil surface, maximizing absorption.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* ----------------------------------------------------------------------
+               1. LEGEND / MARKER INTERACTION LOGIC
+               ---------------------------------------------------------------------- */
+            const markers = document.querySelectorAll('.marker');
+            const legends = document.querySelectorAll('.legend-item');
+
+            function clearActive() {
+                markers.forEach(m => m.classList.remove('active'));
+                legends.forEach(l => l.classList.remove('active'));
+            }
+
+            function activatePair(id) {
+                clearActive();
+                const marker = document.getElementById(id);
+                const legend = document.getElementById(marker.dataset.target);
+                if(marker) marker.classList.add('active');
+                if(legend) legend.classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                const handleEvent = (e) => { e.preventDefault(); activatePair(marker.id); };
+                marker.addEventListener('mouseenter', handleEvent);
+                marker.addEventListener('touchstart', handleEvent, {passive: false});
+            });
+
+            legends.forEach(legend => {
+                const handleEvent = (e) => { e.preventDefault(); activatePair(legend.dataset.target); };
+                legend.addEventListener('mouseenter', handleEvent);
+                legend.addEventListener('touchstart', handleEvent, {passive: false});
+            });
+
+            document.querySelector('.components-grid').addEventListener('mouseleave', clearActive);
+
+
+            /* ----------------------------------------------------------------------
+               2. WORKING PROCESS CYCLE LOGIC
+               ---------------------------------------------------------------------- */
+            const stages = [
+                {
+                    title: "1. Data Collection",
+                    desc: "Sensors continuously monitor soil moisture, ambient temperature, humidity, and solar radiation."
+                },
+                {
+                    title: "2. ET Calculation",
+                    desc: "The system calculates Evapotranspiration (ET) — exactly how much water the plant lost to the air today."
+                },
+                {
+                    title: "3. Smart Scheduling",
+                    desc: "Based on soil type and ET, algorithms determine the exact duration and optimal time (usually pre-dawn) to water."
+                },
+                {
+                    title: "4. Precision Application",
+                    desc: "Valves open, delivering precise volumes directly to the root zone, replacing exactly what was lost."
+                }
+            ];
+
+            let currentStage = 0;
+            let cycleInterval;
+            let isPlaying = true;
+
+            const titleEl = document.getElementById('stage-title');
+            const descEl = document.getElementById('stage-desc');
+            const svgs = document.querySelectorAll('.stage-svg');
+            const dots = document.querySelectorAll('.dot');
+
+            function showStage(index) {
+                currentStage = index;
+                // Update text
+                titleEl.textContent = stages[index].title;
+                descEl.textContent = stages[index].desc;
+                
+                // Update visuals
+                svgs.forEach((svg, i) => {
+                    if(i === index) svg.classList.add('active');
+                    else svg.classList.remove('active');
+                });
+
+                // Update dots
+                dots.forEach((dot, i) => {
+                    if(i === index) dot.classList.add('active');
+                    else dot.classList.remove('active');
+                });
+            }
+
+            function nextStage() {
+                let next = (currentStage + 1) % stages.length;
+                showStage(next);
+            }
+
+            function prevStage() {
+                let prev = (currentStage - 1 + stages.length) % stages.length;
+                showStage(prev);
+            }
+
+            function togglePlay() {
+                const btn = document.getElementById('btn-play');
+                if (isPlaying) {
+                    clearInterval(cycleInterval);
+                    btn.textContent = '▶';
+                    isPlaying = false;
+                } else {
+                    cycleInterval = setInterval(nextStage, 4000);
+                    btn.textContent = '⏸';
+                    isPlaying = true;
+                }
+            }
+
+            document.getElementById('btn-next').addEventListener('click', () => { clearInterval(cycleInterval); isPlaying=false; document.getElementById('btn-play').textContent='▶'; nextStage(); });
+            document.getElementById('btn-prev').addEventListener('click', () => { clearInterval(cycleInterval); isPlaying=false; document.getElementById('btn-play').textContent='▶'; prevStage(); });
+            document.getElementById('btn-play').addEventListener('click', togglePlay);
+
+            // Start auto-play
+            cycleInterval = setInterval(nextStage, 4000);
+
+
+            /* ----------------------------------------------------------------------
+               3. INTERACTIVE CANVAS SIMULATION LOGIC
+               ---------------------------------------------------------------------- */
+            const canvas = document.getElementById('sim-canvas');
+            const ctx = canvas.getContext('2d', { alpha: false });
+            const wrapper = document.getElementById('canvas-wrapper');
+            
+            let dpr = window.devicePixelRatio || 1;
+            let width, height;
+
+            // State
+            let simState = {
+                soilType: 'loam',
+                cropType: 'corn',
+                method: 'drip',
+                isIrrigating: false,
+                health: 100,
+                waterApplied: 0,
+                waterWasted: 0,
+                moistureZones: [] // Grid of soil moisture
+            };
+
+            const configs = {
+                soil: {
+                    sand: { color: '#d4a373', drainage: 3.0, spread: 0.5 },
+                    loam: { color: '#8b5a2b', drainage: 1.0, spread: 1.5 },
+                    clay: { color: '#5c4033', drainage: 0.2, spread: 2.5 }
+                },
+                crop: {
+                    lettuce: { rootDepth: 0.3, rootWidth: 0.4 },
+                    corn: { rootDepth: 0.6, rootWidth: 0.5 },
+                    tomato: { rootDepth: 0.8, rootWidth: 0.6 }
+                },
+                method: {
+                    flood: { flowRate: 5, efficiency: 0.4 }, // high volume, high waste
+                    sprinkler: { flowRate: 2, efficiency: 0.7 }, // med volume, med waste (evap)
+                    drip: { flowRate: 0.5, efficiency: 0.95 } // low volume, low waste
+                }
+            };
+
+            let particles = [];
+            let animationId;
+
+            // Handle Resize
+            function resizeCanvas() {
+                const rect = wrapper.getBoundingClientRect();
+                width = rect.width;
+                height = rect.height;
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                ctx.scale(dpr, dpr);
+                initMoistureGrid();
+                drawEnvironment();
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+            
+            // Initialization
+            function initMoistureGrid() {
+                simState.moistureZones = [];
+                const cols = 20;
+                const rows = 10;
+                for(let i=0; i<rows; i++){
+                    let row = [];
+                    for(let j=0; j<cols; j++){
+                        row.push(0); // 0 to 100 moisture
+                    }
+                    simState.moistureZones.push(row);
+                }
+            }
+
+            function resetSim() {
+                simState.isIrrigating = false;
+                simState.health = 100;
+                simState.waterApplied = 0;
+                simState.waterWasted = 0;
+                particles = [];
+                initMoistureGrid();
+                updateUI();
+                drawEnvironment();
+            }
+
+            // Input handling
+            document.getElementById('sim-soil').addEventListener('change', (e) => { simState.soilType = e.target.value; resetSim(); });
+            document.getElementById('sim-crop').addEventListener('change', (e) => { simState.cropType = e.target.value; resetSim(); });
+            document.getElementById('sim-method').addEventListener('change', (e) => { simState.method = e.target.value; resetSim(); });
+            
+            document.getElementById('btn-reset').addEventListener('click', resetSim);
+            document.getElementById('btn-irrigate').addEventListener('click', () => {
+                if(!simState.isIrrigating) {
+                    simState.isIrrigating = true;
+                    spawnWater();
+                }
+            });
+
+            // UI Updates
+            const healthEl = document.getElementById('val-health');
+            const appliedEl = document.getElementById('val-water');
+            const wastedEl = document.getElementById('val-waste');
+
+            function updateUI() {
+                healthEl.textContent = Math.round(simState.health) + '%';
+                healthEl.className = 'metric-val ' + (simState.health > 80 ? 'val-good' : (simState.health < 40 ? 'val-bad' : ''));
+                
+                appliedEl.textContent = Math.round(simState.waterApplied) + ' L';
+                wastedEl.textContent = Math.round(simState.waterWasted) + ' L';
+                wastedEl.className = 'metric-val ' + (simState.waterWasted > 50 ? 'val-bad' : '');
+            }
+
+            // --- Rendering & Simulation Logic ---
+
+            class Particle {
+                constructor(x, y, vx, vy, type) {
+                    this.x = x;
+                    this.y = y;
+                    this.vx = vx;
+                    this.vy = vy;
+                    this.life = 100;
+                    this.type = type; // 'drop', 'flood'
+                }
+                update() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    if(this.type === 'drop') {
+                        this.vy += 0.2; // gravity
+                    }
+                    
+                    // Hit soil surface (approx 40% down)
+                    let groundY = height * 0.4;
+                    if(this.y >= groundY && this.life > 0) {
+                        this.infiltrate();
+                    }
+                }
+                infiltrate() {
+                    // Turn particle into soil moisture and kill particle
+                    let col = Math.floor((this.x / width) * 20);
+                    if(col >= 0 && col < 20) {
+                        simState.moistureZones[0][col] += 5; // add to top layer
+                    }
+                    this.life = 0;
+                }
+                draw(ctx) {
+                    if(this.life <= 0) return;
+                    ctx.fillStyle = 'rgba(14, 165, 233, 0.8)';
+                    ctx.beginPath();
+                    if(this.type === 'drop') {
+                        ctx.arc(this.x, this.y, 3, 0, Math.PI*2);
+                    } else {
+                        ctx.fillRect(this.x, this.y, 10, 5); // flood wave
+                    }
+                    ctx.fill();
+                }
+            }
+
+            function spawnWater() {
+                if(!simState.isIrrigating) return;
+                
+                const method = configs.method[simState.method];
+                simState.waterApplied += method.flowRate;
+                
+                let groundY = height * 0.4;
+                let centerX = width / 2;
+
+                if(simState.method === 'drip') {
+                    // Spawn precisely at center root
+                    particles.push(new Particle(centerX + (Math.random()*10-5), groundY - 10, 0, 1, 'drop'));
+                } 
+                else if(simState.method === 'sprinkler') {
+                    // Arcing drops across wide area
+                    for(let i=0; i<3; i++){
+                        let vx = (Math.random() - 0.5) * 10;
+                        particles.push(new Particle(centerX, groundY - 50, vx, -2, 'drop'));
+                    }
+                    // Evaporation waste calculation
+                    simState.waterWasted += method.flowRate * (1 - method.efficiency);
+                }
+                else if(simState.method === 'flood') {
+                    // Massive block across surface
+                    for(let i=0; i<10; i++){
+                        particles.push(new Particle(Math.random() * width, groundY - 5, 0, 2, 'flood'));
+                    }
+                }
+
+                updateUI();
+                
+                // Stop after applying certain amount
+                if(simState.waterApplied > 150) {
+                    simState.isIrrigating = false;
+                }
+            }
+
+            function updateSoilMoisture() {
+                const soilParams = configs.soil[simState.soilType];
+                const rows = simState.moistureZones.length;
+                const cols = simState.moistureZones[0].length;
+                
+                // Deep percolation (waste) track
+                let deepLoss = 0;
+
+                // Create next state array
+                let nextGrid = JSON.parse(JSON.stringify(simState.moistureZones));
+
+                for(let r = 0; r < rows; r++) {
+                    for(let c = 0; c < cols; c++) {
+                        let val = simState.moistureZones[r][c];
+                        if(val > 0) {
+                            // Drainage down
+                            let drainAmt = Math.min(val, soilParams.drainage);
+                            if(r < rows - 1) {
+                                nextGrid[r+1][c] += drainAmt;
+                                nextGrid[r][c] -= drainAmt;
+                            } else {
+                                // Reached bottom = deep percolation waste
+                                deepLoss += drainAmt;
+                                nextGrid[r][c] -= drainAmt;
+                            }
+                            
+                            // Spread horizontally based on soil type
+                            let spreadAmt = Math.min(nextGrid[r][c], soilParams.spread);
+                            if(spreadAmt > 0) {
+                                if(c > 0 && nextGrid[r][c-1] < nextGrid[r][c]) { nextGrid[r][c-1] += spreadAmt/2; nextGrid[r][c] -= spreadAmt/2; }
+                                if(c < cols-1 && nextGrid[r][c+1] < nextGrid[r][c]) { nextGrid[r][c+1] += spreadAmt/2; nextGrid[r][c] -= spreadAmt/2; }
+                            }
+                        }
+                    }
+                }
+                simState.moistureZones = nextGrid;
+                
+                // Convert arbitrary moisture units to liters for UI (approximate scaling)
+                if(deepLoss > 0) {
+                    simState.waterWasted += (deepLoss / 5); 
+                }
+            }
+
+            function calculatePlantHealth() {
+                // Check moisture in root zone
+                const cropParams = configs.crop[simState.cropType];
+                const maxDepthRow = Math.floor(cropParams.rootDepth * 10); // 0 to 10 rows
+                const centerCol = 10;
+                const widthCols = Math.floor(cropParams.rootWidth * 10 / 2);
+                
+                let totalMoisture = 0;
+                let rootCells = 0;
+                
+                for(let r = 0; r <= maxDepthRow; r++) {
+                    for(let c = centerCol - widthCols; c <= centerCol + widthCols; c++) {
+                        if(simState.moistureZones[r] && simState.moistureZones[r][c] !== undefined) {
+                            totalMoisture += simState.moistureZones[r][c];
+                            rootCells++;
+                        }
+                    }
+                }
+                
+                let avgMoisture = totalMoisture / rootCells;
+                
+                // Ideal moisture is around 20-40 per cell.
+                // Too dry drops health, too wet drops health slowly (waterlogging).
+                if(avgMoisture < 5) {
+                    simState.health = Math.max(0, simState.health - 0.1);
+                } else if (avgMoisture > 80) {
+                     simState.health = Math.max(0, simState.health - 0.05); // rot
+                } else if (avgMoisture >= 10 && avgMoisture <= 60 && simState.health < 100) {
+                    simState.health = Math.min(100, simState.health + 0.2); // recover
+                }
+                
+                // Base evaporation (plants dry out over time if not watered)
+                if(!simState.isIrrigating && simState.waterApplied > 0 && Math.random() < 0.1) {
+                     simState.health = Math.max(0, simState.health - 0.05);
+                }
+            }
+
+            function drawEnvironment() {
+                // 1. Sky/Background
+                ctx.fillStyle = '#87CEEB';
+                ctx.fillRect(0, 0, width, height * 0.4);
+
+                // 2. Soil Layer
+                const soilColor = configs.soil[simState.soilType].color;
+                ctx.fillStyle = soilColor;
+                ctx.fillRect(0, height * 0.4, width, height * 0.6);
+
+                // 3. Draw Moisture Grid Overlay
+                const rows = simState.moistureZones.length;
+                const cols = simState.moistureZones[0].length;
+                const cellW = width / cols;
+                const cellH = (height * 0.6) / rows;
+                const startY = height * 0.4;
+
+                for(let r = 0; r < rows; r++) {
+                    for(let c = 0; c < cols; c++) {
+                        let moisture = simState.moistureZones[r][c];
+                        if(moisture > 1) {
+                            // Darken/blue-tint soil based on moisture
+                            let alpha = Math.min(0.8, moisture / 50);
+                            ctx.fillStyle = `rgba(14, 165, 233, ${alpha})`;
+                            ctx.fillRect(c * cellW, startY + (r * cellH), cellW+1, cellH+1); // +1 prevents gaps
+                        }
+                    }
+                }
+
+                // 4. Draw Plant/Roots
+                drawPlant();
+
+                // 5. Draw Irrigation System visual
+                drawIrrigationHardware();
+
+                // 6. Draw Particles
+                particles.forEach(p => p.draw(ctx));
+            }
+            
+            function drawIrrigationHardware() {
+                 let groundY = height * 0.4;
+                 let centerX = width / 2;
+                 
+                 ctx.fillStyle = '#1e293b';
+                 if(simState.method === 'drip') {
+                     // Pipe on ground
+                     ctx.fillRect(0, groundY - 8, width, 8);
+                     // Emitter
+                     ctx.fillStyle = '#ef4444';
+                     ctx.fillRect(centerX - 5, groundY - 10, 10, 10);
+                 } else if (simState.method === 'sprinkler') {
+                     // Standpipe
+                     ctx.fillRect(centerX - 4, groundY - 50, 8, 50);
+                     // Sprinkler head
+                     ctx.fillStyle = '#94a3b8';
+                     ctx.beginPath();
+                     ctx.arc(centerX, groundY - 50, 8, 0, Math.PI, true);
+                     ctx.fill();
+                 }
+            }
+
+            function drawPlant() {
+                const centerX = width / 2;
+                const groundY = height * 0.4;
+                const cropParams = configs.crop[simState.cropType];
+                
+                // Color based on health
+                let green = Math.max(50, Math.floor((simState.health / 100) * 211));
+                let plantColor = `rgb(52, ${green}, 153)`;
+                if(simState.health < 40) plantColor = '#a1a1aa'; // withered
+                
+                ctx.fillStyle = plantColor;
+                ctx.strokeStyle = plantColor;
+                ctx.lineWidth = 4;
+
+                // Simple procedural plant
+                if(simState.cropType === 'corn') {
+                    // Stalk
+                    ctx.beginPath(); ctx.moveTo(centerX, groundY); ctx.lineTo(centerX, groundY - 80); ctx.stroke();
+                    // Leaves
+                    ctx.beginPath(); ctx.moveTo(centerX, groundY - 20); ctx.quadraticCurveTo(centerX - 40, groundY - 40, centerX - 50, groundY - 10); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(centerX, groundY - 40); ctx.quadraticCurveTo(centerX + 40, groundY - 60, centerX + 50, groundY - 30); ctx.stroke();
+                } else if (simState.cropType === 'lettuce') {
+                    ctx.beginPath(); ctx.arc(centerX, groundY - 15, 20, 0, Math.PI, true); ctx.fill();
+                    ctx.beginPath(); ctx.arc(centerX - 15, groundY - 5, 15, 0, Math.PI, true); ctx.fill();
+                    ctx.beginPath(); ctx.arc(centerX + 15, groundY - 5, 15, 0, Math.PI, true); ctx.fill();
+                } else if (simState.cropType === 'tomato') {
+                     // Stalk
+                    ctx.beginPath(); ctx.moveTo(centerX, groundY); ctx.lineTo(centerX, groundY - 100); ctx.stroke();
+                    // Branches
+                    ctx.beginPath(); ctx.moveTo(centerX, groundY - 30); ctx.lineTo(centerX - 30, groundY - 50); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(centerX, groundY - 60); ctx.lineTo(centerX + 30, groundY - 80); ctx.stroke();
+                    // Fruits
+                    if(simState.health > 50) {
+                        ctx.fillStyle = '#ef4444';
+                        ctx.beginPath(); ctx.arc(centerX - 25, groundY - 45, 8, 0, Math.PI*2); ctx.fill();
+                        ctx.beginPath(); ctx.arc(centerX + 25, groundY - 75, 8, 0, Math.PI*2); ctx.fill();
+                    }
+                }
+
+                // Roots
+                ctx.strokeStyle = '#d4d4d8';
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.5;
+                
+                let rootDepthPx = (height * 0.6) * cropParams.rootDepth;
+                let rootWidthPx = (width * 0.5) * cropParams.rootWidth;
+
+                ctx.beginPath();
+                ctx.moveTo(centerX, groundY);
+                ctx.quadraticCurveTo(centerX - rootWidthPx/2, groundY + rootDepthPx/2, centerX - rootWidthPx, groundY + rootDepthPx);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(centerX, groundY);
+                ctx.lineTo(centerX, groundY + rootDepthPx * 1.2);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(centerX, groundY);
+                ctx.quadraticCurveTo(centerX + rootWidthPx/2, groundY + rootDepthPx/2, centerX + rootWidthPx, groundY + rootDepthPx);
+                ctx.stroke();
+
+                ctx.globalAlpha = 1.0;
+            }
+
+            // Main Game Loop
+            let lastTime = 0;
+            function simLoop(timestamp) {
+                // Throttle logical updates somewhat to prevent crazy speeds on high refresh monitors
+                if (timestamp - lastTime > 30) { 
+                    
+                    if(simState.isIrrigating) spawnWater();
+                    
+                    // Update particles
+                    for(let i = particles.length - 1; i >= 0; i--) {
+                        particles[i].update();
+                        if(particles[i].life <= 0) particles.splice(i, 1);
+                    }
+                    
+                    // Update soil dynamics (slower tick than particles)
+                    if(Math.random() < 0.2) {
+                        updateSoilMoisture();
+                        calculatePlantHealth();
+                        updateUI();
+                    }
+                    
+                    lastTime = timestamp;
+                }
+
+                drawEnvironment();
+                animationId = requestAnimationFrame(simLoop);
+            }
+
+            // Init Canvas
+            resizeCanvas();
+            resetSim();
+            animationId = requestAnimationFrame(simLoop);
+
+        });
+    </script>
+</body>
+</html>

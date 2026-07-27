@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Wind Formation | Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & FOUNDATION
+           ========================================================================== */
+        :root {
+            /* Colors */
+            --bg-deep: #050814;
+            --bg-card: rgba(15, 20, 35, 0.4);
+            --bg-card-hover: rgba(25, 35, 60, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            
+            --text-main: #f0f4ff;
+            --text-muted: #94a3b8;
+            
+            --accent-cyan: #00f2fe;
+            --accent-blue: #4facfe;
+            --accent-orange: #ff9a44;
+            --accent-red: #fc6076;
+            
+            --high-pressure: #38bdf8; /* Cool, sinking */
+            --low-pressure: #fb7185;  /* Warm, rising */
+
+            /* Typography (Fluid) */
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --text-xs: clamp(0.75rem, 1vw, 0.875rem);
+            --text-sm: clamp(0.875rem, 1.2vw, 1rem);
+            --text-base: clamp(1rem, 1.5vw, 1.125rem);
+            --text-lg: clamp(1.25rem, 2vw, 1.5rem);
+            --text-xl: clamp(1.5rem, 3vw, 2rem);
+            --text-2xl: clamp(2rem, 4vw, 3rem);
+            --text-3xl: clamp(2.5rem, 5vw, 4rem);
+
+            /* Spacing */
+            --space-xs: 0.5rem;
+            --space-sm: 1rem;
+            --space-md: 1.5rem;
+            --space-lg: 2rem;
+            --space-xl: 3rem;
+            --space-2xl: 5rem;
+            
+            /* Radius */
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            --radius-xl: 32px;
+            --radius-full: 9999px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Animated Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            background: radial-gradient(circle at 15% 50%, rgba(79, 172, 254, 0.08), transparent 50%),
+                        radial-gradient(circle at 85% 30%, rgba(255, 154, 68, 0.08), transparent 50%);
+            overflow: hidden;
+        }
+        .particle-bg {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0.3;
+        }
+
+        /* Layout Container */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--space-md);
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease, background 0.3s ease;
+        }
+        
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(8px); /* Performance on mobile */
+                -webkit-backdrop-filter: blur(8px);
+            }
+        }
+
+        .section-title {
+            font-size: var(--text-2xl);
+            font-weight: 700;
+            margin-bottom: var(--space-sm);
+            background: linear-gradient(to right, var(--text-main), var(--text-muted));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+        .section-subtitle {
+            font-size: var(--text-lg);
+            color: var(--text-muted);
+            text-align: center;
+            margin-bottom: var(--space-xl);
+            max-width: 600px;
+            margin-inline: auto;
+        }
+
+        section {
+            padding: var(--space-2xl) 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            position: relative;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            overflow: hidden;
+        }
+        
+        .hero-content {
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .hero h1 {
+            font-size: var(--text-3xl);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            background: linear-gradient(45deg, var(--accent-cyan), var(--text-main));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 20px rgba(0, 242, 254, 0.3));
+        }
+
+        .hero p {
+            font-size: var(--text-xl);
+            color: var(--text-muted);
+            max-width: 800px;
+        }
+
+        /* 3D Earth Visual */
+        .hero-visual {
+            position: absolute;
+            bottom: -20vh;
+            width: 100%;
+            height: 60vh;
+            z-index: 1;
+            display: flex;
+            justify-content: center;
+            perspective: 1000px;
+        }
+        
+        .globe-container {
+            position: relative;
+            width: 80vw;
+            max-width: 1000px;
+            aspect-ratio: 2/1;
+            border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+            background: radial-gradient(ellipse at center top, #0a192f 0%, #020c1b 100%);
+            box-shadow: 
+                inset 0 20px 50px rgba(79, 172, 254, 0.2),
+                0 -10px 50px rgba(79, 172, 254, 0.1);
+            overflow: hidden;
+            transform-style: preserve-3d;
+            transform: rotateX(20deg);
+        }
+
+        .atmosphere-glow {
+            position: absolute;
+            top: -10%; left: -5%; width: 110%; height: 110%;
+            border-radius: inherit;
+            background: linear-gradient(to bottom, rgba(0, 242, 254, 0.3) 0%, transparent 60%);
+            filter: blur(20px);
+            pointer-events: none;
+        }
+
+        .wind-lines {
+            position: absolute;
+            width: 100%; height: 100%;
+            pointer-events: none;
+        }
+        
+        .wind-lines path {
+            fill: none;
+            stroke: rgba(255,255,255,0.15);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-dasharray: 100 200;
+            animation: dash 8s linear infinite;
+        }
+        
+        @keyframes dash {
+            to { stroke-dashoffset: -300; }
+        }
+
+        /* ==========================================================================
+           COMPONENTS SECTION (Strict Marker Rule Applied)
+           ========================================================================== */
+        .components-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-xl);
+            align-items: center;
+        }
+        
+        @media (min-width: 1024px) {
+            .components-grid { grid-template-columns: 3fr 2fr; }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--space-sm);
+        }
+
+        .illustration-svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+        }
+
+        /* Glowing Markers */
+        .marker {
+            position: absolute;
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 15px currentColor;
+            z-index: 10;
+        }
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            border: 2px solid currentColor;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        /* Marker Positions (Percentages for responsiveness) */
+        #m1 { top: 15%; left: 20%; color: var(--accent-orange); background: rgba(255, 154, 68, 0.2); }
+        #m2 { top: 75%; left: 30%; color: var(--accent-red); background: rgba(252, 96, 118, 0.2); }
+        #m3 { top: 40%; left: 45%; color: var(--accent-red); background: rgba(252, 96, 118, 0.2); }
+        #m4 { top: 20%; left: 70%; color: var(--accent-blue); background: rgba(79, 172, 254, 0.2); }
+        #m5 { top: 75%; left: 80%; color: var(--accent-blue); background: rgba(79, 172, 254, 0.2); }
+        #m6 { top: 70%; left: 55%; color: #fff; background: rgba(255, 255, 255, 0.2); }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--glass-border);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        
+        .legend-content h4 { font-size: var(--text-base); margin-bottom: 2px; }
+        .legend-content p { font-size: var(--text-xs); color: var(--text-muted); }
+
+        /* Color Coding for Legend Badges */
+        .badge-sun { background: var(--accent-orange); color: #000; box-shadow: 0 0 10px var(--accent-orange); }
+        .badge-heat { background: var(--accent-red); color: #fff; box-shadow: 0 0 10px var(--accent-red); }
+        .badge-cool { background: var(--accent-blue); color: #fff; box-shadow: 0 0 10px var(--accent-blue); }
+        .badge-wind { background: #fff; color: #000; box-shadow: 0 0 10px #fff; }
+
+        /* ==========================================================================
+           WORKING MECHANISM (MANDATORY SECTION)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .working-visual {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: linear-gradient(to bottom, #1a2a6c, #112240);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        @media (max-width: 768px) {
+            .working-visual { aspect-ratio: 4/3; }
+        }
+
+        /* SVG Inner Styling for Working Section */
+        .wg-svg { width: 100%; height: 100%; }
+        
+        /* Elements that animate based on stages */
+        .wg-sunrays { opacity: 0; transition: opacity 0.5s ease; stroke: #ffeb3b; stroke-width: 2; stroke-dasharray: 5,5; }
+        .wg-heat-land { opacity: 0; transition: opacity 1s ease; fill: url(#heatGradient); }
+        .wg-air-up { opacity: 0; transition: all 1s ease; transform: translateY(20px); }
+        .wg-air-down { opacity: 0; transition: all 1s ease; transform: translateY(-20px); }
+        .wg-wind-surface { opacity: 0; transition: all 1s ease; stroke-dashoffset: 200; }
+        .wg-wind-aloft { opacity: 0; transition: all 1s ease; stroke-dashoffset: -200; }
+
+        /* Stage Active Classes applied via JS */
+        .stage-1 .wg-sunrays { opacity: 1; animation: rayPulse 2s infinite; }
+        .stage-1 .wg-heat-land { opacity: 0.7; }
+        
+        .stage-2 .wg-sunrays { opacity: 1; }
+        .stage-2 .wg-heat-land { opacity: 0.9; }
+        .stage-2 .wg-air-up { opacity: 1; transform: translateY(0); }
+        
+        .stage-3 .wg-sunrays { opacity: 1; }
+        .stage-3 .wg-heat-land { opacity: 0.9; }
+        .stage-3 .wg-air-up { opacity: 1; transform: translateY(0); }
+        .stage-3 .wg-wind-surface { opacity: 1; animation: flowDash 2s linear infinite; }
+        
+        .stage-4 .wg-sunrays { opacity: 1; }
+        .stage-4 .wg-heat-land { opacity: 0.9; }
+        .stage-4 .wg-air-up { opacity: 1; transform: translateY(0); }
+        .stage-4 .wg-wind-surface { opacity: 1; animation: flowDash 2s linear infinite; }
+        .stage-4 .wg-air-down { opacity: 1; transform: translateY(0); }
+        .stage-4 .wg-wind-aloft { opacity: 1; animation: flowDashRev 2s linear infinite; }
+
+        @keyframes rayPulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+        @keyframes flowDash { to { stroke-dashoffset: 0; } }
+        @keyframes flowDashRev { to { stroke-dashoffset: 0; } }
+
+        /* Controls Panel */
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+            padding: var(--space-md);
+            background: rgba(10, 15, 30, 0.8);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+        }
+
+        .stage-info {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+        
+        .stage-title {
+            font-size: var(--text-lg);
+            color: var(--accent-cyan);
+            font-weight: 600;
+        }
+        .stage-desc { font-size: var(--text-base); }
+
+        .controls-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            font-family: inherit;
+            font-size: var(--text-sm);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:hover { background: rgba(255, 255, 255, 0.2); }
+        .btn.active { background: var(--accent-cyan); color: #000; border-color: var(--accent-cyan); }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+        .dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .dot.active {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            transform: scale(1.2);
+        }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (Canvas)
+           ========================================================================== */
+        .simulation-wrapper {
+            position: relative;
+            width: 100%;
+            height: 60vh;
+            min-height: 400px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            background: #000;
+        }
+
+        canvas#simCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: block;
+        }
+
+        .sim-controls {
+            position: absolute;
+            bottom: var(--space-md);
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            padding: var(--space-md);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            display: flex;
+            gap: var(--space-lg);
+            width: 90%;
+            max-width: 600px;
+        }
+
+        @media (max-width: 768px) {
+            .sim-controls { flex-direction: column; gap: var(--space-sm); bottom: var(--space-xs); padding: var(--space-sm); }
+        }
+
+        .slider-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .slider-group label {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px; width: 16px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            margin-top: -6px;
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+
+        /* ==========================================================================
+           INFO CARDS (Facts, Apps, Mistakes)
+           ========================================================================== */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-md);
+        }
+
+        .info-card {
+            padding: var(--space-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+        
+        .card-icon {
+            width: 48px; height: 48px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .info-card h3 { font-size: var(--text-lg); }
+        .info-card p { color: var(--text-muted); font-size: var(--text-sm); }
+
+        /* Specific Card Accents */
+        .fact-card .card-icon { color: var(--accent-cyan); box-shadow: 0 0 15px rgba(0,242,254,0.2); }
+        .mistake-card .card-icon { color: var(--accent-red); box-shadow: 0 0 15px rgba(252,96,118,0.2); }
+        .app-card .card-icon { color: var(--accent-orange); box-shadow: 0 0 15px rgba(255,154,68,0.2); }
+
+        /* Revision List */
+        .revision-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .revision-list li {
+            padding: var(--space-md);
+            background: rgba(255,255,255,0.03);
+            border-left: 4px solid var(--accent-cyan);
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-sm);
+        }
+        .revision-list li::before {
+            content: '✓';
+            color: var(--accent-cyan);
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <canvas id="particleBg" class="particle-bg"></canvas>
+    </div>
+
+    <div class="container">
+
+        <!-- 1. INTRODUCTION -->
+        <section class="hero">
+            <div class="hero-content">
+                <h1>The Engine of the Atmosphere</h1>
+                <p>Wind is simply air in motion. But what causes an invisible gas to move with such force? Discover the thermal and physical mechanisms that drive global and local winds.</p>
+            </div>
+            
+            <div class="hero-visual">
+                <div class="globe-container">
+                    <div class="atmosphere-glow"></div>
+                    <svg class="wind-lines" viewBox="0 0 1000 500">
+                        <path d="M 100,250 Q 300,100 500,250 T 900,250" />
+                        <path d="M 50,350 Q 250,200 450,350 T 950,350" stroke-width="1" opacity="0.5"/>
+                        <path d="M 150,150 Q 350,50 550,150 T 850,150" stroke-width="3" opacity="0.8"/>
+                    </svg>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. TOPIC OVERVIEW & COMPONENTS -->
+        <section id="components">
+            <h2 class="section-title">The Anatomy of Wind</h2>
+            <p class="section-subtitle">Wind is born from inequality. It is nature's attempt to balance temperature and pressure differences created by the Sun.</p>
+            
+            <div class="components-grid">
+                <!-- Visual Illustration with Markers -->
+                <div class="illustration-container">
+                    <!-- Complex Vector Illustration using SVG -->
+                    <svg class="illustration-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#fff" stop-opacity="1" />
+                                <stop offset="20%" stop-color="#ffeb3b" stop-opacity="0.9" />
+                                <stop offset="100%" stop-color="#ff9800" stop-opacity="0" />
+                            </radialGradient>
+                            <linearGradient id="landGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#8d6e63" />
+                                <stop offset="100%" stop-color="#3e2723" />
+                            </linearGradient>
+                            <linearGradient id="waterGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#29b6f6" />
+                                <stop offset="100%" stop-color="#0277bd" />
+                            </linearGradient>
+                            <linearGradient id="upArrowGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="#ff9a44" stop-opacity="0.2"/>
+                                <stop offset="100%" stop-color="#fc6076" stop-opacity="0.9"/>
+                            </linearGradient>
+                            <linearGradient id="downArrowGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#4facfe" stop-opacity="0.2"/>
+                                <stop offset="100%" stop-color="#00f2fe" stop-opacity="0.9"/>
+                            </linearGradient>
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#000" flood-opacity="0.5"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Background / Atmosphere -->
+                        <rect width="100%" height="100%" fill="transparent" />
+
+                        <!-- Sun -->
+                        <circle cx="150" cy="100" r="80" fill="url(#sunGlow)" />
+                        
+                        <!-- Water -->
+                        <path d="M 400,350 Q 600,340 800,350 L 800,500 L 400,500 Z" fill="url(#waterGrad)" filter="url(#shadow)" />
+                        
+                        <!-- Land -->
+                        <path d="M 0,350 Q 200,330 400,350 L 400,500 L 0,500 Z" fill="url(#landGrad)" filter="url(#shadow)" />
+
+                        <!-- Arrows representing Convection Cell -->
+                        <!-- Rising Warm Air (Left over land) -->
+                        <path d="M 200,320 C 200,200 250,150 350,150" fill="none" stroke="url(#upArrowGrad)" stroke-width="20" stroke-linecap="round" marker-end="url(#arrowheadRed)" />
+                        
+                        <!-- Sinking Cool Air (Right over water) -->
+                        <path d="M 600,150 C 700,150 700,250 650,320" fill="none" stroke="url(#downArrowGrad)" stroke-width="20" stroke-linecap="round" />
+                        
+                        <!-- Surface Wind (Water to Land) -->
+                        <path d="M 600,360 L 250,360" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-dasharray="15,15" opacity="0.8" />
+                        
+                        <!-- Aloft Wind (Land to Water) -->
+                        <path d="M 380,150 L 550,150" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" stroke-dasharray="15,15" opacity="0.4" />
+                    </svg>
+
+                    <!-- Markers strictly placed over coordinates -->
+                    <div class="marker" id="m1" data-target="item1">1</div>
+                    <div class="marker" id="m2" data-target="item2">2</div>
+                    <div class="marker" id="m3" data-target="item3">3</div>
+                    <div class="marker" id="m4" data-target="item4">4</div>
+                    <div class="marker" id="m5" data-target="item5">5</div>
+                    <div class="marker" id="m6" data-target="item6">6</div>
+                </div>
+
+                <!-- Legend strictly outside the illustration -->
+                <div class="legend-list glass-panel">
+                    <div class="legend-item" id="item1" data-target="m1">
+                        <div class="legend-badge badge-sun">1</div>
+                        <div class="legend-content">
+                            <h4>Solar Radiation</h4>
+                            <p>Energy source. Heats surfaces unevenly.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item2" data-target="m2">
+                        <div class="legend-badge badge-heat">2</div>
+                        <div class="legend-content">
+                            <h4>Heated Surface</h4>
+                            <p>Land heats up faster than water.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item3" data-target="m3">
+                        <div class="legend-badge badge-heat">3</div>
+                        <div class="legend-content">
+                            <h4>Low Pressure Area</h4>
+                            <p>Warm air expands, becomes lighter, and rises.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item4" data-target="m4">
+                        <div class="legend-badge badge-cool">4</div>
+                        <div class="legend-content">
+                            <h4>Cooling Aloft</h4>
+                            <p>Rising air cools in upper atmosphere.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item5" data-target="m5">
+                        <div class="legend-badge badge-cool">5</div>
+                        <div class="legend-content">
+                            <h4>High Pressure Area</h4>
+                            <p>Cool, dense air sinks back to surface.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item6" data-target="m6">
+                        <div class="legend-badge badge-wind">6</div>
+                        <div class="legend-content">
+                            <h4>Surface Wind</h4>
+                            <p>Air rushes from High to Low pressure.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. WORKING PROCESS (Mandatory Stage-by-Stage) -->
+        <section id="working">
+            <h2 class="section-title">Mechanism: The Convection Cycle</h2>
+            <p class="section-subtitle">Observe the continuous loop of a Sea Breeze. Watch how thermal energy transforms into kinetic movement stage by stage.</p>
+
+            <div class="working-container glass-panel p-md">
+                
+                <!-- Visual Canvas/SVG for Animation -->
+                <div class="working-visual" id="workingVisual">
+                    <svg class="wg-svg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <radialGradient id="heatGradient" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#ff5722" stop-opacity="0.8"/>
+                                <stop offset="100%" stop-color="#ff5722" stop-opacity="0"/>
+                            </radialGradient>
+                            <linearGradient id="coolGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#03a9f4" stop-opacity="0.6"/>
+                                <stop offset="100%" stop-color="#03a9f4" stop-opacity="0"/>
+                            </linearGradient>
+                            
+                            <!-- Arrow Marker -->
+                            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                              <polygon points="0 0, 10 3.5, 0 7" fill="#fff" />
+                            </marker>
+                        </defs>
+
+                        <!-- Scenery -->
+                        <rect x="0" y="400" width="500" height="200" fill="#795548" /> <!-- Land -->
+                        <rect x="500" y="420" width="500" height="180" fill="#0288d1" /> <!-- Sea -->
+                        <circle cx="100" cy="100" r="60" fill="#ffc107" /> <!-- Sun -->
+
+                        <!-- Animated Elements (controlled by CSS classes on parent) -->
+                        
+                        <!-- Stage 1: Sun rays & Heat -->
+                        <path class="wg-sunrays" d="M150,150 L250,250 M170,120 L300,180 M120,170 L180,300" />
+                        <ellipse class="wg-heat-land" cx="250" cy="400" rx="200" ry="50" />
+                        
+                        <!-- Stage 2: Rising Air (Low Pressure) -->
+                        <g class="wg-air-up">
+                            <path d="M150,380 Q150,200 250,150" fill="none" stroke="#ff5252" stroke-width="15" stroke-linecap="round" opacity="0.8"/>
+                            <path d="M300,380 Q300,220 380,180" fill="none" stroke="#ff5252" stroke-width="10" stroke-linecap="round" opacity="0.6"/>
+                            <text x="250" y="380" fill="#fff" font-size="24" font-weight="bold" text-anchor="middle">LOW P</text>
+                        </g>
+
+                        <!-- Stage 3: Surface Wind -->
+                        <path class="wg-wind-surface" d="M800,400 L300,400" fill="none" stroke="#fff" stroke-width="12" stroke-dasharray="20,20" marker-end="url(#arrowhead)"/>
+                        
+                        <!-- Stage 4: Sinking Air & Return flow -->
+                        <g class="wg-air-down">
+                            <path d="M600,150 Q750,150 750,380" fill="none" stroke="#00bcd4" stroke-width="15" stroke-linecap="round" opacity="0.8"/>
+                            <text x="750" y="380" fill="#fff" font-size="24" font-weight="bold" text-anchor="middle">HIGH P</text>
+                        </g>
+                        <path class="wg-wind-aloft" d="M400,150 L600,150" fill="none" stroke="#fff" stroke-width="8" stroke-dasharray="15,15" opacity="0.5" marker-end="url(#arrowhead)"/>
+                    </svg>
+                </div>
+
+                <!-- Controls -->
+                <div class="controls-panel">
+                    <div class="stage-info">
+                        <div class="stage-title" id="wgTitle">1. Solar Heating</div>
+                        <div class="stage-desc" id="wgDesc">The Sun's radiation hits the Earth. Land absorbs heat much faster than water, creating a temperature imbalance.</div>
+                    </div>
+                    
+                    <div class="controls-row">
+                        <button class="btn" id="btnPrev">← Prev</button>
+                        
+                        <div class="progress-dots" id="wgDots">
+                            <div class="dot active" data-index="0"></div>
+                            <div class="dot" data-index="1"></div>
+                            <div class="dot" data-index="2"></div>
+                            <div class="dot" data-index="3"></div>
+                        </div>
+                        
+                        <button class="btn" id="btnNext">Next →</button>
+                        <button class="btn" id="btnAutoPlay">▶ Auto-Play</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. INTERACTIVE SIMULATION -->
+        <section id="simulation">
+            <h2 class="section-title">Global Wind Lab</h2>
+            <p class="section-subtitle">Simulate how temperature differences and Earth's rotation (Coriolis Effect) create global wind patterns.</p>
+
+            <div class="simulation-wrapper">
+                <canvas id="simCanvas"></canvas>
+                
+                <div class="sim-controls glass-panel">
+                    <div class="slider-group">
+                        <label>
+                            <span>Equator-Pole Temp Diff</span>
+                            <span id="tempVal">High</span>
+                        </label>
+                        <input type="range" id="tempSlider" min="0" max="100" value="80">
+                    </div>
+                    
+                    <div class="slider-group">
+                        <label>
+                            <span>Earth Rotation (Coriolis)</span>
+                            <span id="rotVal">Normal</span>
+                        </label>
+                        <input type="range" id="rotSlider" min="0" max="100" value="50">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. INFO CARDS -->
+        <section id="info">
+            <div class="card-grid">
+                <!-- Fact -->
+                <div class="glass-panel info-card fact-card">
+                    <div class="card-icon">🌪️</div>
+                    <h3>Did you know?</h3>
+                    <p>The fastest wind speed ever recorded on Earth (not in a tornado) was 253 mph (407 km/h) at Barrow Island, Australia, during Cyclone Olivia in 1996.</p>
+                </div>
+                
+                <!-- Application -->
+                <div class="glass-panel info-card app-card">
+                    <div class="card-icon">⚡</div>
+                    <h3>Real-World Application</h3>
+                    <p>Modern wind turbines harness kinetic energy from wind. They are strategically placed in coastal areas or mountain gaps where temperature gradients create reliable, strong winds.</p>
+                </div>
+
+                <!-- Mistake -->
+                <div class="glass-panel info-card mistake-card">
+                    <div class="card-icon">❌</div>
+                    <h3>Common Misconception</h3>
+                    <p>Many think wind is just "air blowing." It's actually a pressure equalization process. Wind doesn't push; High Pressure air rushes in to fill the void left by rising Low Pressure air.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. REVISION -->
+        <section id="revision">
+            <h2 class="section-title">Quick Revision</h2>
+            <ul class="revision-list glass-panel">
+                <li><strong>Source:</strong> All wind begins with the Sun unevenly heating the Earth's surface.</li>
+                <li><strong>Low Pressure:</strong> Warm air expands, becomes less dense, and rises.</li>
+                <li><strong>High Pressure:</strong> Cool air condenses, becomes denser, and sinks.</li>
+                <li><strong>The Flow:</strong> Air always moves from High Pressure areas to Low Pressure areas.</li>
+                <li><strong>Coriolis Effect:</strong> Earth's rotation curves the path of wind, preventing it from flowing in straight lines.</li>
+            </ul>
+        </section>
+
+    </div>
+
+    <script>
+        /**
+         * GLOBAL UTILITIES
+         */
+        const clamp = (num, min, max) => Math.min(Math.max(num, min), max);
+
+        /**
+         * AMBIENT BACKGROUND PARTICLES
+         */
+        const setupAmbientBackground = () => {
+            const canvas = document.getElementById('particleBg');
+            const ctx = canvas.getContext('2d');
+            let particles = [];
+            let width, height;
+
+            const resize = () => {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            };
+
+            class Particle {
+                constructor() {
+                    this.x = Math.random() * width;
+                    this.y = Math.random() * height;
+                    this.size = Math.random() * 2;
+                    this.vx = (Math.random() - 0.5) * 0.5;
+                    this.vy = (Math.random() - 0.5) * 0.5;
+                    this.opacity = Math.random() * 0.5;
+                }
+                update() {
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    if (this.x < 0 || this.x > width) this.vx *= -1;
+                    if (this.y < 0 || this.y > height) this.vy *= -1;
+                }
+                draw() {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            const init = () => {
+                resize();
+                particles = Array.from({ length: 50 }, () => new Particle());
+                animate();
+            };
+
+            const animate = () => {
+                ctx.clearRect(0, 0, width, height);
+                particles.forEach(p => { p.update(); p.draw(); });
+                requestAnimationFrame(animate);
+            };
+
+            window.addEventListener('resize', resize);
+            init();
+        };
+
+        /**
+         * COMPONENT SECTION (Marker/Legend Interaction)
+         */
+        const setupComponents = () => {
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            const activatePair = (id) => {
+                markers.forEach(m => m.style.transform = 'scale(1)');
+                legendItems.forEach(l => l.classList.remove('active'));
+                
+                const m = document.getElementById(id);
+                const l = document.getElementById(m.dataset.target) || document.querySelector(`[data-target="${id}"]`);
+                
+                if (m) m.style.transform = 'scale(1.2)';
+                if (l) l.classList.add('active');
+            };
+
+            markers.forEach(m => {
+                m.addEventListener('mouseenter', () => activatePair(m.id));
+                m.addEventListener('touchstart', (e) => { e.preventDefault(); activatePair(m.id); });
+            });
+            legendItems.forEach(l => {
+                l.addEventListener('mouseenter', () => activatePair(l.dataset.target));
+                l.addEventListener('touchstart', (e) => { e.preventDefault(); activatePair(l.dataset.target); });
+            });
+        };
+
+        /**
+         * WORKING PROCESS (Stage Machine)
+         */
+        const setupWorkingProcess = () => {
+            const visual = document.getElementById('workingVisual');
+            const titleEl = document.getElementById('wgTitle');
+            const descEl = document.getElementById('wgDesc');
+            const dots = document.querySelectorAll('#wgDots .dot');
+            const btnPrev = document.getElementById('btnPrev');
+            const btnNext = document.getElementById('btnNext');
+            const btnAutoPlay = document.getElementById('btnAutoPlay');
+
+            const stages = [
+                { title: "1. Solar Heating", desc: "The Sun's radiation hits the Earth. Land absorbs heat much faster than water, creating a temperature imbalance." },
+                { title: "2. Warm Air Rises (Low P)", desc: "Air above the heated land warms, expands, and becomes less dense. It rises, creating a zone of Low Pressure at the surface." },
+                { title: "3. Surface Wind (Sea Breeze)", desc: "Cooler, denser air over the water (High Pressure) rapidly moves inland to fill the space left by the rising warm air." },
+                { title: "4. Cooling & Convection", desc: "Rising warm air cools in the upper atmosphere, moves out over the sea, and sinks, completing the continuous convection cell." }
+            ];
+
+            let currentStage = 0;
+            let autoPlayInterval = null;
+
+            const setStage = (index) => {
+                currentStage = index;
+                
+                // Update text
+                titleEl.textContent = stages[currentStage].title;
+                descEl.textContent = stages[currentStage].desc;
+
+                // Update dots
+                dots.forEach((dot, i) => dot.classList.toggle('active', i === currentStage));
+
+                // Update visual CSS classes (clearing previous, setting current)
+                visual.className = 'working-visual'; // reset
+                // Add all stages up to current to build the animation logically
+                for (let i = 0; i <= currentStage; i++) {
+                    visual.classList.add(`stage-${i + 1}`);
+                }
+            };
+
+            const nextStage = () => setStage((currentStage + 1) % stages.length);
+            const prevStage = () => setStage((currentStage - 1 + stages.length) % stages.length);
+
+            const toggleAutoPlay = () => {
+                if (autoPlayInterval) {
+                    clearInterval(autoPlayInterval);
+                    autoPlayInterval = null;
+                    btnAutoPlay.classList.remove('active');
+                    btnAutoPlay.textContent = "▶ Auto-Play";
+                } else {
+                    nextStage(); // step immediately
+                    autoPlayInterval = setInterval(nextStage, 3000);
+                    btnAutoPlay.classList.add('active');
+                    btnAutoPlay.textContent = "⏸ Pause";
+                }
+            };
+
+            btnNext.addEventListener('click', () => { clearInterval(autoPlayInterval); btnAutoPlay.classList.remove('active'); btnAutoPlay.textContent="▶ Auto-Play"; nextStage(); });
+            btnPrev.addEventListener('click', () => { clearInterval(autoPlayInterval); btnAutoPlay.classList.remove('active'); btnAutoPlay.textContent="▶ Auto-Play"; prevStage(); });
+            btnAutoPlay.addEventListener('click', toggleAutoPlay);
+            
+            dots.forEach(dot => {
+                dot.addEventListener('click', () => {
+                    clearInterval(autoPlayInterval);
+                    btnAutoPlay.classList.remove('active');
+                    btnAutoPlay.textContent="▶ Auto-Play";
+                    setStage(parseInt(dot.dataset.index));
+                });
+            });
+
+            // Init
+            setStage(0);
+        };
+
+        /**
+         * INTERACTIVE SIMULATION (Canvas Engine)
+         */
+        const setupSimulation = () => {
+            const canvas = document.getElementById('simCanvas');
+            const ctx = canvas.getContext('2d');
+            const wrapper = canvas.parentElement;
+            
+            const tempSlider = document.getElementById('tempSlider');
+            const rotSlider = document.getElementById('rotSlider');
+            const tempValText = document.getElementById('tempVal');
+            const rotValText = document.getElementById('rotVal');
+
+            let width, height, centerX, centerY;
+            let particles = [];
+            
+            // Physics variables controlled by sliders
+            let tempGradient = 0.8; // 0 to 1
+            let coriolisForce = 0.5; // 0 to 1
+
+            const resizeCanvas = () => {
+                const rect = wrapper.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                width = rect.width;
+                height = rect.height;
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                ctx.scale(dpr, dpr);
+                centerX = width / 2;
+                centerY = height * 1.5; // Earth center below screen
+                
+                initParticles();
+            };
+
+            class WindParticle {
+                constructor() {
+                    this.reset();
+                }
+                
+                reset() {
+                    // Spawn on the "surface" (an arc)
+                    const angle = (Math.random() * Math.PI/2) - Math.PI/4; // -45 to +45 deg from top center
+                    const radius = width > 768 ? height * 0.8 : height * 0.6; // Earth radius
+                    
+                    this.x = centerX + Math.sin(angle) * radius;
+                    this.y = centerY - Math.cos(angle) * radius;
+                    
+                    // Latitude normalized (-1 left edge, 0 center/equator, 1 right edge)
+                    this.lat = (this.x - centerX) / (width/2); 
+                    
+                    this.vx = 0;
+                    this.vy = 0;
+                    this.life = 0;
+                    this.maxLife = 100 + Math.random() * 100;
+                    this.color = '#fff';
+                    this.size = Math.random() * 2 + 1;
+                    
+                    // State: 0=rising(equator), 1=aloft, 2=sinking(poles), 3=surface return
+                    // Simplified: just move based on physics field
+                }
+
+                update() {
+                    // 1. Temperature drives vertical movement (Convection)
+                    // Higher tempDiff = stronger lift at equator (center), sinking at poles (edges)
+                    const lift = (1 - Math.abs(this.lat)) * tempGradient * 2; // Up at center
+                    const sink = Math.abs(this.lat) * tempGradient; // Down at edges
+                    
+                    this.vy -= lift * 0.1;
+                    this.vy += sink * 0.05;
+
+                    // 2. Altitude constraint & lateral spread aloft
+                    const altitude = (centerY - this.y) - (height * 0.6); // roughly height above surface
+                    if (altitude > height * 0.3) {
+                        this.vy *= 0.8; // hit 'tropopause', stop rising
+                        // move towards poles
+                        this.vx += (this.lat > 0 ? 1 : -1) * tempGradient * 0.1;
+                    }
+
+                    // 3. Coriolis Effect (Deflection based on latitude and velocity)
+                    // In N. Hemisphere (right side), deflects right. S. Hemisphere (left side), deflects left.
+                    const coriolisDeflection = this.vy * coriolisForce * this.lat * 0.5;
+                    this.vx += coriolisDeflection;
+
+                    // 4. Apply velocity and damping
+                    this.vx *= 0.95;
+                    this.vy *= 0.95;
+                    this.x += this.vx;
+                    this.y += this.vy;
+
+                    // Color based on vertical movement
+                    if (this.vy < -0.5) this.color = `rgba(255, 100, 100, ${1 - this.life/this.maxLife})`; // Red rising
+                    else if (this.vy > 0.5) this.color = `rgba(100, 200, 255, ${1 - this.life/this.maxLife})`; // Blue sinking
+                    else this.color = `rgba(255, 255, 255, ${0.5 - (this.life/this.maxLife)*0.5})`; // White neutral
+
+                    this.life++;
+                    if (this.life > this.maxLife || this.x < 0 || this.x > width || this.y > height) {
+                        this.reset();
+                    }
+                }
+
+                draw() {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            const initParticles = () => {
+                particles = Array.from({ length: 200 }, () => new WindParticle());
+            };
+
+            const drawEarth = () => {
+                const radius = width > 768 ? height * 0.8 : height * 0.6;
+                
+                // Atmosphere Glow
+                let glow = ctx.createRadialGradient(centerX, centerY, radius, centerX, centerY, radius + 150);
+                glow.addColorStop(0, 'rgba(0, 150, 255, 0.2)');
+                glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = glow;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius + 150, 0, Math.PI*2);
+                ctx.fill();
+
+                // Earth Surface Heat Map
+                let earthGrad = ctx.createRadialGradient(centerX, centerY - radius, 0, centerX, centerY - radius, radius);
+                // Center (Equator) gets redder with higher tempDiff
+                const eqColor = `rgba(${100 + (tempGradient*155)}, 50, 50, 1)`;
+                const poleColor = `rgba(20, 50, ${100 + (tempGradient*100)}, 1)`;
+                
+                earthGrad.addColorStop(0, eqColor); // Equator (hot)
+                earthGrad.addColorStop(1, poleColor); // Poles (cold)
+
+                ctx.fillStyle = earthGrad;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Labels
+                ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('EQUATOR', centerX, centerY - radius + 20);
+                ctx.fillText('POLE', centerX - 150, centerY - radius + 50);
+                ctx.fillText('POLE', centerX + 150, centerY - radius + 50);
+            };
+
+            const animate = () => {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; // Motion blur trail
+                ctx.fillRect(0, 0, width, height);
+
+                drawEarth();
+
+                particles.forEach(p => {
+                    p.update();
+                    p.draw();
+                });
+
+                requestAnimationFrame(animate);
+            };
+
+            // Input Listeners
+            tempSlider.addEventListener('input', (e) => {
+                tempGradient = e.target.value / 100;
+                tempValText.textContent = tempGradient < 0.3 ? 'Low' : tempGradient > 0.7 ? 'High' : 'Med';
+            });
+            rotSlider.addEventListener('input', (e) => {
+                coriolisForce = e.target.value / 100;
+                rotValText.textContent = coriolisForce < 0.2 ? 'Off' : coriolisForce > 0.8 ? 'Fast' : 'Normal';
+            });
+
+            // Debounced resize
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(resizeCanvas, 200);
+            });
+
+            resizeCanvas();
+            animate();
+        };
+
+        /**
+         * INITIALIZATION
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            setupAmbientBackground();
+            setupComponents();
+            setupWorkingProcess();
+            setupSimulation();
+        });
+
+    </script>
+</body>
+</html>

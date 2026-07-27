@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chemical Reactions Explorer</title>
+    <style>
+        /* ==========================================================================
+           ROOT VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            /* Color Palette - Futuristic Sci-Fi/Lab */
+            --bg-base: #05050a;
+            --bg-surface: rgba(18, 18, 32, 0.6);
+            --bg-surface-light: rgba(30, 30, 50, 0.7);
+            
+            --accent-cyan: #00e5ff;
+            --accent-cyan-glow: rgba(0, 229, 255, 0.5);
+            --accent-magenta: #ff007f;
+            --accent-magenta-glow: rgba(255, 0, 127, 0.5);
+            --accent-yellow: #ffea00;
+            --accent-green: #00ff7f;
+            
+            --text-main: #f0f4f8;
+            --text-muted: #a0aec0;
+            --text-dark: #1a202c;
+
+            /* Element Colors */
+            --atom-a: #ff007f; /* Magenta */
+            --atom-b: #00e5ff; /* Cyan */
+            --atom-c: #ffea00; /* Yellow */
+            --atom-d: #00ff7f; /* Green */
+            
+            /* Typography (Fluid) */
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --text-h1: clamp(2rem, 5vw, 4rem);
+            --text-h2: clamp(1.5rem, 3.5vw, 2.5rem);
+            --text-h3: clamp(1.2rem, 2vw, 1.5rem);
+            --text-body: clamp(0.95rem, 1.2vw, 1.1rem);
+            --text-small: clamp(0.8rem, 1vw, 0.9rem);
+            
+            /* Spacing & Layout */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --gap-lg: 2rem;
+            --gap-md: 1.5rem;
+            --gap-sm: 0.75rem;
+            --padding-section: clamp(3rem, 6vw, 6rem) clamp(1rem, 4vw, 4rem);
+            --container-max: 1400px;
+            
+            /* Effects */
+            --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* ==========================================================================
+           RESET & GLOBAL STYLES
+           ========================================================================== */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: var(--font-family);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Ambient Background Canvas */
+        #ambient-canvas {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: var(--container-max);
+            margin: 0 auto;
+            position: relative;
+        }
+
+        section { padding: var(--padding-section); }
+
+        h1, h2, h3 { font-weight: 700; line-height: 1.2; margin-bottom: 1rem; }
+        h1 { font-size: var(--text-h1); letter-spacing: -1px; text-shadow: 0 0 40px rgba(0,229,255,0.3); }
+        h2 { font-size: var(--text-h2); }
+        h3 { font-size: var(--text-h3); color: var(--accent-cyan); }
+        p { font-size: var(--text-body); color: var(--text-muted); margin-bottom: 1.5rem; }
+        
+        .highlight { color: var(--text-main); font-weight: 600; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
+        .gradient-text {
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-magenta));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ==========================================================================
+           COMPONENTS (GLASSMORPHISM)
+           ========================================================================== */
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+            padding: clamp(1.5rem, 3vw, 2.5rem);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+            pointer-events: none;
+        }
+
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: var(--gap-lg); }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--gap-md); }
+
+        /* ==========================================================================
+           DIAGRAM LABELS & LEGENDS (MANDATORY PATTERN)
+           ========================================================================== */
+        .diagram-layout {
+            display: flex; flex-direction: column; gap: var(--gap-md);
+            align-items: center;
+        }
+        @media (min-width: 1024px) {
+            .diagram-layout { flex-direction: row; align-items: flex-start; justify-content: space-between; }
+            .diagram-visual { flex: 1; min-width: 0; }
+            .diagram-legend-container { width: 320px; flex-shrink: 0; }
+        }
+
+        .diagram-visual {
+            position: relative; width: 100%; min-height: 240px;
+            display: flex; justify-content: center; align-items: center;
+            background: radial-gradient(circle at center, rgba(30,30,50,0.8) 0%, transparent 70%);
+            border-radius: var(--radius-md);
+        }
+
+        .diagram-visual svg { width: 100%; height: 100%; max-height: 400px; display: block; overflow: visible; }
+
+        /* Numbered Markers on Art */
+        .marker {
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            transform-origin: center;
+        }
+        .marker-circle { fill: var(--bg-surface-light); stroke: var(--accent-cyan); stroke-width: 2; transition: all 0.3s; }
+        .marker-text { fill: #fff; font-size: 14px; font-weight: bold; font-family: sans-serif; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+        
+        .marker.active .marker-circle, .marker:hover .marker-circle {
+            fill: var(--accent-cyan); stroke: #fff; filter: drop-shadow(0 0 8px var(--accent-cyan-glow)); transform: scale(1.15);
+        }
+        .marker.active .marker-text, .marker:hover .marker-text { fill: var(--bg-base); }
+
+        /* The Legend List */
+        .legend-list { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+        .legend-item {
+            display: flex; align-items: center; gap: 1rem;
+            padding: 0.75rem 1rem; border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.03); border: 1px solid transparent;
+            cursor: pointer; transition: var(--transition-smooth);
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 229, 255, 0.1); border-color: rgba(0, 229, 255, 0.3);
+            transform: translateX(5px);
+        }
+        .legend-badge {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--bg-surface-light); border: 1px solid var(--accent-cyan);
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-size: 0.9rem; color: var(--accent-cyan);
+            flex-shrink: 0; transition: var(--transition-smooth);
+        }
+        .legend-item:hover .legend-badge, .legend-item.active .legend-badge {
+            background: var(--accent-cyan); color: var(--bg-base); box-shadow: 0 0 10px var(--accent-cyan-glow);
+        }
+        .legend-details { flex: 1; }
+        .legend-title { display: block; font-weight: 600; color: var(--text-main); font-size: var(--text-small); }
+        .legend-desc { display: block; font-size: 0.8rem; color: var(--text-muted); line-height: 1.3; }
+
+
+        /* ==========================================================================
+           SPECIFIC SECTIONS
+           ========================================================================== */
+
+        /* Hero */
+        #hero { min-height: 90vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; position: relative; }
+        .hero-graphics { position: relative; width: 300px; height: 300px; margin-bottom: 2rem; }
+        .hero-orb {
+            position: absolute; border-radius: 50%; mix-blend-mode: screen; filter: blur(20px);
+            animation: floatOrb 8s infinite alternate ease-in-out;
+        }
+        .orb-1 { width: 150px; height: 150px; background: var(--accent-cyan); top: 20%; left: 10%; }
+        .orb-2 { width: 120px; height: 120px; background: var(--accent-magenta); bottom: 10%; right: 20%; animation-delay: -3s; }
+        .hero-svg { position: absolute; top:0; left:0; width:100%; height:100%; z-index: 2;}
+
+        @keyframes floatOrb { 0% { transform: translate(0,0) scale(1); } 100% { transform: translate(20px, -30px) scale(1.2); } }
+
+        /* Reaction Types Grid */
+        .reaction-card {
+            display: flex; flex-direction: column; gap: 1rem;
+            transition: transform 0.3s;
+        }
+        .reaction-card:hover { transform: translateY(-5px); }
+        .reaction-formula {
+            display: inline-block; padding: 0.5rem 1rem; border-radius: 20px;
+            background: rgba(255,255,255,0.05); font-family: monospace; font-size: 1.2rem;
+            letter-spacing: 2px; color: var(--accent-yellow); margin-bottom: 1rem;
+        }
+
+        /* Working Mechanism */
+        #mechanism-container {
+            display: grid; grid-template-columns: 1fr; gap: var(--gap-lg);
+            align-items: center;
+        }
+        @media(min-width: 1024px) { #mechanism-container { grid-template-columns: 1fr 350px; } }
+        
+        .mech-visual-area { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; border-radius: var(--radius-lg); overflow: hidden; border: var(--glass-border); box-shadow: inset 0 0 50px rgba(0,0,0,0.8); }
+        #mech-canvas { width: 100%; height: 100%; display: block; }
+        
+        .mech-controls {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 1rem; background: rgba(0,0,0,0.6); padding: 10px 20px; border-radius: 30px; backdrop-filter: blur(5px);
+        }
+        .btn {
+            background: transparent; border: 1px solid var(--accent-cyan); color: var(--accent-cyan);
+            padding: 8px 16px; border-radius: 20px; cursor: pointer; font-weight: bold;
+            transition: all 0.2s; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px;
+        }
+        .btn:hover, .btn.active { background: var(--accent-cyan); color: var(--bg-base); box-shadow: 0 0 15px var(--accent-cyan-glow); }
+        .btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
+        .mech-info { display: flex; flex-direction: column; gap: 1.5rem; }
+        .stage-indicator { display: flex; gap: 5px; margin-bottom: 1rem; }
+        .stage-dot { width: 30px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1); transition: 0.3s; }
+        .stage-dot.active { background: var(--accent-magenta); box-shadow: 0 0 10px var(--accent-magenta-glow); }
+        .stage-content { min-height: 150px; }
+        .stage-title { color: var(--accent-magenta); font-size: 1.5rem; margin-bottom: 0.5rem; }
+        .stage-meta { display: flex; gap: 1rem; font-size: 0.85rem; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; margin-top: 1rem; }
+        .meta-item span { display: block; color: #fff; font-weight: bold; }
+
+        /* Simulator */
+        .sim-layout { display: grid; grid-template-columns: 1fr; gap: var(--gap-md); }
+        @media(min-width: 768px) { .sim-layout { grid-template-columns: 250px 1fr; } }
+        
+        .sim-controls { display: flex; flex-direction: column; gap: 1.5rem; }
+        .control-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .control-group label { font-size: 0.9rem; color: var(--accent-green); text-transform: uppercase; letter-spacing: 1px; font-weight: bold; }
+        
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; height: 30px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%;
+            background: var(--accent-green); cursor: pointer; margin-top: -8px; box-shadow: 0 0 10px rgba(0,255,127,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer; background: rgba(255,255,255,0.1); border-radius: 2px;
+        }
+        
+        .sim-view { position: relative; width: 100%; aspect-ratio: 4/3; background: #000; border-radius: var(--radius-md); overflow: hidden; border: 1px solid rgba(0,255,127,0.3); }
+        #sim-canvas { width: 100%; height: 100%; }
+        .sim-overlay { position: absolute; top:10px; right:10px; background: rgba(0,0,0,0.7); padding: 5px 10px; border-radius: 5px; font-family: monospace; font-size: 0.8rem; color: var(--accent-green); border: 1px solid var(--accent-green); }
+
+        /* SVG Definitions - Reusable */
+        .svg-defs { width: 0; height: 0; position: absolute; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Reusable SVG Gradients and Filters -->
+    <svg class="svg-defs" aria-hidden="true">
+        <defs>
+            <!-- Atom Materials -->
+            <radialGradient id="atomMagenta" cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stop-color="#ff66b2"/>
+                <stop offset="60%" stop-color="#ff007f"/>
+                <stop offset="100%" stop-color="#800040"/>
+            </radialGradient>
+            <radialGradient id="atomCyan" cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stop-color="#66ffff"/>
+                <stop offset="60%" stop-color="#00e5ff"/>
+                <stop offset="100%" stop-color="#007380"/>
+            </radialGradient>
+            <radialGradient id="atomYellow" cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stop-color="#ffff66"/>
+                <stop offset="60%" stop-color="#ffea00"/>
+                <stop offset="100%" stop-color="#807500"/>
+            </radialGradient>
+            <radialGradient id="atomGreen" cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stop-color="#66ffb2"/>
+                <stop offset="60%" stop-color="#00ff7f"/>
+                <stop offset="100%" stop-color="#008040"/>
+            </radialGradient>
+            <radialGradient id="atomGrey" cx="30%" cy="30%" r="70%">
+                <stop offset="0%" stop-color="#cccccc"/>
+                <stop offset="60%" stop-color="#888888"/>
+                <stop offset="100%" stop-color="#333333"/>
+            </radialGradient>
+
+            <!-- Glow Filters -->
+            <filter id="glowCyan" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="5" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            
+            <!-- Connection Bond -->
+            <linearGradient id="bondGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.8)"/>
+                <stop offset="50%" stop-color="rgba(255,255,255,0.2)"/>
+                <stop offset="100%" stop-color="rgba(255,255,255,0.8)"/>
+            </linearGradient>
+            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000" flood-opacity="0.8"/>
+            </filter>
+        </defs>
+    </svg>
+
+    <!-- Ambient Background -->
+    <canvas id="ambient-canvas"></canvas>
+
+    <div class="container">
+        
+        <!-- SECTION 1: HERO -->
+        <section id="hero">
+            <div class="hero-graphics">
+                <div class="hero-orb orb-1"></div>
+                <div class="hero-orb orb-2"></div>
+                <svg class="hero-svg" viewBox="0 0 100 100">
+                    <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5" stroke-dasharray="2,2">
+                        <animateTransform attributeName="transform" type="rotate" from="0 50 50" to="360 50 50" dur="20s" repeatCount="indefinite"/>
+                    </circle>
+                    <line x1="30" y1="50" x2="70" y2="50" stroke="var(--text-main)" stroke-width="2" opacity="0.5"/>
+                    <circle cx="30" cy="50" r="8" fill="url(#atomCyan)" filter="url(#shadow)"/>
+                    <circle cx="70" cy="50" r="12" fill="url(#atomMagenta)" filter="url(#shadow)"/>
+                </svg>
+            </div>
+            <h1>Types of <span class="gradient-text">Chemical Reactions</span></h1>
+            <p style="max-width: 600px; margin: 0 auto;">Explore the fundamental mechanisms that rearrange the building blocks of the universe. Understand how atoms break apart, swap partners, and fuse to create entirely new substances.</p>
+        </section>
+
+        <!-- SECTION 2: COMPONENTS (TYPES) -->
+        <section id="types">
+            <div class="glass-panel">
+                <h2>The Four Fundamental Patterns</h2>
+                <p>Most chemical interactions fall into one of these structural architectures. Hover over the markers to identify the components.</p>
+                
+                <div class="grid-2">
+                    
+                    <!-- Type 1: Synthesis -->
+                    <div class="glass-panel reaction-card diagram-container">
+                        <h3>1. Synthesis (Combination)</h3>
+                        <div class="reaction-formula">A + B → AB</div>
+                        <p class="text-small">Two or more simple substances combine to form a more complex product.</p>
+                        
+                        <div class="diagram-layout">
+                            <div class="diagram-visual">
+                                <svg viewBox="0 0 200 100">
+                                    <!-- Plus Sign -->
+                                    <path d="M55,50 L65,50 M60,45 L60,55" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+                                    <!-- Arrow -->
+                                    <path d="M90,50 L110,50 M105,45 L110,50 L105,55" stroke="rgba(255,255,255,0.3)" stroke-width="2" fill="none"/>
+                                    
+                                    <!-- Reactants -->
+                                    <g class="hover-group">
+                                        <circle cx="30" cy="50" r="15" fill="url(#atomCyan)" filter="url(#shadow)"/>
+                                        <g class="marker" data-marker-id="syn-1" transform="translate(30,30)">
+                                            <circle class="marker-circle" cx="0" cy="0" r="10"/>
+                                            <text class="marker-text" x="0" y="1">1</text>
+                                        </g>
+                                    </g>
+                                    
+                                    <g class="hover-group">
+                                        <circle cx="80" cy="50" r="15" fill="url(#atomMagenta)" filter="url(#shadow)"/>
+                                        <g class="marker" data-marker-id="syn-2" transform="translate(80,30)">
+                                            <circle class="marker-circle" cx="0" cy="0" r="10"/>
+                                            <text class="marker-text" x="0" y="1">2</text>
+                                        </g>
+                                    </g>
+                                    
+                                    <!-- Product -->
+                                    <g class="hover-group">
+                                        <rect x="145" y="47" width="10" height="6" fill="rgba(255,255,255,0.5)"/> <!-- Bond -->
+                                        <circle cx="140" cy="50" r="15" fill="url(#atomCyan)" filter="url(#shadow)"/>
+                                        <circle cx="160" cy="50" r="15" fill="url(#atomMagenta)" filter="url(#shadow)"/>
+                                        <g class="marker" data-marker-id="syn-3" transform="translate(150,25)">
+                                            <circle class="marker-circle" cx="0" cy="0" r="10"/>
+                                            <text class="marker-text" x="0" y="1">3</text>
+                                        </g>
+                                    </g>
+                                </svg>
+                            </div>
+                            <div class="diagram-legend-container">
+                                <ul class="legend-list">
+                                    <li class="legend-item" data-marker-id="syn-1">
+                                        <div class="legend-badge">1</div>
+                                        <div class="legend-details">
+                                            <span class="legend-title">Reactant A</span>
+                                            <span class="legend-desc">E.g., Sodium (Na) atom.</span>
+                                        </div>
+                                    </li>
+                                    <li class="legend-item" data-marker-id="syn-2">
+                                        <div class="legend-badge">2</div>
+                                        <div class="legend-details">
+                                            <span class="legend-title">Reactant B</span>
+                                            <span class="legend-desc">E.g., Chlorine (Cl) atom.</span>
+                                        </div>
+                                    </li>
+                                    <li class="legend-item" data-marker-id="syn-3">
+                                        <div class="legend-badge">3</div>
+                                        <div class="legend-details">
+                                            <span class="legend-title">Compound AB</span>
+                                            <span class="legend-desc">New fused molecule (NaCl).</span>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Type 2: Decomposition -->
+                    <div class="glass-panel reaction-card diagram-container">
+                        <h3>2. Decomposition</h3>
+                        <div class="reaction-formula">AB → A + B</div>
+                        <p class="text-small">A complex molecule breaks down into simpler constituent parts, usually requiring energy.</p>
+                        
+                        <div class="diagram-layout">
+                            <div class="diagram-visual">
+                                <svg viewBox="0 0 200 100">
+                                    <!-- Arrow -->
+                                    <path d="M80,50 L100,50 M95,45 L100,50 L95,55" stroke="rgba(255,255,255,0.3)" stroke-width="2" fill="none"/>
+                                    <!-- Plus Sign -->
+                                    <path d="M145,50 L155,50 M150,45 L150,55" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+                                    
+                                    <!-- Reactant (Compound) -->
+                                    <g class="hover-group">
+                                        <rect x="40" y="47" width="10" height="6" fill="rgba(255,255,255,0.5)"/>
+                                        <circle cx="35" cy="50" r="15" fill="url(#atomYellow)" filter="url(#shadow)"/>
+                                        <circle cx="55" cy="50" r="15" fill="url(#atomGreen)" filter="url(#shadow)"/>
+                                        <g class="marker" data-marker-id="dec-1" transform="translate(45,25)">
+                                            <circle class="marker-circle" cx="0" cy="0" r="10"/>
+                                            <text class="marker-text" x="0" y="1">1</text>
+                                        </g>
+                                    </g>
+                                    
+                                    <!-- Products -->
+                                    <g class="hover-group">
+                                        <circle cx="125" cy="50" r="15" fill="url(#atomYellow)" filter="url(#shadow)"/>
+                                        <g class="marker" data-marker-id="dec-2" transform="translate(125,30)">
+                                            <circle class="marker-circle" cx="0" cy="0" r="10"/>
+                                            <text class="marker-text" x="0" y="1">2</text>
+                                        </g>
+                                    </g>
+                                    <g class="hover-group">
+                                        <circle cx="175" cy="50" r="15" fill="url(#atomGreen)" filter="url(#shadow)"/>
+                                        <g class="marker" data-marker-id="dec-3" transform="translate(175,30)">
+                                            <circle class="marker-circle" cx="0" cy="0" r="10"/>
+                                            <text class="marker-text" x="0" y="1">3</text>
+                                        </g>
+                                    </g>
+                                </svg>
+                            </div>
+                            <div class="diagram-legend-container">
+                                <ul class="legend-list">
+                                    <li class="legend-item" data-marker-id="dec-1">
+                                        <div class="legend-badge">1</div>
+                                        <div class="legend-details">
+                                            <span class="legend-title">Compound AB</span>
+                                            <span class="legend-desc">Water (H₂O) molecule.</span>
+                                        </div>
+                                    </li>
+                                    <li class="legend-item" data-marker-id="dec-2">
+                                        <div class="legend-badge">2</div>
+                                        <div class="legend-details">
+                                            <span class="legend-title">Product A</span>
+                                            <span class="legend-desc">Hydrogen gas.</span>
+                                        </div>
+                                    </li>
+                                    <li class="legend-item" data-marker-id="dec-3">
+                                        <div class="legend-badge">3</div>
+                                        <div class="legend-details">
+                                            <span class="legend-title">Product B</span>
+                                            <span class="legend-desc">Oxygen gas.</span>
+                                        </div>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+
+                     <!-- Type 3: Single Displacement -->
+                     <div class="glass-panel reaction-card diagram-container" style="grid-column: 1 / -1;">
+                        <h3>3. Single Displacement</h3>
+                        <div class="reaction-formula">A + BC → AC + B</div>
+                        <p class="text-small">A more reactive element displaces a less reactive element from its compound.</p>
+                        
+                        <div class="diagram-layout">
+                            <div class="diagram-visual">
+                                <svg viewBox="0 0 300 100">
+                                    <path d="M125,50 L145,50 M140,45 L145,50 L140,55" stroke="rgba(255,255,255,0.3)" stroke-width="2" fill="none"/>
+                                    <path d="M60,50 L70,50 M65,45 L65,55" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+                                    <path d="M225,50 L235,50 M230,45 L230,55" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+                                    
+                                    <!-- A -->
+                                    <g class="marker" data-marker-id="sd-1" transform="translate(30,25)">
+                                        <circle class="marker-circle" cx="0" cy="0" r="10"/><text class="marker-text" x="0" y="1">1</text>
+                                    </g>
+                                    <circle cx="30" cy="50" r="15" fill="url(#atomMagenta)" filter="url(#shadow)"/>
+                                    
+                                    <!-- BC -->
+                                    <g class="marker" data-marker-id="sd-2" transform="translate(100,25)">
+                                        <circle class="marker-circle" cx="0" cy="0" r="10"/><text class="marker-text" x="0" y="1">2</text>
+                                    </g>
+                                    <rect x="95" y="47" width="10" height="6" fill="rgba(255,255,255,0.5)"/>
+                                    <circle cx="90" cy="50" r="15" fill="url(#atomCyan)" filter="url(#shadow)"/>
+                                    <circle cx="110" cy="50" r="15" fill="url(#atomYellow)" filter="url(#shadow)"/>
+                                    
+                                    <!-- AC -->
+                                    <g class="marker" data-marker-id="sd-3" transform="translate(185,25)">
+                                        <circle class="marker-circle" cx="0" cy="0" r="10"/><text class="marker-text" x="0" y="1">3</text>
+                                    </g>
+                                    <rect x="180" y="47" width="10" height="6" fill="rgba(255,255,255,0.5)"/>
+                                    <circle cx="175" cy="50" r="15" fill="url(#atomMagenta)" filter="url(#shadow)"/>
+                                    <circle cx="195" cy="50" r="15" fill="url(#atomYellow)" filter="url(#shadow)"/>
+
+                                    <!-- B -->
+                                    <g class="marker" data-marker-id="sd-4" transform="translate(260,25)">
+                                        <circle class="marker-circle" cx="0" cy="0" r="10"/><text class="marker-text" x="0" y="1">4</text>
+                                    </g>
+                                    <circle cx="260" cy="50" r="15" fill="url(#atomCyan)" filter="url(#shadow)"/>
+                                </svg>
+                            </div>
+                            <div class="diagram-legend-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; width: 100%;">
+                                <ul class="legend-list" style="grid-column: span 1;">
+                                    <li class="legend-item" data-marker-id="sd-1">
+                                        <div class="legend-badge">1</div><div class="legend-details"><span class="legend-title">Element A</span><span class="legend-desc">Active metal (Iron).</span></div>
+                                    </li>
+                                    <li class="legend-item" data-marker-id="sd-2">
+                                        <div class="legend-badge">2</div><div class="legend-details"><span class="legend-title">Compound BC</span><span class="legend-desc">Copper Sulfate.</span></div>
+                                    </li>
+                                </ul>
+                                <ul class="legend-list" style="grid-column: span 1;">
+                                    <li class="legend-item" data-marker-id="sd-3">
+                                        <div class="legend-badge">3</div><div class="legend-details"><span class="legend-title">Compound AC</span><span class="legend-desc">Iron Sulfate (New).</span></div>
+                                    </li>
+                                    <li class="legend-item" data-marker-id="sd-4">
+                                        <div class="legend-badge">4</div><div class="legend-details"><span class="legend-title">Element B</span><span class="legend-desc">Kicked out (Copper).</span></div>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: WORKING MECHANISM (MANDATORY) -->
+        <section id="mechanism">
+            <div class="glass-panel">
+                <h2>Mechanism: How Bonds Break & Form</h2>
+                <p>A chemical reaction isn't instant. It is a <span class="highlight">linear sequence</span> driven by kinetics. Molecules must collide with enough force (Activation Energy) to break existing bonds before new ones can form.</p>
+                
+                <div id="mechanism-container">
+                    
+                    <!-- Visual Area -->
+                    <div class="mech-visual-area">
+                        <canvas id="mech-canvas"></canvas>
+                        <div class="mech-controls">
+                            <button class="btn" id="btn-prev">Prev</button>
+                            <button class="btn" id="btn-play">Auto-Play</button>
+                            <button class="btn" id="btn-next">Next</button>
+                        </div>
+                    </div>
+
+                    <!-- Text Area -->
+                    <div class="mech-info">
+                        <div>
+                            <div class="stage-indicator">
+                                <div class="stage-dot active" id="dot-0"></div>
+                                <div class="stage-dot" id="dot-1"></div>
+                                <div class="stage-dot" id="dot-2"></div>
+                                <div class="stage-dot" id="dot-3"></div>
+                            </div>
+                            <div class="stage-content" id="stage-content">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: INTERACTIVE SIMULATION -->
+        <section id="simulation">
+            <div class="glass-panel">
+                <h2>Reaction Chamber Simulator</h2>
+                <p>Observe how <span class="highlight">Temperature</span> affects reaction rate. Higher heat means faster moving particles, leading to more frequent and energetic collisions (increasing successful combinations).</p>
+                
+                <div class="sim-layout">
+                    <!-- Controls -->
+                    <div class="sim-controls">
+                        <div class="control-group">
+                            <label>System Temperature</label>
+                            <input type="range" id="sim-temp" min="1" max="10" value="3">
+                            <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-muted);">
+                                <span>Cold</span><span>Hot</span>
+                            </div>
+                        </div>
+                        <div class="control-group" style="margin-top: 1rem;">
+                            <label>Reaction State</label>
+                            <div style="display:flex; gap: 10px;">
+                                <div style="width:15px; height:15px; border-radius:50%; background:var(--atom-b);"></div> + 
+                                <div style="width:15px; height:15px; border-radius:50%; background:var(--atom-a);"></div> →
+                                <div style="width:30px; height:15px; border-radius:7.5px; background:linear-gradient(90deg, var(--atom-b), var(--atom-a));"></div>
+                            </div>
+                        </div>
+                        <button class="btn" id="sim-reset" style="margin-top:auto;">Flush Chamber (Reset)</button>
+                    </div>
+
+                    <!-- Visual -->
+                    <div class="sim-view">
+                        <canvas id="sim-canvas"></canvas>
+                        <div class="sim-overlay" id="sim-stats">Yield: 0%</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 5: REAL WORLD -->
+        <section id="applications">
+            <h2>Everyday Chemistry</h2>
+            <div class="grid-3">
+                <div class="glass-panel" style="text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">🔥</div>
+                    <h3>Combustion</h3>
+                    <p class="text-small">Car engines and campfires rely on oxygen reacting rapidly with fuel to release heat and light.</p>
+                </div>
+                <div class="glass-panel" style="text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">🧲</div>
+                    <h3>Oxidation (Rust)</h3>
+                    <p class="text-small">A slow synthesis reaction where iron exposed to water and oxygen forms iron oxide.</p>
+                </div>
+                <div class="glass-panel" style="text-align: center;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">💊</div>
+                    <h3>Neutralization</h3>
+                    <p class="text-small">Antacid tablets (base) react with stomach acid to form harmless water and salt, curing heartburn.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        /**
+         * UTILITIES
+         */
+        const Utils = {
+            dist: (x1, y1, x2, y2) => Math.sqrt((x2-x1)**2 + (y2-y1)**2),
+            lerp: (start, end, amt) => (1-amt)*start + amt*end,
+            setupCanvas: (canvasId) => {
+                const canvas = document.getElementById(canvasId);
+                const ctx = canvas.getContext('2d');
+                const resize = () => {
+                    const rect = canvas.parentElement.getBoundingClientRect();
+                    const dpr = window.devicePixelRatio || 1;
+                    canvas.width = rect.width * dpr;
+                    canvas.height = rect.height * dpr;
+                    ctx.scale(dpr, dpr);
+                    canvas.style.width = `${rect.width}px`;
+                    canvas.style.height = `${rect.height}px`;
+                    return { w: rect.width, h: rect.height };
+                };
+                return { canvas, ctx, resize };
+            }
+        };
+
+        /**
+         * 1. DIAGRAM LEGENDS LOGIC (Mandatory Requirement)
+         */
+        const initLegends = () => {
+            const containers = document.querySelectorAll('.diagram-container');
+            
+            containers.forEach(container => {
+                const markers = container.querySelectorAll('.marker');
+                const listItems = container.querySelectorAll('.legend-item');
+                
+                const activate = (id) => {
+                    markers.forEach(m => m.dataset.markerId === id ? m.classList.add('active') : m.classList.remove('active'));
+                    listItems.forEach(l => l.dataset.markerId === id ? l.classList.add('active') : l.classList.remove('active'));
+                };
+                const deactivateAll = () => {
+                    markers.forEach(m => m.classList.remove('active'));
+                    listItems.forEach(l => l.classList.remove('active'));
+                }
+
+                // Mouse events
+                markers.forEach(m => {
+                    m.addEventListener('mouseenter', () => activate(m.dataset.markerId));
+                    m.addEventListener('mouseleave', deactivateAll);
+                });
+                listItems.forEach(l => {
+                    l.addEventListener('mouseenter', () => activate(l.dataset.markerId));
+                    l.addEventListener('mouseleave', deactivateAll);
+                });
+
+                // Touch events for mobile
+                markers.forEach(m => m.addEventListener('touchstart', (e) => { e.preventDefault(); activate(m.dataset.markerId); }, {passive: false}));
+                listItems.forEach(l => l.addEventListener('touchstart', (e) => { e.preventDefault(); activate(l.dataset.markerId); }, {passive: false}));
+            });
+        };
+
+        /**
+         * 2. AMBIENT BACKGROUND
+         */
+        const AmbientBg = (() => {
+            let config, particles = [];
+            
+            const init = () => {
+                config = Utils.setupCanvas('ambient-canvas');
+                window.addEventListener('resize', onResize);
+                window.addEventListener('orientationchange', onResize);
+                onResize();
+                createParticles();
+                requestAnimationFrame(draw);
+            };
+
+            const onResize = () => { config.size = config.resize(); };
+            
+            const createParticles = () => {
+                particles = [];
+                const count = window.innerWidth < 768 ? 20 : 50; // Less on mobile
+                for(let i=0; i<count; i++) {
+                    particles.push({
+                        x: Math.random() * window.innerWidth,
+                        y: Math.random() * window.innerHeight,
+                        r: Math.random() * 2 + 1,
+                        vx: (Math.random() - 0.5) * 0.5,
+                        vy: (Math.random() - 0.5) * 0.5,
+                        alpha: Math.random() * 0.5 + 0.1
+                    });
+                }
+            };
+
+            const draw = () => {
+                if(!config.size) return;
+                config.ctx.clearRect(0, 0, config.size.w, config.size.h);
+                
+                particles.forEach(p => {
+                    p.x += p.vx; p.y += p.vy;
+                    if(p.x < 0 || p.x > config.size.w) p.vx *= -1;
+                    if(p.y < 0 || p.y > config.size.h) p.vy *= -1;
+                    
+                    config.ctx.beginPath();
+                    config.ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                    config.ctx.fillStyle = `rgba(0, 229, 255, ${p.alpha})`;
+                    config.ctx.fill();
+                });
+                requestAnimationFrame(draw);
+            };
+
+            return { init };
+        })();
+
+        /**
+         * 3. WORKING MECHANISM (Stage-by-stage Sequence)
+         */
+        const Mechanism = (() => {
+            let config;
+            let currentStage = 0;
+            let progress = 0; // 0.0 to 1.0 within a stage
+            let isPlaying = false;
+            let lastTime = 0;
+            let animationFrame;
+
+            const stagesData = [
+                { title: "1. Approach", desc: "Reactant molecules drift randomly. They must collide with the correct orientation.", in: "A, B", out: "None" },
+                { title: "2. Collision", desc: "Impact! The kinetic energy of the collision is converted into internal energy.", in: "Kinetic Energy", out: "Heat" },
+                { title: "3. Transition State", desc: "Activation energy is reached. Old bonds stretch and weaken, new bonds begin to form.", in: "Unstable Complex", out: "Bond Swap" },
+                { title: "4. Products Form", desc: "New stable bonds solidify. The newly formed molecules separate.", in: "New Bonds", out: "Molecule AB" }
+            ];
+
+            const colors = { H: '#00e5ff', Cl: '#ff007f' };
+
+            const init = () => {
+                config = Utils.setupCanvas('mech-canvas');
+                window.addEventListener('resize', () => { config.size = config.resize(); draw(); });
+                config.size = config.resize();
+                
+                document.getElementById('btn-next').addEventListener('click', () => setStage(currentStage + 1));
+                document.getElementById('btn-prev').addEventListener('click', () => setStage(currentStage - 1));
+                document.getElementById('btn-play').addEventListener('click', togglePlay);
+                
+                updateDOM();
+                draw();
+            };
+
+            const togglePlay = () => {
+                isPlaying = !isPlaying;
+                const btn = document.getElementById('btn-play');
+                btn.textContent = isPlaying ? "Pause" : "Auto-Play";
+                btn.classList.toggle('active', isPlaying);
+                if(isPlaying) {
+                    lastTime = performance.now();
+                    loop(lastTime);
+                } else {
+                    cancelAnimationFrame(animationFrame);
+                }
+            };
+
+            const setStage = (idx) => {
+                if(idx < 0 || idx > 3) return;
+                currentStage = idx;
+                progress = 0;
+                updateDOM();
+                draw();
+            };
+
+            const updateDOM = () => {
+                document.getElementById('btn-prev').disabled = currentStage === 0;
+                document.getElementById('btn-next').disabled = currentStage === 3;
+                
+                for(let i=0; i<4; i++) {
+                    document.getElementById(`dot-${i}`).classList.toggle('active', i === currentStage);
+                }
+                
+                const d = stagesData[currentStage];
+                document.getElementById('stage-content').innerHTML = `
+                    <h3 class="stage-title">${d.title}</h3>
+                    <p style="color: #fff;">${d.desc}</p>
+                    <div class="stage-meta">
+                        <div class="meta-item">Input: <span>${d.in}</span></div>
+                        <div class="meta-item">Output: <span>${d.out}</span></div>
+                    </div>
+                `;
+            };
+
+            const drawAtom = (ctx, x, y, radius, colorStr) => {
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI*2);
+                ctx.fillStyle = colorStr;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = colorStr;
+                ctx.fill();
+                ctx.shadowBlur = 0; // reset
+            };
+
+            const loop = (time) => {
+                if(!isPlaying) return;
+                const dt = time - lastTime;
+                lastTime = time;
+                
+                progress += dt * 0.001; // 1 second per stage
+                if(progress >= 1.0) {
+                    progress = 0;
+                    if(currentStage < 3) {
+                        currentStage++;
+                        updateDOM();
+                    } else {
+                        currentStage = 0; // loop
+                        updateDOM();
+                    }
+                }
+                draw();
+                animationFrame = requestAnimationFrame(loop);
+            };
+
+            const draw = () => {
+                if(!config.size) return;
+                const {ctx, size: {w, h}} = config;
+                ctx.clearRect(0, 0, w, h);
+                
+                const cx = w/2, cy = h/2;
+                let atomRadius = Math.min(w, h) * 0.08;
+                
+                // Logic based on stage and progress
+                // Let's model A2 + B2 -> 2AB  (e.g., H2 + Cl2 -> 2HCl)
+                
+                let dist = w * 0.4; // starting distance
+                let p = progress;
+                
+                if(currentStage === 0) {
+                    // Approach: far to near
+                    let currentDist = Utils.lerp(dist, atomRadius*2.5, p);
+                    
+                    // Left molecule (A2)
+                    drawAtom(ctx, cx - currentDist, cy - atomRadius*0.8, atomRadius, colors.H);
+                    drawAtom(ctx, cx - currentDist, cy + atomRadius*0.8, atomRadius, colors.H);
+                    // Right molecule (B2)
+                    drawAtom(ctx, cx + currentDist, cy - atomRadius*0.8, atomRadius, colors.Cl);
+                    drawAtom(ctx, cx + currentDist, cy + atomRadius*0.8, atomRadius, colors.Cl);
+                } 
+                else if (currentStage === 1) {
+                    // Collision: hit and squeeze
+                    let squeeze = Math.sin(p * Math.PI) * (atomRadius * 0.2);
+                    let baseDist = atomRadius*2.5;
+                    let currentDist = Utils.lerp(baseDist, atomRadius*2, p);
+                    
+                    // Left
+                    drawAtom(ctx, cx - currentDist + squeeze, cy - atomRadius*0.8, atomRadius, colors.H);
+                    drawAtom(ctx, cx - currentDist + squeeze, cy + atomRadius*0.8, atomRadius, colors.H);
+                    // Right
+                    drawAtom(ctx, cx + currentDist - squeeze, cy - atomRadius*0.8, atomRadius, colors.Cl);
+                    drawAtom(ctx, cx + currentDist - squeeze, cy + atomRadius*0.8, atomRadius, colors.Cl);
+                    
+                    // Flash effect on peak collision
+                    if(p > 0.4 && p < 0.6) {
+                        ctx.beginPath();
+                        ctx.arc(cx, cy, atomRadius*3, 0, Math.PI*2);
+                        ctx.fillStyle = `rgba(255, 255, 255, ${Math.sin(p*Math.PI)})`;
+                        ctx.fill();
+                    }
+                }
+                else if (currentStage === 2) {
+                    // Transition: form square complex, lines fade
+                    let yDist = atomRadius*0.8;
+                    let xDist = atomRadius*2;
+                    
+                    // Top pair forming
+                    ctx.beginPath(); ctx.moveTo(cx-xDist, cy-yDist); ctx.lineTo(cx+xDist, cy-yDist);
+                    ctx.strokeStyle = `rgba(255,255,255,${p})`; ctx.lineWidth = 4; ctx.stroke();
+                    
+                    // Bottom pair forming
+                    ctx.beginPath(); ctx.moveTo(cx-xDist, cy+yDist); ctx.lineTo(cx+xDist, cy+yDist);
+                    ctx.stroke();
+
+                    drawAtom(ctx, cx - xDist, cy - yDist, atomRadius, colors.H);
+                    drawAtom(ctx, cx - xDist, cy + yDist, atomRadius, colors.H);
+                    drawAtom(ctx, cx + xDist, cy - yDist, atomRadius, colors.Cl);
+                    drawAtom(ctx, cx + xDist, cy + yDist, atomRadius, colors.Cl);
+                }
+                else if (currentStage === 3) {
+                    // Products Form: separate top and bottom
+                    let yDist = Utils.lerp(atomRadius*0.8, h*0.3, p);
+                    let xDist = atomRadius*1.5;
+                    
+                    // Top Molecule (HCl)
+                    drawAtom(ctx, cx - xDist/2, cy - yDist, atomRadius, colors.H);
+                    drawAtom(ctx, cx + xDist/2, cy - yDist, atomRadius, colors.Cl);
+                    
+                    // Bottom Molecule (HCl)
+                    drawAtom(ctx, cx - xDist/2, cy + yDist, atomRadius, colors.H);
+                    drawAtom(ctx, cx + xDist/2, cy + yDist, atomRadius, colors.Cl);
+                }
+            };
+
+            return { init };
+        })();
+
+
+        /**
+         * 4. INTERACTIVE SIMULATOR (Reaction Chamber)
+         */
+        const Simulator = (() => {
+            let config, atoms = [];
+            let temp = 3; // 1 to 10
+            let yieldCount = 0;
+            const TOTAL = 40;
+
+            const TYPES = { A: 0, B: 1, AB: 2 };
+            const COLORS = { 
+                [TYPES.A]: '#00e5ff', 
+                [TYPES.B]: '#ff007f', 
+                [TYPES.AB]: '#b800e6' // Purple for compound
+            };
+
+            const init = () => {
+                config = Utils.setupCanvas('sim-canvas');
+                window.addEventListener('resize', onResize);
+                
+                document.getElementById('sim-temp').addEventListener('input', (e) => {
+                    temp = parseInt(e.target.value);
+                    updateVelocities();
+                });
+                
+                document.getElementById('sim-reset').addEventListener('click', reset);
+                
+                onResize();
+                reset();
+                requestAnimationFrame(loop);
+            };
+
+            const onResize = () => { config.size = config.resize(); };
+
+            const reset = () => {
+                atoms = [];
+                yieldCount = 0;
+                if(!config.size) return;
+                const radius = window.innerWidth < 768 ? 5 : 8;
+                
+                for(let i=0; i<TOTAL; i++) {
+                    const type = i % 2 === 0 ? TYPES.A : TYPES.B;
+                    atoms.push({
+                        x: Math.random() * (config.size.w - radius*2) + radius,
+                        y: Math.random() * (config.size.h - radius*2) + radius,
+                        vx: (Math.random() - 0.5) * temp * 0.5,
+                        vy: (Math.random() - 0.5) * temp * 0.5,
+                        r: radius,
+                        type: type
+                    });
+                }
+                updateStats();
+            };
+
+            const updateVelocities = () => {
+                const speedMult = temp * 0.5;
+                atoms.forEach(a => {
+                    // Normalize and multiply by new temp
+                    const currentSpeed = Math.sqrt(a.vx*a.vx + a.vy*a.vy);
+                    if(currentSpeed > 0) {
+                        a.vx = (a.vx / currentSpeed) * speedMult;
+                        a.vy = (a.vy / currentSpeed) * speedMult;
+                    }
+                });
+            };
+
+            const checkCollisions = () => {
+                for(let i=0; i<atoms.length; i++) {
+                    for(let j=i+1; j<atoms.length; j++) {
+                        let a = atoms[i], b = atoms[j];
+                        let dx = b.x - a.x;
+                        let dy = b.y - a.y;
+                        let dist = Math.sqrt(dx*dx + dy*dy);
+                        
+                        if(dist < a.r + b.r) {
+                            // Basic Elastic Collision response (visual only)
+                            let nx = dx/dist, ny = dy/dist;
+                            let p = 2 * (a.vx*nx + a.vy*ny - b.vx*nx - b.vy*ny) / 2;
+                            a.vx -= p * nx; a.vy -= p * ny;
+                            b.vx += p * nx; b.vy += p * ny;
+                            
+                            // Prevent sticking
+                            let overlap = (a.r + b.r - dist) / 2;
+                            a.x -= overlap * nx; a.y -= overlap * ny;
+                            b.x += overlap * nx; b.y += overlap * ny;
+
+                            // Reaction Logic: A + B -> AB if temp is high enough
+                            // Higher temp = higher probability of reaction
+                            if(a.type !== b.type && a.type !== TYPES.AB && b.type !== TYPES.AB) {
+                                // Reaction probability scales with temperature (temp is 1-10)
+                                let probability = temp * 0.02; // max 20% chance per frame on collision at max temp
+                                if(Math.random() < probability) {
+                                    // Fuse them!
+                                    a.type = TYPES.AB;
+                                    a.r = a.r * 1.4; // Slightly bigger
+                                    
+                                    // Calculate momentum conserving velocity for compound
+                                    a.vx = (a.vx + b.vx) / 2;
+                                    a.vy = (a.vy + b.vy) / 2;
+
+                                    // Remove atom b
+                                    atoms.splice(j, 1);
+                                    j--; // adjust index after removal
+                                    yieldCount++;
+                                    updateStats();
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            const updateStats = () => {
+                const percentage = Math.round((yieldCount / (TOTAL/2)) * 100);
+                document.getElementById('sim-stats').innerText = `Yield: ${percentage}%`;
+            };
+
+            const loop = () => {
+                if(!config.size) return requestAnimationFrame(loop);
+                const {ctx, size: {w, h}} = config;
+                
+                // Trail effect
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                ctx.fillRect(0, 0, w, h);
+                
+                checkCollisions();
+
+                atoms.forEach(a => {
+                    // Bounds
+                    if(a.x - a.r < 0) { a.x = a.r; a.vx *= -1; }
+                    if(a.x + a.r > w) { a.x = w - a.r; a.vx *= -1; }
+                    if(a.y - a.r < 0) { a.y = a.r; a.vy *= -1; }
+                    if(a.y + a.r > h) { a.y = h - a.r; a.vy *= -1; }
+                    
+                    a.x += a.vx;
+                    a.y += a.vy;
+                    
+                    ctx.beginPath();
+                    ctx.arc(a.x, a.y, a.r, 0, Math.PI*2);
+                    ctx.fillStyle = COLORS[a.type];
+                    
+                    // Glow for compounds
+                    if(a.type === TYPES.AB) {
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = COLORS[a.type];
+                    } else {
+                        ctx.shadowBlur = 0;
+                    }
+                    
+                    ctx.fill();
+                });
+                
+                requestAnimationFrame(loop);
+            };
+
+            return { init };
+        })();
+
+
+        /**
+         * BOOTSTRAP
+         */
+        window.addEventListener('DOMContentLoaded', () => {
+            initLegends();
+            AmbientBg.init();
+            Mechanism.init();
+            Simulator.init();
+        });
+
+    </script>
+</body>
+</html>

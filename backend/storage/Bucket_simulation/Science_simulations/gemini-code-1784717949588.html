@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Thermodynamics: Heat Transfer</title>
+    <style>
+        /* ==========================================================================
+           ROOT VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-dark: #05060A;
+            --bg-panel: rgba(15, 17, 26, 0.6);
+            --bg-panel-hover: rgba(25, 28, 42, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            
+            --heat-primary: #FF3B00;
+            --heat-secondary: #FF9100;
+            --heat-glow: rgba(255, 59, 0, 0.4);
+            
+            --cold-primary: #00E5FF;
+            --cold-secondary: #0077FF;
+            --cold-glow: rgba(0, 229, 255, 0.4);
+            
+            --text-main: #FFFFFF;
+            --text-muted: #8E9BB0;
+            --text-accent: #FFD166;
+
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+
+            --space-xs: clamp(4px, 1vw, 8px);
+            --space-sm: clamp(8px, 1.5vw, 16px);
+            --space-md: clamp(16px, 2.5vw, 24px);
+            --space-lg: clamp(24px, 4vw, 40px);
+            --space-xl: clamp(40px, 6vw, 64px);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(255, 59, 0, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(0, 229, 255, 0.03) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Typography (Fluid) */
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+        h2 { font-size: clamp(1.8rem, 3.5vw, 3rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: var(--space-md); }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.8rem); font-weight: 600; margin-bottom: var(--space-sm); color: var(--text-accent); }
+        p { font-size: clamp(0.95rem, 1.2vw, 1.1rem); color: var(--text-muted); margin-bottom: var(--space-md); font-weight: 400; }
+        .caption { font-size: clamp(0.8rem, 1vw, 0.9rem); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
+
+        .text-gradient-heat {
+            background: linear-gradient(135deg, var(--heat-secondary), var(--heat-primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ==========================================================================
+           LAYOUT & GLASSMORPHISM
+           ========================================================================== */
+        .app-container {
+            width: 100%;
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: var(--space-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xl);
+        }
+
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(10px); /* Perf optimization */
+                -webkit-backdrop-filter: blur(10px);
+                padding: var(--space-md);
+                border-radius: var(--radius-md);
+            }
+            .app-container { padding: var(--space-md); gap: var(--space-lg); }
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-lg);
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-md);
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* ==========================================================================
+           COMPONENTS: LABELS & MARKERS (STRICT NO-OVERLAP PATTERN)
+           ========================================================================== */
+        .diagram-layout {
+            display: flex;
+            gap: var(--space-md);
+            align-items: stretch;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            padding: var(--space-sm);
+        }
+        
+        @media (max-width: 1024px) {
+            .diagram-layout { flex-direction: column; }
+        }
+
+        .diagram-visual {
+            flex: 2;
+            position: relative;
+            min-height: 300px; /* Guaranteed minimum height */
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            background: #000;
+        }
+
+        .diagram-legend {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+            justify-content: center;
+            min-width: 250px;
+        }
+
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--bg-panel);
+            border: 2px solid var(--text-main);
+            color: var(--text-main);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(0,0,0,0.8);
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .marker::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.3);
+            animation: pulse 2s infinite;
+            pointer-events: none;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-sm);
+            padding: var(--space-sm);
+            border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item .badge {
+            width: 24px;
+            height: 24px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .legend-item .details h4 { font-size: 1rem; color: var(--text-main); margin-bottom: 2px; }
+        .legend-item .details p { font-size: 0.85rem; margin: 0; }
+
+        /* Hover/Active states mapped via JS */
+        .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--heat-primary);
+            border-color: var(--text-main);
+            box-shadow: 0 0 20px var(--heat-glow);
+        }
+        .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.2);
+            transform: translateX(5px);
+        }
+        .legend-item.active .badge {
+            background: var(--heat-primary);
+            color: #000;
+        }
+
+        /* ==========================================================================
+           COMPONENTS: WORKING SECTION (STAGE-BY-STAGE)
+           ========================================================================== */
+        .working-section {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .working-display {
+            position: relative;
+            width: 100%;
+            height: 45vh;
+            min-height: 350px;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #020204;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .stage-info {
+            position: absolute;
+            top: var(--space-md);
+            left: var(--space-md);
+            right: var(--space-md);
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .stage-badge {
+            display: inline-block;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: var(--heat-primary);
+            font-weight: 600;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stage-title {
+            font-size: clamp(1.2rem, 2vw, 1.8rem);
+            font-weight: 700;
+            margin-bottom: 4px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+        }
+
+        .stage-desc {
+            font-size: clamp(0.9rem, 1.2vw, 1.1rem);
+            max-width: 600px;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+            color: rgba(255,255,255,0.9);
+        }
+
+        .controls-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.3);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-md);
+            gap: var(--space-md);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+            flex: 1;
+            justify-content: center;
+        }
+
+        .dot {
+            width: 32px;
+            height: 4px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .dot.active { background: var(--heat-primary); box-shadow: 0 0 10px var(--heat-glow); }
+
+        .btn-group { display: flex; gap: 8px; }
+
+        button {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white;
+            padding: 10px 16px;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover { background: rgba(255,255,255,0.2); transform: translateY(-1px); }
+        button:active { transform: translateY(1px); }
+        button.primary { background: var(--heat-primary); color: #000; border: none; box-shadow: 0 4px 15px var(--heat-glow); }
+        button.primary:hover { background: var(--heat-secondary); }
+
+        /* ==========================================================================
+           INTERACTIVE LAB COMPONENTS
+           ========================================================================== */
+        .control-group { margin-bottom: var(--space-md); }
+        .control-header { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-muted); }
+        
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px; width: 24px;
+            border-radius: 50%;
+            background: var(--text-main);
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            border: 2px solid #000;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: linear-gradient(90deg, var(--cold-primary), var(--heat-primary));
+            border-radius: 2px;
+        }
+
+        /* Material selector */
+        .selector {
+            display: flex; gap: 8px;
+            background: rgba(0,0,0,0.3);
+            padding: 4px; border-radius: var(--radius-sm);
+        }
+        .selector-item {
+            flex: 1; text-align: center; padding: 8px;
+            border-radius: 6px; cursor: pointer;
+            font-size: 0.9rem; font-weight: 600; color: var(--text-muted);
+            transition: all 0.2s;
+        }
+        .selector-item.active { background: rgba(255,255,255,0.1); color: var(--text-main); }
+
+        /* ==========================================================================
+           ANIMATIONS & EFFECTS
+           ========================================================================== */
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.5; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .hero-graphic {
+            width: 100%; height: 40vh; min-height: 300px;
+            position: relative; border-radius: var(--radius-lg);
+            overflow: hidden; background: radial-gradient(circle at center, #1a1525 0%, #05060A 100%);
+            border: 1px solid var(--glass-border);
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .fact-card {
+            background: linear-gradient(135deg, rgba(255,209,102,0.1) 0%, rgba(255,59,0,0.05) 100%);
+            border-left: 4px solid var(--text-accent);
+            padding: var(--space-md);
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    
+    <!-- HEADER -->
+    <header style="text-align: center; padding-top: var(--space-md);">
+        <p class="caption text-gradient-heat">Premium Simulation Module</p>
+        <h1>Heat Transfer</h1>
+        <p style="max-width: 600px; margin: var(--space-sm) auto; font-size: 1.2rem;">
+            Discover how thermal energy moves through the universe via Conduction, Convection, and Radiation.
+        </p>
+    </header>
+
+    <!-- HERO VISUAL -->
+    <section class="glass-panel" style="padding: 0;">
+        <div class="hero-graphic" id="hero-container">
+            <canvas id="hero-canvas"></canvas>
+            <div style="position: absolute; text-align: center; pointer-events: none;">
+                <h2 style="margin:0; text-shadow: 0 4px 20px rgba(0,0,0,0.8);">Energy in Motion</h2>
+                <p style="margin:0; color: rgba(255,255,255,0.7);">From atomic vibrations to electromagnetic waves.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 1: CONDUCTION -->
+    <section class="glass-panel">
+        <h2 class="text-gradient-heat">1. Conduction</h2>
+        <p>The transfer of heat through direct contact within a solid material. Heat causes atoms to vibrate rapidly, transferring kinetic energy to adjacent, cooler atoms through continuous collisions.</p>
+        
+        <!-- COMPONENTS WITH MARKERS -->
+        <h3>Anatomy of Conduction</h3>
+        <div class="diagram-layout">
+            <div class="diagram-visual" id="cond-components">
+                <canvas id="cond-comp-canvas"></canvas>
+                <!-- Markers added dynamically via JS -->
+            </div>
+            <div class="diagram-legend" id="cond-legend">
+                <!-- Legend items added dynamically via JS -->
+            </div>
+        </div>
+
+        <div style="height: var(--space-lg);"></div>
+
+        <!-- WORKING MECHANISM -->
+        <h3>Working Mechanism: Molecular Scale</h3>
+        <div class="working-section" id="ws-conduction">
+            <div class="working-display">
+                <canvas id="cond-working-canvas"></canvas>
+                <div class="stage-info">
+                    <div class="stage-badge" id="cond-badge">Stage 1/4</div>
+                    <div class="stage-title" id="cond-title">Thermal Equilibrium</div>
+                    <div class="stage-desc" id="cond-desc">Atoms vibrate slightly at ambient temperature. No net heat flow occurs.</div>
+                </div>
+            </div>
+            <div class="controls-bar">
+                <button id="cond-prev">◄ Prev</button>
+                <div class="progress-dots" id="cond-dots">
+                    <div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                </div>
+                <div class="btn-group">
+                    <button id="cond-next">Next ►</button>
+                    <button class="primary" id="cond-auto">Auto-Play</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- SECTION 2: CONVECTION -->
+    <section class="glass-panel">
+        <h2 class="text-gradient-heat" style="--heat-primary: #FF9100; --heat-secondary: #FFD166;">2. Convection</h2>
+        <p>The transfer of heat by the macroscopic movement of a fluid (liquid or gas). As fluid heats up, it expands, becomes less dense, and rises, while cooler, denser fluid sinks to replace it, creating a continuous cycle.</p>
+        
+        <!-- COMPONENTS WITH MARKERS -->
+        <h3>Convection Cell Architecture</h3>
+        <div class="diagram-layout">
+            <div class="diagram-visual" id="conv-components">
+                <canvas id="conv-comp-canvas"></canvas>
+            </div>
+            <div class="diagram-legend" id="conv-legend"></div>
+        </div>
+
+        <div style="height: var(--space-lg);"></div>
+
+        <!-- WORKING MECHANISM -->
+        <h3>Working Mechanism: Fluid Dynamics</h3>
+        <div class="working-section" id="ws-convection">
+            <div class="working-display">
+                <canvas id="conv-working-canvas"></canvas>
+                <div class="stage-info">
+                    <div class="stage-badge" id="conv-badge">Stage 1/4</div>
+                    <div class="stage-title" id="conv-title">Heat Application</div>
+                    <div class="stage-desc" id="conv-desc">Energy transfers to the bottom fluid layer.</div>
+                </div>
+            </div>
+            <div class="controls-bar">
+                <button id="conv-prev">◄ Prev</button>
+                <div class="progress-dots" id="conv-dots">
+                    <div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                </div>
+                <div class="btn-group">
+                    <button id="conv-next">Next ►</button>
+                    <button class="primary" id="conv-auto">Auto-Play</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION 3: RADIATION -->
+    <section class="glass-panel">
+        <h2 class="text-gradient-heat" style="--heat-primary: #FF0055; --heat-secondary: #FF00CC;">3. Radiation</h2>
+        <p>The transfer of energy via electromagnetic waves. Unlike conduction and convection, radiation requires no physical medium and can travel across the vacuum of space at the speed of light.</p>
+        
+        <!-- COMPONENTS WITH MARKERS -->
+        <h3>Electromagnetic Emission</h3>
+        <div class="diagram-layout">
+            <div class="diagram-visual" id="rad-components">
+                <canvas id="rad-comp-canvas"></canvas>
+            </div>
+            <div class="diagram-legend" id="rad-legend"></div>
+        </div>
+
+        <div style="height: var(--space-lg);"></div>
+
+        <!-- WORKING MECHANISM -->
+        <h3>Working Mechanism: Wave Propagation</h3>
+        <div class="working-section" id="ws-radiation">
+            <div class="working-display">
+                <canvas id="rad-working-canvas"></canvas>
+                <div class="stage-info">
+                    <div class="stage-badge" id="rad-badge">Stage 1/3</div>
+                    <div class="stage-title" id="rad-title">Photon Emission</div>
+                    <div class="stage-desc" id="rad-desc">Thermal energy agitates electrons, emitting infrared photons.</div>
+                </div>
+            </div>
+            <div class="controls-bar">
+                <button id="rad-prev">◄ Prev</button>
+                <div class="progress-dots" id="rad-dots">
+                    <div class="dot active"></div><div class="dot"></div><div class="dot"></div>
+                </div>
+                <div class="btn-group">
+                    <button id="rad-next">Next ►</button>
+                    <button class="primary" id="rad-auto">Auto-Play</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION LAB -->
+    <section class="glass-panel">
+        <h2>Interactive Thermodynamics Lab</h2>
+        <p>Adjust the parameters below to see how temperature and material properties affect the rate of heat transfer simultaneously.</p>
+        
+        <div class="grid-2">
+            <div class="diagram-visual" style="min-height: 400px;" id="lab-container">
+                <canvas id="lab-canvas"></canvas>
+            </div>
+            
+            <div style="display: flex; flex-direction: column; gap: var(--space-md); padding: var(--space-md); background: rgba(0,0,0,0.2); border-radius: var(--radius-md);">
+                
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Heat Source Temperature</span>
+                        <span id="lab-temp-val" class="text-gradient-heat">300°C</span>
+                    </div>
+                    <input type="range" id="lab-temp" min="0" max="1000" value="300">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header"><span>Conductor Material</span></div>
+                    <div class="selector" id="lab-mat-selector">
+                        <div class="selector-item active" data-val="copper">Copper (High k)</div>
+                        <div class="selector-item" data-val="steel">Steel (Med k)</div>
+                        <div class="selector-item" data-val="glass">Glass (Low k)</div>
+                    </div>
+                </div>
+
+                <div class="fact-card" style="margin-top: auto;">
+                    <strong>Observation:</strong> Watch how high temperature increases radiation intensity exponentially (Stefan-Boltzmann Law: E ∝ T⁴), while conduction is linear based on the material's thermal conductivity (k).
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SUMMARY GRID -->
+    <div class="grid-2">
+        <section class="glass-panel">
+            <h3>Real-World Applications</h3>
+            <ul style="list-style: none; padding:0; display:flex; flex-direction:column; gap:12px;">
+                <li style="display:flex; gap:12px; align-items:flex-start;">
+                    <div style="background:var(--heat-primary); padding:4px 8px; border-radius:4px; font-weight:bold; color:#000; font-size:0.8rem;">COND</div>
+                    <p style="margin:0; font-size:0.95rem;"><strong>Computer Heat Sinks:</strong> Copper/Aluminum draws heat away from CPUs.</p>
+                </li>
+                <li style="display:flex; gap:12px; align-items:flex-start;">
+                    <div style="background:var(--heat-secondary); padding:4px 8px; border-radius:4px; font-weight:bold; color:#000; font-size:0.8rem;">CONV</div>
+                    <p style="margin:0; font-size:0.95rem;"><strong>Ocean Currents:</strong> Massive underwater convection cells regulate global climate.</p>
+                </li>
+                <li style="display:flex; gap:12px; align-items:flex-start;">
+                    <div style="background:#FF0055; padding:4px 8px; border-radius:4px; font-weight:bold; color:#000; font-size:0.8rem;">RAD</div>
+                    <p style="margin:0; font-size:0.95rem;"><strong>Thermal Imaging:</strong> Cameras detect infrared radiation emitted by bodies.</p>
+                </li>
+            </ul>
+        </section>
+
+        <section class="glass-panel" style="border-color: rgba(255,59,0,0.3);">
+            <h3 style="color: #FF3B00;">Common Misconceptions</h3>
+            <div style="margin-bottom: 12px;">
+                <strong style="color:white;">❌ "Cold flows into the room."</strong><br>
+                <span style="font-size:0.9rem; color:var(--text-muted);">✅ Cold is just the absence of heat. Heat always flows from high to low energy. You lose heat to the outside.</span>
+            </div>
+            <div>
+                <strong style="color:white;">❌ "Heat rises."</strong><br>
+                <span style="font-size:0.9rem; color:var(--text-muted);">✅ Hot <em>fluids</em> rise due to buoyancy (convection). Heat itself transfers in all directions.</span>
+            </div>
+        </section>
+    </div>
+
+</div>
+
+<script>
+/**
+ * CORE GRAPHICS ENGINE & UTILS
+ * Handles responsive canvas sizing, Retina display support (DPR),
+ * and animation loops.
+ */
+const Utils = {
+    setupCanvas(canvasId) {
+        const canvas = document.getElementById(canvasId);
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const parent = canvas.parentElement;
+        
+        const resize = () => {
+            const rect = parent.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+            return { w: rect.width, h: rect.height };
+        };
+        
+        let size = resize();
+        window.addEventListener('resize', () => { size = resize(); });
+        
+        // Fill dark background by default
+        ctx.fillStyle = '#020204';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        return { canvas, ctx, getSize: () => size };
+    },
+    
+    colorLerp(color1, color2, factor) {
+        let result = color1.slice();
+        for (let i = 0; i < 3; i++) {
+            result[i] = Math.round(result[i] + factor * (color2[i] - color1[i]));
+        }
+        return `rgb(${result[0]}, ${result[1]}, ${result[2]})`;
+    },
+    
+    // Blue to Red gradient mapping
+    tempToColor(tempNorm) { // tempNorm 0.0 to 1.0
+        const cold = [0, 229, 255]; // Cyan
+        const warm = [255, 209, 102]; // Yellow
+        const hot = [255, 59, 0]; // Red
+        
+        if (tempNorm < 0.5) {
+            return this.colorLerp(cold, warm, tempNorm * 2);
+        } else {
+            return this.colorLerp(warm, hot, (tempNorm - 0.5) * 2);
+        }
+    }
+};
+
+/**
+ * INTERACTIVE LABEL SYSTEM MANAGER
+ * Guarantees no overlap by placing absolute markers over canvas,
+ * and normal document flow text beside/below it.
+ */
+class LabelSystem {
+    constructor(containerId, legendId, data) {
+        this.container = document.getElementById(containerId);
+        this.legendContainer = document.getElementById(legendId);
+        this.data = data;
+        this.build();
+    }
+
+    build() {
+        this.data.forEach((item, index) => {
+            const num = index + 1;
+            
+            // 1. Build Marker on Illustration
+            const marker = document.createElement('div');
+            marker.className = 'marker';
+            marker.textContent = num;
+            // Position using percentages so it scales with responsive container
+            marker.style.left = `${item.x}%`;
+            marker.style.top = `${item.y}%`;
+            this.container.appendChild(marker);
+
+            // 2. Build Legend Item
+            const legendItem = document.createElement('div');
+            legendItem.className = 'legend-item';
+            legendItem.innerHTML = `
+                <div class="badge">${num}</div>
+                <div class="details">
+                    <h4>${item.title}</h4>
+                    <p>${item.desc}</p>
+                </div>
+            `;
+            this.legendContainer.appendChild(legendItem);
+
+            // 3. Interaction logic
+            const activate = () => {
+                this.clearActive();
+                marker.classList.add('active');
+                legendItem.classList.add('active');
+            };
+
+            marker.addEventListener('mouseenter', activate);
+            marker.addEventListener('touchstart', (e) => { e.preventDefault(); activate(); });
+            legendItem.addEventListener('mouseenter', activate);
+        });
+    }
+
+    clearActive() {
+        const markers = this.container.querySelectorAll('.marker');
+        const items = this.legendContainer.querySelectorAll('.legend-item');
+        markers.forEach(m => m.classList.remove('active'));
+        items.forEach(i => i.classList.remove('active'));
+    }
+}
+
+/**
+ * WORKING SECTION CONTROLLER
+ * Manages Stage-by-Stage logic, UI updates, and bridges to Canvas renders
+ */
+class WorkingController {
+    constructor(config) {
+        this.stages = config.stages;
+        this.prefix = config.prefix;
+        this.currentStage = 0;
+        this.isAutoPlay = false;
+        this.timer = null;
+        this.onStageChange = config.onStageChange;
+
+        // UI Elements
+        this.ui = {
+            badge: document.getElementById(`${this.prefix}-badge`),
+            title: document.getElementById(`${this.prefix}-title`),
+            desc: document.getElementById(`${this.prefix}-desc`),
+            dots: document.getElementById(`${this.prefix}-dots`).children,
+            btnPrev: document.getElementById(`${this.prefix}-prev`),
+            btnNext: document.getElementById(`${this.prefix}-next`),
+            btnAuto: document.getElementById(`${this.prefix}-auto`),
+        };
+
+        this.bindEvents();
+        this.updateUI();
+    }
+
+    bindEvents() {
+        this.ui.btnPrev.addEventListener('click', () => { this.stopAuto(); this.prev(); });
+        this.ui.btnNext.addEventListener('click', () => { this.stopAuto(); this.next(); });
+        this.ui.btnAuto.addEventListener('click', () => this.toggleAuto());
+    }
+
+    setStage(index) {
+        this.currentStage = index;
+        if (this.currentStage >= this.stages.length) this.currentStage = 0;
+        if (this.currentStage < 0) this.currentStage = this.stages.length - 1;
+        this.updateUI();
+        if (this.onStageChange) this.onStageChange(this.currentStage);
+    }
+
+    next() { this.setStage(this.currentStage + 1); }
+    prev() { this.setStage(this.currentStage - 1); }
+
+    toggleAuto() {
+        this.isAutoPlay = !this.isAutoPlay;
+        if (this.isAutoPlay) {
+            this.ui.btnAuto.classList.add('active');
+            this.ui.btnAuto.textContent = '⏸ Pause';
+            this.ui.btnAuto.style.background = '#FF9100';
+            this.next();
+            this.timer = setInterval(() => this.next(), 4000); // 4s per stage
+        } else {
+            this.stopAuto();
+        }
+    }
+
+    stopAuto() {
+        this.isAutoPlay = false;
+        clearInterval(this.timer);
+        this.ui.btnAuto.textContent = 'Auto-Play';
+        this.ui.btnAuto.style.background = '';
+    }
+
+    updateUI() {
+        const s = this.stages[this.currentStage];
+        this.ui.badge.textContent = `Stage ${this.currentStage + 1}/${this.stages.length}`;
+        this.ui.title.textContent = s.title;
+        this.ui.desc.textContent = s.desc;
+        
+        Array.from(this.ui.dots).forEach((dot, i) => {
+            dot.classList.toggle('active', i === this.currentStage);
+        });
+    }
+}
+
+
+/* ==========================================================================
+   SIMULATION ENGINES (CANVAS)
+   ========================================================================== */
+
+/**
+ * CONDUCTION SIMULATION (Lattice of Atoms)
+ */
+class ConductionSim {
+    constructor(canvasId, mode = 'components') {
+        const setup = Utils.setupCanvas(canvasId);
+        this.ctx = setup.ctx;
+        this.getSize = setup.getSize;
+        this.mode = mode; // 'components', 'working', or 'lab'
+        
+        this.atoms = [];
+        this.cols = 15;
+        this.rows = 5;
+        this.time = 0;
+        this.heatFactor = 0; // 0 to 1
+        
+        this.stage = 0;
+        this.initGrid();
+        
+        requestAnimationFrame(this.render.bind(this));
+    }
+
+    initGrid() {
+        this.atoms = [];
+        for (let i = 0; i < this.cols; i++) {
+            for (let j = 0; j < this.rows; j++) {
+                this.atoms.push({
+                    c: i, r: j,
+                    temp: 0, // 0 = cold, 1 = hot
+                    phase: Math.random() * Math.PI * 2
+                });
+            }
+        }
+    }
+
+    updateLogic() {
+        // Mode logic overrides
+        if (this.mode === 'working') {
+            if (this.stage === 0) this.heatFactor = 0; // Cold
+            if (this.stage === 1) this.heatFactor = 0.2; // Heat applied left
+            if (this.stage === 2) this.heatFactor = 0.6; // Transferring
+            if (this.stage === 3) this.heatFactor = 1.0; // Eq
+        } else if (this.mode === 'components') {
+            this.heatFactor = 0.5; // Static gradient
+        }
+
+        // Simulate heat flow (left to right)
+        for (let i = 0; i < this.cols; i++) {
+            let targetTemp = 0;
+            if (this.mode === 'components') {
+                targetTemp = 1 - (i / this.cols);
+            } else {
+                // Working mode logic
+                if (i === 0) {
+                    targetTemp = this.heatFactor > 0 ? 1 : 0;
+                } else {
+                    // Propagate from left neighbor based on heatFactor time
+                    let delay = i * 0.1;
+                    targetTemp = Math.max(0, (this.heatFactor * 1.5) - delay);
+                    targetTemp = Math.min(1, targetTemp);
+                }
+            }
+
+            for (let j = 0; j < this.rows; j++) {
+                let a = this.atoms[i * this.rows + j];
+                // Smooth temp transition
+                a.temp += (targetTemp - a.temp) * 0.05;
+            }
+        }
+        this.time += 0.1;
+    }
+
+    render() {
+        const { w, h } = this.getSize();
+        this.ctx.fillStyle = '#020204';
+        this.ctx.fillRect(0, 0, w, h);
+        
+        this.updateLogic();
+
+        // Draw heat source (left wall)
+        if (this.mode !== 'components' && this.heatFactor > 0) {
+            const grad = this.ctx.createLinearGradient(0, 0, w*0.1, 0);
+            grad.addColorStop(0, 'rgba(255, 59, 0, 0.5)');
+            grad.addColorStop(1, 'rgba(255, 59, 0, 0)');
+            this.ctx.fillStyle = grad;
+            this.ctx.fillRect(0, 0, w*0.15, h);
+        }
+
+        // Draw lattice structure (lines)
+        const padX = w * 0.15;
+        const padY = h * 0.2;
+        const gridW = w - padX * 2;
+        const gridH = h - padY * 2;
+        const cellX = gridW / (this.cols - 1);
+        const cellY = gridH / (this.rows - 1);
+
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        
+        // Horizontal lines
+        for (let j = 0; j < this.rows; j++) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(padX, padY + j * cellY);
+            this.ctx.lineTo(w - padX, padY + j * cellY);
+            this.ctx.stroke();
+        }
+        // Vertical lines
+        for (let i = 0; i < this.cols; i++) {
+            this.ctx.beginPath();
+            this.ctx.moveTo(padX + i * cellX, padY);
+            this.ctx.lineTo(padX + i * cellX, h - padY);
+            this.ctx.stroke();
+        }
+
+        // Draw Atoms
+        for (let a of this.atoms) {
+            let basex = padX + a.c * cellX;
+            let basey = padY + a.r * cellY;
+            
+            // Vibration amplitude based on temp
+            let amp = a.temp * cellX * 0.3;
+            let speed = 1 + a.temp * 2;
+            let offX = Math.sin(this.time * speed + a.phase) * amp;
+            let offY = Math.cos(this.time * speed * 0.8 + a.phase) * amp;
+
+            let x = basex + offX;
+            let y = basey + offY;
+
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, Math.min(cellX, cellY) * 0.3, 0, Math.PI * 2);
+            this.ctx.fillStyle = Utils.tempToColor(a.temp);
+            this.ctx.fill();
+            
+            // Glow
+            if (a.temp > 0.5) {
+                this.ctx.shadowBlur = 10;
+                this.ctx.shadowColor = Utils.tempToColor(a.temp);
+                this.ctx.fill();
+                this.ctx.shadowBlur = 0;
+            }
+        }
+
+        requestAnimationFrame(this.render.bind(this));
+    }
+}
+
+
+/**
+ * CONVECTION SIMULATION (Fluid Particles in a vessel)
+ */
+class ConvectionSim {
+    constructor(canvasId, mode = 'components') {
+        const setup = Utils.setupCanvas(canvasId);
+        this.ctx = setup.ctx;
+        this.getSize = setup.getSize;
+        this.mode = mode;
+        
+        this.particles = [];
+        this.numParticles = window.innerWidth < 768 ? 150 : 300;
+        this.stage = 0;
+        
+        this.initParticles();
+        requestAnimationFrame(this.render.bind(this));
+    }
+
+    initParticles() {
+        for(let i=0; i<this.numParticles; i++) {
+            this.particles.push({
+                x: Math.random(), // normalized 0-1
+                y: Math.random(), // normalized 0-1
+                temp: 0.1,
+                vx: (Math.random()-0.5)*0.002,
+                vy: 0
+            });
+        }
+    }
+
+    updateLogic() {
+        const { w, h } = this.getSize();
+        
+        // Vessel bounds relative to canvas
+        const vW = w * 0.6;
+        const vH = h * 0.7;
+        const vX = (w - vW) / 2;
+        const vY = (h - vH) / 2;
+        
+        let heatActive = false;
+        let flowActive = false;
+        
+        if (this.mode === 'components') {
+            heatActive = true; flowActive = true;
+        } else if (this.mode === 'working') {
+            if (this.stage >= 0) heatActive = true;
+            if (this.stage >= 1) flowActive = true;
+        }
+
+        for (let p of this.particles) {
+            // Apply Heat at bottom center
+            let isBottomCenter = (p.y > 0.8 && p.x > 0.3 && p.x < 0.7);
+            if (heatActive && isBottomCenter) {
+                p.temp += 0.02;
+            } else {
+                p.temp -= 0.002; // ambient cooling
+            }
+            p.temp = Math.max(0, Math.min(1, p.temp));
+
+            // Physics (Buoyancy)
+            if (flowActive) {
+                // Hot fluid rises (negative y velocity)
+                let buoyancy = (p.temp - 0.3) * -0.005;
+                p.vy += buoyancy;
+                
+                // Friction/Damping
+                p.vy *= 0.95;
+                p.vx *= 0.95;
+
+                // Convection cell logic (push outward at top, inward at bottom)
+                if (p.y < 0.2) { // Top
+                    p.vx += (p.x < 0.5 ? -0.001 : 0.001);
+                }
+                if (p.y > 0.8) { // Bottom
+                    p.vx += (p.x < 0.5 ? 0.001 : -0.001);
+                }
+            }
+
+            p.x += p.vx;
+            p.y += p.vy;
+
+            // Boundaries
+            if (p.x < 0.05) { p.x = 0.05; p.vx *= -1; }
+            if (p.x > 0.95) { p.x = 0.95; p.vx *= -1; }
+            if (p.y < 0.05) { p.y = 0.05; p.vy *= -1; }
+            if (p.y > 0.95) { p.y = 0.95; p.vy *= -1; }
+        }
+    }
+
+    render() {
+        const { w, h } = this.getSize();
+        this.ctx.fillStyle = '#020204';
+        this.ctx.fillRect(0, 0, w, h);
+        
+        this.updateLogic();
+
+        const vW = w * 0.6;
+        const vH = h * 0.7;
+        const vX = (w - vW) / 2;
+        const vY = (h - vH) / 2;
+
+        // Draw heat source glow
+        if (this.mode === 'components' || this.stage >= 0) {
+            const glow = this.ctx.createRadialGradient(w/2, vY+vH, 0, w/2, vY+vH, vW/2);
+            glow.addColorStop(0, 'rgba(255, 59, 0, 0.4)');
+            glow.addColorStop(1, 'rgba(255, 59, 0, 0)');
+            this.ctx.fillStyle = glow;
+            this.ctx.fillRect(0, vY+vH-50, w, 100);
+        }
+
+        // Draw vessel (glass beaker look)
+        this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        this.ctx.lineWidth = 4;
+        this.ctx.beginPath();
+        this.ctx.moveTo(vX, vY - 20);
+        this.ctx.lineTo(vX, vY + vH);
+        this.ctx.lineTo(vX + vW, vY + vH);
+        this.ctx.lineTo(vX + vW, vY - 20);
+        this.ctx.stroke();
+        
+        // Draw fluid particles
+        this.ctx.globalCompositeOperation = 'screen';
+        const pSize = w < 768 ? 4 : 8;
+        
+        for (let p of this.particles) {
+            let px = vX + p.x * vW;
+            let py = vY + p.y * vH;
+            
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, pSize, 0, Math.PI * 2);
+            let color = Utils.tempToColor(p.temp);
+            this.ctx.fillStyle = color.replace('rgb', 'rgba').replace(')', ', 0.6)');
+            this.ctx.fill();
+        }
+        this.ctx.globalCompositeOperation = 'source-over';
+
+        // Draw directional arrows if component mode or later stages
+        if (this.mode === 'components' || (this.mode === 'working' && this.stage >= 2)) {
+            this.drawArrow(w/2 - 20, vY + vH*0.7, w/2 - 20, vY + vH*0.3, '#FF3B00'); // Up left
+            this.drawArrow(w/2 + 20, vY + vH*0.7, w/2 + 20, vY + vH*0.3, '#FF3B00'); // Up right
+            if(this.mode==='components' || this.stage >= 3){
+                this.drawArrow(vX + vW*0.15, vY + vH*0.3, vX + vW*0.15, vY + vH*0.7, '#00E5FF'); // Down left
+                this.drawArrow(vX + vW*0.85, vY + vH*0.3, vX + vW*0.85, vY + vH*0.7, '#00E5FF'); // Down right
+            }
+        }
+
+        requestAnimationFrame(this.render.bind(this));
+    }
+
+    drawArrow(x1, y1, x2, y2, color) {
+        this.ctx.strokeStyle = color;
+        this.ctx.fillStyle = color;
+        this.ctx.lineWidth = 3;
+        this.ctx.beginPath();
+        this.ctx.moveTo(x1, y1);
+        this.ctx.lineTo(x2, y2);
+        this.ctx.stroke();
+        
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        this.ctx.beginPath();
+        this.ctx.moveTo(x2, y2);
+        this.ctx.lineTo(x2 - 10 * Math.cos(angle - Math.PI / 6), y2 - 10 * Math.sin(angle - Math.PI / 6));
+        this.ctx.lineTo(x2 - 10 * Math.cos(angle + Math.PI / 6), y2 - 10 * Math.sin(angle + Math.PI / 6));
+        this.ctx.fill();
+    }
+}
+
+
+/**
+ * RADIATION SIMULATION (Electromagnetic Waves & Photons)
+ */
+class RadiationSim {
+    constructor(canvasId, mode = 'components') {
+        const setup = Utils.setupCanvas(canvasId);
+        this.ctx = setup.ctx;
+        this.getSize = setup.getSize;
+        this.mode = mode;
+        this.time = 0;
+        this.photons = [];
+        requestAnimationFrame(this.render.bind(this));
+    }
+
+    updateLogic(w, h) {
+        this.time += 0.05;
+        
+        let emitRate = 0;
+        if (this.mode === 'components') emitRate = 0.5;
+        else if (this.mode === 'working' && this.stage >= 0) emitRate = (this.stage + 1) * 0.3;
+
+        // Emit new photons
+        if (Math.random() < emitRate) {
+            this.photons.push({
+                angle: (Math.random() - 0.5) * Math.PI * 0.8, // emit rightwards mainly
+                dist: 0,
+                speed: 4 + Math.random() * 2,
+                amp: 10 + Math.random() * 20,
+                freq: 0.1 + Math.random() * 0.1
+            });
+        }
+
+        // Update photons
+        for (let i = this.photons.length - 1; i >= 0; i--) {
+            let p = this.photons[i];
+            p.dist += p.speed;
+            if (p.dist > w) this.photons.splice(i, 1);
+        }
+    }
+
+    render() {
+        const { w, h } = this.getSize();
+        this.ctx.fillStyle = '#020204';
+        this.ctx.fillRect(0, 0, w, h);
+        
+        this.updateLogic(w, h);
+
+        const cx = w * 0.2; // Emitter position
+        const cy = h / 2;
+
+        // Draw Vacuum / Space background
+        this.ctx.fillStyle = 'rgba(255,255,255,0.02)';
+        this.ctx.font = '14px sans-serif';
+        this.ctx.textAlign = 'center';
+        if (this.mode === 'components') {
+            this.ctx.fillText("VACUUM (NO MEDIUM REQUIRED)", w/2, h - 30);
+        }
+
+        // Draw Emitter Object
+        const emitterGrad = this.ctx.createRadialGradient(cx, cy, 0, cx, cy, 60);
+        emitterGrad.addColorStop(0, '#FFD166');
+        emitterGrad.addColorStop(0.3, '#FF3B00');
+        emitterGrad.addColorStop(1, 'rgba(255, 59, 0, 0)');
+        
+        this.ctx.beginPath();
+        this.ctx.arc(cx, cy, 60, 0, Math.PI * 2);
+        this.ctx.fillStyle = emitterGrad;
+        this.ctx.fill();
+
+        // Pulsing core based on stage
+        let pulse = Math.sin(this.time*2) * 5;
+        this.ctx.beginPath();
+        this.ctx.arc(cx, cy, 30 + pulse, 0, Math.PI * 2);
+        this.ctx.fillStyle = '#FFF';
+        this.ctx.shadowBlur = 20;
+        this.ctx.shadowColor = '#FF9100';
+        this.ctx.fill();
+        this.ctx.shadowBlur = 0;
+
+        // Draw Target Object (Right side)
+        const targetX = w * 0.85;
+        if (this.mode === 'components' || (this.mode === 'working' && this.stage >= 2)) {
+            this.ctx.fillStyle = '#334';
+            this.ctx.fillRect(targetX, cy - 80, 40, 160);
+            // Heat map on target
+            const heatGrad = this.ctx.createLinearGradient(targetX, 0, targetX+40, 0);
+            heatGrad.addColorStop(0, 'rgba(255,59,0,0.8)');
+            heatGrad.addColorStop(1, 'rgba(0,0,0,0)');
+            this.ctx.fillStyle = heatGrad;
+            this.ctx.fillRect(targetX, cy - 80, 40, 160);
+        }
+
+        // Draw Wave Photons (Sine paths)
+        this.ctx.lineWidth = 2;
+        for (let p of this.photons) {
+            // calculate x,y along angle
+            let baseX = cx + Math.cos(p.angle) * (p.dist + 40);
+            let baseY = cy + Math.sin(p.angle) * (p.dist + 40);
+            
+            // transverse sine wave offset
+            let perpAngle = p.angle + Math.PI/2;
+            let offset = Math.sin(p.dist * p.freq - this.time * 5) * p.amp;
+            
+            let x = baseX + Math.cos(perpAngle) * offset;
+            let y = baseY + Math.sin(perpAngle) * offset;
+
+            // Trail
+            this.ctx.beginPath();
+            this.ctx.moveTo(x, y);
+            for(let j=1; j<10; j++) {
+                let pastDist = p.dist - j*2;
+                if(pastDist < 0) continue;
+                let px = cx + Math.cos(p.angle) * (pastDist + 40);
+                let py = cy + Math.sin(p.angle) * (pastDist + 40);
+                let poff = Math.sin(pastDist * p.freq - this.time * 5) * p.amp;
+                this.ctx.lineTo(px + Math.cos(perpAngle)*poff, py + Math.sin(perpAngle)*poff);
+            }
+            this.ctx.strokeStyle = `rgba(255, 90, 0, ${1 - p.dist/w})`;
+            this.ctx.stroke();
+
+            // Head glow
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, 3, 0, Math.PI*2);
+            this.ctx.fillStyle = '#FFF';
+            this.ctx.fill();
+        }
+
+        requestAnimationFrame(this.render.bind(this));
+    }
+}
+
+
+/**
+ * COMBINED HERO ANIMATION
+ */
+class HeroSim {
+    constructor(canvasId) {
+        const setup = Utils.setupCanvas(canvasId);
+        this.ctx = setup.ctx;
+        this.getSize = setup.getSize;
+        this.time = 0;
+        requestAnimationFrame(this.render.bind(this));
+    }
+
+    render() {
+        const { w, h } = this.getSize();
+        this.ctx.clearRect(0, 0, w, h);
+        this.time += 0.02;
+
+        const cx = w / 2;
+        const cy = h / 2;
+
+        // Abstract representation of all 3
+        this.ctx.globalCompositeOperation = 'screen';
+
+        // 1. Radiation (Waves outward)
+        this.ctx.lineWidth = 1;
+        for(let i=0; i<5; i++) {
+            let radius = (this.time * 50 + i * 100) % 400;
+            this.ctx.beginPath();
+            this.ctx.arc(cx, cy, radius, 0, Math.PI*2);
+            this.ctx.strokeStyle = `rgba(255, 90, 0, ${0.5 - radius/800})`;
+            this.ctx.stroke();
+        }
+
+        // 2. Convection (Swirling particles)
+        for(let i=0; i<30; i++) {
+            let angle = this.time + i * (Math.PI*2/30);
+            let r = 100 + Math.sin(this.time * 2 + i) * 20;
+            let x = cx + Math.cos(angle) * r;
+            let y = cy + Math.sin(angle) * r;
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, 4, 0, Math.PI*2);
+            this.ctx.fillStyle = i%2==0 ? 'rgba(255,100,0,0.6)' : 'rgba(0,200,255,0.6)';
+            this.ctx.fill();
+        }
+
+        // 3. Conduction (Connecting nodes)
+        this.ctx.beginPath();
+        this.ctx.moveTo(cx - 200, cy);
+        this.ctx.lineTo(cx + 200, cy);
+        let grad = this.ctx.createLinearGradient(cx-200, cy, cx+200, cy);
+        grad.addColorStop(0, '#00E5FF');
+        grad.addColorStop(0.5, '#FFD166');
+        grad.addColorStop(1, '#FF3B00');
+        this.ctx.lineWidth = 4;
+        this.ctx.strokeStyle = grad;
+        this.ctx.stroke();
+
+        // Core
+        this.ctx.beginPath();
+        this.ctx.arc(cx, cy, 40, 0, Math.PI*2);
+        const coreGrad = this.ctx.createRadialGradient(cx,cy,0,cx,cy,40);
+        coreGrad.addColorStop(0, '#FFF');
+        coreGrad.addColorStop(0.5, '#FF9100');
+        coreGrad.addColorStop(1, 'rgba(255,59,0,0)');
+        this.ctx.fillStyle = coreGrad;
+        this.ctx.fill();
+
+        this.ctx.globalCompositeOperation = 'source-over';
+        requestAnimationFrame(this.render.bind(this));
+    }
+}
+
+
+/**
+ * INTERACTIVE LAB LOGIC
+ */
+class InteractiveLab {
+    constructor(canvasId) {
+        const setup = Utils.setupCanvas(canvasId);
+        this.ctx = setup.ctx;
+        this.getSize = setup.getSize;
+        
+        this.tempInput = document.getElementById('lab-temp');
+        this.tempValLabel = document.getElementById('lab-temp-val');
+        this.matSelectors = document.querySelectorAll('#lab-mat-selector .selector-item');
+        
+        this.temp = 300; // 0 to 1000
+        this.material = 'copper'; // copper, steel, glass
+        this.k_values = { 'copper': 0.8, 'steel': 0.4, 'glass': 0.1 };
+        
+        this.time = 0;
+
+        this.bindEvents();
+        requestAnimationFrame(this.render.bind(this));
+    }
+
+    bindEvents() {
+        this.tempInput.addEventListener('input', (e) => {
+            this.temp = parseInt(e.target.value);
+            this.tempValLabel.textContent = `${this.temp}°C`;
+            let r = Math.floor(255);
+            let g = Math.floor(255 - (this.temp/1000)*196);
+            let b = Math.floor(255 - (this.temp/1000)*255);
+            this.tempValLabel.style.color = `rgb(${r},${g},${b})`;
+        });
+
+        this.matSelectors.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                this.matSelectors.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.material = btn.dataset.val;
+            });
+        });
+    }
+
+    render() {
+        const { w, h } = this.getSize();
+        this.ctx.fillStyle = '#020204';
+        this.ctx.fillRect(0, 0, w, h);
+        
+        this.time += 0.05;
+        const normTemp = this.temp / 1000;
+        
+        const cx = w/2;
+        const cy = h * 0.7;
+
+        // 1. Central Heat Source
+        const sourceRadius = 50 + normTemp * 20;
+        const sGrad = this.ctx.createRadialGradient(cx, cy, 0, cx, cy, sourceRadius*2);
+        sGrad.addColorStop(0, Utils.tempToColor(normTemp));
+        sGrad.addColorStop(0.5, Utils.tempToColor(normTemp).replace('rgb', 'rgba').replace(')', ',0.5)'));
+        sGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        
+        this.ctx.fillStyle = sGrad;
+        this.ctx.beginPath();
+        this.ctx.arc(cx, cy, sourceRadius*2, 0, Math.PI*2);
+        this.ctx.fill();
+
+        // 2. Conduction Rod (Left)
+        const k = this.k_values[this.material];
+        const rodLength = w * 0.35;
+        const rodX = cx - sourceRadius - rodLength;
+        const rodY = cy - 10;
+        
+        // Heat penetration length based on k and temp
+        const pen = rodLength * normTemp * k;
+        
+        const rGrad = this.ctx.createLinearGradient(cx - sourceRadius, cy, cx - sourceRadius - rodLength, cy);
+        rGrad.addColorStop(0, Utils.tempToColor(normTemp));
+        rGrad.addColorStop(Math.min(1, pen/rodLength || 0.01), Utils.tempToColor(0));
+        rGrad.addColorStop(1, Utils.tempToColor(0));
+        
+        this.ctx.fillStyle = rGrad;
+        this.ctx.fillRect(rodX, rodY, rodLength, 20);
+        this.ctx.strokeStyle = '#555';
+        this.ctx.strokeRect(rodX, rodY, rodLength, 20);
+
+        // 3. Radiation (Right)
+        const radIntensity = Math.pow(normTemp, 4); // Stefan-Boltzmann visual approx
+        this.ctx.lineWidth = 2;
+        for(let i=0; i<3; i++) {
+            let offset = (this.time*50 + i*60) % 200;
+            if(offset > 0 && radIntensity > 0.01) {
+                this.ctx.beginPath();
+                this.ctx.arc(cx, cy, sourceRadius + offset, -Math.PI/4, Math.PI/4);
+                this.ctx.strokeStyle = `rgba(255, 90, 0, ${radIntensity * (1 - offset/200)})`;
+                this.ctx.stroke();
+            }
+        }
+        
+        // 4. Convection (Above)
+        if (normTemp > 0.1) {
+            for(let i=0; i<5; i++) {
+                let py = cy - sourceRadius - ((this.time*30 + i*40) % 150);
+                let px = cx + Math.sin(py * 0.05 + i) * 20;
+                
+                this.ctx.beginPath();
+                this.ctx.arc(px, py, 4 + normTemp*4, 0, Math.PI*2);
+                this.ctx.fillStyle = `rgba(255, 100, 0, ${normTemp * (1 - (cy-py)/200)})`;
+                this.ctx.fill();
+            }
+        }
+
+        // Labels
+        this.ctx.fillStyle = '#FFF';
+        this.ctx.font = '12px sans-serif';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(`Conduction (k=${k})`, rodX + rodLength/2, rodY - 15);
+        this.ctx.fillText(`Convection`, cx, cy - sourceRadius - 160);
+        this.ctx.fillText(`Radiation (E∝T⁴)`, cx + 150, cy - 50);
+
+        requestAnimationFrame(this.render.bind(this));
+    }
+}
+
+
+/* ==========================================================================
+   INITIALIZATION & DATA
+   ========================================================================== */
+
+document.addEventListener('DOMContentLoaded', () => {
+    
+    // Init Hero
+    new HeroSim('hero-canvas');
+
+    // --- CONDUCTION SETUP ---
+    const condSimComp = new ConductionSim('cond-comp-canvas', 'components');
+    new LabelSystem('cond-components', 'cond-legend', [
+        { x: 10, y: 50, title: 'Heat Source', desc: 'Applies thermal energy to one end.' },
+        { x: 50, y: 50, title: 'Solid Lattice', desc: 'Tightly packed atoms in a solid metal.' },
+        { x: 30, y: 30, title: 'Vibrating Atoms', desc: 'High kinetic energy from heat causes rapid vibration.' },
+        { x: 80, y: 50, title: 'Cold End', desc: 'Energy has not yet propagated here.' }
+    ]);
+
+    const condSimWorking = new ConductionSim('cond-working-canvas', 'working');
+    new WorkingController({
+        prefix: 'cond',
+        stages: [
+            { title: 'Thermal Equilibrium', desc: 'Atoms vibrate slightly at ambient temperature. No net heat flow.' },
+            { title: 'Heat Application', desc: 'Energy is applied. Localized atoms gain massive kinetic energy.' },
+            { title: 'Energy Transfer', desc: 'Rapidly vibrating atoms collide with slower neighbors, passing energy down the rod.' },
+            { title: 'System Heated', desc: 'The thermal energy propagates entirely through the material structure.' }
+        ],
+        onStageChange: (idx) => { condSimWorking.stage = idx; }
+    });
+
+    // --- CONVECTION SETUP ---
+    const convSimComp = new ConvectionSim('conv-comp-canvas', 'components');
+    new LabelSystem('conv-components', 'conv-legend', [
+        { x: 50, y: 90, title: 'Heat Source', desc: 'Warms fluid at the absolute bottom.' },
+        { x: 50, y: 50, title: 'Rising Hot Fluid', desc: 'Heated fluid expands, decreases density, and rises (buoyancy).' },
+        { x: 25, y: 50, title: 'Sinking Cold Fluid', desc: 'Cooler, denser fluid sinks to replace the rising hot fluid.' },
+        { x: 75, y: 20, title: 'Cooling Surface', desc: 'Fluid loses heat at the top, triggering the downward flow.' }
+    ]);
+
+    const convSimWorking = new ConvectionSim('conv-working-canvas', 'working');
+    new WorkingController({
+        prefix: 'conv',
+        stages: [
+            { title: 'Initial Heating', desc: 'Energy transfers only to the fluid layer directly contacting the heat source.' },
+            { title: 'Expansion & Buoyancy', desc: 'The heated fluid layer expands, becomes less dense than surrounding fluid, and begins to rise.' },
+            { title: 'Displacement', desc: 'As hot fluid moves up, it physically pushes cooler, denser fluid downward.' },
+            { title: 'Convection Cycle', desc: 'A continuous circular flow is established, distributing heat throughout the mass.' }
+        ],
+        onStageChange: (idx) => { convSimWorking.stage = idx; }
+    });
+
+
+    // --- RADIATION SETUP ---
+    const radSimComp = new RadiationSim('rad-comp-canvas', 'components');
+    new LabelSystem('rad-components', 'rad-legend', [
+        { x: 20, y: 50, title: 'Emitter', desc: 'Any object with temperature > Absolute Zero emits radiation.' },
+        { x: 50, y: 50, title: 'Electromagnetic Waves', desc: 'Energy travels as photons in the infrared/visible spectrum.' },
+        { x: 85, y: 50, title: 'Absorber', desc: 'Target object absorbs photons, converting them back to heat.' }
+    ]);
+
+    const radSimWorking = new RadiationSim('rad-working-canvas', 'working');
+    new WorkingController({
+        prefix: 'rad',
+        stages: [
+            { title: 'Thermal Agitation', desc: 'Internal heat causes atomic electrons to jump between energy states.' },
+            { title: 'Photon Emission', desc: 'As electrons return to ground state, they release energy packets (photons).' },
+            { title: 'Wave Propagation & Absorption', desc: 'Waves travel indefinitely through a vacuum until absorbed by another mass.' }
+        ],
+        onStageChange: (idx) => { radSimWorking.stage = idx; }
+    });
+
+    // --- INTERACTIVE LAB ---
+    new InteractiveLab('lab-canvas');
+
+});
+</script>
+</body>
+</html>

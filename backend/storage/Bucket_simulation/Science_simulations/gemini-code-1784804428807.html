@@ -1,0 +1,1468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Water Purification Process Visualization</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & FOUNDATION
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-dark: #070e17;
+            --bg-grad-1: #0a192f;
+            --bg-grad-2: #112240;
+            --accent-cyan: #00f2fe;
+            --accent-blue: #4facfe;
+            --accent-green: #00d2ff;
+            --text-main: #e6f1ff;
+            --text-muted: #8892b0;
+            
+            /* Glassmorphism */
+            --glass-bg: rgba(17, 34, 64, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            /* Material Colors */
+            --water-dirty: #8b7355;
+            --water-mid: #5b8c85;
+            --water-clean: #00f2fe;
+            --alum-color: #f0f0f0;
+            --chlorine-color: #a8ff78;
+            --sand-color: #d4b483;
+            --gravel-color: #7b7b7b;
+            --charcoal-color: #2a2a2a;
+            
+            /* Typography */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            
+            /* Sizing & Spacing */
+            --spacing-sm: clamp(8px, 1vw, 12px);
+            --spacing-md: clamp(16px, 2vw, 24px);
+            --spacing-lg: clamp(24px, 4vw, 48px);
+            --border-radius: 20px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            background-image: radial-gradient(circle at 50% -20%, var(--bg-grad-2), var(--bg-dark) 80%);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Animated Background Particles Container */
+        #ambient-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-md);
+        }
+
+        /* Typography */
+        h1 {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: var(--spacing-sm);
+            background: linear-gradient(to right, var(--accent-cyan), var(--accent-blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        h2 {
+            font-size: clamp(1.8rem, 3vw, 2.5rem);
+            font-weight: 700;
+            margin-bottom: var(--spacing-md);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h3 {
+            font-size: clamp(1.2rem, 2vw, 1.5rem);
+            color: var(--accent-cyan);
+            margin-bottom: 8px;
+        }
+
+        p {
+            font-size: clamp(0.9rem, 1.2vw, 1.1rem);
+            color: var(--text-muted);
+            margin-bottom: var(--spacing-md);
+        }
+
+        /* ==========================================================================
+           COMPONENTS (Glassmorphism)
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-lg);
+            box-shadow: var(--glass-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Mobile Optimization for Blur */
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(4px);
+                -webkit-backdrop-filter: blur(4px);
+                padding: var(--spacing-md);
+            }
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: rgba(0, 242, 254, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(0, 242, 254, 0.2);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: var(--spacing-md);
+        }
+
+        /* ==========================================================================
+           SECTION: HERO
+           ========================================================================== */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1.2rem, 2vw, 1.8rem);
+            color: var(--text-muted);
+            max-width: 800px;
+            margin: 0 auto 40px;
+        }
+
+        .drop-container {
+            width: clamp(150px, 30vw, 250px);
+            height: clamp(150px, 30vw, 250px);
+            position: relative;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+
+        /* ==========================================================================
+           SECTION: COMPONENTS (Mandatory Rule 1 - Layout & Legends)
+           ========================================================================== */
+        .components-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+        }
+
+        @media (min-width: 1024px) {
+            .components-layout {
+                grid-template-columns: 2fr 1fr;
+            }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px; /* Guarantee minimum height */
+            background: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            padding: var(--spacing-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* The SVG Illustration */
+        .plant-svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+            display: block;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+        }
+
+        /* Markers overlaying the illustration */
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            background: var(--bg-dark);
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: clamp(0.8rem, 1.2vw, 1rem);
+            cursor: pointer;
+            transform: translate(-50%, -50%); /* Center on exact point */
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            background: var(--accent-cyan);
+            color: var(--bg-dark);
+            transform: translate(-50%, -50%) scale(1.2);
+            box-shadow: 0 0 25px rgba(0, 242, 254, 0.8);
+        }
+
+        /* Legend List (Normal document flow) */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item.active {
+            background: rgba(0, 242, 254, 0.1);
+            border-color: rgba(0, 242, 254, 0.3);
+            transform: translateX(10px);
+        }
+
+        .legend-num {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: var(--accent-cyan);
+            color: var(--bg-dark);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .legend-text h4 {
+            color: #fff;
+            margin-bottom: 4px;
+            font-size: 1.1rem;
+        }
+
+        .legend-text p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           SECTION: WORKING MECHANISM (Mandatory Rule 2 - Stage-by-Stage)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        /* Canvas rendering area */
+        .stage-visual {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #040810;
+            border-radius: 16px;
+            border: 1px solid rgba(0, 242, 254, 0.2);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        #process-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* UI Overlays inside visual */
+        .stage-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            right: 20px;
+            pointer-events: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            z-index: 2;
+        }
+
+        .stage-title-box {
+            background: rgba(10, 25, 47, 0.8);
+            backdrop-filter: blur(8px);
+            padding: 12px 24px;
+            border-radius: 12px;
+            border: 1px solid rgba(0,242,254,0.3);
+        }
+
+        .stage-title-box h3 {
+            margin: 0;
+            color: #fff;
+            font-size: clamp(1.2rem, 2vw, 1.5rem);
+        }
+
+        .io-badges {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        .badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0,0,0,0.6);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .badge.in::before { content: '↓ IN:'; color: #ffca28; font-weight: bold; font-size: 0.7rem; }
+        .badge.out::before { content: '↑ OUT:'; color: var(--accent-green); font-weight: bold; font-size: 0.7rem; }
+
+        .stage-caption {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: clamp(0.9rem, 1.5vw, 1.1rem);
+            color: #fff;
+            text-align: center;
+            width: max-content;
+            max-width: 90%;
+            border: 1px solid rgba(255,255,255,0.1);
+            z-index: 2;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.3);
+            padding: 16px 24px;
+            border-radius: 16px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .btn {
+            background: rgba(0, 242, 254, 0.1);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 44px; /* Touch target size */
+        }
+
+        .btn:hover:not(:disabled) {
+            background: var(--accent-cyan);
+            color: var(--bg-dark);
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            border-color: var(--text-muted);
+            color: var(--text-muted);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+            color: var(--bg-dark);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            opacity: 0.9;
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+
+        .dot.active {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            transform: scale(1.2);
+        }
+
+        /* ==========================================================================
+           SECTION: INTERACTIVE SIMULATION (Plant Operator)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-lg);
+        }
+
+        @media (min-width: 768px) {
+            .sim-layout { grid-template-columns: 1fr 1fr; }
+        }
+
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .slider-group {
+            background: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .slider-header label { font-weight: 600; color: #fff; }
+        .slider-value { color: var(--accent-cyan); font-family: monospace; font-size: 1.1rem; }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 0 10px var(--accent-cyan);
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+
+        .sim-visual {
+            position: relative;
+            background: #040810;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-md);
+            min-height: 300px;
+        }
+
+        /* CSS based Beaker simulation */
+        .beaker {
+            width: 150px;
+            height: 200px;
+            border: 4px solid rgba(255,255,255,0.2);
+            border-top: none;
+            border-radius: 0 0 20px 20px;
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(to right, rgba(255,255,255,0.05), rgba(255,255,255,0));
+        }
+
+        .beaker-liquid {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 80%;
+            background: var(--water-dirty); /* Starts dirty */
+            transition: all 0.5s ease;
+            transform-origin: bottom;
+        }
+        
+        .beaker-sludge {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 0%;
+            background: #4a3a2a;
+            transition: height 0.5s ease;
+        }
+
+        .sim-status {
+            margin-top: 24px;
+            text-align: center;
+            padding: 12px 24px;
+            border-radius: 30px;
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--text-muted);
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .status-excellent { border-color: var(--accent-green); color: var(--accent-green); box-shadow: 0 0 15px rgba(0, 210, 255, 0.2); }
+        .status-poor { border-color: #ff5252; color: #ff5252; }
+
+        /* ==========================================================================
+           SECTION: CARDS (Grid Layout)
+           ========================================================================== */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .info-card {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: var(--spacing-md);
+            border-radius: 16px;
+            transition: transform 0.3s, background 0.3s;
+        }
+
+        .info-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(0, 242, 254, 0.3);
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 16px;
+            fill: none;
+            stroke: var(--accent-cyan);
+            stroke-width: 1.5;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .info-card h4 {
+            color: #fff;
+            font-size: 1.2rem;
+            margin-bottom: 8px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background Canvas -->
+    <canvas id="ambient-canvas"></canvas>
+
+    <div class="container">
+        
+        <!-- ================= HERO ================= -->
+        <section class="hero glass-panel">
+            <div class="tag">Interactive Simulation</div>
+            <h1>The Journey to<br>Pure Water</h1>
+            <p class="hero-subtitle">Discover the engineering and chemistry required to transform raw, murky natural water into safe, crystal-clear drinking hydration.</p>
+            
+            <!-- CSS/SVG Hero Animation -->
+            <div class="drop-container">
+                <svg viewBox="0 0 100 100" width="100%" height="100%">
+                    <defs>
+                        <linearGradient id="drop-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#00f2fe">
+                                <animate attributeName="stop-color" values="#8b7355; #00f2fe; #00f2fe; #8b7355" dur="8s" repeatCount="indefinite" />
+                            </stop>
+                            <stop offset="100%" stop-color="#4facfe">
+                                <animate attributeName="stop-color" values="#4a3a2a; #4facfe; #4facfe; #4a3a2a" dur="8s" repeatCount="indefinite" />
+                            </stop>
+                        </linearGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <path d="M50 5 C50 5, 10 40, 10 65 C10 87, 28 95, 50 95 C72 95, 90 87, 90 65 C90 40, 50 5, 50 5 Z" 
+                          fill="url(#drop-grad)" 
+                          filter="url(#glow)"
+                          stroke="rgba(255,255,255,0.5)" stroke-width="2"/>
+                    
+                    <!-- Shine -->
+                    <path d="M25 60 Q20 40 45 25" stroke="rgba(255,255,255,0.6)" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.8"/>
+                </svg>
+            </div>
+        </section>
+
+        <!-- ================= COMPONENTS OVERVIEW ================= -->
+        <section class="glass-panel">
+            <h2>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h4l2-9 4 18 3-9h5"/></svg>
+                The Treatment Plant
+            </h2>
+            <p>Modern water treatment is a continuous flow process. Follow the path from source to city. Hover or tap the numbered markers to understand each structure's role.</p>
+
+            <div class="components-layout">
+                <!-- Visual Map -->
+                <div class="illustration-container" id="plant-container">
+                    <!-- Premium Vector SVG Illustration -->
+                    <svg class="plant-svg" viewBox="0 0 1000 400" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="metal" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#4a5568" />
+                                <stop offset="20%" stop-color="#718096" />
+                                <stop offset="80%" stop-color="#2d3748" />
+                                <stop offset="100%" stop-color="#1a202c" />
+                            </linearGradient>
+                            <linearGradient id="water-raw" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#8b7355"/><stop offset="100%" stop-color="#4a3a2a"/></linearGradient>
+                            <linearGradient id="water-floc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#5b8c85"/><stop offset="100%" stop-color="#2c4c47"/></linearGradient>
+                            <linearGradient id="water-pure" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00f2fe"/><stop offset="100%" stop-color="#0a7bba"/></linearGradient>
+                            <pattern id="sand" x="0" y="0" width="10" height="10" patternUnits="userSpaceOnUse">
+                                <rect width="10" height="10" fill="#d4b483"/>
+                                <circle cx="2" cy="2" r="1" fill="#b08d55"/>
+                                <circle cx="7" cy="6" r="1.5" fill="#e6cd98"/>
+                            </pattern>
+                            <pattern id="gravel" x="0" y="0" width="20" height="20" patternUnits="userSpaceOnUse">
+                                <rect width="20" height="20" fill="#7b7b7b"/>
+                                <circle cx="5" cy="5" r="3" fill="#555"/>
+                                <circle cx="15" cy="12" r="4" fill="#999"/>
+                            </pattern>
+                            <pattern id="charcoal" x="0" y="0" width="15" height="15" patternUnits="userSpaceOnUse">
+                                <rect width="15" height="15" fill="#2a2a2a"/>
+                                <path d="M0 0L15 15M15 0L0 15" stroke="#111" stroke-width="1"/>
+                            </pattern>
+                        </defs>
+
+                        <!-- Base/Ground line -->
+                        <line x1="0" y1="350" x2="1000" y2="350" stroke="#1a202c" stroke-width="4"/>
+
+                        <!-- Intake (Left) -->
+                        <path d="M0 250 Q 40 250 80 270 L 80 350 L 0 350 Z" fill="url(#water-raw)"/>
+                        <rect x="70" y="220" width="20" height="130" fill="url(#metal)"/> <!-- Pump pipe -->
+                        <path d="M 60 200 L 100 200 L 90 220 L 70 220 Z" fill="#718096"/> <!-- Pump motor -->
+
+                        <!-- Pipe 1 -->
+                        <rect x="90" y="220" width="80" height="15" fill="url(#metal)"/>
+                        <rect x="155" y="150" width="15" height="85" fill="url(#metal)"/>
+
+                        <!-- 1. Coagulation / Flocculation Tank -->
+                        <!-- Back wall -->
+                        <rect x="170" y="100" width="180" height="250" fill="#2d3748"/>
+                        <!-- Water -->
+                        <rect x="170" y="150" width="180" height="200" fill="url(#water-raw)"/>
+                        <!-- Front frame -->
+                        <rect x="165" y="95" width="190" height="10" fill="url(#metal)"/>
+                        <rect x="165" y="95" width="10" height="255" fill="url(#metal)"/>
+                        <rect x="345" y="95" width="10" height="255" fill="url(#metal)"/>
+                        <!-- Mixers -->
+                        <rect x="210" y="80" width="6" height="180" fill="#a0aec0"/>
+                        <path d="M 190 250 L 236 260 L 236 240 Z" fill="#a0aec0"/>
+                        <rect x="300" y="80" width="6" height="180" fill="#a0aec0"/>
+                        <path d="M 280 250 L 326 260 L 326 240 Z" fill="#a0aec0"/>
+                        <!-- Chemical Doser -->
+                        <path d="M 200 40 L 226 40 L 218 70 L 208 70 Z" fill="#f6e05e"/>
+                        <rect x="211" y="70" width="4" height="25" fill="#f6e05e"/>
+
+                        <!-- Pipe 2 -->
+                        <rect x="355" y="170" width="40" height="15" fill="url(#metal)"/>
+
+                        <!-- 2. Sedimentation Basin -->
+                        <!-- Slanted bottom for sludge -->
+                        <polygon points="395,100 600,100 600,350 497,350 395,250" fill="#2d3748"/>
+                        <!-- Water (Gradient from floc to clear) -->
+                        <polygon points="395,170 600,170 600,350 497,350 395,250" fill="url(#water-floc)"/>
+                        <!-- Sludge layer at bottom -->
+                        <polygon points="450,300 600,300 600,350 497,350" fill="#3a2a1a"/>
+                        <!-- Tank frame -->
+                        <polygon points="390,95 605,95 605,105 390,105" fill="url(#metal)"/>
+                        <rect x="390" y="95" width="10" height="160" fill="url(#metal)"/>
+                        <rect x="595" y="95" width="10" height="255" fill="url(#metal)"/>
+
+                        <!-- Pipe 3 -->
+                        <rect x="605" y="180" width="40" height="15" fill="url(#metal)"/>
+
+                        <!-- 3. Filtration Unit -->
+                        <rect x="645" y="100" width="120" height="250" fill="#2d3748"/>
+                        <!-- Water on top -->
+                        <rect x="645" y="180" width="120" height="40" fill="url(#water-pure)"/>
+                        <!-- Filter Layers -->
+                        <rect x="645" y="220" width="120" height="40" fill="url(#charcoal)"/> <!-- Activated Carbon -->
+                        <rect x="645" y="260" width="120" height="50" fill="url(#sand)"/> <!-- Sand -->
+                        <rect x="645" y="310" width="120" height="40" fill="url(#gravel)"/> <!-- Gravel -->
+                        <!-- Frame -->
+                        <rect x="640" y="95" width="130" height="10" fill="url(#metal)"/>
+                        <rect x="640" y="95" width="10" height="255" fill="url(#metal)"/>
+                        <rect x="760" y="95" width="10" height="255" fill="url(#metal)"/>
+
+                        <!-- Pipe 4 -->
+                        <rect x="770" y="330" width="40" height="15" fill="url(#metal)"/>
+
+                        <!-- 4. Disinfection & Storage -->
+                        <path d="M 810 100 Q 855 80 900 100 L 900 350 L 810 350 Z" fill="#2d3748"/>
+                        <path d="M 810 200 Q 855 200 900 200 L 900 350 L 810 350 Z" fill="url(#water-pure)"/>
+                        <!-- Frame -->
+                        <path d="M 805 100 Q 855 75 905 100 L 900 110 Q 855 88 810 110 Z" fill="url(#metal)"/>
+                        <rect x="805" y="100" width="10" height="250" fill="url(#metal)"/>
+                        <rect x="895" y="100" width="10" height="250" fill="url(#metal)"/>
+                        <!-- Chlorine Doser -->
+                        <rect x="845" y="50" width="20" height="30" fill="#68d391" rx="5"/>
+                        <rect x="852" y="80" width="6" height="20" fill="#68d391"/>
+
+                        <!-- Output Pipe -->
+                        <rect x="905" y="300" width="60" height="20" fill="url(#metal)"/>
+                        <path d="M 965 300 L 980 290 L 980 330 L 965 320 Z" fill="#4a5568"/> <!-- Valve -->
+                        <rect x="980" y="295" width="20" height="30" fill="url(#water-pure)"/> <!-- Output water -->
+                    </svg>
+
+                    <!-- Absolutely Positioned Markers -->
+                    <div class="marker" data-target="legend-1" style="left: 8%; top: 60%;">1</div>
+                    <div class="marker" data-target="legend-2" style="left: 26%; top: 40%;">2</div>
+                    <div class="marker" data-target="legend-3" style="left: 50%; top: 50%;">3</div>
+                    <div class="marker" data-target="legend-4" style="left: 70%; top: 65%;">4</div>
+                    <div class="marker" data-target="legend-5" style="left: 85%; top: 45%;">5</div>
+                </div>
+
+                <!-- Legend List -->
+                <div class="legend-list" id="plant-legend">
+                    <div class="legend-item" id="legend-1">
+                        <div class="legend-num">1</div>
+                        <div class="legend-text">
+                            <h4>Intake Pump</h4>
+                            <p>Draws raw, untreated water from natural sources like lakes or rivers.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-2">
+                        <div class="legend-num">2</div>
+                        <div class="legend-text">
+                            <h4>Coagulation Tank</h4>
+                            <p>Chemicals (Alum) are mixed in rapidly to make microscopic dirt particles sticky.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-3">
+                        <div class="legend-num">3</div>
+                        <div class="legend-text">
+                            <h4>Sedimentation Basin</h4>
+                            <p>Heavy clumps of dirt (floc) sink to the bottom as sludge. Clear water flows over top.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-4">
+                        <div class="legend-text">
+                            <div class="legend-num" style="margin-left:-44px; margin-top:2px; position:absolute;">4</div>
+                            <h4>Filtration Unit</h4>
+                            <p>Water trickles through charcoal, sand, and gravel, trapping remaining tiny impurities.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-5">
+                        <div class="legend-num">5</div>
+                        <div class="legend-text">
+                            <h4>Disinfection & Storage</h4>
+                            <p>Chlorine or UV light destroys bacteria. Clean water is stored for distribution.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= WORKING PROCESS (Mandatory Rule 2) ================= -->
+        <section class="glass-panel">
+            <h2>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                Mechanism of Action
+            </h2>
+            <p>Observe the physical and chemical transformations at the particle level. This is a <strong>linear sequence</strong> where each stage prepares the water for the next.</p>
+
+            <div class="working-container">
+                <!-- Visual Area -->
+                <div class="stage-visual">
+                    <!-- UI Overlays -->
+                    <div class="stage-info">
+                        <div class="stage-title-box">
+                            <h3 id="stage-title">1. Coagulation</h3>
+                        </div>
+                        <div class="io-badges">
+                            <div class="badge in" id="stage-in">Raw Water, Alum</div>
+                            <div class="badge out" id="stage-out">Sticky Particles</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Dynamic Canvas Engine -->
+                    <canvas id="process-canvas"></canvas>
+                    
+                    <div class="stage-caption" id="stage-caption">
+                        Fast mixing distributes chemicals, neutralizing particle charges.
+                    </div>
+                </div>
+
+                <!-- Controls -->
+                <div class="controls">
+                    <button class="btn" id="btn-prev" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        Previous
+                    </button>
+                    
+                    <div class="progress-dots" id="stage-dots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn" id="btn-autoplay">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="play-icon"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Auto-Play
+                        </button>
+                        <button class="btn btn-primary" id="btn-next">
+                            Next Stage
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= INTERACTIVE SIMULATION ================= -->
+        <section class="glass-panel">
+            <h2>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                The Operator Dashboard
+            </h2>
+            <p>Balancing chemicals is critical. Too little Alum, and dirt won't settle. Too much wastes resources. Adjust the doses to achieve excellent water quality.</p>
+
+            <div class="sim-layout">
+                <div class="controls-panel">
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <label>Incoming Turbidity (Dirtiness)</label>
+                            <span class="slider-value" id="val-turbidity">75 NTU</span>
+                        </div>
+                        <input type="range" id="slide-turbidity" min="10" max="100" value="75">
+                        <p style="font-size: 0.8rem; margin-top: 8px; margin-bottom: 0;">Higher turbidity requires more coagulant.</p>
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <label>Alum Dose (Coagulant)</label>
+                            <span class="slider-value" id="val-alum">20 mg/L</span>
+                        </div>
+                        <input type="range" id="slide-alum" min="0" max="100" value="20">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <label>Chlorine Dose (Disinfectant)</label>
+                            <span class="slider-value" id="val-chlorine">1.0 mg/L</span>
+                        </div>
+                        <input type="range" id="slide-chlorine" min="0" max="5" step="0.1" value="1.0">
+                    </div>
+                </div>
+
+                <div class="sim-visual">
+                    <h3 style="position:absolute; top:20px; left:20px; color:#fff;">Settling Tank</h3>
+                    <div class="beaker">
+                        <div class="beaker-liquid" id="sim-liquid"></div>
+                        <div class="beaker-sludge" id="sim-sludge"></div>
+                    </div>
+                    <div id="sim-particles" style="position:absolute; width:150px; height:200px; pointer-events:none;">
+                        <!-- Particles injected via JS -->
+                    </div>
+                    <div class="sim-status status-poor" id="sim-status-box">
+                        Status: Evaluating...
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= INFO CARDS ================= -->
+        <section class="grid-3" style="margin-bottom: var(--spacing-lg);">
+            <div class="info-card">
+                <svg class="card-icon" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                <h4>Vital Application</h4>
+                <p>Modern cities cannot exist without this process. A typical plant processes over 50 million gallons daily, preventing outbreaks of cholera and typhoid.</p>
+            </div>
+            <div class="info-card">
+                <svg class="card-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                <h4>Did You Know?</h4>
+                <p>Activated carbon in the filters has a massive surface area. Just one gram of it can have a surface area in excess of 3,000 square meters (a tennis court)!</p>
+            </div>
+            <div class="info-card">
+                <svg class="card-icon" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <h4>Common Mistake</h4>
+                <p>People often confuse <strong>Filtration</strong> (physical removal of solids) with <strong>Disinfection</strong> (chemical killing of microscopic biological threats). Both are needed.</p>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ================= JAVASCRIPT ================= -->
+    <script>
+        /**
+         * 1. UI Interactions: Component Legend Highlight (Mandatory Rule 1)
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function clearActive() {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+            }
+
+            markers.forEach(marker => {
+                const targetId = marker.getAttribute('data-target');
+                const targetElement = document.getElementById(targetId);
+
+                const activate = () => {
+                    clearActive();
+                    marker.classList.add('active');
+                    if(targetElement) {
+                        targetElement.classList.add('active');
+                        // Scroll legend item into view if on mobile and out of view
+                        if (window.innerWidth < 1024) {
+                           targetElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        }
+                    }
+                };
+
+                marker.addEventListener('mouseenter', activate);
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); activate(); });
+            });
+
+            legendItems.forEach(item => {
+                const activate = () => {
+                    clearActive();
+                    item.classList.add('active');
+                    const targetMarker = document.querySelector(`.marker[data-target="${item.id}"]`);
+                    if(targetMarker) targetMarker.classList.add('active');
+                };
+                item.addEventListener('mouseenter', activate);
+                item.addEventListener('touchstart', (e) => { e.preventDefault(); activate(); });
+            });
+            
+            // Allow clicking outside to clear
+            document.addEventListener('click', (e) => {
+                if(!e.target.closest('.marker') && !e.target.closest('.legend-item')) {
+                    clearActive();
+                }
+            });
+        });
+
+        /**
+         * 2. Working Mechanism: Canvas Engine (Mandatory Rule 2 & Responsive)
+         */
+        const processCanvas = document.getElementById('process-canvas');
+        const ctx = processCanvas.getContext('2d');
+        let cw, ch;
+
+        // Resize handler implementing High-DPI and responsive fluid rules
+        function resizeCanvas() {
+            const container = processCanvas.parentElement;
+            const rect = container.getBoundingClientRect();
+            // Multiply by devicePixelRatio for crisp rendering on Retina/Mobile
+            const dpr = window.devicePixelRatio || 1;
+            cw = rect.width;
+            ch = rect.height;
+            processCanvas.width = cw * dpr;
+            processCanvas.height = ch * dpr;
+            ctx.scale(dpr, dpr);
+            
+            // Re-init particles on resize to fit new dimensions
+            initParticles();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+
+        // State Machine Data
+        const stages = [
+            {
+                id: 0,
+                title: "1. Coagulation",
+                in: "Raw Water, Alum", out: "Sticky Particles",
+                caption: "Rapid mixing distributes the Alum. Dirt particles lose their negative charge.",
+                colors: { water: '#5b4a3a' } // Dirty
+            },
+            {
+                id: 1,
+                title: "2. Flocculation",
+                in: "Micro-particles", out: "Heavy 'Floc' Clumps",
+                caption: "Slow stirring allows neutralized particles to collide and stick together (floc).",
+                colors: { water: '#52665a' } // Less dirty, greenish
+            },
+            {
+                id: 2,
+                title: "3. Sedimentation",
+                in: "Floc + Water", out: "Clear Water, Sludge",
+                caption: "Water flows very slowly. Gravity pulls heavy floc to the bottom.",
+                colors: { water: '#2d6a78' } // Cleaner
+            },
+            {
+                id: 3,
+                title: "4. Filtration",
+                in: "Settled Water", out: "Filtered Water",
+                caption: "Water trickles down through layers of charcoal, sand, and gravel.",
+                colors: { water: '#00b4d8' } // Very clean
+            },
+            {
+                id: 4,
+                title: "5. Disinfection",
+                in: "Filtered Water, Cl2", out: "Safe Drinking Water",
+                caption: "Chlorine is added to seek and destroy invisible bacteria and viruses.",
+                colors: { water: '#00f2fe' } // Pure
+            }
+        ];
+
+        let currentStageIndex = 0;
+        let particles = [];
+        let animationId;
+        let transitionTime = 0; // 0 to 1 for smooth visual morphs
+
+        // UI Elements
+        const uiTitle = document.getElementById('stage-title');
+        const uiIn = document.getElementById('stage-in');
+        const uiOut = document.getElementById('stage-out');
+        const uiCaption = document.getElementById('stage-caption');
+        const uiBtnPrev = document.getElementById('btn-prev');
+        const uiBtnNext = document.getElementById('btn-next');
+        const uiBtnAuto = document.getElementById('btn-autoplay');
+        const uiDots = document.getElementById('stage-dots').children;
+
+        let isAutoPlaying = false;
+        let autoPlayTimer;
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * cw;
+                this.y = Math.random() * ch;
+                this.size = Math.random() * 3 + 1;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.type = 'dirt'; // dirt, floc, bacteria, chlorine
+                this.opacity = 1;
+                this.targetX = this.x; // for grouping
+                this.targetY = this.y;
+            }
+            draw() {
+                ctx.globalAlpha = this.opacity;
+                ctx.beginPath();
+                
+                if (this.type === 'dirt') {
+                    ctx.fillStyle = '#8b7355';
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                } else if (this.type === 'floc') {
+                    ctx.fillStyle = '#4a3a2a';
+                    // Draw bumpy floc
+                    for(let i=0; i<3; i++){
+                        ctx.arc(this.x + (Math.random()*4-2), this.y + (Math.random()*4-2), this.size * 1.5, 0, Math.PI * 2);
+                    }
+                } else if (this.type === 'chlorine') {
+                    ctx.fillStyle = '#a8ff78';
+                    ctx.arc(this.x, this.y, this.size * 1.5, 0, Math.PI * 2);
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#a8ff78';
+                } else if (this.type === 'bacteria') {
+                    ctx.strokeStyle = '#ff5252';
+                    ctx.lineWidth = 2;
+                    ctx.moveTo(this.x - 5, this.y);
+                    ctx.lineTo(this.x + 5, this.y);
+                    ctx.stroke();
+                }
+                
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                ctx.shadowBlur = 0; // reset
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            for (let i = 0; i < 150; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function updateUI() {
+            const data = stages[currentStageIndex];
+            uiTitle.textContent = data.title;
+            uiIn.textContent = data.in;
+            uiOut.textContent = data.out;
+            uiCaption.textContent = data.caption;
+            
+            uiBtnPrev.disabled = currentStageIndex === 0;
+            
+            if (currentStageIndex === stages.length - 1) {
+                uiBtnNext.innerHTML = 'Finish <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5l10 -10"/></svg>';
+            } else {
+                uiBtnNext.innerHTML = 'Next Stage <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>';
+            }
+
+            Array.from(uiDots).forEach((dot, idx) => {
+                dot.className = 'dot' + (idx === currentStageIndex ? ' active' : '');
+            });
+        }
+
+        function setStage(index) {
+            if (index < 0 || index >= stages.length) return;
+            if (index === 0) initParticles(); // Reset physics when restarting
+            
+            currentStageIndex = index;
+            transitionTime = 0; // Trigger morph animation
+            updateUI();
+            
+            // Re-type particles based on stage to demonstrate transformation
+            particles.forEach((p, i) => {
+                if (index === 0) p.type = 'dirt';
+                if (index === 1) {
+                    // Group them into floc
+                    if (i % 3 === 0) {
+                        p.type = 'floc';
+                        p.size *= 1.2;
+                    } else {
+                        p.type = 'none'; // hide others as they merged
+                    }
+                }
+                if (index === 4) {
+                    if (i < 20) p.type = 'bacteria';
+                    else if (i < 60) p.type = 'chlorine';
+                    else p.type = 'none';
+                }
+            });
+        }
+
+        // --- Drawing specific environmental elements ---
+        let mixerAngle = 0;
+        function drawEnvironment() {
+            // Base background (animated gradient interpolation would go here, using solid for perf)
+            ctx.fillStyle = stages[currentStageIndex].colors.water;
+            ctx.fillRect(0, 0, cw, ch);
+
+            // Morphing logic based on transitionTime
+            if (transitionTime < 1) transitionTime += 0.02;
+
+            if (currentStageIndex === 0 || currentStageIndex === 1) {
+                // Draw Mixer
+                mixerAngle += (currentStageIndex === 0) ? 0.2 : 0.05; // Fast vs Slow mixing
+                ctx.save();
+                ctx.translate(cw/2, ch/2);
+                ctx.rotate(mixerAngle);
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                ctx.fillRect(-5, -ch/3, 10, ch/1.5);
+                ctx.fillRect(-cw/4, -5, cw/2, 10);
+                ctx.restore();
+            }
+
+            if (currentStageIndex === 3) {
+                // Draw Filter Layers
+                let h = ch / 3;
+                // Charcoal
+                ctx.fillStyle = 'rgba(42, 42, 42, 0.8)';
+                ctx.fillRect(0, ch - h*3, cw, h);
+                // Sand
+                ctx.fillStyle = 'rgba(212, 180, 131, 0.8)';
+                ctx.fillRect(0, ch - h*2, cw, h);
+                // Gravel
+                ctx.fillStyle = 'rgba(123, 123, 123, 0.8)';
+                ctx.fillRect(0, ch - h, cw, h);
+            }
+        }
+
+        function animateProcess() {
+            ctx.clearRect(0, 0, cw, ch);
+            drawEnvironment();
+
+            // Particle Physics based on Stage
+            particles.forEach(p => {
+                if (p.type === 'none') return;
+
+                if (currentStageIndex === 0) {
+                    // Chaotic fast mixing
+                    p.x += p.vx * 3;
+                    p.y += p.vy * 3;
+                    if(p.x < 0 || p.x > cw) p.vx *= -1;
+                    if(p.y < 0 || p.y > ch) p.vy *= -1;
+                } 
+                else if (currentStageIndex === 1) {
+                    // Flocculation: slow circular motion
+                    p.x += Math.sin(Date.now() * 0.001 + p.y) * 2;
+                    p.y += Math.cos(Date.now() * 0.001 + p.x) * 2;
+                }
+                else if (currentStageIndex === 2) {
+                    // Sedimentation: Gravity
+                    if (p.type === 'floc') {
+                        p.y += 1.5; // fall down
+                        p.x += 0.5; // gentle horizontal flow
+                        if (p.y > ch - 20) p.y = ch - 20; // collect at bottom
+                        if (p.x > cw) p.x = 0; // loop
+                    }
+                }
+                else if (currentStageIndex === 3) {
+                    // Filtration: move down, stop randomly
+                    p.y += 2;
+                    if (p.y > ch/2 && Math.random() > 0.95) {
+                        p.type = 'none'; // gets trapped
+                    }
+                }
+                else if (currentStageIndex === 4) {
+                    // Disinfection: Chlorine chases bacteria
+                    if (p.type === 'chlorine') {
+                        p.x += p.vx * 2;
+                        p.y += p.vy * 2;
+                        if(p.x < 0 || p.x > cw) p.vx *= -1;
+                        if(p.y < 0 || p.y > ch) p.vy *= -1;
+                    }
+                    if (p.type === 'bacteria') {
+                        // jiggle
+                        p.x += (Math.random() - 0.5) * 4;
+                        p.y += (Math.random() - 0.5) * 4;
+                        
+                        // Check collision with chlorine (simple distance check)
+                        particles.forEach(c => {
+                            if (c.type === 'chlorine' && p.type === 'bacteria') {
+                                let dx = c.x - p.x;
+                                let dy = c.y - p.y;
+                                if (dx*dx + dy*dy < 400) {
+                                    p.type = 'none'; // Killed
+                                }
+                            }
+                        });
+                    }
+                }
+
+                p.draw();
+            });
+
+            animationId = requestAnimationFrame(animateProcess);
+        }
+
+        // Initialize Canvas Engine
+        setTimeout(() => {
+            resizeCanvas();
+            updateUI();
+            animateProcess();
+        }, 100);
+
+        // Control Listeners
+        uiBtnPrev.addEventListener('click', () => setStage(currentStageIndex - 1));
+        uiBtnNext.addEventListener('click', () => {
+            if (currentStageIndex === stages.length - 1) {
+                setStage(0); // Loop back
+            } else {
+                setStage(currentStageIndex + 1);
+            }
+        });
+        
+        uiBtnAuto.addEventListener('click', () => {
+            isAutoPlaying = !isAutoPlaying;
+            if (isAutoPlaying) {
+                uiBtnAuto.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause';
+                uiBtnAuto.style.background = 'rgba(0, 242, 254, 0.3)';
+                autoPlayTimer = setInterval(() => {
+                    setStage((currentStageIndex + 1) % stages.length);
+                }, 4000);
+            } else {
+                uiBtnAuto.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Auto-Play';
+                uiBtnAuto.style.background = '';
+                clearInterval(autoPlayTimer);
+            }
+        });
+
+
+        /**
+         * 3. Interactive Simulation Logic (Operator Dashboard)
+         */
+        const sTurb = document.getElementById('slide-turbidity');
+        const sAlum = document.getElementById('slide-alum');
+        const sChlor = document.getElementById('slide-chlorine');
+        
+        const vTurb = document.getElementById('val-turbidity');
+        const vAlum = document.getElementById('val-alum');
+        const vChlor = document.getElementById('val-chlorine');
+        
+        const simLiquid = document.getElementById('sim-liquid');
+        const simSludge = document.getElementById('sim-sludge');
+        const simStatusBox = document.getElementById('sim-status-box');
+        
+        function updateSimulation() {
+            let turb = parseInt(sTurb.value);
+            let alum = parseInt(sAlum.value);
+            let chlor = parseFloat(sChlor.value);
+            
+            vTurb.textContent = turb + " NTU";
+            vAlum.textContent = alum + " mg/L";
+            vChlor.textContent = chlor.toFixed(1) + " mg/L";
+            
+            // Logic rules
+            let idealAlum = turb * 0.4; // rough heuristic
+            let alumDiff = Math.abs(alum - idealAlum);
+            
+            let isAlumGood = alumDiff < 10;
+            let isChlorGood = chlor >= 1.0 && chlor <= 3.0;
+            
+            let qualityScore = 0;
+            let statusText = "Poor";
+            let statusClass = "status-poor";
+            
+            // Visuals
+            if (isAlumGood) {
+                simLiquid.style.background = "var(--water-mid)";
+                simSludge.style.height = "20%"; // Dirt settles
+                qualityScore += 50;
+            } else {
+                if (alum < idealAlum) {
+                    simLiquid.style.background = "var(--water-dirty)"; // Stays dirty
+                    simSludge.style.height = "5%";
+                } else {
+                    simLiquid.style.background = "rgba(255, 255, 255, 0.4)"; // Overdosed/Cloudy white
+                    simSludge.style.height = "30%";
+                }
+            }
+            
+            if (isChlorGood) {
+                qualityScore += 50;
+            }
+            
+            if (isAlumGood && isChlorGood) {
+                simLiquid.style.background = "var(--water-clean)"; // Perfect
+                statusText = "Excellent! Safe to drink.";
+                statusClass = "status-excellent";
+            } else if (isAlumGood && !isChlorGood) {
+                statusText = "Warning: Unsafe Bacteria Levels.";
+            } else if (!isAlumGood && isChlorGood) {
+                statusText = "Warning: High Turbidity / Cloudy.";
+            } else {
+                statusText = "Critical: Unsafe Water.";
+            }
+            
+            simStatusBox.textContent = statusText;
+            simStatusBox.className = `sim-status ${statusClass}`;
+        }
+        
+        [sTurb, sAlum, sChlor].forEach(el => {
+            el.addEventListener('input', updateSimulation);
+            // Touch support for sliders is native, but adding listener ensures immediate feedback
+            el.addEventListener('touchmove', updateSimulation); 
+        });
+        updateSimulation(); // Init
+
+
+        /**
+         * 4. Ambient Background Animation (Visual Polish)
+         */
+        const ambCanvas = document.getElementById('ambient-canvas');
+        const actx = ambCanvas.getContext('2d');
+        let aw, ah;
+        let ambParticles = [];
+
+        function resizeAmb() {
+            aw = window.innerWidth;
+            ah = window.innerHeight;
+            ambCanvas.width = aw;
+            ambCanvas.height = ah;
+        }
+        window.addEventListener('resize', resizeAmb);
+        resizeAmb();
+
+        for(let i=0; i<50; i++) {
+            ambParticles.push({
+                x: Math.random() * aw,
+                y: Math.random() * ah,
+                r: Math.random() * 2 + 0.5,
+                vy: (Math.random() * -0.5) - 0.1 // float up
+            });
+        }
+
+        function drawAmbient() {
+            actx.clearRect(0,0,aw,ah);
+            actx.fillStyle = 'rgba(0, 242, 254, 0.1)';
+            ambParticles.forEach(p => {
+                actx.beginPath();
+                actx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                actx.fill();
+                p.y += p.vy;
+                if(p.y < 0) {
+                    p.y = ah;
+                    p.x = Math.random() * aw;
+                }
+            });
+            requestAnimationFrame(drawAmbient);
+        }
+        drawAmbient();
+
+    </script>
+</body>
+</html>

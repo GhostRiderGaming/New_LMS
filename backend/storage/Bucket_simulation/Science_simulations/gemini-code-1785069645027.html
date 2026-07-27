@@ -1,0 +1,1592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Motion Graphs Visualization Lab</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & BASE SETUP
+           ========================================================================== */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        :root {
+            /* Premium Color Palette */
+            --bg-base: #030712;
+            --bg-surface: #111827;
+            --glass-bg: rgba(17, 24, 39, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            /* Thematic Colors */
+            --c-dist: #f43f5e; /* Rose / Pink for Distance */
+            --c-vel: #0ea5e9;  /* Cyan / Blue for Velocity */
+            --c-acc: #10b981;  /* Emerald / Green for Acceleration */
+            --c-time: #f59e0b; /* Amber / Orange for Time */
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            /* Typography */
+            --font-main: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+            
+            /* Sizing */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --spacing: clamp(16px, 3vw, 32px);
+            
+            /* Transitions */
+            --t-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --t-smooth: 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            position: relative;
+        }
+
+        /* Ambient Animated Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, #111827 0%, #030712 100%);
+        }
+        
+        .glow-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s infinite alternate ease-in-out;
+        }
+
+        .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: var(--c-vel); animation-delay: 0s; }
+        .orb-2 { bottom: -20%; right: -10%; width: 60vw; height: 60vw; background: var(--c-dist); animation-delay: -5s; }
+        .orb-3 { top: 40%; left: 60%; width: 30vw; height: 30vw; background: var(--c-acc); animation-delay: -10s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(10%, 10%) scale(1.1); }
+        }
+
+        /* ==========================================================================
+           2. TYPOGRAPHY & LAYOUT UTILITIES
+           ========================================================================== */
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 700; color: var(--text-main); margin-bottom: 0.5em;}
+        h3 { font-size: clamp(1.2rem, 2.5vw, 1.8rem); font-weight: 600; color: var(--text-main); }
+        p { font-size: clamp(0.95rem, 1.2vw, 1.125rem); color: var(--text-muted); }
+        .mono { font-family: var(--font-mono); }
+        
+        .gradient-text-dist { background: linear-gradient(to right, #fb7185, #e11d48); -webkit-background-clip: text; color: transparent; }
+        .gradient-text-vel { background: linear-gradient(to right, #38bdf8, #0284c7); -webkit-background-clip: text; color: transparent; }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing);
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            transition: var(--t-smooth);
+        }
+
+        .glass-panel:hover {
+            border-color: var(--glass-highlight);
+            box-shadow: 0 0 30px rgba(255,255,255,0.05);
+        }
+
+        section {
+            margin-bottom: clamp(60px, 10vw, 120px);
+            position: relative;
+        }
+
+        /* Badge */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            margin-bottom: 16px;
+        }
+
+        /* ==========================================================================
+           3. HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding-top: 10vh;
+        }
+
+        .hero h1 { margin-bottom: 24px; }
+        .hero p { max-width: 600px; margin: 0 auto 40px; }
+
+        .hero-visual {
+            width: 100%;
+            max-width: 800px;
+            height: 300px;
+            position: relative;
+            margin-top: 2rem;
+        }
+
+        /* ==========================================================================
+           4. MANDATORY LABELLING SYSTEM (Markers & Legend)
+           ========================================================================== */
+        .diagram-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        @media (min-width: 1024px) {
+            .diagram-container {
+                grid-template-columns: 2fr 1fr; /* Image left, legend right */
+            }
+        }
+
+        .illustration-wrapper {
+            position: relative;
+            width: 100%;
+            min-height: 280px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow: hidden; /* Keep markers inside */
+        }
+
+        /* The SVG Illustration */
+        .premium-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+            filter: drop-shadow(0 10px 15px rgba(0,0,0,0.5));
+        }
+
+        /* Numbered Markers */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--bg-surface);
+            border: 2px solid #fff;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            font-size: 14px;
+            font-family: var(--font-mono);
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(0,0,0,0.8), 0 0 15px currentColor;
+            transition: all var(--t-fast);
+            z-index: 10;
+        }
+
+        .marker::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 1px solid currentColor;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all var(--t-fast);
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            z-index: 20;
+        }
+        
+        .marker:hover::before, .marker.active::before {
+            opacity: 1;
+            transform: scale(1);
+            animation: pulse-ring 1.5s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        /* Colors for specific marker types */
+        .marker[data-color="dist"] { border-color: var(--c-dist); color: var(--c-dist); box-shadow: 0 0 15px var(--c-dist); background: rgba(244, 63, 94, 0.1); }
+        .marker[data-color="vel"] { border-color: var(--c-vel); color: var(--c-vel); box-shadow: 0 0 15px var(--c-vel); background: rgba(14, 165, 233, 0.1); }
+        .marker[data-color="time"] { border-color: var(--c-time); color: var(--c-time); box-shadow: 0 0 15px var(--c-time); background: rgba(245, 158, 11, 0.1); }
+        .marker[data-color="slope"] { border-color: #fff; color: #fff; box-shadow: 0 0 15px rgba(255,255,255,0.5); background: rgba(255,255,255, 0.1); }
+
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .legend-item {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            transition: var(--t-fast);
+            cursor: pointer;
+            align-items: center;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--glass-border);
+            transform: translateX(4px);
+        }
+
+        .legend-badge {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            border: 1px solid currentColor;
+        }
+        
+        .legend-content h4 { font-size: 0.95rem; margin-bottom: 2px; color: var(--text-main);}
+        .legend-content p { font-size: 0.85rem; margin: 0; line-height: 1.3;}
+
+        /* Color classes for legend linking */
+        .leg-dist { color: var(--c-dist); }
+        .leg-vel { color: var(--c-vel); }
+        .leg-time { color: var(--c-time); }
+        .leg-slope { color: #fff; }
+        
+        .legend-item.active.leg-dist { border-left: 3px solid var(--c-dist); background: rgba(244, 63, 94, 0.05);}
+        .legend-item.active.leg-vel { border-left: 3px solid var(--c-vel); background: rgba(14, 165, 233, 0.05);}
+
+        /* ==========================================================================
+           5. MANDATORY WORKING SECTION (Mechanism / Stages)
+           ========================================================================== */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .mech-visual {
+            width: 100%;
+            background: #000;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            position: relative;
+            border: 1px solid var(--glass-border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top half: The physical motion (Car) */
+        .mech-world {
+            height: 160px;
+            background: linear-gradient(to bottom, #0f172a, #020617);
+            position: relative;
+            border-bottom: 1px solid var(--glass-border);
+            overflow: hidden;
+        }
+
+        /* Bottom half: The graphs drawing in real-time */
+        .mech-graphs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            height: 240px;
+            background: #080c14;
+        }
+
+        .graph-view {
+            position: relative;
+            padding: 10px;
+            border-right: 1px solid rgba(255,255,255,0.05);
+        }
+        .graph-view:last-child { border-right: none; }
+        
+        .graph-title {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            color: rgba(255,255,255,0.5);
+            z-index: 2;
+        }
+
+        .mech-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Controls Area */
+        .mech-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .mech-nav {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            transition: var(--t-fast);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover { background: rgba(255,255,255,0.2); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: var(--c-vel); border-color: var(--c-vel); color: #000; font-weight: bold;}
+        .btn-primary:hover { background: #38bdf8; box-shadow: 0 0 15px rgba(14, 165, 233, 0.4);}
+
+        /* Stage Info Area */
+        .stage-info {
+            flex: 1;
+            min-width: 250px;
+        }
+        
+        .stage-badge {
+            font-size: 0.75rem;
+            color: var(--c-time);
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+        
+        .stage-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+            color: #fff;
+        }
+
+        .stage-desc {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        /* Progress Dots */
+        .progress-dots {
+            display: flex;
+            gap: 6px;
+            margin-right: 16px;
+        }
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--t-fast);
+        }
+        .dot.active { background: var(--c-vel); box-shadow: 0 0 8px var(--c-vel); transform: scale(1.2);}
+
+        /* CSS Car Entity for Mechanism */
+        .entity-car {
+            position: absolute;
+            bottom: 20px; /* Ride on road */
+            left: 0;
+            width: 60px;
+            height: 24px;
+            transform: translateX(-50%);
+            will-change: transform;
+            z-index: 10;
+        }
+        /* Sleek car body via CSS */
+        .car-body {
+            position: absolute;
+            width: 100%; height: 100%;
+            background: linear-gradient(135deg, #e2e8f0, #94a3b8);
+            border-radius: 12px 20px 4px 4px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5), inset 0 2px 5px rgba(255,255,255,0.5);
+        }
+        .car-window {
+            position: absolute;
+            top: 2px; right: 15px; width: 25px; height: 10px;
+            background: #0f172a;
+            border-radius: 4px 12px 0 0;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .car-wheel {
+            position: absolute;
+            bottom: -4px; width: 14px; height: 14px;
+            background: #1e293b;
+            border: 2px solid #475569;
+            border-radius: 50%;
+        }
+        .car-wheel.front { right: 8px; }
+        .car-wheel.rear { left: 8px; }
+        
+        .car-light {
+            position: absolute;
+            width: 4px; height: 8px;
+            border-radius: 2px;
+        }
+        .car-light.front { right: 0; top: 10px; background: #fef08a; box-shadow: 5px 0 15px #fef08a; }
+        .car-light.rear { left: 0; top: 8px; background: #ef4444; box-shadow: -5px 0 10px #ef4444; transition: 0.2s;}
+        
+        /* Brake light active state class */
+        .braking .car-light.rear { background: #ff0000; box-shadow: -10px 0 20px #ff0000; filter: brightness(1.5);}
+
+        /* Road grid lines */
+        .road-grid {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%; height: 20px;
+            background: 
+                linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
+            background-size: 50px 100%;
+            border-top: 1px solid rgba(255,255,255,0.2);
+        }
+        
+        /* Particles for speed */
+        .speed-lines {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+        
+        /* Mechanism Inputs/Outputs visualization */
+        .stage-indicators {
+            position: absolute;
+            top: 10px; right: 10px;
+            display: flex;
+            gap: 10px;
+        }
+        .indicator-box {
+            background: rgba(0,0,0,0.6);
+            border: 1px solid var(--glass-border);
+            border-radius: 6px;
+            padding: 4px 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: #fff;
+        }
+        .indicator-box svg { width: 14px; height: 14px; }
+
+
+        /* ==========================================================================
+           6. INTERACTIVE SIMULATION LAB
+           ========================================================================== */
+        .lab-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+        @media (min-width: 1024px) {
+            .lab-container { grid-template-columns: 300px 1fr; }
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 24px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+            font-family: var(--font-mono);
+        }
+
+        /* Premium Sliders */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            border: 2px solid var(--c-vel);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+        
+        .slider-acc::-webkit-slider-thumb { border-color: var(--c-acc); box-shadow: 0 0 10px var(--c-acc);}
+        .slider-vel::-webkit-slider-thumb { border-color: var(--c-vel); box-shadow: 0 0 10px var(--c-vel);}
+
+        /* Simulation View */
+        .sim-view {
+            display: flex;
+            flex-direction: column;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: #020617;
+            border: 1px solid var(--glass-border);
+            min-height: 400px;
+        }
+
+        .sim-world {
+            height: 120px;
+            position: relative;
+            background: linear-gradient(to bottom, #0f172a, #000);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .sim-graphs {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr;
+            position: relative;
+        }
+        @media (min-width: 768px) {
+            .sim-graphs { grid-template-columns: 1fr 1fr; }
+        }
+
+        #labCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .sim-overlay-text {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: rgba(255,255,255,0.5);
+            pointer-events: none;
+        }
+        .overlay-right { left: auto; right: 10px; text-align: right; }
+
+        /* ==========================================================================
+           7. INFO CARDS (Applications, Mistakes)
+           ========================================================================== */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .info-card {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            height: 100%;
+        }
+
+        .info-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .bg-red { background: rgba(244, 63, 94, 0.1); color: var(--c-dist); border: 1px solid rgba(244, 63, 94, 0.2);}
+        .bg-blue { background: rgba(14, 165, 233, 0.1); color: var(--c-vel); border: 1px solid rgba(14, 165, 233, 0.2);}
+        .bg-green { background: rgba(16, 185, 129, 0.1); color: var(--c-acc); border: 1px solid rgba(16, 185, 129, 0.2);}
+
+        /* Mobile specific adjustments to meet constraints */
+        @media (max-width: 767px) {
+            .container { padding: 16px; }
+            section { margin-bottom: 60px; }
+            .glass-panel { padding: 16px; backdrop-filter: blur(10px); } /* Reduce blur for perf */
+            .btn { padding: 12px 16px; font-size: 1rem; } /* Tap targets >= 44px */
+            input[type=range]::-webkit-slider-thumb { height: 28px; width: 28px; margin-top:-12px;} /* Larger thumbs */
+            .mech-graphs { height: auto; grid-template-columns: 1fr; grid-template-rows: 150px 150px; }
+            .graph-view { border-right: none; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        }
+
+        /* Ensure Canvas doesn't overflow */
+        canvas { max-width: 100%; }
+        
+        /* Utilities */
+        .hidden { display: none !important; }
+        .text-center { text-align: center; }
+        .mb-2 { margin-bottom: 8px; }
+        .mb-4 { margin-bottom: 16px; }
+        .mt-4 { margin-top: 16px; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Animated Background -->
+    <div class="ambient-bg">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+        <div class="glow-orb orb-3"></div>
+    </div>
+
+    <div class="container">
+        
+        <!-- SECTION 1: HERO -->
+        <section class="hero" id="intro">
+            <div class="badge">Kinematics Unit 01</div>
+            <h1>Visualizing <span class="gradient-text-vel">Motion</span><br>Through Graphs</h1>
+            <p>A premium interactive laboratory to understand the mathematical relationship between position, velocity, acceleration, and time.</p>
+            
+            <div class="hero-visual glass-panel">
+                <!-- Abstract looping SVG animation of a moving point drawing a curve -->
+                <svg viewBox="0 0 800 300" class="premium-svg" preserveAspectRatio="xMidYMid slice">
+                    <defs>
+                        <linearGradient id="gridGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="rgba(255,255,255,0.02)"/>
+                            <stop offset="100%" stop-color="rgba(255,255,255,0.1)"/>
+                        </linearGradient>
+                        <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="var(--c-dist)"/>
+                            <stop offset="100%" stop-color="var(--c-vel)"/>
+                        </linearGradient>
+                        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="8" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+                    
+                    <!-- Background Grid -->
+                    <g stroke="url(#gridGrad)" stroke-width="1" fill="none">
+                        <!-- Horizontal -->
+                        <path d="M0,50 L800,50 M0,100 L800,100 M0,150 L800,150 M0,200 L800,200 M0,250 L800,250" />
+                        <!-- Vertical -->
+                        <path d="M100,0 L100,300 M200,0 L200,300 M300,0 L300,300 M400,0 L400,300 M500,0 L500,300 M600,0 L600,300 M700,0 L700,300" />
+                    </g>
+                    
+                    <!-- Axes -->
+                    <path d="M 50 250 L 750 250" stroke="#fff" stroke-width="2" opacity="0.5"/>
+                    <path d="M 50 250 L 50 50" stroke="#fff" stroke-width="2" opacity="0.5"/>
+
+                    <!-- Animated Curve -->
+                    <path id="hero-curve" d="M 50 250 C 200 250, 300 50, 500 150 S 700 250, 750 100" 
+                          fill="none" stroke="url(#lineGrad)" stroke-width="4" filter="url(#glow)"
+                          stroke-dasharray="1500" stroke-dashoffset="1500">
+                        <animate attributeName="stroke-dashoffset" values="1500;0" dur="4s" repeatCount="indefinite" ease="ease-in-out"/>
+                    </path>
+                    
+                    <!-- Moving Dot -->
+                    <circle r="6" fill="#fff" filter="url(#glow)">
+                        <animateMotion dur="4s" repeatCount="indefinite" rotate="auto" ease="ease-in-out">
+                            <mpath href="#hero-curve"/>
+                        </animateMotion>
+                    </circle>
+                </svg>
+            </div>
+        </section>
+
+
+        <!-- SECTION 2: COMPONENTS (Anatomy) -->
+        <section id="anatomy">
+            <h2 class="text-center">Anatomy of a Motion Graph</h2>
+            <p class="text-center mb-4">Every line, curve, and enclosed space contains physical meaning. Hover the markers to decode.</p>
+            
+            <div class="glass-panel">
+                <div class="diagram-container">
+                    
+                    <!-- Left/Top: Illustration -->
+                    <div class="illustration-wrapper">
+                        <!-- Strict Labeling: Only numbered markers over the SVG -->
+                        <div class="marker" data-color="dist" style="top: 15%; left: 8%;" data-target="item-y">1</div>
+                        <div class="marker" data-color="time" style="bottom: 10%; left: 85%;" data-target="item-x">2</div>
+                        <div class="marker" data-color="slope" style="top: 35%; left: 45%;" data-target="item-slope">3</div>
+                        <div class="marker" data-color="vel" style="top: 70%; left: 65%;" data-target="item-area">4</div>
+
+                        <svg viewBox="0 0 600 400" class="premium-svg">
+                            <defs>
+                                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="rgba(14, 165, 233, 0.4)"/>
+                                    <stop offset="100%" stop-color="rgba(14, 165, 233, 0.0)"/>
+                                </linearGradient>
+                            </defs>
+                            
+                            <!-- Grid & Axes -->
+                            <g stroke="rgba(255,255,255,0.05)" stroke-width="1">
+                                <path d="M50,0 L50,350 M150,0 L150,350 M250,0 L250,350 M350,0 L350,350 M450,0 L450,350 M550,0 L550,350"/>
+                                <path d="M50,50 L600,50 M50,150 L600,150 M50,250 L600,250 M50,350 L600,350"/>
+                            </g>
+                            <path d="M 50 350 L 550 350" stroke="#fff" stroke-width="2"/> <!-- X Axis -->
+                            <path d="M 50 350 L 50 50" stroke="#fff" stroke-width="2"/>  <!-- Y Axis -->
+                            
+                            <!-- Arrow Heads -->
+                            <path d="M 550 350 L 540 345 L 540 355 Z" fill="#fff"/>
+                            <path d="M 50 50 L 45 60 L 55 60 Z" fill="#fff"/>
+
+                            <!-- Area Under Curve (Highlighted) -->
+                            <path d="M 300 350 L 300 150 C 400 100, 450 150, 500 250 L 500 350 Z" fill="url(#areaGrad)"/>
+                            <path d="M 300 350 L 300 150" stroke="var(--c-vel)" stroke-width="1" stroke-dasharray="4,4"/>
+                            <path d="M 500 350 L 500 250" stroke="var(--c-vel)" stroke-width="1" stroke-dasharray="4,4"/>
+
+                            <!-- The Curve -->
+                            <path d="M 50 350 C 150 350, 200 200, 300 150 C 400 100, 450 150, 500 250" 
+                                  fill="none" stroke="#fff" stroke-width="4" filter="url(#glow)"/>
+                            
+                            <!-- Slope Tangent Line -->
+                            <path d="M 200 230 L 400 70" stroke="var(--c-dist)" stroke-width="2" />
+                            <circle cx="300" cy="150" r="5" fill="#fff" stroke="var(--c-dist)" stroke-width="2"/>
+                            
+                            <!-- Triangle for slope (rise/run) -->
+                            <path d="M 300 150 L 400 150 L 400 70" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-dasharray="4,4"/>
+                        </svg>
+                    </div>
+
+                    <!-- Right/Bottom: Legend List (Normal flow, never overlaps) -->
+                    <div class="legend-list">
+                        <div class="legend-item leg-dist" id="item-y" data-target="dist">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-content">
+                                <h4>Y-Axis (Dependent Variable)</h4>
+                                <p>Typically Distance (m) or Velocity (m/s). Shows what is changing over time.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item leg-time" id="item-x" data-target="time">
+                            <div class="legend-badge">2</div>
+                            <div class="legend-content">
+                                <h4>X-Axis (Independent Variable)</h4>
+                                <p>Always Time (s). Progresses uniformly from left to right.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item leg-slope" id="item-slope" data-target="slope">
+                            <div class="legend-badge">3</div>
+                            <div class="legend-content">
+                                <h4>Slope (Gradient: Δy/Δx)</h4>
+                                <p>On d-t graph: Velocity. On v-t graph: Acceleration. Steeper = Faster rate of change.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item leg-vel" id="item-area" data-target="vel">
+                            <div class="legend-badge">4</div>
+                            <div class="legend-content">
+                                <h4>Area Under Curve</h4>
+                                <p>On a Velocity-Time graph, the shaded area represents total Displacement (Distance traveled).</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+
+        <!-- SECTION 3: MANDATORY WORKING SECTION (Stage-by-Stage Mechanism) -->
+        <section id="working">
+            <h2 class="text-center">The Mechanics of Motion</h2>
+            <p class="text-center mb-4">Observe how physical movement directly translates into lines on a graph in this 4-stage sequence.</p>
+
+            <div class="mechanism-container glass-panel">
+                
+                <!-- Visual Top: Car Journey -->
+                <div class="mech-visual">
+                    
+                    <div class="mech-world">
+                        <!-- Inputs/Outputs visualizer -->
+                        <div class="stage-indicators">
+                            <div class="indicator-box" id="ind-throttle">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="var(--c-acc)" stroke-width="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                <span>Throttle: 0%</span>
+                            </div>
+                            <div class="indicator-box" id="ind-speed">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="var(--c-vel)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                                <span>Speed: 0 m/s</span>
+                            </div>
+                        </div>
+
+                        <div class="speed-lines" id="speedLines">
+                            <!-- Background speed effect lines -->
+                            <svg width="100%" height="100%">
+                                <g stroke="rgba(255,255,255,0.1)" stroke-width="2" stroke-dasharray="20,100">
+                                    <line x1="100%" y1="20" x2="-20%" y2="20" class="line-move" />
+                                    <line x1="120%" y1="60" x2="-20%" y2="60" class="line-move" style="animation-duration: 0.8s" />
+                                    <line x1="90%" y1="100" x2="-20%" y2="100" class="line-move" style="animation-duration: 1.2s"/>
+                                </g>
+                            </svg>
+                        </div>
+                        <div class="road-grid"></div>
+                        
+                        <!-- The CSS Entity -->
+                        <div class="entity-car" id="mechCar">
+                            <div class="car-body"></div>
+                            <div class="car-window"></div>
+                            <div class="car-light front"></div>
+                            <div class="car-light rear"></div>
+                            <div class="car-wheel front"></div>
+                            <div class="car-wheel rear"></div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Bottom: Progressive Graphs -->
+                    <div class="mech-graphs">
+                        <div class="graph-view">
+                            <div class="graph-title">Distance-Time (d-t)</div>
+                            <canvas id="canvas-mech-dt" class="mech-canvas"></canvas>
+                        </div>
+                        <div class="graph-view">
+                            <div class="graph-title">Velocity-Time (v-t)</div>
+                            <canvas id="canvas-mech-vt" class="mech-canvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls & Info -->
+                <div class="mech-controls">
+                    <div class="stage-info">
+                        <div class="stage-badge" id="mech-stage-badge">Stage 1 of 4</div>
+                        <div class="stage-title" id="mech-stage-title">Starting Up (Acceleration)</div>
+                        <p class="stage-desc" id="mech-stage-desc">Throttle applied. Velocity increases continuously. Distance curves upwards exponentially.</p>
+                    </div>
+
+                    <div class="mech-nav">
+                        <div class="progress-dots" id="mech-dots">
+                            <div class="dot active"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+                        <button class="btn" id="btn-prev">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        <button class="btn btn-primary" id="btn-play-stage">Play Stage</button>
+                        <button class="btn" id="btn-next">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+
+        <!-- SECTION 4: INTERACTIVE SIMULATION LAB -->
+        <section id="lab">
+            <h2 class="text-center">Interactive Graphing Lab</h2>
+            <p class="text-center mb-4">Adjust the initial variables and observe how physics dictates the shape of both graphs simultaneously.</p>
+            
+            <div class="glass-panel lab-container">
+                
+                <!-- Left: Controls -->
+                <div class="control-panel">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Initial Velocity (<span class="mono">u</span>)</span>
+                            <span class="mono" id="val-u">0 m/s</span>
+                        </div>
+                        <input type="range" id="slider-u" class="slider-vel" min="-10" max="10" step="1" value="0">
+                        <p style="font-size: 0.8rem; margin:0;">Starting speed at t=0.</p>
+                    </div>
+
+                    <div class="control-group mt-4">
+                        <div class="control-header">
+                            <span>Constant Acceleration (<span class="mono">a</span>)</span>
+                            <span class="mono" id="val-a">2 m/s²</span>
+                        </div>
+                        <input type="range" id="slider-a" class="slider-acc" min="-5" max="5" step="0.5" value="2">
+                        <p style="font-size: 0.8rem; margin:0;">Rate of change of velocity.</p>
+                    </div>
+
+                    <div style="flex:1"></div>
+                    
+                    <button class="btn btn-primary" style="justify-content:center; padding: 16px;" id="btn-sim-play">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Run Simulation
+                    </button>
+                    <button class="btn" style="justify-content:center;" id="btn-sim-reset">Reset</button>
+                </div>
+
+                <!-- Right: Simulation Output -->
+                <div class="sim-view">
+                    
+                    <div class="sim-world">
+                        <div class="sim-overlay-text">Time: <span id="sim-time" class="mono" style="color:var(--c-time)">0.0s</span></div>
+                        
+                        <!-- Track markers -->
+                        <div style="position:absolute; bottom: 0; width:100%; border-top:2px solid #333; height: 10px;">
+                            <!-- Hash marks via CSS pattern -->
+                            <div style="width:100%; height:100%; background: repeating-linear-gradient(90deg, #666 0px, #666 2px, transparent 2px, transparent 50px);"></div>
+                        </div>
+                        
+                        <!-- Lab Car Entity -->
+                        <div class="entity-car" id="labCar" style="left: 10%;">
+                            <div class="car-body"></div>
+                            <div class="car-window"></div>
+                            <div class="car-wheel front"></div>
+                            <div class="car-wheel rear"></div>
+                        </div>
+                    </div>
+
+                    <!-- Dual Canvas Setup for rendering graphs -->
+                    <div class="sim-graphs">
+                        <div style="position:relative; border-right: 1px solid rgba(255,255,255,0.1)">
+                            <div class="sim-overlay-text">d-t Graph (Position)</div>
+                            <canvas id="labCanvasDT" style="width:100%; height:100%; min-height: 250px;"></canvas>
+                        </div>
+                        <div style="position:relative;">
+                            <div class="sim-overlay-text">v-t Graph (Velocity)</div>
+                            <canvas id="labCanvasVT" style="width:100%; height:100%; min-height: 250px;"></canvas>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+
+        <!-- SECTION 5: INFO GRID (Applications & Mistakes) -->
+        <section id="info">
+            <div class="cards-grid">
+                
+                <div class="glass-panel info-card">
+                    <div class="info-icon bg-blue">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    </div>
+                    <h3>Real World: GPS</h3>
+                    <p>Navigation apps calculate your ETA by constantly plotting your <strong>distance-time</strong> curve, analyzing the slope (your current speed), and predicting the remaining area to your destination.</p>
+                </div>
+
+                <div class="glass-panel info-card">
+                    <div class="info-icon bg-red">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                    </div>
+                    <h3>Common Mistake</h3>
+                    <p>Assuming a straight diagonal line on a <strong>velocity-time</strong> graph means constant distance. False! A diagonal v-t line means <em>changing</em> velocity (constant acceleration). The distance is actually curving upwards.</p>
+                </div>
+
+                <div class="glass-panel info-card">
+                    <div class="info-icon bg-green">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <h3>Quick Revision Rule</h3>
+                    <ul style="list-style: none; padding: 0; color: var(--text-muted); font-size: 0.95rem; display: flex; flex-direction:column; gap:8px;">
+                        <li>• <span style="color:#fff">d-t Slope</span> = Velocity</li>
+                        <li>• <span style="color:#fff">v-t Slope</span> = Acceleration</li>
+                        <li>• <span style="color:#fff">v-t Area</span> = Distance (Displacement)</li>
+                        <li>• <span style="color:#fff">d-t Area</span> = Meaningless!</li>
+                    </ul>
+                </div>
+
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Add some specific animation classes used by JS -->
+    <style>
+        @keyframes dashMove {
+            to { stroke-dashoffset: -100; }
+        }
+        .line-move {
+            animation: dashMove linear infinite;
+        }
+    </style>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 1. MARKER & LEGEND INTERACTION (Anatomy Section) ---
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function clearActiveStates() {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => {
+                    clearActiveStates();
+                    marker.classList.add('active');
+                    document.getElementById(marker.dataset.target).classList.add('active');
+                });
+                marker.addEventListener('click', () => { /* Mobile touch support */
+                    clearActiveStates();
+                    marker.classList.add('active');
+                    document.getElementById(marker.dataset.target).classList.add('active');
+                });
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => {
+                    clearActiveStates();
+                    item.classList.add('active');
+                    document.querySelector(`.marker[data-target="${item.id}"]`).classList.add('active');
+                });
+            });
+
+
+            // --- UTILS FOR CANVAS ---
+            function setupCanvas(canvasId) {
+                const canvas = document.getElementById(canvasId);
+                const ctx = canvas.getContext('2d');
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                
+                return { canvas, ctx, width: rect.width, height: rect.height };
+            }
+
+            function drawGrid(ctx, w, h, originX, originY) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                // Vertical lines
+                for(let x = originX % 50; x < w; x+=50) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
+                // Horizontal lines
+                for(let y = originY % 50; y < h; y+=50) { ctx.moveTo(0, y); ctx.lineTo(w, y); }
+                ctx.stroke();
+
+                // Axes
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(originX, 0); ctx.lineTo(originX, h); // Y axis
+                ctx.moveTo(0, originY); ctx.lineTo(w, originY); // X axis
+                ctx.stroke();
+            }
+
+
+            // --- 2. MANDATORY WORKING SECTION (Stage-by-Stage) ---
+            
+            // Define the sequence logic
+            const stages = [
+                {
+                    title: "Acceleration",
+                    desc: "Throttle applied. Velocity increases linearly. Distance curves upwards exponentially (parabola).",
+                    a: 2, u: 0, duration: 4, action: "Speeding up", brake: false
+                },
+                {
+                    title: "Constant Velocity",
+                    desc: "Cruising speed. Acceleration is zero. Velocity is flat. Distance grows steadily (straight diagonal line).",
+                    a: 0, u: 8, duration: 4, action: "Cruising", brake: false
+                },
+                {
+                    title: "Deceleration",
+                    desc: "Brakes applied! Negative acceleration. Velocity drops to zero. Distance curve flattens out.",
+                    a: -2.66, u: 8, duration: 3, action: "Braking", brake: true
+                },
+                {
+                    title: "At Rest",
+                    desc: "Object stopped. Velocity is zero. Distance remains constant (flat horizontal line).",
+                    a: 0, u: 0, duration: 3, action: "Stopped", brake: false
+                }
+            ];
+
+            let currentStageIdx = 0;
+            let mechReqId;
+            let mechTime = 0;
+            let mechIsPlaying = false;
+            
+            // History array to keep track of cumulative points for drawing continuous graphs
+            let stageHistory = [];
+            let totalT = 0;
+            let currentDist = 0;
+
+            const btnNext = document.getElementById('btn-next');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnPlayStage = document.getElementById('btn-play-stage');
+            const dots = document.querySelectorAll('#mech-dots .dot');
+            const mechCar = document.getElementById('mechCar');
+            const speedLines = document.getElementById('speedLines');
+            
+            const indThrottle = document.getElementById('ind-throttle').querySelector('span');
+            const indSpeed = document.getElementById('ind-speed').querySelector('span');
+
+            let cvsMechDT, cvsMechVT;
+
+            function initMechCanvas() {
+                cvsMechDT = setupCanvas('canvas-mech-dt');
+                cvsMechVT = setupCanvas('canvas-mech-vt');
+            }
+
+            window.addEventListener('resize', () => {
+                // Throttle resize
+                clearTimeout(window.resizeTimer);
+                window.resizeTimer = setTimeout(() => {
+                    initMechCanvas();
+                    if(!mechIsPlaying) drawMechFrame(true); // redraw static
+                    
+                    // Also resize lab canvas
+                    initLabCanvas();
+                    if(!simIsRunning) drawLabFrame();
+                }, 100);
+            });
+
+            function updateStageUI() {
+                const stg = stages[currentStageIdx];
+                document.getElementById('mech-stage-badge').innerText = `Stage ${currentStageIdx + 1} of ${stages.length}`;
+                document.getElementById('mech-stage-title').innerText = stg.title;
+                document.getElementById('mech-stage-desc').innerText = stg.desc;
+                
+                dots.forEach((d, i) => d.classList.toggle('active', i === currentStageIdx));
+                btnPrev.disabled = currentStageIdx === 0;
+                btnNext.disabled = currentStageIdx === stages.length - 1;
+
+                if(stg.brake) mechCar.classList.add('braking');
+                else mechCar.classList.remove('braking');
+            }
+
+            function calcPhysics(a, u, t, initialD) {
+                const v = u + (a * t);
+                const d = initialD + (u * t) + (0.5 * a * t * t);
+                return {v, d};
+            }
+
+            function playMechStage() {
+                if(mechIsPlaying) return;
+                mechIsPlaying = true;
+                btnPlayStage.innerHTML = 'Animating...';
+                btnPlayStage.disabled = true;
+                
+                // Set initial conditions for this stage run
+                const stg = stages[currentStageIdx];
+                mechTime = 0;
+                
+                // Get starting D from history if available
+                let startD = 0;
+                let startGlobalT = 0;
+                
+                if (currentStageIdx > 0 && stageHistory[currentStageIdx-1]) {
+                    startD = stageHistory[currentStageIdx-1].endD;
+                    startGlobalT = stageHistory[currentStageIdx-1].endGlobalT;
+                } else {
+                    // Reset history if starting from beginning
+                    stageHistory = [];
+                }
+
+                currentDist = startD;
+
+                let lastTime = performance.now();
+                
+                function animate(currentTime) {
+                    const dt = (currentTime - lastTime) / 1000; // seconds
+                    lastTime = currentTime;
+                    
+                    if (mechTime < stg.duration) {
+                        mechTime += dt;
+                        if(mechTime > stg.duration) mechTime = stg.duration; // cap
+                        
+                        const state = calcPhysics(stg.a, stg.u, mechTime, startD);
+                        currentDist = state.d;
+                        
+                        // Update UI Indicators
+                        indThrottle.innerText = `Throttle: ${stg.a > 0 ? 'ON' : stg.a < 0 ? 'BRAKE' : 'OFF'}`;
+                        indSpeed.innerText = `Speed: ${Math.max(0, state.v).toFixed(1)} m/s`;
+                        
+                        // Visual speed effects
+                        if (state.v > 0) speedLines.style.opacity = Math.min(1, state.v / 10);
+                        else speedLines.style.opacity = 0;
+
+                        // Move car physically (looping x position based on distance modulo)
+                        // This makes it look like it's continuously traveling
+                        const carX = (currentDist * 10) % 100; // map abstract distance to screen %
+                        mechCar.style.left = `${carX}%`;
+                        
+                        // Store current point for graph drawing
+                        if(!stageHistory[currentStageIdx]) {
+                            stageHistory[currentStageIdx] = { points: [], endD: 0, endGlobalT: 0 };
+                        }
+                        stageHistory[currentStageIdx].points.push({
+                            t: startGlobalT + mechTime,
+                            d: state.d,
+                            v: state.v
+                        });
+
+                        drawMechFrame();
+                        mechReqId = requestAnimationFrame(animate);
+                    } else {
+                        // Stage finished
+                        mechIsPlaying = false;
+                        btnPlayStage.innerHTML = 'Replay Stage';
+                        btnPlayStage.disabled = false;
+                        
+                        // Save final state
+                        if(stageHistory[currentStageIdx]) {
+                            stageHistory[currentStageIdx].endD = currentDist;
+                            stageHistory[currentStageIdx].endGlobalT = startGlobalT + stg.duration;
+                        }
+
+                        // Auto-advance logic (optional, keeping it manual for better learning pacing)
+                    }
+                }
+                
+                mechReqId = requestAnimationFrame(animate);
+            }
+
+            function drawMechFrame(isStatic = false) {
+                if(!cvsMechDT) return;
+                
+                const { ctx: ctxDT, width: wDT, height: hDT } = cvsMechDT;
+                const { ctx: ctxVT, width: wVT, height: hVT } = cvsMechVT;
+                
+                ctxDT.clearRect(0,0,wDT,hDT);
+                ctxVT.clearRect(0,0,wVT,hVT);
+                
+                // Origin at bottom left
+                const ox = 30; 
+                const oyDT = hDT - 30;
+                const oyVT = hVT - 30;
+
+                drawGrid(ctxDT, wDT, hDT, ox, oyDT);
+                drawGrid(ctxVT, wVT, hVT, ox, oyVT);
+
+                // Scale factors
+                const scaleX = (wDT - 50) / 15; // 15 seconds total max
+                const scaleY_D = (hDT - 50) / 40; // max distance ~40m
+                const scaleY_V = (hVT - 50) / 10; // max vel 10m/s
+
+                // Function to plot history
+                function plot(ctx, oy, scaleY, valueKey, color) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 3;
+                    ctx.shadowColor = color;
+                    ctx.shadowBlur = 10;
+                    
+                    let started = false;
+                    
+                    // Draw previous stages
+                    for(let i=0; i<=currentStageIdx; i++) {
+                        if(stageHistory[i] && stageHistory[i].points) {
+                            stageHistory[i].points.forEach((p, idx) => {
+                                const px = ox + (p.t * scaleX);
+                                const py = oy - (p[valueKey] * scaleY);
+                                if(!started) { ctx.moveTo(px, py); started = true; }
+                                else { ctx.lineTo(px, py); }
+                            });
+                        }
+                    }
+                    ctx.stroke();
+                    ctx.shadowBlur = 0; // reset
+                }
+
+                plot(ctxDT, oyDT, scaleY_D, 'd', 'var(--c-dist)');
+                plot(ctxVT, oyVT, scaleY_V, 'v', 'var(--c-vel)');
+            }
+
+            // Mechanism Event Listeners
+            btnNext.addEventListener('click', () => {
+                if(currentStageIdx < stages.length - 1) {
+                    cancelAnimationFrame(mechReqId);
+                    mechIsPlaying = false;
+                    btnPlayStage.disabled = false;
+                    btnPlayStage.innerHTML = 'Play Stage';
+                    
+                    // If moving forward without finishing, simulate completion instantly for history
+                    if(!stageHistory[currentStageIdx] || stageHistory[currentStageIdx].points.length === 0) {
+                        // Quick simulate
+                        const stg = stages[currentStageIdx];
+                        let startD = currentStageIdx > 0 ? stageHistory[currentStageIdx-1].endD : 0;
+                        let startGlobalT = currentStageIdx > 0 ? stageHistory[currentStageIdx-1].endGlobalT : 0;
+                        
+                        stageHistory[currentStageIdx] = { points: [], endD: 0, endGlobalT: 0 };
+                        for(let t=0; t<=stg.duration; t+=0.1) {
+                            const state = calcPhysics(stg.a, stg.u, t, startD);
+                            stageHistory[currentStageIdx].points.push({ t: startGlobalT + t, d: state.d, v: state.v });
+                        }
+                        stageHistory[currentStageIdx].endD = calcPhysics(stg.a, stg.u, stg.duration, startD).d;
+                        stageHistory[currentStageIdx].endGlobalT = startGlobalT + stg.duration;
+                    }
+
+                    currentStageIdx++;
+                    updateStageUI();
+                    drawMechFrame(true);
+                }
+            });
+
+            btnPrev.addEventListener('click', () => {
+                if(currentStageIdx > 0) {
+                    cancelAnimationFrame(mechReqId);
+                    mechIsPlaying = false;
+                    btnPlayStage.disabled = false;
+                    btnPlayStage.innerHTML = 'Play Stage';
+                    
+                    // Delete current and next history
+                    stageHistory[currentStageIdx] = null;
+                    currentStageIdx--;
+                    stageHistory[currentStageIdx] = null; // Clear it so it can be re-run
+                    
+                    updateStageUI();
+                    drawMechFrame(true);
+                    
+                    // Reset car position visually
+                    mechCar.style.left = '0%';
+                    indSpeed.innerText = 'Speed: 0 m/s';
+                }
+            });
+
+            btnPlayStage.addEventListener('click', playMechStage);
+
+            // Initialize Mechanism
+            initMechCanvas();
+            updateStageUI();
+            drawMechFrame(true);
+
+
+
+            // --- 3. INTERACTIVE SIMULATION LAB ---
+            
+            const sliderU = document.getElementById('slider-u');
+            const sliderA = document.getElementById('slider-a');
+            const valU = document.getElementById('val-u');
+            const valA = document.getElementById('val-a');
+            const btnSimPlay = document.getElementById('btn-sim-play');
+            const btnSimReset = document.getElementById('btn-sim-reset');
+            const labCar = document.getElementById('labCar');
+            const timeDisplay = document.getElementById('sim-time');
+
+            let cvsLabDT, cvsLabVT;
+            let simReqId;
+            let simIsRunning = false;
+            let simTime = 0;
+            let simData = []; // Array to hold {t, d, v}
+
+            function initLabCanvas() {
+                cvsLabDT = setupCanvas('labCanvasDT');
+                cvsLabVT = setupCanvas('labCanvasVT');
+            }
+
+            // Update labels on slider move
+            sliderU.addEventListener('input', (e) => valU.innerText = `${e.target.value} m/s`);
+            sliderA.addEventListener('input', (e) => valA.innerText = `${e.target.value} m/s²`);
+
+            function drawLabFrame() {
+                if(!cvsLabDT) return;
+                
+                const { ctx: ctxDT, width: wDT, height: hDT } = cvsLabDT;
+                const { ctx: ctxVT, width: wVT, height: hVT } = cvsLabVT;
+                
+                ctxDT.clearRect(0,0,wDT,hDT);
+                ctxVT.clearRect(0,0,wVT,hVT);
+                
+                // Define origin (allow negative velocity/distance to go below center)
+                const ox = 30;
+                
+                // Dynamic Y origins
+                // Distance: mostly positive, but could be negative if u is neg
+                const oyDT = hDT * 0.8; 
+                // Velocity: middle to allow pos/neg
+                const oyVT = hVT * 0.5;
+
+                drawGrid(ctxDT, wDT, hDT, ox, oyDT);
+                drawGrid(ctxVT, wVT, hVT, ox, oyVT);
+
+                // Draw X axes slightly thicker
+                ctxDT.beginPath(); ctxDT.moveTo(ox, oyDT); ctxDT.lineTo(wDT, oyDT); ctxDT.strokeStyle="#fff"; ctxDT.stroke();
+                ctxVT.beginPath(); ctxVT.moveTo(ox, oyVT); ctxVT.lineTo(wVT, oyVT); ctxVT.strokeStyle="#fff"; ctxVT.stroke();
+
+                if(simData.length === 0) return;
+
+                // Max time for graph x-scale
+                const maxT = 10; // 10 seconds simulation
+                const scaleX = (wDT - 50) / maxT;
+                
+                // Fixed scales for Y to see curves properly
+                const scaleY_D = (hDT * 0.4) / 100; // 100m max
+                const scaleY_V = (hVT * 0.4) / 20;  // 20m/s max
+
+                // Plot DT
+                ctxDT.beginPath();
+                ctxDT.strokeStyle = 'var(--c-dist)';
+                ctxDT.lineWidth = 3;
+                simData.forEach((p, i) => {
+                    const px = ox + (p.t * scaleX);
+                    const py = oyDT - (p.d * scaleY_D);
+                    if(i === 0) ctxDT.moveTo(px, py);
+                    else ctxDT.lineTo(px, py);
+                });
+                ctxDT.stroke();
+
+                // Plot VT
+                ctxVT.beginPath();
+                ctxVT.strokeStyle = 'var(--c-vel)';
+                ctxVT.lineWidth = 3;
+                simData.forEach((p, i) => {
+                    const px = ox + (p.t * scaleX);
+                    const py = oyVT - (p.v * scaleY_V);
+                    if(i === 0) ctxVT.moveTo(px, py);
+                    else ctxVT.lineTo(px, py);
+                });
+                ctxVT.stroke();
+                
+                // Shade area under VT curve
+                ctxVT.lineTo(ox + (simData[simData.length-1].t * scaleX), oyVT);
+                ctxVT.lineTo(ox, oyVT);
+                ctxVT.fillStyle = 'rgba(14, 165, 233, 0.2)';
+                ctxVT.fill();
+            }
+
+            function runSimulation() {
+                if(simIsRunning) {
+                    cancelAnimationFrame(simReqId);
+                    simIsRunning = false;
+                    btnSimPlay.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Resume';
+                    return;
+                }
+                
+                simIsRunning = true;
+                btnSimPlay.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause';
+                
+                const u = parseFloat(sliderU.value);
+                const a = parseFloat(sliderA.value);
+                
+                let lastTime = performance.now();
+                
+                function simLoop(currentTime) {
+                    if(!simIsRunning) return;
+                    
+                    const dt = (currentTime - lastTime) / 1000;
+                    lastTime = currentTime;
+                    
+                    if (simTime < 10) { // Run for 10 virtual seconds
+                        simTime += dt;
+                        
+                        // Physics
+                        const v = u + (a * simTime);
+                        const d = (u * simTime) + (0.5 * a * simTime * simTime);
+                        
+                        simData.push({t: simTime, v: v, d: d});
+                        
+                        // Update UI
+                        timeDisplay.innerText = simTime.toFixed(1) + 's';
+                        
+                        // Move car physically
+                        // Center origin (10%) + mapping distance to visual space
+                        const carVisualPos = 10 + (d * 0.5); // scale factor for visual
+                        labCar.style.left = `clamp(-10%, ${carVisualPos}%, 110%)`; // Keep mostly visible
+                        
+                        // Car direction facing based on velocity
+                        if(v < 0) labCar.style.transform = 'translateX(-50%) scaleX(-1)';
+                        else labCar.style.transform = 'translateX(-50%) scaleX(1)';
+
+                        drawLabFrame();
+                        simReqId = requestAnimationFrame(simLoop);
+                    } else {
+                        simIsRunning = false;
+                        btnSimPlay.innerHTML = 'Finished';
+                        btnSimPlay.disabled = true;
+                    }
+                }
+                
+                simReqId = requestAnimationFrame(simLoop);
+            }
+
+            function resetSimulation() {
+                cancelAnimationFrame(simReqId);
+                simIsRunning = false;
+                simTime = 0;
+                simData = [];
+                timeDisplay.innerText = '0.0s';
+                labCar.style.left = '10%';
+                labCar.style.transform = 'translateX(-50%) scaleX(1)';
+                
+                btnSimPlay.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run Simulation';
+                btnSimPlay.disabled = false;
+                
+                drawLabFrame();
+            }
+
+            btnSimPlay.addEventListener('click', runSimulation);
+            btnSimReset.addEventListener('click', resetSimulation);
+
+            // Init Lab
+            initLabCanvas();
+            drawLabFrame();
+
+            // Trigger reflow/resize manually to fix initial bounds on some mobile browsers
+            setTimeout(() => { window.dispatchEvent(new Event('resize')); }, 500);
+        });
+    </script>
+</body>
+</html>

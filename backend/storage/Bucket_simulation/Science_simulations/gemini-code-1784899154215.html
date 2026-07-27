@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>Nephron & Urine Formation Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            /* Colors */
+            --bg-base: #050914;
+            --bg-glass: rgba(16, 22, 38, 0.65);
+            --bg-glass-hover: rgba(26, 34, 56, 0.8);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(255, 255, 255, 0.2);
+            
+            --text-main: #FFFFFF;
+            --text-muted: #9BA3B5;
+            --text-accent: #64D2FF;
+            
+            /* Educational Color Coding */
+            --color-blood: #FF3B30;
+            --color-arteriole: #FF453A;
+            --color-capsule: #E5E5EA;
+            --color-pct: #FF9500;
+            --color-loop: #FFCC00;
+            --color-dct: #34C759;
+            --color-duct: #32ADE6;
+            --color-urine: #FFD60A;
+            --color-toxin: #AF52DE;
+            
+            /* Typography (Fluid) */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --fs-h1: clamp(2rem, 5vw, 3.5rem);
+            --fs-h2: clamp(1.5rem, 3.5vw, 2.5rem);
+            --fs-h3: clamp(1.2rem, 2.5vw, 1.75rem);
+            --fs-body: clamp(0.9rem, 1.5vw, 1.1rem);
+            --fs-small: clamp(0.8rem, 1.2vw, 0.95rem);
+            
+            /* Sizing & Layout */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --pad-section: clamp(20px, 4vw, 60px);
+            --pad-card: clamp(16px, 3vw, 32px);
+            --gap-main: clamp(16px, 3vw, 40px);
+            
+            /* Transitions */
+            --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+            --dur-fast: 0.2s;
+            --dur-med: 0.5s;
+            --dur-slow: 0.8s;
+        }
+
+        /* ==========================================================================
+           RESET & GLOBAL
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(255, 59, 48, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(100, 210, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 50% 80%, rgba(255, 204, 0, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Typography */
+        h1, h2, h3 { font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; }
+        h1 { font-size: var(--fs-h1); background: linear-gradient(135deg, #FFF, #A0AABF); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--fs-h2); margin-bottom: var(--gap-main); }
+        h3 { font-size: var(--fs-h3); margin-bottom: 0.5rem; }
+        p { font-size: var(--fs-body); color: var(--text-muted); margin-bottom: 1rem; }
+        
+        .accent-text { color: var(--text-accent); font-weight: 600; }
+
+        /* ==========================================================================
+           LAYOUT & CONTAINERS
+           ========================================================================== */
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--pad-section);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 100px);
+        }
+
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: var(--pad-card);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transition: all var(--dur-med) var(--ease-smooth);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--gap-main);
+            align-items: center;
+        }
+
+        .grid-2col-asym {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: var(--gap-main);
+        }
+
+        @media (max-width: 1024px) {
+            .grid-2col, .grid-2col-asym { grid-template-columns: 1fr; }
+            .glass-panel { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); } /* Performance on mobile */
+        }
+
+        /* ==========================================================================
+           HEADER & INTRO
+           ========================================================================== */
+        header { text-align: center; padding-top: 2rem; }
+        header p { max-width: 600px; margin: 1rem auto 0; font-size: var(--fs-h3); }
+
+        /* ==========================================================================
+           COMPONENTS SECTION (Strict Marker + Legend Pattern)
+           ========================================================================== */
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: clamp(300px, 50vw, 550px);
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .svg-canvas {
+            width: 100%;
+            height: 100%;
+            max-height: 600px;
+            object-fit: contain;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+        }
+
+        /* Labeled Markers */
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            background: rgba(255,255,255,0.1);
+            border: 2px solid;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: var(--fs-small);
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: all var(--dur-fast) var(--ease-spring);
+            backdrop-filter: blur(4px);
+            z-index: 10;
+            box-shadow: 0 0 15px currentColor;
+        }
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.3);
+            background: currentColor;
+            color: #000;
+            z-index: 20;
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            height: 100%;
+            justify-content: center;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all var(--dur-fast) ease;
+        }
+        
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--border-highlight);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #000;
+            flex-shrink: 0;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .legend-text h4 { font-size: 1.1rem; margin-bottom: 2px; }
+        .legend-text p { font-size: var(--fs-small); margin: 0; color: rgba(255,255,255,0.7); line-height: 1.3; }
+
+        /* ==========================================================================
+           WORKING SECTION (Mandatory Stage-by-Stage)
+           ========================================================================== */
+        .working-stage {
+            display: flex;
+            flex-direction: column;
+            gap: var(--gap-main);
+        }
+
+        .stage-visual {
+            position: relative;
+            width: 100%;
+            min-height: clamp(250px, 40vw, 400px);
+            background: radial-gradient(circle at center, rgba(30,40,60,0.5) 0%, rgba(5,9,20,0.8) 100%);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stage-info {
+            background: rgba(0,0,0,0.2);
+            padding: var(--pad-card);
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--color-duct);
+            transition: border-color 0.3s ease;
+        }
+
+        /* Controls */
+        .controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255,255,255,0.05);
+            padding: 12px 24px;
+            border-radius: 100px;
+            margin-top: 1rem;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-family: inherit;
+            font-size: var(--fs-small);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
+        .btn:active { transform: scale(0.95); }
+        .btn.primary { background: var(--color-duct); border-color: transparent; color: #000; }
+        .btn.primary:hover { background: #5AC8FA; }
+
+        .progress-dots { display: flex; gap: 8px; }
+        .dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: rgba(255,255,255,0.2); transition: all 0.3s ease;
+        }
+        .dot.active { background: var(--text-main); transform: scale(1.3); box-shadow: 0 0 8px #FFF; }
+
+        /* Animation Elements */
+        .anim-arrow, .anim-particle { opacity: 0; transition: opacity 0.5s ease; }
+        .stage-active .anim-arrow, .stage-active .anim-particle { opacity: 1; }
+
+        @keyframes flowDown { 0% { stroke-dashoffset: 100; } 100% { stroke-dashoffset: 0; } }
+        .flow-path { stroke-dasharray: 10 10; animation: flowDown 1s linear infinite; }
+
+        /* ==========================================================================
+           SIMULATION (Canvas & Sliders)
+           ========================================================================== */
+        .simulation-wrapper {
+            position: relative;
+            width: 100%;
+            min-height: clamp(350px, 50vw, 500px);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #02050A;
+            border: 1px solid var(--border-glass);
+        }
+
+        canvas#simCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .slider-group {
+            background: rgba(255,255,255,0.03);
+            padding: 16px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-glass);
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-size: var(--fs-small);
+            font-weight: 600;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 20px; width: 20px;
+            border-radius: 50%; background: #FFF; cursor: pointer;
+            margin-top: -8px; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer; background: rgba(255,255,255,0.2); border-radius: 2px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        /* ==========================================================================
+           EXTRAS (Facts, Mistakes, Revision)
+           ========================================================================== */
+        .grid-3col {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--gap-main);
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            padding: 20px;
+            transition: transform 0.3s ease;
+        }
+        .info-card:hover { transform: translateY(-5px); background: rgba(255,255,255,0.05); }
+        .info-icon { font-size: 2rem; margin-bottom: 12px; display: block; }
+        
+        .mistakes-list li, .revision-list li { margin-bottom: 12px; margin-left: 20px; color: var(--text-muted); }
+        .mistakes-list li::marker { color: var(--color-blood); }
+        .revision-list li::marker { color: var(--color-duct); }
+
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+
+    <!-- HEADER -->
+    <header>
+        <h1>Nephron & Urine Formation</h1>
+        <p>Explore the microscopic filtration plant inside your kidneys. Watch how blood transforms into urine through highly selective purification.</p>
+    </header>
+
+    <!-- COMPONENTS SECTION -->
+    <section class="glass-panel components-section">
+        <h2>Anatomy of a Nephron</h2>
+        <p>The kidney contains millions of these functional units. Each nephron filters blood, reclaims necessary nutrients, and expels waste.</p>
+        
+        <div class="grid-2col-asym">
+            <!-- Illustration Area -->
+            <div class="illustration-container">
+                <!-- SVG Illustration -->
+                <svg class="svg-canvas" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <!-- Gradients -->
+                        <linearGradient id="gradBlood" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#FF3B30" />
+                            <stop offset="100%" stop-color="#99110B" />
+                        </linearGradient>
+                        <linearGradient id="gradTubule" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#F2D388" />
+                            <stop offset="100%" stop-color="#C99B3B" />
+                        </linearGradient>
+                        <linearGradient id="gradDuct" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#32ADE6" />
+                            <stop offset="100%" stop-color="#0A5A82" />
+                        </linearGradient>
+                        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="8" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+
+                    <!-- Background Zoning -->
+                    <rect x="0" y="0" width="800" height="300" fill="rgba(255,255,255,0.02)" />
+                    <text x="20" y="30" fill="rgba(255,255,255,0.3)" font-size="16" font-weight="bold">RENAL CORTEX</text>
+                    <line x1="0" y1="300" x2="800" y2="300" stroke="rgba(255,255,255,0.1)" stroke-width="2" stroke-dasharray="10 10"/>
+                    <text x="20" y="330" fill="rgba(255,255,255,0.3)" font-size="16" font-weight="bold">RENAL MEDULLA</text>
+
+                    <!-- Collecting Duct (Background layer) -->
+                    <path d="M 650 150 L 650 580" stroke="url(#gradDuct)" stroke-width="30" stroke-linecap="round" fill="none" />
+                    <path d="M 650 150 L 650 580" stroke="#FFF" stroke-width="10" stroke-linecap="round" fill="none" opacity="0.2" />
+                    <!-- Duct branches -->
+                    <path d="M 600 180 L 650 200 M 600 350 L 650 370 M 600 500 L 650 520" stroke="url(#gradDuct)" stroke-width="20" stroke-linecap="round" fill="none"/>
+
+                    <!-- Main Tubule Path -->
+                    <path id="nephron-tube" d="M 230 200 
+                             C 260 120, 320 120, 350 200
+                             C 370 250, 400 200, 420 250
+                             L 420 520
+                             C 420 560, 480 560, 480 520
+                             L 480 280
+                             C 480 200, 550 150, 600 230
+                             L 650 250" 
+                          stroke="url(#gradTubule)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#glow)"/>
+                    
+                    <!-- Tubule Inner Highlight -->
+                    <path d="M 230 200 C 260 120, 320 120, 350 200 C 370 250, 400 200, 420 250 L 420 520 C 420 560, 480 560, 480 520 L 480 280 C 480 200, 550 150, 600 230 L 650 250" 
+                          stroke="#FFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.3"/>
+
+                    <!-- Bowman's Capsule -->
+                    <path d="M 230 240 C 160 240, 130 190, 150 150 C 170 110, 210 120, 230 160 Z" fill="#E5E5EA" stroke="#A0AABF" stroke-width="4"/>
+                    <path d="M 230 240 C 160 240, 130 190, 150 150 C 170 110, 210 120, 230 160 Z" fill="none" stroke="#FFF" stroke-width="2" opacity="0.5"/>
+
+                    <!-- Glomerulus (Blood Knot) -->
+                    <path d="M 60 190 C 120 190, 130 140, 160 160 C 190 180, 170 210, 190 190 C 210 170, 180 140, 160 180 C 140 220, 120 160, 100 170 C 80 180, 60 160, 40 180" 
+                          stroke="url(#gradBlood)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#glow)"/>
+                    <circle cx="170" cy="175" r="25" fill="url(#gradBlood)" filter="url(#glow)"/>
+
+                </svg>
+
+                <!-- Markers (Injected via JS to ensure sync with legend) -->
+                <div id="markers-container"></div>
+            </div>
+
+            <!-- Legend List -->
+            <div class="legend-list" id="legend-container">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING SECTION -->
+    <section class="glass-panel working-section">
+        <h2>How It Works</h2>
+        <p>Urine formation is a continuous biological cycle across 4 distinct stages. Watch the mechanism below.</p>
+        
+        <div class="grid-2col">
+            <!-- Animation Stage -->
+            <div class="stage-visual">
+                <!-- Reusing a localized SVG approach for mechanical breakdown -->
+                <svg id="stageSvg" viewBox="0 0 400 400" width="100%" height="100%">
+                    <!-- Base Tubule (Abstracted for working view) -->
+                    <path d="M 50 200 L 150 200 Q 200 200, 200 250 L 200 350 Q 200 380, 250 380 Q 300 380, 300 350 L 300 100" stroke="#4A5568" stroke-width="40" fill="none" stroke-linecap="round"/>
+                    <path d="M 50 200 L 150 200 Q 200 200, 200 250 L 200 350 Q 200 380, 250 380 Q 300 380, 300 350 L 300 100" stroke="#A0AABF" stroke-width="36" fill="none" stroke-linecap="round" opacity="0.3"/>
+                    
+                    <!-- Glomerulus placeholder -->
+                    <circle cx="50" cy="200" r="40" fill="#2D3748" stroke="#4A5568" stroke-width="4"/>
+
+                    <!-- Stage 1 Anim: Filtration -->
+                    <g id="anim-stage-0" class="anim-group" opacity="1">
+                        <circle cx="50" cy="200" r="35" fill="var(--color-blood)" filter="url(#glow)"/>
+                        <path class="flow-path" d="M 70 200 L 120 200" stroke="#FFF" stroke-width="4" stroke-linecap="round"/>
+                        <circle cx="90" cy="200" r="4" fill="#FFF">
+                            <animate attributeName="cx" values="60; 130" dur="1s" repeatCount="indefinite"/>
+                        </circle>
+                    </g>
+
+                    <!-- Stage 2 Anim: Reabsorption -->
+                    <g id="anim-stage-1" class="anim-group" opacity="0">
+                        <path d="M 150 200 Q 200 200, 200 250 L 200 300" stroke="var(--color-pct)" stroke-width="40" fill="none" stroke-linecap="round"/>
+                        <!-- Arrows leaving tube -->
+                        <path d="M 170 170 L 170 130 M 230 230 L 270 230 M 170 270 L 130 270" stroke="#34C759" stroke-width="4" stroke-linecap="round" marker-end="url(#arrowGreen)">
+                            <animate attributeName="opacity" values="0.2; 1; 0.2" dur="1.5s" repeatCount="indefinite"/>
+                        </path>
+                        <text x="170" y="110" fill="#34C759" font-size="12" text-anchor="middle" font-weight="bold">Water & Nutrients</text>
+                    </g>
+
+                    <!-- Stage 3 Anim: Secretion -->
+                    <g id="anim-stage-2" class="anim-group" opacity="0">
+                        <path d="M 200 300 L 200 350 Q 200 380, 250 380 Q 300 380, 300 350" stroke="var(--color-toxin)" stroke-width="40" fill="none" stroke-linecap="round"/>
+                        <!-- Arrows entering tube -->
+                        <path d="M 130 330 L 170 330 M 370 370 L 330 370" stroke="#AF52DE" stroke-width="4" stroke-linecap="round" marker-end="url(#arrowPurple)">
+                            <animate attributeName="transform" values="translate(-10,0); translate(0,0)" dur="1s" repeatCount="indefinite"/>
+                        </path>
+                        <text x="100" y="335" fill="#AF52DE" font-size="12" text-anchor="middle" font-weight="bold">Toxins/H+</text>
+                    </g>
+
+                    <!-- Stage 4 Anim: Excretion -->
+                    <g id="anim-stage-3" class="anim-group" opacity="0">
+                        <path d="M 300 350 L 300 100" stroke="var(--color-urine)" stroke-width="40" fill="none" stroke-linecap="round"/>
+                        <!-- Downward flow -->
+                        <path class="flow-path" d="M 300 330 L 300 120" stroke="#000" stroke-width="4" stroke-linecap="round" opacity="0.5"/>
+                        <circle cx="300" cy="300" r="8" fill="#FFF">
+                            <animate attributeName="cy" values="330; 120" dur="1s" repeatCount="indefinite"/>
+                        </circle>
+                    </g>
+
+                    <!-- Arrow Markers -->
+                    <defs>
+                        <marker id="arrowGreen" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#34C759"/>
+                        </marker>
+                        <marker id="arrowPurple" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="#AF52DE"/>
+                        </marker>
+                    </defs>
+                </svg>
+            </div>
+
+            <!-- Explainer Info -->
+            <div class="working-stage">
+                <div class="stage-info" id="stageInfoCard">
+                    <h3 id="stageTitle" class="accent-text">1. Ultrafiltration</h3>
+                    <p id="stageDesc">High blood pressure forces water, glucose, salts, and urea out of the glomerular capillaries into Bowman's capsule. Large proteins and blood cells stay behind.</p>
+                </div>
+
+                <div class="controls-row">
+                    <button class="btn" id="btnPrev">← Prev</button>
+                    <div class="progress-dots" id="progressDots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    <button class="btn" id="btnNext">Next →</button>
+                    <button class="btn primary" id="btnPlay">▶ Auto-Play</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SIMULATION SECTION -->
+    <section class="glass-panel simulation-section">
+        <h2>Live Fluid Simulation</h2>
+        <p>Adjust physiological parameters and watch how they affect the filtration flow in real-time. Particles represent fluid (blue), nutrients (green), and waste (yellow).</p>
+        
+        <div class="grid-2col-asym">
+            <div class="simulation-wrapper">
+                <canvas id="simCanvas"></canvas>
+            </div>
+            
+            <div class="controls-panel">
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Blood Pressure (GFR)</span>
+                        <span id="valBp" style="color: var(--color-blood)">120 mmHg</span>
+                    </div>
+                    <input type="range" id="sliderBp" min="80" max="180" value="120">
+                    <p style="font-size: 0.8rem; margin-top: 8px; color: rgba(255,255,255,0.5)">Higher pressure increases filtration rate. Extremely low pressure stops filtration.</p>
+                </div>
+
+                <div class="slider-group">
+                    <div class="slider-header">
+                        <span>Hydration Level (ADH)</span>
+                        <span id="valHyd" style="color: var(--color-duct)">Optimal</span>
+                    </div>
+                    <input type="range" id="sliderHyd" min="0" max="100" value="70">
+                    <p style="font-size: 0.8rem; margin-top: 8px; color: rgba(255,255,255,0.5)">Low hydration releases ADH, opening aquaporins in the collecting duct to reabsorb water, concentrating urine.</p>
+                </div>
+
+                <div class="info-card" style="margin-top: auto; border-color: var(--color-urine);">
+                    <h4 style="color: var(--color-urine); margin-bottom: 5px;">Urine Output Status:</h4>
+                    <p id="urineStatus" style="font-weight: bold; font-size: 1.1rem; color: #FFF; margin: 0;">Normal Volume & Concentration</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- EXTRAS SECTION -->
+    <section class="grid-3col extras-section">
+        <div class="glass-panel info-card">
+            <span class="info-icon">💧</span>
+            <h3>Did You Know?</h3>
+            <p>Your kidneys filter about <strong>180 liters</strong> of fluid every single day! However, 99% of that is reabsorbed, resulting in only 1.5 to 2 liters of actual urine.</p>
+        </div>
+
+        <div class="glass-panel info-card">
+            <span class="info-icon">⚠️</span>
+            <h3>Common Mistakes</h3>
+            <ul class="mistakes-list">
+                <li>Thinking urine is directly filtered from the stomach or intestines. (It comes strictly from blood plasma).</li>
+                <li>Believing glucose in urine is normal. (It's entirely reabsorbed; presence indicates diabetes).</li>
+            </ul>
+        </div>
+
+        <div class="glass-panel info-card">
+            <span class="info-icon">🧠</span>
+            <h3>Quick Revision</h3>
+            <ul class="revision-list">
+                <li><strong>Glomerulus:</strong> Filters plasma.</li>
+                <li><strong>PCT:</strong> Reabsorbs nutrients.</li>
+                <li><strong>Loop of Henle:</strong> Reabsorbs water & salts.</li>
+                <li><strong>DCT:</strong> Secretes toxins/drugs.</li>
+                <li><strong>Collecting Duct:</strong> Final water concentration.</li>
+            </ul>
+        </div>
+    </section>
+
+</div>
+
+<!-- ==========================================================================
+     JAVASCRIPT LOGIC
+     ========================================================================== -->
+<script>
+    /* --------------------------------------------------------------------------
+       1. COMPONENTS MAP: MARKERS & LEGEND
+       -------------------------------------------------------------------------- */
+    const componentsData = [
+        { id: 'glom', title: 'Glomerulus', desc: 'A tight knot of capillaries where high blood pressure forces fluid out.', color: 'var(--color-blood)', pos: { top: '35%', left: '15%' } },
+        { id: 'bowman', title: 'Bowman\'s Capsule', desc: 'Cup-like sac that catches the filtered fluid (filtrate) from the glomerulus.', color: 'var(--color-capsule)', pos: { top: '25%', left: '25%' } },
+        { id: 'pct', title: 'Proximal Convoluted Tubule', desc: 'Reabsorbs 100% of glucose and amino acids back into the blood.', color: 'var(--color-pct)', pos: { top: '33%', left: '40%' } },
+        { id: 'loop', title: 'Loop of Henle', desc: 'Dips into the medulla to create a salt gradient, crucial for water reabsorption.', color: 'var(--color-loop)', pos: { top: '75%', left: '55%' } },
+        { id: 'dct', title: 'Distal Convoluted Tubule', desc: 'Fine-tunes ions and pH; active secretion of toxins occurs here.', color: 'var(--color-dct)', pos: { top: '40%', left: '72%' } },
+        { id: 'duct', title: 'Collecting Duct', desc: 'Carries final urine to the renal pelvis; target site for ADH hormone.', color: 'var(--color-duct)', pos: { top: '20%', left: '81%' } }
+    ];
+
+    const markersContainer = document.getElementById('markers-container');
+    const legendContainer = document.getElementById('legend-container');
+
+    componentsData.forEach((comp, index) => {
+        const num = index + 1;
+        
+        // Create Marker
+        const marker = document.createElement('div');
+        marker.className = 'marker';
+        marker.style.top = comp.pos.top;
+        marker.style.left = comp.pos.left;
+        marker.style.color = comp.color;
+        marker.textContent = num;
+        marker.dataset.id = comp.id;
+        
+        // Create Legend Item
+        const legend = document.createElement('div');
+        legend.className = 'legend-item';
+        legend.dataset.id = comp.id;
+        legend.innerHTML = `
+            <div class="legend-badge" style="background: ${comp.color}">${num}</div>
+            <div class="legend-text">
+                <h4 style="color: ${comp.color}">${comp.title}</h4>
+                <p>${comp.desc}</p>
+            </div>
+        `;
+
+        // Interaction bindings
+        const activate = () => {
+            document.querySelectorAll('.marker, .legend-item').forEach(el => el.classList.remove('active'));
+            marker.classList.add('active');
+            legend.classList.add('active');
+        };
+
+        marker.addEventListener('mouseenter', activate);
+        marker.addEventListener('touchstart', (e) => { e.preventDefault(); activate(); }, {passive: false});
+        legend.addEventListener('mouseenter', activate);
+
+        markersContainer.appendChild(marker);
+        legendContainer.appendChild(legend);
+    });
+
+
+    /* --------------------------------------------------------------------------
+       2. WORKING SECTION: STAGES & AUTO-PLAY
+       -------------------------------------------------------------------------- */
+    const stagesData = [
+        { title: "1. Ultrafiltration", desc: "High blood pressure forces water, glucose, salts, and urea out of the glomerular capillaries into Bowman's capsule. Large proteins and blood cells stay behind.", color: "var(--color-blood)" },
+        { title: "2. Selective Reabsorption", desc: "As filtrate passes the Proximal Tubule and Loop of Henle, useful substances (100% glucose, most water and salts) are reabsorbed back into the bloodstream.", color: "#34C759" },
+        { title: "3. Tubular Secretion", desc: "Excess H+ ions, potassium, and drug residues are actively secreted from the blood into the Distal Tubule to be removed from the body.", color: "var(--color-toxin)" },
+        { title: "4. Excretion", desc: "The final fluid, now called urine, travels down the Collecting Duct. Based on hydration, water is fine-tuned before leaving the kidney.", color: "var(--color-urine)" }
+    ];
+
+    let currentStage = 0;
+    let isPlaying = false;
+    let playInterval;
+
+    const domStageTitle = document.getElementById('stageTitle');
+    const domStageDesc = document.getElementById('stageDesc');
+    const domStageCard = document.getElementById('stageInfoCard');
+    const dots = document.querySelectorAll('.dot');
+    const animGroups = document.querySelectorAll('.anim-group');
+
+    function updateStage(index) {
+        currentStage = index;
+        const data = stagesData[index];
+        
+        // Update Text & UI
+        domStageTitle.textContent = data.title;
+        domStageTitle.style.color = data.color;
+        domStageDesc.textContent = data.desc;
+        domStageCard.style.borderLeftColor = data.color;
+
+        // Update Dots
+        dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
+
+        // Update SVG Graphics
+        animGroups.forEach((g, i) => {
+            g.style.opacity = i === index ? "1" : "0";
+            g.style.transition = "opacity 0.5s ease";
+        });
+    }
+
+    document.getElementById('btnPrev').addEventListener('click', () => {
+        stopAutoPlay();
+        updateStage((currentStage - 1 + 4) % 4);
+    });
+
+    document.getElementById('btnNext').addEventListener('click', () => {
+        stopAutoPlay();
+        updateStage((currentStage + 1) % 4);
+    });
+
+    const btnPlay = document.getElementById('btnPlay');
+    function togglePlay() {
+        if (isPlaying) {
+            stopAutoPlay();
+        } else {
+            isPlaying = true;
+            btnPlay.textContent = "⏸ Pause";
+            btnPlay.style.background = "#FF3B30";
+            btnPlay.style.color = "#FFF";
+            playInterval = setInterval(() => {
+                updateStage((currentStage + 1) % 4);
+            }, 3500); // 3.5s per stage
+        }
+    }
+
+    function stopAutoPlay() {
+        isPlaying = false;
+        clearInterval(playInterval);
+        btnPlay.textContent = "▶ Auto-Play";
+        btnPlay.style.background = "var(--color-duct)";
+        btnPlay.style.color = "#000";
+    }
+
+    btnPlay.addEventListener('click', togglePlay);
+    // Initialize first stage
+    updateStage(0);
+
+
+    /* --------------------------------------------------------------------------
+       3. INTERACTIVE SIMULATION: CANVAS PARTICLES
+       -------------------------------------------------------------------------- */
+    const canvas = document.getElementById('simCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Sliders & UI
+    const sliderBp = document.getElementById('sliderBp');
+    const valBp = document.getElementById('valBp');
+    const sliderHyd = document.getElementById('sliderHyd');
+    const valHyd = document.getElementById('valHyd');
+    const txtUrineStatus = document.getElementById('urineStatus');
+
+    let w, h;
+    let particles = [];
+    
+    // Simplified Abstract Path for Simulation
+    // 0: Glomerulus, 1: Bowman, 2: PCT, 3: Loop Desc, 4: Loop Asc, 5: DCT, 6: Duct
+    const pathNodes = [
+        {x: 0.1, y: 0.25}, // 0 Start Arteriole
+        {x: 0.2, y: 0.3},  // 1 Glom
+        {x: 0.3, y: 0.3},  // 2 PCT Start
+        {x: 0.45, y: 0.3}, // 3 Loop Top
+        {x: 0.45, y: 0.8}, // 4 Loop Bottom
+        {x: 0.55, y: 0.8}, // 5 Loop Bottom Asc
+        {x: 0.55, y: 0.3}, // 6 DCT Start
+        {x: 0.75, y: 0.3}, // 7 Duct Top
+        {x: 0.75, y: 1.0}  // 8 End
+    ];
+
+    function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        // Handle High-DPI displays
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.scale(dpr, dpr);
+        w = rect.width;
+        h = rect.height;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+    resizeCanvas();
+
+    class Particle {
+        constructor() {
+            this.progress = 0; // 0 to 1 along the path
+            this.speed = (Math.random() * 0.002) + 0.002;
+            
+            // Types: 0=RBC(Stays in blood), 1=Water(Blue), 2=Urea(Yellow), 3=Nutrient(Green)
+            const rand = Math.random();
+            if (rand < 0.2) this.type = 0;
+            else if (rand < 0.6) this.type = 1;
+            else if (rand < 0.8) this.type = 2;
+            else this.type = 3;
+
+            this.active = true;
+            this.size = Math.random() * 2 + 2;
+        }
+
+        update(bpMultiplier, hydMultiplier) {
+            this.progress += this.speed * bpMultiplier;
+
+            // Filtration logic based on location (progress)
+            
+            // 0.1 to 0.2 = Glomerulus. RBCs don't filter.
+            if (this.type === 0 && this.progress > 0.15) {
+                // RBCs bypass tubule and fade
+                this.active = false; 
+            }
+
+            // 0.3 to 0.5 = PCT/Loop. Nutrients get reabsorbed.
+            if (this.type === 3 && this.progress > 0.35) {
+                this.active = false;
+            }
+
+            // 0.7 to 1.0 = Collecting Duct. Water reabsorbed based on Hydration (ADH)
+            // Low hydration -> high ADH -> high water reabsorption (particles disappear)
+            if (this.type === 1 && this.progress > 0.7) {
+                if (Math.random() > hydMultiplier) {
+                    this.active = false;
+                }
+            }
+
+            if (this.progress >= 1) this.active = false;
+        }
+
+        draw() {
+            if (!this.active) return;
+            
+            // Interpolate position along pathNodes
+            const totalSegments = pathNodes.length - 1;
+            const scaledProgress = this.progress * totalSegments;
+            const idx = Math.floor(scaledProgress);
+            
+            if (idx >= totalSegments) return;
+
+            const t = scaledProgress - idx;
+            const p1 = pathNodes[idx];
+            const p2 = pathNodes[idx + 1];
+
+            // Linear interpolation + slight sine wave for organic flow
+            const x = (p1.x + (p2.x - p1.x) * t) * w;
+            const y = (p1.y + (p2.y - p1.y) * t) * h;
+            
+            // Adding jitter based on type
+            const offset = Math.sin(this.progress * 100) * 4;
+
+            ctx.beginPath();
+            ctx.arc(x + offset, y, this.size, 0, Math.PI * 2);
+            
+            if (this.type === 0) ctx.fillStyle = '#FF3B30'; // Blood
+            else if (this.type === 1) ctx.fillStyle = '#32ADE6'; // Water
+            else if (this.type === 2) ctx.fillStyle = '#FFD60A'; // Urea
+            else ctx.fillStyle = '#34C759'; // Nutrient
+            
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    function drawPathBackground() {
+        ctx.strokeStyle = "rgba(255,255,255,0.05)";
+        ctx.lineWidth = 20;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.beginPath();
+        pathNodes.forEach((p, i) => {
+            if (i === 0) ctx.moveTo(p.x * w, p.y * h);
+            else ctx.lineTo(p.x * w, p.y * h);
+        });
+        ctx.stroke();
+
+        // Inner track
+        ctx.strokeStyle = "rgba(255,255,255,0.1)";
+        ctx.lineWidth = 10;
+        ctx.stroke();
+    }
+
+    let lastTime = 0;
+    function animateSim(timestamp) {
+        // Clear with fade for motion trail
+        ctx.fillStyle = "rgba(2, 5, 10, 0.3)";
+        ctx.fillRect(0, 0, w, h);
+
+        drawPathBackground();
+
+        // Values from sliders
+        const bp = parseInt(sliderBp.value);
+        const hyd = parseInt(sliderHyd.value);
+
+        // Multipliers
+        const bpMultiplier = (bp / 120); // 120 is normal
+        // Hydration logic: Hydration 100 = lots of water stays in tube. Hydration 0 = ADH high, water leaves tube.
+        const hydMultiplier = (hyd / 100); 
+
+        // Update Labels
+        valBp.textContent = `${bp} mmHg`;
+        valHyd.textContent = hyd > 80 ? "High (Clear)" : hyd < 30 ? "Low/Dehydrated" : "Optimal";
+        
+        // Status text update
+        if (bp < 90) txtUrineStatus.textContent = "GFR Critically Low (Kidney Failure Risk)";
+        else if (hyd < 30) {
+            txtUrineStatus.textContent = "Low Volume, Highly Concentrated (Dark Yellow)";
+            txtUrineStatus.style.color = "#FF9500";
+        }
+        else if (hyd > 80) {
+            txtUrineStatus.textContent = "High Volume, Dilute (Clear)";
+            txtUrineStatus.style.color = "#32ADE6";
+        }
+        else {
+            txtUrineStatus.textContent = "Normal Volume & Concentration";
+            txtUrineStatus.style.color = "#FFF";
+        }
+
+        // Spawn logic (Higher BP = more particles)
+        const spawnRate = Math.floor(3 * bpMultiplier);
+        for(let i=0; i<spawnRate; i++) {
+            if(Math.random() > 0.5) particles.push(new Particle());
+        }
+
+        // Filter inactive & update/draw active
+        particles = particles.filter(p => p.active);
+        particles.forEach(p => {
+            p.update(bpMultiplier, hydMultiplier);
+            p.draw();
+        });
+
+        requestAnimationFrame(animateSim);
+    }
+
+    // Start Simulation Loop
+    requestAnimationFrame(animateSim);
+
+</script>
+
+</body>
+</html>

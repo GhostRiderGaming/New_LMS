@@ -16,12 +16,12 @@ const missions = [
   {
     id: 'simulation',
     title: 'Lab Engine',
-    subtitle: 'Simulation Builder',
+    subtitle: 'Simulation Library',
     icon: '🔬',
-    description: 'Create interactive browser-based simulations for any subject',
+    description: 'Browse 288 interactive simulations across Maths & Science',
     color: 'cyan',
     href: '/simulation',
-    stats: '5 Categories',
+    stats: '288 Sims',
   },
   {
     id: 'model3d',
@@ -211,7 +211,7 @@ export default function HomePage() {
           <div className="max-w-3xl mx-auto grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
             {[
               { label: 'Anime Styles', value: '4', icon: '🎨' },
-              { label: 'Sim Categories', value: '5', icon: '🔬' },
+              { label: 'Simulations', value: '288', icon: '🔬' },
               { label: '3D Categories', value: '5', icon: '🧊' },
               { label: 'Max Episodes', value: '10', icon: '📖' },
             ].map((s) => (

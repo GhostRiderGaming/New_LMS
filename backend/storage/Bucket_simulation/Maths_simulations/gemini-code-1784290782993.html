@@ -1,0 +1,982 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Algebraic Expressions Simulator</title>
+    <style>
+        /* ==========================================================================
+           DESIGN SYSTEM & VARIABLES
+           ========================================================================== */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Poppins:wght@400;600;700&display=swap');
+
+        :root {
+            /* Colors */
+            --bg-base: #060913;
+            --bg-gradient: radial-gradient(circle at top right, #0d1633, #060913 70%);
+            
+            --accent-cyan: #00E5FF;
+            --accent-blue: #4FC3F7;
+            --accent-purple: #8E44FF;
+            --accent-orange: #FFA726;
+            --accent-green: #00E676;
+            --accent-red: #FF5252;
+            
+            --text-main: #FFFFFF;
+            --text-muted: #9BA4B5;
+            
+            --glass-bg: rgba(16, 24, 48, 0.45);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            
+            /* Typography */
+            --font-main: 'Inter', sans-serif;
+            --font-head: 'Poppins', sans-serif;
+            
+            /* Borders & Transitions */
+            --radius-lg: 16px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* ==========================================================================
+           GLOBAL STYLES & RESET
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg-base);
+            background-image: var(--bg-gradient);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.6;
+            position: relative;
+        }
+
+        /* Background Canvas for Particles */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-base);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-cyan);
+        }
+
+        /* Container */
+        .app-container {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        /* ==========================================================================
+           GLASSMORPHISM CARDS
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+            padding: 24px;
+            transition: var(--transition);
+        }
+        .glass-panel:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 12px 40px rgba(0, 229, 255, 0.05);
+        }
+
+        /* ==========================================================================
+           TYPOGRAPHY & MATH FORMATTING
+           ========================================================================== */
+        h1, h2, h3 {
+            font-family: var(--font-head);
+            font-weight: 700;
+        }
+        
+        .main-title {
+            font-size: clamp(2rem, 4vw, 3.5rem);
+            text-align: center;
+            background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(0, 229, 255, 0.3);
+        }
+
+        .section-title {
+            font-size: 1.2rem;
+            color: var(--accent-blue);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        p {
+            color: var(--text-muted);
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }
+
+        /* Math Text Rendering */
+        .math {
+            font-family: 'Times New Roman', Times, serif;
+            font-size: 1.15em;
+            letter-spacing: 0.5px;
+            color: #FFF;
+        }
+        .math i {
+            font-style: italic;
+        }
+        .formula-box {
+            background: rgba(0,0,0,0.3);
+            border-left: 4px solid var(--accent-purple);
+            padding: 15px;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            margin: 15px 0;
+            font-size: 1.25rem;
+        }
+
+        /* ==========================================================================
+           LAYOUT GRIDS
+           ========================================================================== */
+        .top-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        
+        .main-workspace {
+            display: grid;
+            grid-template-columns: 2.5fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .top-grid { grid-template-columns: 1fr; }
+            .main-workspace { grid-template-columns: 1fr; }
+        }
+
+        /* ==========================================================================
+           SIMULATION / GRAPH AREA
+           ========================================================================== */
+        .graph-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #02040a;
+            border: 1px solid var(--glass-border);
+            box-shadow: inset 0 0 60px rgba(0, 229, 255, 0.05);
+        }
+        
+        canvas#simulationCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .graph-overlay-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+        }
+
+        .legend-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0,0,0,0.6);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 8px;
+            backdrop-filter: blur(4px);
+        }
+        .color-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        /* ==========================================================================
+           CONTROLS & PARAMETERS
+           ========================================================================== */
+        .control-group {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .control-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .param-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .param-name {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .param-input {
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--accent-cyan);
+            color: var(--text-main);
+            padding: 4px 8px;
+            border-radius: 6px;
+            width: 60px;
+            text-align: center;
+            font-family: var(--font-main);
+            outline: none;
+            transition: var(--transition);
+        }
+        .param-input:focus {
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+        }
+
+        /* Custom Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: 10px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--text-main);
+            margin-top: -6px;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Specific Slider Colors */
+        #slider-a::-webkit-slider-thumb { background: var(--accent-cyan); box-shadow: 0 0 12px var(--accent-cyan); }
+        #slider-b::-webkit-slider-thumb { background: var(--accent-purple); box-shadow: 0 0 12px var(--accent-purple); }
+        #slider-c::-webkit-slider-thumb { background: var(--accent-orange); box-shadow: 0 0 12px var(--accent-orange); }
+        #slider-x::-webkit-slider-thumb { background: var(--accent-green); box-shadow: 0 0 12px var(--accent-green); }
+
+        /* Buttons */
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .btn {
+            background: rgba(255,255,255,0.05);
+            color: var(--text-main);
+            border: 1px solid var(--glass-border);
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-main);
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: var(--transition);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.85rem;
+        }
+        .btn:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-2px);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .btn-primary {
+            background: rgba(0, 229, 255, 0.15);
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+        .btn-primary:hover {
+            background: var(--accent-cyan);
+            color: #000;
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+        }
+        .btn-action {
+            background: rgba(142, 68, 255, 0.15);
+            border-color: var(--accent-purple);
+            color: #d1adff;
+        }
+        .btn-action:hover {
+            background: var(--accent-purple);
+            color: #FFF;
+            box-shadow: 0 0 20px rgba(142, 68, 255, 0.4);
+        }
+
+        /* ==========================================================================
+           LIVE CALCULATIONS
+           ========================================================================== */
+        .calc-board {
+            background: #00000080;
+            border-radius: var(--radius-md);
+            padding: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.2rem;
+            margin-top: 10px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .calc-step {
+            margin-bottom: 12px;
+            opacity: 0.8;
+            transition: var(--transition);
+        }
+        .calc-step:last-child {
+            margin-bottom: 0;
+            opacity: 1;
+            font-weight: bold;
+            font-size: 1.4rem;
+            border-top: 1px dashed rgba(255,255,255,0.2);
+            padding-top: 12px;
+            color: var(--accent-green);
+        }
+
+        .hl-a { color: var(--accent-cyan); font-weight: bold; }
+        .hl-b { color: var(--accent-purple); font-weight: bold; }
+        .hl-c { color: var(--accent-orange); font-weight: bold; }
+        .hl-x { color: var(--accent-green); font-weight: bold; }
+
+        /* ==========================================================================
+           TOOLTIPS
+           ========================================================================== */
+        .tooltip-wrapper {
+            position: relative;
+            display: inline-block;
+            cursor: help;
+        }
+        .tooltip-wrapper .tooltip-icon {
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            margin-left: 5px;
+        }
+        .tooltip-wrapper::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+            opacity: 0;
+            visibility: hidden;
+            transition: var(--transition);
+            border: 1px solid var(--accent-blue);
+            z-index: 10;
+        }
+        .tooltip-wrapper:hover::after {
+            opacity: 1;
+            visibility: visible;
+            transform: translateX(-50%) translateY(-5px);
+        }
+
+        /* Warning text */
+        #warning-msg {
+            color: var(--accent-red);
+            font-size: 0.85rem;
+            margin-top: 10px;
+            display: none;
+            text-align: center;
+            font-weight: 600;
+            animation: pulseWarning 1.5s infinite;
+        }
+
+        @keyframes pulseWarning {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Background Particles Canvas -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="app-container">
+        
+        <!-- HEADER -->
+        <header>
+            <h1 class="main-title">Algebraic Expressions</h1>
+            <p style="text-align: center; max-width: 800px; margin: 0 auto; color: var(--text-main);">Interactive Evaluation & Visualization Laboratory</p>
+        </header>
+
+        <!-- INTRO GRID -->
+        <div class="top-grid">
+            <!-- Theory Panel -->
+            <div class="glass-panel">
+                <h2 class="section-title">📘 Definition & Theory</h2>
+                <p>An <strong>algebraic expression</strong> is a mathematical phrase containing numbers, variables (like <span class="math"><i>x</i></span>), and arithmetic operators (+, -, ×, ÷).</p>
+                <p>Unlike an equation, an expression does not have an equals sign. By <strong>evaluating</strong> an expression—substituting specific numerical values for the variables—we generate outputs that map curves on a graph.</p>
+                
+                <h3 class="section-title" style="margin-top: 20px; font-size: 1rem;">Standard Polynomial Forms</h3>
+                <div class="formula-box math">
+                    Linear: <i>y</i> = <i>m</i><i>x</i> + <i>b</i><br>
+                    Quadratic: <i>y</i> = <i>a</i><i>x</i><sup>2</sup> + <i>b</i><i>x</i> + <i>c</i><br>
+                    Cubic: <i>y</i> = <i>a</i><i>x</i><sup>3</sup> + <i>b</i><i>x</i><sup>2</sup> + <i>c</i><i>x</i> + <i>d</i>
+                </div>
+            </div>
+
+            <!-- Fact Panel -->
+            <div class="glass-panel" style="display: flex; flex-direction: column; justify-content: center;">
+                <h2 class="section-title">💡 Did You Know?</h2>
+                <p style="font-size: 1.1rem; line-height: 1.8;">
+                    The word "<strong>Algebra</strong>" comes from the Arabic term "<em>al-jabr</em>", meaning "reunion of broken parts". 
+                </p>
+                <p style="font-size: 1.1rem; line-height: 1.8;">
+                    It was coined in the 9th century by Persian mathematician and astronomer <strong>Al-Khwarizmi</strong> in his monumental book on calculation.
+                </p>
+                <div style="margin-top: 20px; padding: 15px; background: rgba(0, 230, 118, 0.1); border-left: 3px solid var(--accent-green); border-radius: 4px;">
+                    <strong style="color: var(--accent-green);">Goal:</strong> Adjust the coefficients below to see how each term alters the shape of the quadratic expression <span class="math"><i>y</i> = <i>a</i><i>x</i><sup>2</sup> + <i>b</i><i>x</i> + <i>c</i></span>.
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN WORKSPACE -->
+        <div class="main-workspace">
+            
+            <!-- Simulation Graph Panel -->
+            <div class="glass-panel" style="padding: 10px; display: flex; flex-direction: column;">
+                <h2 class="section-title" style="padding: 10px 10px 0 10px;">📉 Trajectory Simulation</h2>
+                <div class="graph-container">
+                    <canvas id="simulationCanvas"></canvas>
+                    <div class="graph-overlay-info">
+                        <div class="legend-pill">
+                            <div class="color-dot" style="background: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-cyan);"></div>
+                            Quadratic Curve <span class="math">(<i>y</i>)</span>
+                        </div><br>
+                        <div class="legend-pill">
+                            <div class="color-dot" style="background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green);"></div>
+                            Evaluated Point <span class="math">(<i>x</i>, <i>y</i>)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls Panel -->
+            <div class="glass-panel" style="display: flex; flex-direction: column;">
+                <h2 class="section-title">⚙️ Parameters</h2>
+                
+                <!-- Quadratic Coefficient -->
+                <div class="control-group">
+                    <div class="param-header">
+                        <span class="param-name tooltip-wrapper" data-tooltip="Controls the 'width' and direction of the parabola.">
+                            <span class="hl-a">Coefficient a</span> <span class="math">(<i>x</i><sup>2</sup> term)</span> <span class="tooltip-icon">?</span>
+                        </span>
+                        <input type="number" id="num-a" class="param-input" value="1" step="0.5">
+                    </div>
+                    <input type="range" id="slider-a" min="-5" max="5" step="0.1" value="1">
+                </div>
+
+                <!-- Linear Coefficient -->
+                <div class="control-group">
+                    <div class="param-header">
+                        <span class="param-name tooltip-wrapper" data-tooltip="Shifts the vertex left or right, and up or down.">
+                            <span class="hl-b">Coefficient b</span> <span class="math">(<i>x</i> term)</span> <span class="tooltip-icon">?</span>
+                        </span>
+                        <input type="number" id="num-b" class="param-input" value="0" step="0.5">
+                    </div>
+                    <input type="range" id="slider-b" min="-10" max="10" step="0.1" value="0">
+                </div>
+
+                <!-- Constant Term -->
+                <div class="control-group">
+                    <div class="param-header">
+                        <span class="param-name tooltip-wrapper" data-tooltip="The y-intercept. Shifts the graph vertically.">
+                            <span class="hl-c">Constant c</span> <span class="tooltip-icon">?</span>
+                        </span>
+                        <input type="number" id="num-c" class="param-input" value="0" step="1">
+                    </div>
+                    <input type="range" id="slider-c" min="-20" max="20" step="1" value="0">
+                </div>
+
+                <!-- Variable X -->
+                <div class="control-group" style="margin-top: 10px; background: rgba(0, 230, 118, 0.05); padding: 15px; border-radius: 8px; border: 1px solid rgba(0, 230, 118, 0.2);">
+                    <div class="param-header">
+                        <span class="param-name tooltip-wrapper" data-tooltip="The independent variable being evaluated.">
+                            <span class="hl-x">Variable x</span> <span class="tooltip-icon">?</span>
+                        </span>
+                        <input type="number" id="num-x" class="param-input" value="2" step="0.5">
+                    </div>
+                    <input type="range" id="slider-x" min="-10" max="10" step="0.1" value="2">
+                </div>
+                
+                <p id="warning-msg">Warning: Value out of optimal visual bounds.</p>
+
+                <!-- Controls -->
+                <div class="btn-grid">
+                    <button class="btn btn-primary" id="btn-play">▶ Play X</button>
+                    <button class="btn" id="btn-pause">⏸ Pause</button>
+                    <button class="btn" id="btn-reset">⏹ Reset</button>
+                    <button class="btn btn-action" id="btn-random">🎲 Randomize</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- LIVE CALCULATIONS PANEL -->
+        <div class="glass-panel">
+            <h2 class="section-title">🧮 Live Calculation Stream</h2>
+            <p>Evaluating <span class="math"><i>f</i>(<i>x</i>) = <i>a</i><i>x</i><sup>2</sup> + <i>b</i><i>x</i> + <i>c</i></span> step-by-step.</p>
+            
+            <div class="calc-board" id="calc-board">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        /**
+         * 1. BACKGROUND PARTICLES SYSTEM
+         */
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let particles = [];
+        
+        function resizeBg() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeBg);
+        resizeBg();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * bgCanvas.width;
+                this.y = Math.random() * bgCanvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = Math.random() * 0.5 - 0.25;
+                this.speedY = Math.random() * 0.5 - 0.25;
+                this.alpha = Math.random() * 0.5 + 0.1;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if(this.x > bgCanvas.width) this.x = 0;
+                if(this.x < 0) this.x = bgCanvas.width;
+                if(this.y > bgCanvas.height) this.y = 0;
+                if(this.y < 0) this.y = bgCanvas.height;
+            }
+            draw() {
+                bgCtx.fillStyle = `rgba(79, 195, 247, ${this.alpha})`;
+                bgCtx.beginPath();
+                bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                bgCtx.fill();
+            }
+        }
+
+        for(let i = 0; i < 70; i++) particles.push(new Particle());
+
+        function animateBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            particles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(animateBg);
+        }
+        animateBg();
+
+
+        /**
+         * 2. ALGEBRAIC SIMULATION ENGINE
+         */
+        const simCanvas = document.getElementById('simulationCanvas');
+        const ctx = simCanvas.getContext('2d');
+
+        // State parameters
+        let state = {
+            a: 1.0,
+            b: 0.0,
+            c: 0.0,
+            x: 2.0,
+            isPlaying: false
+        };
+
+        // UI Elements
+        const sliders = {
+            a: document.getElementById('slider-a'),
+            b: document.getElementById('slider-b'),
+            c: document.getElementById('slider-c'),
+            x: document.getElementById('slider-x')
+        };
+        const inputs = {
+            a: document.getElementById('num-a'),
+            b: document.getElementById('num-b'),
+            c: document.getElementById('num-c'),
+            x: document.getElementById('num-x')
+        };
+        const calcBoard = document.getElementById('calc-board');
+        const warningMsg = document.getElementById('warning-msg');
+
+        // Math Config
+        const mathDomain = { minX: -10, maxX: 10 };
+        let mathRange = { minY: -25, maxY: 25 }; 
+
+        // Resize Graph Canvas
+        function resizeSimCanvas() {
+            const container = simCanvas.parentElement;
+            simCanvas.width = container.clientWidth;
+            simCanvas.height = container.clientHeight;
+            drawGraph();
+        }
+        window.addEventListener('resize', resizeSimCanvas);
+
+        // Coordinate Mapping Functions
+        function mapX(x) {
+            return (x - mathDomain.minX) / (mathDomain.maxX - mathDomain.minX) * simCanvas.width;
+        }
+        function mapY(y) {
+            return simCanvas.height - ((y - mathRange.minY) / (mathRange.maxY - mathRange.minY) * simCanvas.height);
+        }
+
+        // Calculate auto range based on curve to keep it nicely framed
+        function updateRange() {
+            let minVal = Infinity;
+            let maxVal = -Infinity;
+            for(let x = mathDomain.minX; x <= mathDomain.maxX; x += 0.5) {
+                let y = state.a * x * x + state.b * x + state.c;
+                if(y < minVal) minVal = y;
+                if(y > maxVal) maxVal = y;
+            }
+            
+            // Add padding and minimum spread
+            let spread = maxVal - minVal;
+            if (spread < 20) spread = 20; 
+            let mid = (maxVal + minVal) / 2;
+            
+            // Smooth transition for range (optional, sticking to direct assignment for accuracy)
+            mathRange.minY = mid - spread * 0.6;
+            mathRange.maxY = mid + spread * 0.6;
+            
+            // Warning if evaluation point goes WAY off graph
+            let currentY = evaluateExpression(state.x);
+            if(currentY < mathRange.minY - 50 || currentY > mathRange.maxY + 50) {
+                warningMsg.style.display = 'block';
+            } else {
+                warningMsg.style.display = 'none';
+            }
+        }
+
+        function evaluateExpression(xVal) {
+            return state.a * xVal * xVal + state.b * xVal + state.c;
+        }
+
+        // Drawing routine
+        function drawGraph() {
+            ctx.clearRect(0, 0, simCanvas.width, simCanvas.height);
+
+            // Draw Grid
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.beginPath();
+            
+            // X Grid
+            for(let x = mathDomain.minX; x <= mathDomain.maxX; x++) {
+                let px = mapX(x);
+                ctx.moveTo(px, 0);
+                ctx.lineTo(px, simCanvas.height);
+            }
+            // Y Grid - dynamic steps
+            let yStep = Math.pow(10, Math.floor(Math.log10(mathRange.maxY - mathRange.minY))) / 2;
+            if(yStep < 1) yStep = 1;
+            
+            let startY = Math.floor(mathRange.minY / yStep) * yStep;
+            for(let y = startY; y <= mathRange.maxY; y += yStep) {
+                let py = mapY(y);
+                ctx.moveTo(0, py);
+                ctx.lineTo(simCanvas.width, py);
+            }
+            ctx.stroke();
+
+            // Draw Axes
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.beginPath();
+            // Y Axis
+            let zeroX = mapX(0);
+            ctx.moveTo(zeroX, 0);
+            ctx.lineTo(zeroX, simCanvas.height);
+            // X Axis
+            let zeroY = mapY(0);
+            ctx.moveTo(0, zeroY);
+            ctx.lineTo(simCanvas.width, zeroY);
+            ctx.stroke();
+
+            // Ticks & Labels
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.font = '12px Inter';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            // X Labels
+            for(let x = mathDomain.minX; x <= mathDomain.maxX; x += 2) {
+                if(x !== 0) {
+                    let px = mapX(x);
+                    ctx.fillText(x, px, zeroY + 8);
+                    ctx.beginPath();
+                    ctx.moveTo(px, zeroY - 4);
+                    ctx.lineTo(px, zeroY + 4);
+                    ctx.stroke();
+                }
+            }
+            // Y Labels
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for(let y = startY; y <= mathRange.maxY; y += yStep) {
+                if(Math.abs(y) > 0.01) {
+                    let py = mapY(y);
+                    ctx.fillText(y.toFixed(0), zeroX - 8, py);
+                    ctx.beginPath();
+                    ctx.moveTo(zeroX - 4, py);
+                    ctx.lineTo(zeroX + 4, py);
+                    ctx.stroke();
+                }
+            }
+
+            // Draw Parabola Trajectory
+            ctx.beginPath();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#00E5FF';
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#00E5FF';
+            
+            let points = 200;
+            for(let i = 0; i <= points; i++) {
+                let x = mathDomain.minX + (mathDomain.maxX - mathDomain.minX) * (i / points);
+                let y = evaluateExpression(x);
+                if(i === 0) ctx.moveTo(mapX(x), mapY(y));
+                else ctx.lineTo(mapX(x), mapY(y));
+            }
+            ctx.stroke();
+            ctx.shadowBlur = 0; // Reset shadow
+
+            // Draw Evaluated Point
+            let currentY = evaluateExpression(state.x);
+            let px = mapX(state.x);
+            let py = mapY(currentY);
+
+            // Dotted projection lines
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = '#00E676';
+            ctx.moveTo(px, zeroY);
+            ctx.lineTo(px, py);
+            ctx.lineTo(zeroX, py);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // The Point
+            ctx.beginPath();
+            ctx.arc(px, py, 7, 0, Math.PI * 2);
+            ctx.fillStyle = '#00E676';
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#00E676';
+            ctx.fill();
+            
+            // White center dot
+            ctx.beginPath();
+            ctx.arc(px, py, 3, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFF';
+            ctx.shadowBlur = 0;
+            ctx.fill();
+
+            // Label the point
+            ctx.fillStyle = '#FFF';
+            ctx.font = 'bold 14px Inter';
+            ctx.textAlign = 'left';
+            ctx.fillText(`(${state.x.toFixed(1)}, ${currentY.toFixed(1)})`, px + 15, py - 15);
+        }
+
+        // Live calculation formatting
+        function updateCalculations() {
+            let a = state.a;
+            let b = state.b;
+            let c = state.c;
+            let x = state.x;
+            
+            let term1 = a * x * x;
+            let term2 = b * x;
+            let term3 = c;
+            let total = term1 + term2 + term3;
+            
+            // Format numbers to avoid crazy decimals
+            const f = (n) => Number.isInteger(n) ? n : n.toFixed(2);
+            const fs = (n) => n < 0 ? `(${f(n)})` : f(n); // wrap negatives in parens
+
+            let html = `
+                <div class="calc-step math">
+                    <i>f</i>(<span class="hl-x">${f(x)}</span>) = 
+                    <span class="hl-a">${fs(a)}</span>·(<span class="hl-x">${fs(x)}</span>)<sup>2</sup> + 
+                    <span class="hl-b">${fs(b)}</span>·(<span class="hl-x">${fs(x)}</span>) + 
+                    <span class="hl-c">${fs(c)}</span>
+                </div>
+                <div class="calc-step math">
+                    <i>f</i>(<span class="hl-x">${f(x)}</span>) = 
+                    <span class="hl-a">${fs(a)}</span>·(${f(x*x)}) + 
+                    (${f(term2)}) + 
+                    <span class="hl-c">${fs(c)}</span>
+                </div>
+                <div class="calc-step math">
+                    <i>f</i>(<span class="hl-x">${f(x)}</span>) = 
+                    ${f(term1)} + ${f(term2)} + ${f(term3)}
+                </div>
+                <div class="calc-step math" style="color: var(--accent-green);">
+                    <i>f</i>(<span class="hl-x">${f(x)}</span>) = ${f(total)}
+                </div>
+            `;
+            calcBoard.innerHTML = html;
+        }
+
+        // State update dispatcher
+        function updateState(key, value) {
+            state[key] = parseFloat(value);
+            sliders[key].value = state[key];
+            inputs[key].value = state[key];
+            updateRange();
+            drawGraph();
+            updateCalculations();
+        }
+
+        // Event Listeners for Inputs
+        ['a', 'b', 'c', 'x'].forEach(key => {
+            sliders[key].addEventListener('input', (e) => updateState(key, e.target.value));
+            inputs[key].addEventListener('change', (e) => updateState(key, e.target.value));
+        });
+
+        // Controls
+        const btnPlay = document.getElementById('btn-play');
+        const btnPause = document.getElementById('btn-pause');
+        const btnReset = document.getElementById('btn-reset');
+        const btnRandom = document.getElementById('btn-random');
+
+        let animationId = null;
+
+        function playLoop() {
+            if(!state.isPlaying) return;
+            let nextX = state.x + 0.05;
+            if(nextX > 10) nextX = -10;
+            updateState('x', nextX.toFixed(2));
+            animationId = requestAnimationFrame(playLoop);
+        }
+
+        btnPlay.addEventListener('click', () => {
+            if(!state.isPlaying) {
+                state.isPlaying = true;
+                btnPlay.style.background = 'var(--accent-cyan)';
+                btnPlay.style.color = '#000';
+                playLoop();
+            }
+        });
+
+        btnPause.addEventListener('click', () => {
+            state.isPlaying = false;
+            btnPlay.style.background = 'rgba(0, 229, 255, 0.15)';
+            btnPlay.style.color = 'var(--accent-cyan)';
+            if(animationId) cancelAnimationFrame(animationId);
+        });
+
+        btnReset.addEventListener('click', () => {
+            state.isPlaying = false;
+            btnPlay.style.background = 'rgba(0, 229, 255, 0.15)';
+            btnPlay.style.color = 'var(--accent-cyan)';
+            updateState('a', 1);
+            updateState('b', 0);
+            updateState('c', 0);
+            updateState('x', 2);
+        });
+
+        btnRandom.addEventListener('click', () => {
+            let rA = (Math.random() * 4 - 2).toFixed(1);
+            if(rA == 0) rA = 1;
+            let rB = (Math.random() * 10 - 5).toFixed(1);
+            let rC = (Math.random() * 20 - 10).toFixed(0);
+            
+            updateState('a', rA);
+            updateState('b', rB);
+            updateState('c', rC);
+        });
+
+        // Init
+        setTimeout(() => {
+            resizeSimCanvas();
+            updateRange();
+            drawGraph();
+            updateCalculations();
+        }, 100);
+
+    </script>
+</body>
+</html>

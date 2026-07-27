@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Blood Circulation Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. RESET & VARIABLES
+           ========================================================================== */
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+        :root {
+            /* Colors */
+            --bg-color: #06080F;
+            --surface-1: rgba(20, 25, 40, 0.4);
+            --surface-2: rgba(30, 35, 60, 0.5);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            
+            --oxygen-red: #ff2a4b;
+            --oxygen-red-glow: rgba(255, 42, 75, 0.6);
+            --deox-blue: #0088ff;
+            --deox-blue-glow: rgba(0, 136, 255, 0.6);
+            --accent: #b4a0ff;
+            
+            --text-main: #f0f2f5;
+            --text-muted: #9ba1a6;
+
+            /* Typography */
+            --font-heading: 'Outfit', sans-serif;
+            --font-body: 'Plus Jakarta Sans', sans-serif;
+            
+            /* Responsive sizes */
+            --fs-h1: clamp(2.5rem, 5vw, 4.5rem);
+            --fs-h2: clamp(1.8rem, 4vw, 3rem);
+            --fs-h3: clamp(1.3rem, 2.5vw, 1.8rem);
+            --fs-body: clamp(0.95rem, 1.2vw, 1.1rem);
+            --fs-small: clamp(0.85rem, 1vw, 0.95rem);
+
+            --space-section: clamp(40px, 8vw, 100px);
+            --space-element: clamp(16px, 3vw, 32px);
+            --border-radius: 24px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            line-height: 1.6;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+            background: radial-gradient(circle at 50% 50%, #0a0d16 0%, #040508 100%);
+        }
+        
+        .ambient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s infinite ease-in-out alternate;
+        }
+        
+        .orb-red {
+            width: 40vw; height: 40vw;
+            background: var(--oxygen-red-glow);
+            top: -10%; left: -10%;
+        }
+        
+        .orb-blue {
+            width: 50vw; height: 50vw;
+            background: var(--deox-blue-glow);
+            bottom: -20%; right: -10%;
+            animation-delay: -5s;
+        }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(10%, 15%) scale(1.2); }
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--surface-1);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(12px); /* Performance on mobile */
+                -webkit-backdrop-filter: blur(12px);
+            }
+        }
+
+        /* Layout & Containers */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 clamp(16px, 5vw, 40px);
+        }
+
+        section {
+            padding: var(--space-section) 0;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-element);
+        }
+
+        /* Typography */
+        h1, h2, h3 { font-family: var(--font-heading); line-height: 1.1; font-weight: 600; }
+        h1 { font-size: var(--fs-h1); letter-spacing: -0.02em; }
+        h2 { font-size: var(--fs-h2); margin-bottom: var(--space-element); }
+        h3 { font-size: var(--fs-h3); margin-bottom: calc(var(--space-element) / 2); }
+        p { font-size: var(--fs-body); color: var(--text-muted); }
+        
+        .text-gradient {
+            background: linear-gradient(135deg, #fff 0%, #a0a5b0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .text-red { color: var(--oxygen-red); }
+        .text-blue { color: var(--deox-blue); }
+
+        /* ==========================================================================
+           2. HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+        .hero-content {
+            z-index: 2;
+            max-width: 800px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+        }
+        .hero-badge {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--glass-border);
+            padding: 8px 16px;
+            border-radius: 100px;
+            font-size: var(--fs-small);
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* ==========================================================================
+           3. COMPONENTS SECTION (Marker + Legend Pattern)
+           ========================================================================== */
+        .components-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: clamp(24px, 5vw, 64px);
+            align-items: center;
+        }
+
+        @media (max-width: 1024px) {
+            .components-layout { grid-template-columns: 1fr; }
+        }
+
+        /* Illustration Container */
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: clamp(300px, 50vw, 600px);
+            background: radial-gradient(circle at center, rgba(30,35,50,0.4) 0%, transparent 70%);
+            border-radius: var(--border-radius);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .illustration-svg {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 10px 30px rgba(0,0,0,0.5));
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-heading);
+            font-weight: 700;
+            font-size: 14px;
+            color: #fff;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+            z-index: -1;
+        }
+        .marker.type-red { background: var(--oxygen-red); }
+        .marker.type-red::before { background: var(--oxygen-red); }
+        .marker.type-blue { background: var(--deox-blue); }
+        .marker.type-blue::before { background: var(--deox-blue); }
+        .marker.active {
+            transform: translate(-50%, -50%) scale(1.3);
+            box-shadow: 0 0 20px currentColor;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            border-radius: 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--glass-border);
+            transform: translateX(8px);
+        }
+        .legend-badge {
+            width: 32px; height: 32px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 700; font-family: var(--font-heading);
+        }
+        .legend-item.type-red .legend-badge { background: rgba(255, 42, 75, 0.2); color: var(--oxygen-red); border: 1px solid var(--oxygen-red); }
+        .legend-item.type-blue .legend-badge { background: rgba(0, 136, 255, 0.2); color: var(--deox-blue); border: 1px solid var(--deox-blue); }
+        
+        .legend-content h4 { color: #fff; font-size: 1.1rem; margin-bottom: 4px; }
+        .legend-content p { font-size: 0.9rem; margin: 0; }
+
+        /* ==========================================================================
+           4. WORKING PROCESS SECTION
+           ========================================================================== */
+        .working-container {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+        @media (max-width: 1024px) {
+            .working-container { grid-template-columns: 1fr; }
+        }
+
+        .working-visual {
+            width: 100%;
+            aspect-ratio: 1/1;
+            background: var(--surface-1);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        .cycle-svg {
+            width: 90%; height: 90%;
+        }
+
+        /* SVG Flow Animation Classes */
+        .flow-path {
+            stroke-dasharray: 10, 10;
+            animation: dashFlow 20s linear infinite;
+            opacity: 0.3;
+            transition: opacity 0.5s, stroke-width 0.5s;
+        }
+        .flow-path.active {
+            opacity: 1;
+            stroke-width: 6;
+            animation-duration: 5s;
+        }
+        @keyframes dashFlow { to { stroke-dashoffset: -1000; } }
+        
+        .node-group { opacity: 0.4; transition: all 0.5s ease; transform-origin: center; }
+        .node-group.active { opacity: 1; filter: drop-shadow(0 0 15px currentColor); transform: scale(1.05); }
+
+        .working-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .stage-card {
+            background: rgba(255,255,255,0.03);
+            border-left: 4px solid var(--glass-border);
+            padding: 24px;
+            border-radius: 0 16px 16px 0;
+            min-height: 140px;
+        }
+        .stage-title { font-size: 1.4rem; color: #fff; margin-bottom: 8px; }
+        .stage-meta {
+            display: flex; gap: 12px; margin-bottom: 12px;
+            font-size: 0.85rem; font-weight: 600; text-transform: uppercase;
+        }
+        .meta-in { color: var(--deox-blue); }
+        .meta-out { color: var(--oxygen-red); }
+
+        .controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--surface-2);
+            padding: 16px;
+            border-radius: 100px;
+        }
+        
+        button {
+            background: none; border: none; color: #fff;
+            font-family: var(--font-heading); font-weight: 600;
+            cursor: pointer; padding: 12px 24px;
+            border-radius: 100px;
+            transition: all 0.2s;
+            display: flex; align-items: center; gap: 8px;
+        }
+        button:hover { background: rgba(255,255,255,0.1); }
+        button.btn-primary { background: var(--oxygen-red); }
+        button.btn-primary:hover { background: #ff4763; box-shadow: 0 0 15px var(--oxygen-red-glow); }
+        
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: 0.3s; }
+        .dot.active { background: #fff; transform: scale(1.5); }
+
+        /* ==========================================================================
+           5. INTERACTIVE SIMULATION
+           ========================================================================== */
+        .simulation-container {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 24px;
+            height: 600px;
+        }
+        @media (max-width: 1024px) {
+            .simulation-container { grid-template-columns: 1fr; height: auto; }
+        }
+
+        .canvas-wrapper {
+            width: 100%; height: 100%; min-height: 400px;
+            border-radius: var(--border-radius);
+            overflow: hidden; position: relative;
+            background: radial-gradient(circle at center, #111522 0%, #06080F 100%);
+            border: 1px solid var(--glass-border);
+        }
+        canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+
+        .sim-panel {
+            padding: 24px;
+            display: flex; flex-direction: column; gap: 24px;
+            justify-content: center;
+        }
+        
+        .control-group { display: flex; flex-direction: column; gap: 12px; }
+        .control-header { display: flex; justify-content: space-between; font-weight: 600; }
+        .value-display { font-family: monospace; font-size: 1.2rem; color: var(--accent); }
+        
+        /* Custom Slider */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; height: 6px;
+            background: rgba(255,255,255,0.1); border-radius: 10px; outline: none;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 24px; height: 24px; border-radius: 50%;
+            background: #fff; cursor: pointer;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            transition: 0.2s;
+        }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+        
+        .metrics-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: auto;
+        }
+        .metric-card {
+            background: rgba(0,0,0,0.3); padding: 16px; border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05); text-align: center;
+        }
+        .metric-val { font-size: 1.5rem; font-weight: 700; font-family: var(--font-heading); margin-top: 4px; }
+
+        /* ==========================================================================
+           6. FACTS, MISTAKES & REVISION
+           ========================================================================== */
+        .grid-3 {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px;
+        }
+        .info-card {
+            padding: 32px;
+            border-radius: var(--border-radius);
+            background: var(--surface-1);
+            border: 1px solid var(--glass-border);
+            transition: transform 0.3s;
+        }
+        .info-card:hover { transform: translateY(-5px); }
+        .info-icon {
+            width: 48px; height: 48px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 24px; margin-bottom: 24px; background: rgba(255,255,255,0.05);
+        }
+
+        .mistake-card { border-top: 4px solid var(--oxygen-red); }
+        .fact-card { border-top: 4px solid var(--accent); }
+        
+        .tag-false { color: var(--oxygen-red); font-weight: 700; font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 8px; display: block;}
+        .tag-true { color: #00e676; font-weight: 700; font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase; margin-top: 16px; display: block;}
+
+        footer { text-align: center; padding: 40px; color: var(--text-muted); border-top: 1px solid var(--glass-border); margin-top: 60px; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="ambient-orb orb-red"></div>
+        <div class="ambient-orb orb-blue"></div>
+    </div>
+
+    <!-- 1. HERO / INTRO -->
+    <section class="hero container">
+        <div class="hero-content">
+            <div class="hero-badge">Interactive Simulation</div>
+            <h1 class="text-gradient">The Engine of Life</h1>
+            <p style="font-size: clamp(1.1rem, 2vw, 1.4rem); max-width: 600px;">
+                Explore the marvel of the human cardiovascular system. A closed-loop hydraulic network that pumps 2,000 gallons of blood every day to keep you alive.
+            </p>
+        </div>
+    </section>
+
+    <!-- 2. COMPONENTS (Anatomy with Markers & Legend) -->
+    <section id="components" class="container">
+        <div style="text-align: center; margin-bottom: 40px;">
+            <h2>Anatomy of the Pump</h2>
+            <p>The heart is a four-chambered muscular organ. Hover or tap the markers to identify its key components.</p>
+        </div>
+
+        <div class="components-layout glass-panel" style="padding: 24px;">
+            <!-- Illustration -->
+            <div class="illustration-container">
+                <!-- Premium SVG of the Heart Outline & Vessels -->
+                <svg class="illustration-svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="grad-red" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ff4b6b" />
+                            <stop offset="100%" stop-color="#cc0022" />
+                        </linearGradient>
+                        <linearGradient id="grad-blue" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#3399ff" />
+                            <stop offset="100%" stop-color="#0044aa" />
+                        </linearGradient>
+                        <linearGradient id="grad-muscle" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#882233" />
+                            <stop offset="100%" stop-color="#330011" />
+                        </linearGradient>
+                        <filter id="neon-glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="8" result="blur" />
+                            <feMerge>
+                                <feMergeNode in="blur" />
+                                <feMergeNode in="SourceGraphic" />
+                            </feMerge>
+                        </filter>
+                    </defs>
+
+                    <!-- Stylized Heart Base -->
+                    <path d="M 400,650 C 300,550 200,450 200,350 C 200,250 280,200 350,220 C 380,230 400,280 400,280 C 400,280 420,230 450,220 C 520,200 600,250 600,350 C 600,450 500,550 400,650 Z" fill="url(#grad-muscle)" stroke="rgba(255,255,255,0.1)" stroke-width="2" />
+                    
+                    <!-- Left Ventricle (Right side on SVG due to anatomical view) -->
+                    <path d="M 400,620 C 480,530 550,450 550,370 C 550,320 520,280 480,270 C 460,265 440,280 420,320 L 400,380 Z" fill="url(#grad-red)" opacity="0.8" />
+                    
+                    <!-- Right Ventricle -->
+                    <path d="M 390,610 L 380,380 C 360,280 340,265 320,270 C 280,280 250,320 250,370 C 250,450 320,530 390,610 Z" fill="url(#grad-blue)" opacity="0.8" />
+
+                    <!-- Aorta Arch -->
+                    <path d="M 420,280 C 420,150 480,100 550,150" fill="none" stroke="url(#grad-red)" stroke-width="40" stroke-linecap="round" filter="url(#neon-glow)" />
+                    <!-- Pulmonary Artery -->
+                    <path d="M 380,290 C 380,180 300,120 230,170" fill="none" stroke="url(#grad-blue)" stroke-width="35" stroke-linecap="round" filter="url(#neon-glow)" />
+                    <!-- Superior Vena Cava -->
+                    <path d="M 320,270 L 320,80" fill="none" stroke="url(#grad-blue)" stroke-width="25" stroke-linecap="round" />
+                    <!-- Pulmonary Veins -->
+                    <path d="M 480,270 L 600,250 M 480,290 L 620,290" fill="none" stroke="url(#grad-red)" stroke-width="15" stroke-linecap="round" />
+                </svg>
+
+                <!-- Markers (Positioned via inline percentages based on SVG viewBox) -->
+                <!-- Aorta -->
+                <div class="marker type-red" data-target="comp-aorta" style="top: 15%; left: 63%;">1</div>
+                <!-- Vena Cava -->
+                <div class="marker type-blue" data-target="comp-vena" style="top: 18%; left: 38%;">2</div>
+                <!-- Right Atrium -->
+                <div class="marker type-blue" data-target="comp-ra" style="top: 38%; left: 38%;">3</div>
+                <!-- Right Ventricle -->
+                <div class="marker type-blue" data-target="comp-rv" style="top: 60%; left: 40%;">4</div>
+                <!-- Pulmonary Artery -->
+                <div class="marker type-blue" data-target="comp-pa" style="top: 25%; left: 32%;">5</div>
+                <!-- Left Atrium -->
+                <div class="marker type-red" data-target="comp-la" style="top: 38%; left: 60%;">6</div>
+                <!-- Left Ventricle -->
+                <div class="marker type-red" data-target="comp-lv" style="top: 60%; left: 62%;">7</div>
+            </div>
+
+            <!-- Legend List -->
+            <div class="legend-list">
+                <div class="legend-item type-red" id="comp-aorta">
+                    <div class="legend-badge">1</div>
+                    <div class="legend-content">
+                        <h4>Aorta</h4>
+                        <p>The main artery that carries highly pressurized, oxygen-rich blood to the entire body.</p>
+                    </div>
+                </div>
+                <div class="legend-item type-blue" id="comp-vena">
+                    <div class="legend-badge">2</div>
+                    <div class="legend-content">
+                        <h4>Vena Cava</h4>
+                        <p>Major veins that return deoxygenated blood from the body back to the heart.</p>
+                    </div>
+                </div>
+                <div class="legend-item type-blue" id="comp-ra">
+                    <div class="legend-badge">3</div>
+                    <div class="legend-content">
+                        <h4>Right Atrium</h4>
+                        <p>Receiving chamber for used, deoxygenated blood returning from the body.</p>
+                    </div>
+                </div>
+                <div class="legend-item type-blue" id="comp-rv">
+                    <div class="legend-badge">4</div>
+                    <div class="legend-content">
+                        <h4>Right Ventricle</h4>
+                        <p>Pumps deoxygenated blood to the lungs to receive fresh oxygen.</p>
+                    </div>
+                </div>
+                <div class="legend-item type-blue" id="comp-pa">
+                    <div class="legend-badge">5</div>
+                    <div class="legend-content">
+                        <h4>Pulmonary Artery</h4>
+                        <p>Carries blood to the lungs. The only artery carrying deoxygenated blood.</p>
+                    </div>
+                </div>
+                <div class="legend-item type-red" id="comp-la">
+                    <div class="legend-badge">6</div>
+                    <div class="legend-content">
+                        <h4>Left Atrium</h4>
+                        <p>Receives fresh, oxygenated blood returning from the lungs.</p>
+                    </div>
+                </div>
+                <div class="legend-item type-red" id="comp-lv">
+                    <div class="legend-badge">7</div>
+                    <div class="legend-content">
+                        <h4>Left Ventricle</h4>
+                        <p>The strongest chamber. Pumps oxygenated blood through the Aorta to the body.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. WORKING PROCESS (Step-by-Step Cycle) -->
+    <section id="working" class="container">
+        <div style="text-align: center; margin-bottom: 40px;">
+            <h2>The Double Circulation Cycle</h2>
+            <p>Blood travels in a continuous figure-8 pattern. Follow the mechanism stage by stage.</p>
+        </div>
+
+        <div class="working-container glass-panel">
+            <!-- Left: Visual Flow Diagram -->
+            <div class="working-visual">
+                <svg class="cycle-svg" viewBox="0 0 800 800" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Base Structure Paths -->
+                    
+                    <!-- Top Loop (Pulmonary / Lungs) -->
+                    <ellipse cx="400" cy="200" rx="200" ry="80" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20" />
+                    <!-- Bottom Loop (Systemic / Body) -->
+                    <ellipse cx="400" cy="600" rx="250" ry="120" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="20" />
+                    <!-- Heart Center -->
+                    <rect x="300" y="320" width="200" height="160" rx="30" fill="var(--surface-2)" stroke="var(--glass-border)" />
+                    
+                    <!-- Nodes (Lungs, Body, Chambers) -->
+                    <g id="node-lungs" class="node-group" style="color: #fff;">
+                        <circle cx="400" cy="120" r="50" fill="rgba(255,255,255,0.1)" stroke="currentColor" stroke-width="4"/>
+                        <text x="400" y="125" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="bold" font-size="20">LUNGS</text>
+                    </g>
+                    <g id="node-body" class="node-group" style="color: #fff;">
+                        <circle cx="400" cy="720" r="50" fill="rgba(255,255,255,0.1)" stroke="currentColor" stroke-width="4"/>
+                        <text x="400" y="725" text-anchor="middle" fill="#fff" font-family="sans-serif" font-weight="bold" font-size="20">BODY</text>
+                    </g>
+
+                    <g id="node-heart-r" class="node-group" style="color: var(--deox-blue);">
+                        <path d="M 310,330 L 390,330 L 390,470 L 310,470 Z" fill="rgba(0,136,255,0.2)" stroke="currentColor" stroke-width="3" rx="10"/>
+                        <text x="350" y="405" text-anchor="middle" fill="#fff" font-size="16">RIGHT</text>
+                    </g>
+                    <g id="node-heart-l" class="node-group" style="color: var(--oxygen-red);">
+                        <path d="M 410,330 L 490,330 L 490,470 L 410,470 Z" fill="rgba(255,42,75,0.2)" stroke="currentColor" stroke-width="3" rx="10"/>
+                        <text x="450" y="405" text-anchor="middle" fill="#fff" font-size="16">LEFT</text>
+                    </g>
+
+                    <!-- Flow Paths -->
+                    <!-- Path 1: Body to Right Heart -->
+                    <path id="path-1" class="flow-path" d="M 400,720 C 150,720 150,400 310,400" fill="none" stroke="var(--deox-blue)" stroke-width="4" stroke-linecap="round"/>
+                    <!-- Path 2: Right Heart to Lungs -->
+                    <path id="path-2" class="flow-path" d="M 350,330 C 350,200 200,200 200,120 C 200,120 300,120 350,120" fill="none" stroke="var(--deox-blue)" stroke-width="4" stroke-linecap="round"/>
+                    <!-- Path 3: Lungs to Left Heart -->
+                    <path id="path-3" class="flow-path" d="M 450,120 C 500,120 600,120 600,200 C 600,200 450,200 450,330" fill="none" stroke="var(--oxygen-red)" stroke-width="4" stroke-linecap="round"/>
+                    <!-- Path 4: Left Heart to Body -->
+                    <path id="path-4" class="flow-path" d="M 490,400 C 650,400 650,720 400,720" fill="none" stroke="var(--oxygen-red)" stroke-width="4" stroke-linecap="round"/>
+
+                </svg>
+            </div>
+
+            <!-- Right: Interactive Controls & Text -->
+            <div class="working-controls">
+                
+                <div class="stage-card" id="stage-content">
+                    <div class="stage-meta">
+                        <span class="meta-in">In: CO₂ Blood</span> → <span class="meta-out">Out: Lungs</span>
+                    </div>
+                    <h3 class="stage-title">Deoxygenated Return</h3>
+                    <p id="stage-desc">Oxygen-depleted blood from the body enters the Right side of the heart via the Vena Cava.</p>
+                </div>
+
+                <div class="controls-row">
+                    <button id="btn-prev">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                    </button>
+                    
+                    <div class="progress-dots" id="cycle-dots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+
+                    <button id="btn-next">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                </div>
+                
+                <button id="btn-autoplay" class="btn-primary" style="justify-content: center; width: 100%;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="play-icon"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <span id="autoplay-text">Auto-Play Cycle</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. SIMULATION SECTION -->
+    <section id="simulation" class="container">
+        <div style="text-align: center; margin-bottom: 40px;">
+            <h2>Live Flow Simulation</h2>
+            <p>Adjust heart rate (BPM) to observe how circulation speed and volume adapt dynamically.</p>
+        </div>
+
+        <div class="simulation-container glass-panel">
+            <!-- Canvas Rendered Flow -->
+            <div class="canvas-wrapper" id="sim-canvas-container">
+                <canvas id="simCanvas"></canvas>
+            </div>
+
+            <!-- Controls Panel -->
+            <div class="sim-panel">
+                <h3>Hemodynamic Control</h3>
+                
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Heart Rate</span>
+                        <span class="value-display"><span id="bpm-val">75</span> BPM</span>
+                    </div>
+                    <input type="range" id="bpm-slider" min="40" max="180" value="75">
+                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-muted);">
+                        <span>Rest (40)</span>
+                        <span>Sprint (180)</span>
+                    </div>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div style="font-size:0.85rem; color:var(--text-muted);">Blood Velocity</div>
+                        <div class="metric-val text-red"><span id="vel-val">30</span><span style="font-size:1rem;"> cm/s</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div style="font-size:0.85rem; color:var(--text-muted);">Cardiac Output</div>
+                        <div class="metric-val text-blue"><span id="co-val">5.0</span><span style="font-size:1rem;"> L/m</span></div>
+                    </div>
+                </div>
+                
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">
+                    * Notice how the particle speed (blood velocity) and generation rate (cardiac output) scale with the heart beats per minute.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. FACTS & MISTAKES -->
+    <section class="container">
+        <h2>Fascinating Facts & Misconceptions</h2>
+        <div class="grid-3">
+            <div class="info-card fact-card">
+                <div class="info-icon text-blue">🌎</div>
+                <h3>100,000 Miles</h3>
+                <p>If you laid all your blood vessels end to end, they would wrap around the Earth roughly four times.</p>
+            </div>
+            
+            <div class="info-card mistake-card">
+                <div class="info-icon text-red">❌</div>
+                <span class="tag-false">Myth: Blood in veins is blue</span>
+                <span class="tag-true">Fact: It's dark red</span>
+                <p>Human blood is never blue. Deoxygenated blood is just a darker shade of red. Veins appear blue through the skin due to light scattering physics (optical illusion).</p>
+            </div>
+
+            <div class="info-card fact-card">
+                <div class="info-icon text-red">⚡</div>
+                <h3>Own Electricity</h3>
+                <p>The heart has its own electrical system (the SA node) and can continue to beat outside the body as long as it has oxygen.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>Built as a premium interactive educational simulation. Focuses on visual comprehension of human circulation.</p>
+    </footer>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 1. COMPONENTS (Marker & Legend Hover Logic) ---
+            const markers = document.querySelectorAll('.marker');
+            const legends = document.querySelectorAll('.legend-item');
+
+            function clearActiveComponents() {
+                markers.forEach(m => m.classList.remove('active'));
+                legends.forEach(l => l.classList.remove('active'));
+            }
+
+            function activateComponent(id) {
+                clearActiveComponents();
+                const marker = document.querySelector(`.marker[data-target="${id}"]`);
+                const legend = document.getElementById(id);
+                if(marker) marker.classList.add('active');
+                if(legend) {
+                    legend.classList.add('active');
+                    // Scroll legend into view softly on mobile if needed
+                    if (window.innerWidth < 768) {
+                        legend.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                }
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => activateComponent(marker.dataset.target));
+                marker.addEventListener('click', () => activateComponent(marker.dataset.target));
+            });
+
+            legends.forEach(legend => {
+                legend.addEventListener('mouseenter', () => activateComponent(legend.id));
+                legend.addEventListener('click', () => activateComponent(legend.id));
+            });
+
+
+            // --- 2. WORKING PROCESS (Cycle Logic) ---
+            const cycleStages = [
+                {
+                    title: "Systemic Return",
+                    in: "CO₂ Blood", out: "Right Heart",
+                    desc: "Oxygen-depleted, dark red blood returns from the body tissues and enters the Right Atrium.",
+                    activeNodes: ['node-body', 'node-heart-r'],
+                    activePath: 'path-1'
+                },
+                {
+                    title: "Pulmonary Pumping",
+                    in: "Right Heart", out: "Lungs",
+                    desc: "The Right Ventricle contracts, pushing deoxygenated blood through the Pulmonary Artery to the lungs.",
+                    activeNodes: ['node-heart-r', 'node-lungs'],
+                    activePath: 'path-2'
+                },
+                {
+                    title: "Gas Exchange",
+                    in: "Lungs", out: "Left Heart",
+                    desc: "In the lungs, blood drops off CO₂ and picks up fresh O₂. It turns bright red and returns to the Left Atrium.",
+                    activeNodes: ['node-lungs', 'node-heart-l'],
+                    activePath: 'path-3'
+                },
+                {
+                    title: "Systemic Pumping",
+                    in: "Left Heart", out: "Body",
+                    desc: "The powerful Left Ventricle pumps the oxygen-rich blood out through the Aorta to nourish the entire body.",
+                    activeNodes: ['node-heart-l', 'node-body'],
+                    activePath: 'path-4'
+                }
+            ];
+
+            let currentStage = 0;
+            let autoPlayInterval = null;
+
+            const DOM = {
+                title: document.querySelector('.stage-title'),
+                desc: document.getElementById('stage-desc'),
+                metaIn: document.querySelector('.meta-in'),
+                metaOut: document.querySelector('.meta-out'),
+                dots: document.querySelectorAll('.dot'),
+                paths: document.querySelectorAll('.flow-path'),
+                nodes: document.querySelectorAll('.node-group')
+            };
+
+            function renderStage(index) {
+                const stage = cycleStages[index];
+                
+                // Text Update (with simple fade)
+                const stageCard = document.getElementById('stage-content');
+                stageCard.style.opacity = 0;
+                
+                setTimeout(() => {
+                    DOM.title.textContent = stage.title;
+                    DOM.desc.textContent = stage.desc;
+                    DOM.metaIn.textContent = `In: ${stage.in}`;
+                    DOM.metaOut.textContent = `Out: ${stage.out}`;
+                    stageCard.style.opacity = 1;
+                }, 200);
+
+                // Update Dots
+                DOM.dots.forEach((dot, i) => {
+                    dot.classList.toggle('active', i === index);
+                });
+
+                // Update SVG SVG Nodes & Paths
+                DOM.nodes.forEach(node => node.classList.remove('active'));
+                DOM.paths.forEach(path => path.classList.remove('active'));
+
+                stage.activeNodes.forEach(id => {
+                    document.getElementById(id).classList.add('active');
+                });
+                document.getElementById(stage.activePath).classList.add('active');
+            }
+
+            function nextStage() {
+                currentStage = (currentStage + 1) % cycleStages.length;
+                renderStage(currentStage);
+            }
+
+            function prevStage() {
+                currentStage = (currentStage - 1 + cycleStages.length) % cycleStages.length;
+                renderStage(currentStage);
+            }
+
+            function toggleAutoPlay() {
+                const btn = document.getElementById('btn-autoplay');
+                const text = document.getElementById('autoplay-text');
+                const icon = document.getElementById('play-icon');
+
+                if (autoPlayInterval) {
+                    clearInterval(autoPlayInterval);
+                    autoPlayInterval = null;
+                    text.textContent = "Auto-Play Cycle";
+                    icon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+                    btn.style.background = 'var(--oxygen-red)';
+                } else {
+                    autoPlayInterval = setInterval(nextStage, 3000);
+                    text.textContent = "Pause Cycle";
+                    icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+                    btn.style.background = 'var(--surface-2)';
+                }
+            }
+
+            document.getElementById('btn-next').addEventListener('click', () => { clearInterval(autoPlayInterval); nextStage(); });
+            document.getElementById('btn-prev').addEventListener('click', () => { clearInterval(autoPlayInterval); prevStage(); });
+            document.getElementById('btn-autoplay').addEventListener('click', toggleAutoPlay);
+
+            // Init Cycle
+            renderStage(0);
+
+
+            // --- 3. CANVAS SIMULATION (Fluid Dynamics & Particles) ---
+            const canvas = document.getElementById('simCanvas');
+            const ctx = canvas.getContext('2d');
+            const container = document.getElementById('sim-canvas-container');
+            
+            // Simulation State
+            let bpm = 75;
+            let width, height;
+            let particles = [];
+            let heartScale = 1;
+            let beatTimer = 0;
+
+            const slider = document.getElementById('bpm-slider');
+            const valBPM = document.getElementById('bpm-val');
+            const valVel = document.getElementById('vel-val');
+            const valCO = document.getElementById('co-val');
+
+            // Responsive Canvas Sizing
+            function resizeCanvas() {
+                const rect = container.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                width = rect.width;
+                height = rect.height;
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                ctx.scale(dpr, dpr);
+            }
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            // Handle Interaction
+            slider.addEventListener('input', (e) => {
+                bpm = parseInt(e.target.value);
+                valBPM.textContent = bpm;
+                
+                // Calculate physiological metrics based on BPM
+                // Velocity scales somewhat linearly but plateaus
+                const vel = (20 + (bpm - 40) * 0.3).toFixed(1);
+                valVel.textContent = vel;
+                
+                // Cardiac Output = Stroke Volume * HR. Assuming SV drops slightly at high HR.
+                let sv = 70; // ml
+                if(bpm > 120) sv = 70 - (bpm-120)*0.2;
+                const co = ((sv * bpm) / 1000).toFixed(1);
+                valCO.textContent = co;
+            });
+            
+            // Particle System Generator
+            class BloodCell {
+                constructor() {
+                    this.reset();
+                    this.progress = Math.random(); // Start randomly along path
+                }
+                
+                reset() {
+                    this.progress = 0;
+                    this.size = Math.random() * 2 + 2;
+                    this.isOxygenated = Math.random() > 0.5;
+                    this.pathOffset = (Math.random() - 0.5) * 15; // Jitter within vessel
+                }
+
+                update(speedMultiplier) {
+                    // Base speed + scaled by BPM
+                    const speed = 0.002 * speedMultiplier;
+                    this.progress += speed;
+                    
+                    if (this.progress >= 1) {
+                        this.reset();
+                    }
+
+                    // Exchange Gas based on position (roughly halfway through their loops)
+                    if (this.isOxygenated && this.progress > 0.45 && this.progress < 0.55) {
+                        // Systemic capillary dropoff
+                        this.isOxygenated = false;
+                    } else if (!this.isOxygenated && this.progress > 0.45 && this.progress < 0.55) {
+                        // Pulmonary capillary pickup
+                        this.isOxygenated = true;
+                    }
+                }
+
+                draw(ctx, w, h) {
+                    const cx = w / 2;
+                    const cy = h / 2;
+                    const rX = w * 0.35;
+                    const rY = h * 0.35;
+                    
+                    let x, y;
+                    
+                    // Define figure 8 path using sine/cosine for smooth continuous flow
+                    // Parametric equation for figure 8 (Lemniscate or similar)
+                    // We'll use two circles essentially
+                    
+                    const t = this.progress * Math.PI * 2;
+                    
+                    if (this.isOxygenated) {
+                        // Traveling from Lungs(top) -> Left Heart(center) -> Body(bottom)
+                        if (this.progress < 0.5) {
+                            // Left Heart to Body (Right side of bottom loop)
+                            const t2 = this.progress * 2 * Math.PI; // 0 to PI
+                            x = cx + Math.sin(t2) * rX;
+                            y = cy + Math.sin(t2/2) * rY * 1.5; 
+                        } else {
+                            // Lungs to Left heart (Right side of top loop)
+                            const t2 = (this.progress - 0.5) * 2 * Math.PI;
+                            x = cx + Math.sin(t2) * rX;
+                            y = cy - Math.sin(t2/2) * rY * 1.5;
+                        }
+                    } else {
+                        // Traveling from Body(bottom) -> Right Heart(center) -> Lungs(top)
+                        if (this.progress < 0.5) {
+                            // Body to Right Heart (Left side of bottom loop)
+                            const t2 = this.progress * 2 * Math.PI + Math.PI;
+                            x = cx + Math.sin(t2) * rX;
+                            y = cy - Math.sin(t2/2) * rY * 1.5; // moving up
+                        } else {
+                            // Right Heart to Lungs (Left side of top loop)
+                            const t2 = (this.progress - 0.5) * 2 * Math.PI + Math.PI;
+                            x = cx + Math.sin(t2) * rX;
+                            y = cy + Math.sin(t2/2) * rY * 1.5;
+                        }
+                    }
+
+                    // Add jitter perpendicular to motion
+                    x += this.pathOffset;
+                    y += this.pathOffset;
+
+                    // Draw glowing particle
+                    ctx.beginPath();
+                    ctx.arc(x, y, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = this.isOxygenated ? '#ff2a4b' : '#0088ff';
+                    ctx.shadowColor = this.isOxygenated ? '#ff2a4b' : '#0088ff';
+                    ctx.shadowBlur = 10;
+                    ctx.fill();
+                    ctx.shadowBlur = 0; // reset
+                }
+            }
+
+            // Init particles
+            for(let i=0; i<150; i++) {
+                particles.push(new BloodCell());
+            }
+
+            function drawHeart(ctx, cx, cy, scale) {
+                ctx.save();
+                ctx.translate(cx, cy);
+                ctx.scale(scale, scale);
+                
+                // Outer glow
+                ctx.shadowColor = '#ff2a4b';
+                ctx.shadowBlur = 30;
+                
+                // Stylized simple heart for canvas
+                ctx.beginPath();
+                ctx.moveTo(0, 15);
+                ctx.bezierCurveTo(0, 15, 20, -15, 40, -15);
+                ctx.bezierCurveTo(60, -15, 60, 15, 60, 15);
+                ctx.bezierCurveTo(60, 35, 30, 55, 0, 80);
+                ctx.bezierCurveTo(-30, 55, -60, 35, -60, 15);
+                ctx.bezierCurveTo(-60, 15, -60, -15, -40, -15);
+                ctx.bezierCurveTo(-20, -15, 0, 15, 0, 15);
+                
+                // Gradient fill
+                const grad = ctx.createLinearGradient(0, -20, 0, 80);
+                grad.addColorStop(0, '#ff4b6b');
+                grad.addColorStop(1, '#882233');
+                ctx.fillStyle = grad;
+                ctx.fill();
+                
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            function renderCanvas() {
+                // Clear with slight trailing effect
+                ctx.fillStyle = 'rgba(17, 21, 34, 0.3)';
+                ctx.fillRect(0, 0, width, height);
+
+                const cx = width / 2;
+                const cy = height / 2;
+
+                // 1. Calculate Beat (Scaling animation based on BPM)
+                // 60 BPM = 1 beat per second = 60 frames (at 60fps)
+                const framesPerBeat = (60 / bpm) * 60;
+                beatTimer++;
+                
+                // Heart beat math (systole/diastole curve)
+                const beatPhase = (beatTimer % framesPerBeat) / framesPerBeat;
+                if (beatPhase < 0.15) {
+                    // Systole (contraction)
+                    heartScale = 1 - Math.sin(beatPhase * Math.PI / 0.15) * 0.15;
+                } else if (beatPhase > 0.15 && beatPhase < 0.3) {
+                    // Slight rebound
+                    heartScale = 1 + Math.sin((beatPhase - 0.15) * Math.PI / 0.15) * 0.05;
+                } else {
+                    // Diastole (resting/filling)
+                    heartScale = 1;
+                }
+
+                // 2. Draw generic vessel pathways (Background)
+                ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+                ctx.lineWidth = 30;
+                ctx.lineCap = 'round';
+                
+                // Top loop (Lungs)
+                ctx.beginPath();
+                ctx.ellipse(cx, cy - height*0.2, width*0.35, height*0.15, 0, 0, Math.PI*2);
+                ctx.stroke();
+                
+                // Bottom loop (Body)
+                ctx.beginPath();
+                ctx.ellipse(cx, cy + height*0.25, width*0.35, height*0.2, 0, 0, Math.PI*2);
+                ctx.stroke();
+
+                // 3. Update & Draw Particles
+                // Speed scales non-linearly with BPM for visual pleasantness
+                const speedMult = 0.5 + (bpm / 60) * 0.8;
+                
+                particles.forEach(p => {
+                    // Add pulse to movement during systole
+                    let pulseSpeed = speedMult;
+                    if (beatPhase < 0.2) pulseSpeed *= 2.5; 
+                    
+                    p.update(pulseSpeed);
+                    p.draw(ctx, width, height);
+                });
+
+                // 4. Draw Heart in center
+                drawHeart(ctx, cx, cy - 20, heartScale);
+
+                requestAnimationFrame(renderCanvas);
+            }
+
+            // Start loop
+            renderCanvas();
+
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Molecule Builder Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & GLOBAL RESET
+           ========================================================================== */
+        :root {
+            /* Colors */
+            --bg-base: #06080f;
+            --bg-surface: rgba(18, 22, 36, 0.6);
+            --bg-glass: rgba(255, 255, 255, 0.03);
+            --bg-glass-hover: rgba(255, 255, 255, 0.08);
+            
+            --accent-cyan: #00f0ff;
+            --accent-purple: #8a2be2;
+            --accent-pink: #ff007f;
+            
+            --text-main: rgba(255, 255, 255, 0.95);
+            --text-muted: rgba(255, 255, 255, 0.65);
+            
+            /* Atom Colors (Realistic Gradients in JS, Base colors here) */
+            --atom-c: #333333; /* Carbon */
+            --atom-o: #e63946; /* Oxygen */
+            --atom-h: #f1faee; /* Hydrogen */
+            --atom-n: #457b9d; /* Nitrogen */
+            
+            /* Typography */
+            --font-ui: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            
+            /* Fluid Typography */
+            --text-xs: clamp(0.75rem, 1vw, 0.85rem);
+            --text-sm: clamp(0.85rem, 1.2vw, 1rem);
+            --text-md: clamp(1rem, 1.5vw, 1.15rem);
+            --text-lg: clamp(1.2rem, 2vw, 1.5rem);
+            --text-xl: clamp(1.5rem, 3vw, 2rem);
+            --text-xxl: clamp(2rem, 5vw, 3.5rem);
+            
+            /* Layout & Spacing */
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-xl: 32px;
+            --spacing-xs: 8px;
+            --spacing-sm: 16px;
+            --spacing-md: 24px;
+            --spacing-lg: 48px;
+            --spacing-xl: 80px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-ui);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(138, 43, 226, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(0, 240, 255, 0.08) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Ambient Background Canvas */
+        #ambient-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Typography Styles */
+        h1, h2, h3, h4 {
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple), var(--accent-pink));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: inline-block;
+        }
+
+        p {
+            color: var(--text-muted);
+            font-size: var(--text-md);
+            max-width: 70ch;
+        }
+
+        /* Container Layout */
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-sm);
+        }
+
+        section {
+            padding: var(--spacing-xl) 0;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+            position: relative;
+        }
+
+        /* Glassmorphism Panels */
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-md);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+            transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.3s ease;
+        }
+
+        /* Buttons */
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            padding: 12px 24px;
+            border-radius: 100px;
+            font-size: var(--text-sm);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn.active {
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.2), rgba(138, 43, 226, 0.2));
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+        }
+
+        /* ==========================================================================
+           HERO & INTRO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding-top: var(--spacing-xl);
+        }
+
+        .hero-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: var(--spacing-md);
+            z-index: 10;
+        }
+
+        .hero h1 {
+            font-size: var(--text-xxl);
+            line-height: 1.1;
+        }
+
+        .hero-canvas-container {
+            width: 100%;
+            height: 50vh;
+            min-height: 400px;
+            position: relative;
+            margin-top: -20px;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none; /* Prevent scroll on canvas drag */
+        }
+
+        /* ==========================================================================
+           COMPONENTS SECTION (MANDATORY MARKER PATTERN)
+           ========================================================================== */
+        .components-grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: var(--spacing-lg);
+            align-items: start;
+        }
+
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            min-height: 400px;
+            background: radial-gradient(circle at center, rgba(0, 240, 255, 0.05), transparent 70%);
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .diagram-svg {
+            width: 100%;
+            height: 100%;
+            max-width: 400px;
+            filter: drop-shadow(0 0 20px rgba(0, 240, 255, 0.2));
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid var(--accent-cyan);
+            color: var(--text-main);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+            backdrop-filter: blur(4px);
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.3);
+            background: var(--accent-cyan);
+            color: #000;
+            box-shadow: 0 0 20px rgba(0, 240, 255, 0.8);
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.08);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(4px);
+        }
+
+        .legend-badge {
+            width: 24px;
+            height: 24px;
+            background: var(--accent-cyan);
+            color: #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            flex-shrink: 0;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+        }
+
+        .legend-content h4 {
+            font-size: var(--text-sm);
+            margin-bottom: 2px;
+            color: var(--accent-cyan);
+        }
+
+        .legend-content p {
+            font-size: var(--text-xs);
+            margin: 0;
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (MANDATORY DEDICATED SECTION)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .working-display {
+            width: 100%;
+            height: 450px;
+            background: #0a0c14;
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(255,255,255,0.08);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        /* Inputs / Outputs visual indicators */
+        .stage-particles {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            z-index: 10;
+        }
+        
+        .particle-badge {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-cyan);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .working-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--spacing-md);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .control-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .dot.active {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan);
+            transform: scale(1.2);
+        }
+
+        .stage-info {
+            text-align: center;
+            flex: 1;
+            padding: 0 20px;
+        }
+        
+        .stage-info h3 {
+            color: var(--accent-cyan);
+            margin-bottom: 4px;
+            font-size: var(--text-lg);
+        }
+        
+        .stage-info p {
+            font-size: var(--text-sm);
+            margin: 0 auto;
+        }
+
+        /* ==========================================================================
+           SIMULATION (INTERACTIVE BUILDER)
+           ========================================================================== */
+        .simulation-grid {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: var(--spacing-md);
+            height: 600px;
+        }
+
+        .sim-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            overflow-y: auto;
+        }
+
+        .sim-main {
+            position: relative;
+            background: radial-gradient(circle at center, rgba(138, 43, 226, 0.1), #05060a);
+            border-radius: var(--radius-lg);
+            border: 1px solid rgba(255,255,255,0.08);
+            overflow: hidden;
+            box-shadow: inset 0 0 60px rgba(0,0,0,0.8);
+        }
+
+        .sim-molecule-btn {
+            width: 100%;
+            justify-content: flex-start;
+            padding: 16px;
+            text-align: left;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.03);
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+
+        .sim-molecule-btn strong {
+            font-size: var(--text-md);
+            color: var(--accent-cyan);
+        }
+        
+        .sim-molecule-btn span {
+            font-size: var(--text-xs);
+            color: var(--text-muted);
+            font-weight: normal;
+        }
+
+        .sim-overlay {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(10px);
+            padding: 16px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.1);
+            pointer-events: none;
+        }
+        
+        .sim-overlay h4 {
+            color: var(--accent-purple);
+            margin-bottom: 4px;
+        }
+        
+        .sim-overlay p {
+            font-size: var(--text-sm);
+            margin: 0;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .drag-hint {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0,0,0,0.4);
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.6);
+            pointer-events: none;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .drag-hint svg {
+            width: 16px; height: 16px; fill: currentColor;
+        }
+
+        /* ==========================================================================
+           GRID SECTIONS (APPLICATIONS, FACTS, MISTAKES)
+           ========================================================================== */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .card:hover {
+            background: rgba(255,255,255,0.04);
+            border-color: rgba(255,255,255,0.1);
+            transform: translateY(-4px);
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            background: linear-gradient(135deg, rgba(0, 240, 255, 0.1), rgba(138, 43, 226, 0.1));
+            color: var(--accent-cyan);
+            border: 1px solid rgba(0, 240, 255, 0.2);
+        }
+
+        .card h4 {
+            color: var(--text-main);
+            font-size: var(--text-lg);
+        }
+
+        .card p {
+            font-size: var(--text-sm);
+            margin: 0;
+        }
+
+        /* Revision Table */
+        .revision-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: var(--spacing-sm);
+        }
+        
+        .revision-table th, .revision-table td {
+            padding: 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .revision-table th {
+            color: var(--accent-purple);
+            font-weight: 600;
+            font-size: var(--text-sm);
+        }
+        
+        .revision-table td {
+            font-size: var(--text-md);
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           RESPONSIVE RULES (MOBILE & TABLET)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .components-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .simulation-grid {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 400px;
+                height: auto;
+            }
+            
+            .sim-sidebar {
+                flex-direction: row;
+                overflow-x: auto;
+                padding-bottom: 8px;
+            }
+            
+            .sim-molecule-btn {
+                min-width: 160px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --spacing-xl: 48px;
+                --spacing-lg: 32px;
+                --spacing-md: 16px;
+            }
+
+            section {
+                padding: var(--spacing-lg) 0;
+            }
+
+            .working-display {
+                height: 350px;
+            }
+            
+            .working-controls {
+                flex-direction: column;
+                gap: 16px;
+                align-items: stretch;
+            }
+            
+            .stage-info {
+                order: -1;
+                padding: 0;
+            }
+            
+            .control-group {
+                justify-content: space-between;
+            }
+
+            .glass-panel {
+                backdrop-filter: blur(10px); /* Reduce blur for mobile perf */
+                -webkit-backdrop-filter: blur(10px);
+            }
+
+            .sim-main {
+                height: 350px;
+            }
+
+            .drag-hint {
+                top: auto;
+                bottom: 20px;
+                right: 20px;
+            }
+            .sim-overlay {
+                top: 20px;
+                bottom: auto;
+                left: 10px;
+                right: 10px;
+                padding: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="ambient-canvas"></canvas>
+
+    <div class="container">
+        
+        <!-- Hero Section -->
+        <section id="hero" class="hero">
+            <div class="hero-content">
+                <h1><span class="gradient-text">Molecule Builder</span></h1>
+                <p>Understand the geometry of the universe. Explore how atoms bond through electron sharing to create the diverse 3D shapes that form all matter.</p>
+            </div>
+            <!-- Interactive Hero Canvas -->
+            <div class="hero-canvas-container">
+                <canvas id="hero-canvas"></canvas>
+            </div>
+        </section>
+
+        <!-- Topic Overview -->
+        <section id="overview">
+            <div class="glass-panel">
+                <h2>The Architecture of Matter</h2>
+                <p>Atoms rarely exist alone. Driven by the need to achieve stable electron configurations, atoms share electrons to form <strong>covalent bonds</strong>. Because electrons repel each other (VSEPR Theory), molecules naturally arrange themselves into specific 3D geometries—like lines, triangles, and tetrahedrons—to minimize this repulsion.</p>
+            </div>
+        </section>
+
+        <!-- Main Components (Marker Pattern) -->
+        <section id="components">
+            <h2>Atomic Toolkit</h2>
+            <p>Before building molecules, examine the building blocks. Here is an Oxygen atom, detailing the components that participate in chemical bonding.</p>
+            
+            <div class="components-grid">
+                <!-- Visual Container -->
+                <div class="diagram-container">
+                    <svg class="diagram-svg" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <radialGradient id="nucGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#ff4d4d"/>
+                                <stop offset="100%" stop-color="#cc0000"/>
+                            </radialGradient>
+                            <radialGradient id="elecGrad" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#ffffff"/>
+                                <stop offset="100%" stop-color="#00f0ff"/>
+                            </radialGradient>
+                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="4" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Electron Shells (Orbits) -->
+                        <circle cx="200" cy="200" r="60" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2" stroke-dasharray="4 4" />
+                        <circle cx="200" cy="200" r="140" fill="none" stroke="rgba(0, 240, 255, 0.3)" stroke-width="2" />
+
+                        <!-- Nucleus -->
+                        <circle cx="200" cy="200" r="25" fill="url(#nucGrad)" filter="url(#glow)"/>
+                        
+                        <!-- Inner Shell Electrons (2) -->
+                        <circle cx="200" cy="140" r="6" fill="url(#elecGrad)" filter="url(#glow)"/>
+                        <circle cx="200" cy="260" r="6" fill="url(#elecGrad)" filter="url(#glow)"/>
+
+                        <!-- Outer (Valence) Shell Electrons (6) -->
+                        <circle cx="200" cy="60" r="8" fill="url(#elecGrad)" filter="url(#glow)"/>
+                        <circle cx="200" cy="340" r="8" fill="url(#elecGrad)" filter="url(#glow)"/>
+                        <circle cx="60" cy="200" r="8" fill="url(#elecGrad)" filter="url(#glow)"/>
+                        <circle cx="340" cy="200" r="8" fill="url(#elecGrad)" filter="url(#glow)"/>
+                        <circle cx="101" cy="101" r="8" fill="url(#elecGrad)" filter="url(#glow)"/>
+                        <circle cx="299" cy="299" r="8" fill="url(#elecGrad)" filter="url(#glow)"/>
+                    </svg>
+
+                    <!-- Absolute Positioning relative to .diagram-container -->
+                    <div class="marker" data-target="1" style="top: 50%; left: 50%;">1</div>
+                    <div class="marker" data-target="2" style="top: 50%; left: 15%;">2</div>
+                    <div class="marker" data-target="3" style="top: 15%; left: 50%;">3</div>
+                </div>
+
+                <!-- Legend List (Document Flow) -->
+                <div class="legend-list glass-panel">
+                    <div class="legend-item" data-target="1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Nucleus</h4>
+                            <p>Protons and neutrons. Determines the element and pulls electrons inward.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="2">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4>Valence Shell</h4>
+                            <p>The outermost orbit. Atoms seek to fill this shell to become stable (Octet Rule).</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="3">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4>Valence Electron</h4>
+                            <p>Subatomic particles available to be shared with other atoms to form bonds.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Working Process (Mandatory Mechanism) -->
+        <section id="working">
+            <h2>Bond Formation Process</h2>
+            <p>How do atoms actually unite? Let's walk through the linear sequence of forming a water molecule (H₂O) via covalent bonding.</p>
+            
+            <div class="working-container glass-panel">
+                <div class="working-display">
+                    <!-- Dynamic particles indicating input/output -->
+                    <div class="stage-particles" id="working-particles">
+                        <!-- Populated by JS -->
+                    </div>
+                    <!-- Canvas for mechanism animation -->
+                    <canvas id="working-canvas"></canvas>
+                </div>
+
+                <div class="working-controls">
+                    <div class="control-group">
+                        <button class="btn" id="btn-prev">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        <button class="btn" id="btn-next">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+
+                    <div class="stage-info">
+                        <h3 id="stage-title">Stage 1</h3>
+                        <p id="stage-desc">Description</p>
+                    </div>
+
+                    <div class="control-group">
+                        <button class="btn" id="btn-play">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="icon-play"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            <span id="text-play">Auto-Play</span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="progress-dots" style="justify-content: center; margin-top:-8px;">
+                    <div class="dot active"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Simulation -->
+        <section id="simulation">
+            <h2>Interactive 3D Builder</h2>
+            <p>Drag to rotate. Select different molecular structures to see how VSEPR theory dictates geometric shapes based on electron repulsion.</p>
+            
+            <div class="simulation-grid">
+                <div class="sim-sidebar">
+                    <button class="btn sim-molecule-btn active" data-molecule="h2o">
+                        <strong>Water (H₂O)</strong>
+                        <span>Bent • 104.5°</span>
+                    </button>
+                    <button class="btn sim-molecule-btn" data-molecule="co2">
+                        <strong>Carbon Dioxide (CO₂)</strong>
+                        <span>Linear • 180°</span>
+                    </button>
+                    <button class="btn sim-molecule-btn" data-molecule="ch4">
+                        <strong>Methane (CH₄)</strong>
+                        <span>Tetrahedral • 109.5°</span>
+                    </button>
+                    <button class="btn sim-molecule-btn" data-molecule="nh3">
+                        <strong>Ammonia (NH₃)</strong>
+                        <span>Trigonal Pyramidal • 107°</span>
+                    </button>
+                </div>
+                
+                <div class="sim-main">
+                    <canvas id="sim-canvas"></canvas>
+                    
+                    <div class="drag-hint">
+                        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/></svg>
+                        Drag to rotate
+                    </div>
+                    
+                    <div class="sim-overlay">
+                        <h4 id="sim-title">Water (H₂O)</h4>
+                        <p id="sim-desc">Oxygen has 2 lone pairs pushing the hydrogen atoms down, creating a bent shape.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Applications -->
+        <section id="applications">
+            <h2>Why Geometry Matters</h2>
+            <div class="cards-grid">
+                <div class="card glass-panel">
+                    <div class="card-icon">💧</div>
+                    <h4>Water's Polarity</h4>
+                    <p>Because H₂O is bent, it has a positive and negative side. This polarity allows it to dissolve nutrients, making life on Earth possible.</p>
+                </div>
+                <div class="card glass-panel">
+                    <div class="card-icon">🧬</div>
+                    <h4>Drug Design</h4>
+                    <p>Pharmaceuticals rely on exact 3D molecular shapes to lock into specific receptors in the human body, much like a key fits a lock.</p>
+                </div>
+                <div class="card glass-panel">
+                    <div class="card-icon">🔥</div>
+                    <h4>Greenhouse Effect</h4>
+                    <p>The linear but flexible shape of CO₂ allows it to absorb infrared radiation (heat) from the Earth, vibrating and trapping warmth in the atmosphere.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Facts & Mistakes -->
+        <section id="facts-mistakes" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--spacing-lg);">
+            <div>
+                <h2 style="color: var(--accent-pink);">Interesting Fact</h2>
+                <div class="glass-panel" style="margin-top: var(--spacing-md); height: 100%;">
+                    <p><strong>Diamond vs. Graphite</strong></p>
+                    <p style="margin-top: 10px;">Both are made of 100% Carbon atoms. In diamond, atoms form rigid tetrahedral bonds (making it the hardest natural substance). In graphite, they form flat hexagonal sheets that slide over each other (making it soft enough for pencil lead). Shape dictates function!</p>
+                </div>
+            </div>
+            <div>
+                <h2 style="color: var(--accent-cyan);">Common Mistake</h2>
+                <div class="glass-panel" style="margin-top: var(--spacing-md); height: 100%;">
+                    <p><strong>"Bonds are physical sticks"</strong></p>
+                    <p style="margin-top: 10px;">People often visualize bonds as solid rods because of physical ball-and-stick models. In reality, a covalent bond is just an invisible electromagnetic force—a region of space where electrons are highly probable to exist, holding nuclei together.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quick Revision -->
+        <section id="revision">
+            <h2>Quick Revision</h2>
+            <div class="glass-panel">
+                <table class="revision-table">
+                    <tr>
+                        <th>Concept</th>
+                        <th>Definition</th>
+                    </tr>
+                    <tr>
+                        <td>Covalent Bond</td>
+                        <td>When atoms share pairs of valence electrons to achieve stability.</td>
+                    </tr>
+                    <tr>
+                        <td>VSEPR Theory</td>
+                        <td>Valence Shell Electron Pair Repulsion. Electron pairs push away from each other to determine 3D shape.</td>
+                    </tr>
+                    <tr>
+                        <td>Lone Pair</td>
+                        <td>A pair of valence electrons not shared with another atom. They exert strong repulsion.</td>
+                    </tr>
+                    <tr>
+                        <td>Octet Rule</td>
+                        <td>The tendency of atoms to prefer having eight electrons in the valence shell.</td>
+                    </tr>
+                </table>
+            </div>
+        </section>
+
+    </div> <!-- End Container -->
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        /**
+         * UTILITY FUNCTIONS
+         */
+        const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
+        const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
+        
+        // Proper resize handler for Canvas considering Device Pixel Ratio
+        function setupCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            function resize() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
+                canvas.logicalWidth = rect.width;
+                canvas.logicalHeight = rect.height;
+            }
+            
+            window.addEventListener('resize', resize);
+            resize();
+            return { canvas, ctx };
+        }
+
+        /**
+         * 1. AMBIENT BACKGROUND ANIMATION (Subtle floating particles)
+         */
+        const ambient = setupCanvas('ambient-canvas');
+        const particles = Array.from({ length: 40 }, () => ({
+            x: Math.random() * window.innerWidth,
+            y: Math.random() * window.innerHeight,
+            size: Math.random() * 2 + 0.5,
+            vx: (Math.random() - 0.5) * 0.3,
+            vy: (Math.random() - 0.5) * 0.3,
+            alpha: Math.random() * 0.5 + 0.1
+        }));
+
+        function drawAmbient() {
+            ambient.ctx.clearRect(0, 0, ambient.canvas.logicalWidth, ambient.canvas.logicalHeight);
+            ambient.ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+            
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                
+                // Wrap around
+                if (p.x < 0) p.x = ambient.canvas.logicalWidth;
+                if (p.x > ambient.canvas.logicalWidth) p.x = 0;
+                if (p.y < 0) p.y = ambient.canvas.logicalHeight;
+                if (p.y > ambient.canvas.logicalHeight) p.y = 0;
+
+                ambient.ctx.globalAlpha = p.alpha;
+                ambient.ctx.beginPath();
+                ambient.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ambient.ctx.fill();
+            });
+            ambient.ctx.globalAlpha = 1;
+            requestAnimationFrame(drawAmbient);
+        }
+        drawAmbient();
+
+
+        /**
+         * 2. 3D MOLECULE RENDERING ENGINE (Used in Hero & Builder)
+         */
+        class MoleculeRenderer {
+            constructor(canvasId, autoRotate = false) {
+                this.setup = setupCanvas(canvasId);
+                this.canvas = this.setup.canvas;
+                this.ctx = this.setup.ctx;
+                
+                this.atoms = [];
+                this.bonds = [];
+                
+                // Rotation angles
+                this.angleX = autoRotate ? 0.2 : 0;
+                this.angleY = autoRotate ? 0 : 0;
+                this.targetAngleX = this.angleX;
+                this.targetAngleY = this.angleY;
+                
+                this.autoRotate = autoRotate;
+                
+                // Interaction
+                this.isDragging = false;
+                this.lastMouseX = 0;
+                this.lastMouseY = 0;
+
+                this.initInteraction();
+                this.animate = this.animate.bind(this);
+                requestAnimationFrame(this.animate);
+            }
+
+            setMolecule(data) {
+                this.atoms = data.atoms;
+                this.bonds = data.bonds;
+            }
+
+            initInteraction() {
+                const startDrag = (x, y) => {
+                    this.isDragging = true;
+                    this.lastMouseX = x;
+                    this.lastMouseY = y;
+                    this.autoRotate = false; // stop auto rotation on interact
+                };
+
+                const moveDrag = (x, y) => {
+                    if (!this.isDragging) return;
+                    const dx = x - this.lastMouseX;
+                    const dy = y - this.lastMouseY;
+                    
+                    this.targetAngleY += dx * 0.01;
+                    this.targetAngleX += dy * 0.01;
+                    
+                    this.lastMouseX = x;
+                    this.lastMouseY = y;
+                };
+
+                const endDrag = () => { this.isDragging = false; };
+
+                // Mouse
+                this.canvas.addEventListener('mousedown', e => startDrag(e.clientX, e.clientY));
+                window.addEventListener('mousemove', e => moveDrag(e.clientX, e.clientY));
+                window.addEventListener('mouseup', endDrag);
+
+                // Touch
+                this.canvas.addEventListener('touchstart', e => {
+                    // prevent scrolling while dragging canvas
+                    e.preventDefault();
+                    startDrag(e.touches[0].clientX, e.touches[0].clientY);
+                }, { passive: false });
+                window.addEventListener('touchmove', e => moveDrag(e.touches[0].clientX, e.touches[0].clientY));
+                window.addEventListener('touchend', endDrag);
+            }
+
+            rotate3D(x, y, z, ax, ay) {
+                // Rotate around X
+                let y1 = y * Math.cos(ax) - z * Math.sin(ax);
+                let z1 = y * Math.sin(ax) + z * Math.cos(ax);
+                
+                // Rotate around Y
+                let x2 = x * Math.cos(ay) + z1 * Math.sin(ay);
+                let z2 = -x * Math.sin(ay) + z1 * Math.cos(ay);
+                
+                return { x: x2, y: y1, z: z2 };
+            }
+
+            getColor(type) {
+                const colors = {
+                    'C': { inner: '#666', outer: '#111' },
+                    'O': { inner: '#ff6b6b', outer: '#cc0000' },
+                    'H': { inner: '#ffffff', outer: '#999999' },
+                    'N': { inner: '#4dabf7', outer: '#1864ab' }
+                };
+                return colors[type] || colors['C'];
+            }
+
+            animate() {
+                const w = this.canvas.logicalWidth;
+                const h = this.canvas.logicalHeight;
+                
+                this.ctx.clearRect(0, 0, w, h);
+                
+                if (this.autoRotate) {
+                    this.targetAngleY += 0.005;
+                }
+
+                // Smooth interpolation for rotation
+                this.angleX = lerp(this.angleX, this.targetAngleX, 0.1);
+                this.angleY = lerp(this.angleY, this.targetAngleY, 0.1);
+
+                // Calculate projected 3D positions
+                const scale = Math.min(w, h) * 0.15;
+                const centerX = w / 2;
+                const centerY = h / 2;
+
+                const projectedAtoms = this.atoms.map((atom, i) => {
+                    const rot = this.rotate3D(atom.x, atom.y, atom.z, this.angleX, this.angleY);
+                    return {
+                        ...atom,
+                        id: i,
+                        px: rot.x * scale + centerX,
+                        py: rot.y * scale + centerY,
+                        pz: rot.z,
+                        rad: atom.r * (scale * 0.3) * (1 + rot.z * 0.2) // Perspective scale
+                    };
+                });
+
+                // Sort by Z index for proper 3D rendering (back to front)
+                projectedAtoms.sort((a, b) => a.pz - b.pz);
+
+                // Draw Bonds
+                this.bonds.forEach(bond => {
+                    const a1 = projectedAtoms.find(a => a.id === bond[0]);
+                    const a2 = projectedAtoms.find(a => a.id === bond[1]);
+                    
+                    if(!a1 || !a2) return;
+
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(a1.px, a1.py);
+                    this.ctx.lineTo(a2.px, a2.py);
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    // Bond width scales with average z depth
+                    this.ctx.lineWidth = 15 * (1 + (a1.pz + a2.pz)*0.1);
+                    this.ctx.lineCap = 'round';
+                    this.ctx.stroke();
+
+                    // Inner glow line
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(a1.px, a1.py);
+                    this.ctx.lineTo(a2.px, a2.py);
+                    this.ctx.strokeStyle = 'rgba(0, 240, 255, 0.8)';
+                    this.ctx.lineWidth = 5 * (1 + (a1.pz + a2.pz)*0.1);
+                    this.ctx.stroke();
+                });
+
+                // Draw Atoms
+                projectedAtoms.forEach(atom => {
+                    const c = this.getColor(atom.type);
+                    
+                    // Shadow/Glow
+                    this.ctx.beginPath();
+                    this.ctx.arc(atom.px, atom.py, atom.rad * 1.2, 0, Math.PI * 2);
+                    this.ctx.fillStyle = `rgba(0,0,0,0.5)`;
+                    this.ctx.filter = 'blur(10px)';
+                    this.ctx.fill();
+                    this.ctx.filter = 'none';
+
+                    // Sphere Gradient
+                    const grad = this.ctx.createRadialGradient(
+                        atom.px - atom.rad*0.3, atom.py - atom.rad*0.3, atom.rad*0.1,
+                        atom.px, atom.py, atom.rad
+                    );
+                    grad.addColorStop(0, c.inner);
+                    grad.addColorStop(1, c.outer);
+
+                    this.ctx.beginPath();
+                    this.ctx.arc(atom.px, atom.py, Math.max(0.1, atom.rad), 0, Math.PI * 2);
+                    this.ctx.fillStyle = grad;
+                    this.ctx.fill();
+                    
+                    // Highlight reflection
+                    this.ctx.beginPath();
+                    this.ctx.arc(atom.px - atom.rad*0.3, atom.py - atom.rad*0.3, atom.rad*0.2, 0, Math.PI*2);
+                    this.ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                    this.ctx.fill();
+                });
+
+                requestAnimationFrame(this.animate);
+            }
+        }
+
+        // Molecule Data Dictionary
+        const MOLECULES = {
+            h2o: { // Bent shape
+                atoms: [
+                    { x: 0, y: -0.2, z: 0, type: 'O', r: 1.2 },
+                    { x: -0.8, y: 0.5, z: 0, type: 'H', r: 0.6 },
+                    { x: 0.8, y: 0.5, z: 0, type: 'H', r: 0.6 }
+                ],
+                bonds: [[0, 1], [0, 2]]
+            },
+            co2: { // Linear
+                atoms: [
+                    { x: 0, y: 0, z: 0, type: 'C', r: 1 },
+                    { x: -1.5, y: 0, z: 0, type: 'O', r: 1.2 },
+                    { x: 1.5, y: 0, z: 0, type: 'O', r: 1.2 }
+                ],
+                bonds: [[0, 1], [0, 2]]
+            },
+            ch4: { // Tetrahedral
+                atoms: [
+                    { x: 0, y: 0, z: 0, type: 'C', r: 1 },
+                    { x: 0, y: -1, z: 0, type: 'H', r: 0.6 },
+                    { x: -0.9, y: 0.3, z: -0.5, type: 'H', r: 0.6 },
+                    { x: 0.9, y: 0.3, z: -0.5, type: 'H', r: 0.6 },
+                    { x: 0, y: 0.3, z: 1, type: 'H', r: 0.6 }
+                ],
+                bonds: [[0, 1], [0, 2], [0, 3], [0, 4]]
+            },
+            nh3: { // Trigonal Pyramidal
+                atoms: [
+                    { x: 0, y: -0.2, z: 0, type: 'N', r: 1.1 },
+                    { x: -0.8, y: 0.6, z: -0.4, type: 'H', r: 0.6 },
+                    { x: 0.8, y: 0.6, z: -0.4, type: 'H', r: 0.6 },
+                    { x: 0, y: 0.6, z: 0.8, type: 'H', r: 0.6 }
+                ],
+                bonds: [[0, 1], [0, 2], [0, 3]]
+            }
+        };
+
+        // Initialize Hero Molecule
+        const heroRenderer = new MoleculeRenderer('hero-canvas', true);
+        heroRenderer.setMolecule(MOLECULES['h2o']);
+
+
+        /**
+         * 3. COMPONENTS SECTION (Marker Logic)
+         */
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function setActiveMarker(targetId) {
+            markers.forEach(m => m.classList.toggle('active', m.dataset.target === targetId));
+            legendItems.forEach(l => l.classList.toggle('active', l.dataset.target === targetId));
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => setActiveMarker(marker.dataset.target));
+            marker.addEventListener('click', () => setActiveMarker(marker.dataset.target));
+        });
+
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => setActiveMarker(item.dataset.target));
+            item.addEventListener('click', () => setActiveMarker(item.dataset.target));
+        });
+
+
+        /**
+         * 4. WORKING MECHANISM (Stage-by-stage Animation)
+         */
+        class WorkingMechanism {
+            constructor() {
+                this.setup = setupCanvas('working-canvas');
+                this.canvas = this.setup.canvas;
+                this.ctx = this.setup.ctx;
+                
+                this.stage = 0;
+                this.isAutoPlay = false;
+                this.autoPlayTimer = null;
+                
+                // Data for the 4 stages of forming H2O
+                this.stagesInfo = [
+                    { title: "Stage 1: Approach", desc: "Two Hydrogen atoms and one Oxygen atom approach each other, drawn by electromagnetic forces.", inOut: "Input: 2[H], 1[O]" },
+                    { title: "Stage 2: Overlap", desc: "The valence electron shells begin to overlap. Electrons find lower energy states between the nuclei.", inOut: "Process: Orbital overlap" },
+                    { title: "Stage 3: Bond Formation", desc: "Electrons are shared. Energy is released (exothermic), locking the atoms into a stable structure.", inOut: "Event: Energy release" },
+                    { title: "Stage 4: Final Geometry", desc: "Repulsion between the unshared (lone) electron pairs pushes the Hydrogen atoms down into a bent 104.5° angle.", inOut: "Output: 1 [H₂O]" }
+                ];
+
+                // Base coordinates for interpolation
+                // [Ox, Oy, H1x, H1y, H2x, H2y, bondOpacity, energyGlow]
+                this.stateDefs = [
+                    [0, 0, -200, 100, 200, 100, 0, 0],    // Far apart
+                    [0, -20, -100, 50, 100, 50, 0, 0],    // Approaching
+                    [0, -40, -60, 20, 60, 20, 0.5, 1],    // Bonding (energy flash)
+                    [0, -40, -80, 60, 80, 60, 1, 0]       // Settled bent shape
+                ];
+
+                this.currentState = [...this.stateDefs[0]];
+                
+                this.bindUI();
+                this.updateUI();
+                
+                this.animate = this.animate.bind(this);
+                requestAnimationFrame(this.animate);
+            }
+
+            bindUI() {
+                document.getElementById('btn-prev').addEventListener('click', () => this.setStage(this.stage - 1));
+                document.getElementById('btn-next').addEventListener('click', () => this.setStage(this.stage + 1));
+                
+                const playBtn = document.getElementById('btn-play');
+                playBtn.addEventListener('click', () => {
+                    this.isAutoPlay = !this.isAutoPlay;
+                    playBtn.classList.toggle('active', this.isAutoPlay);
+                    document.getElementById('text-play').innerText = this.isAutoPlay ? 'Pause' : 'Auto-Play';
+                    
+                    if (this.isAutoPlay) {
+                        if (this.stage === 3) this.setStage(0);
+                        this.autoPlayTimer = setInterval(() => {
+                            this.setStage((this.stage + 1) % 4);
+                        }, 2500);
+                    } else {
+                        clearInterval(this.autoPlayTimer);
+                    }
+                });
+            }
+
+            setStage(index) {
+                if (index < 0 || index > 3) return;
+                this.stage = index;
+                this.updateUI();
+            }
+
+            updateUI() {
+                const info = this.stagesInfo[this.stage];
+                document.getElementById('stage-title').innerText = info.title;
+                document.getElementById('stage-desc').innerText = info.desc;
+                
+                document.getElementById('working-particles').innerHTML = `<div class="particle-badge">${info.inOut}</div>`;
+
+                const dots = document.querySelectorAll('.working-controls + .progress-dots .dot');
+                dots.forEach((dot, i) => dot.classList.toggle('active', i === this.stage));
+
+                document.getElementById('btn-prev').style.opacity = this.stage === 0 ? '0.5' : '1';
+                document.getElementById('btn-next').style.opacity = this.stage === 3 ? '0.5' : '1';
+            }
+
+            drawAtom(ctx, x, y, radius, color, drawShells=false) {
+                // Glow
+                ctx.beginPath();
+                ctx.arc(x, y, radius*1.5, 0, Math.PI*2);
+                ctx.fillStyle = color.replace('1)', '0.3)');
+                ctx.filter = 'blur(8px)';
+                ctx.fill();
+                ctx.filter = 'none';
+
+                // Body
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI*2);
+                ctx.fillStyle = color;
+                ctx.fill();
+
+                if (drawShells) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, radius + 20, 0, Math.PI*2);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([4, 4]);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+
+            animate() {
+                const w = this.canvas.logicalWidth;
+                const h = this.canvas.logicalHeight;
+                this.ctx.clearRect(0, 0, w, h);
+
+                const cx = w / 2;
+                const cy = h / 2;
+
+                // Lerp current state to target state
+                const target = this.stateDefs[this.stage];
+                for(let i=0; i<this.currentState.length; i++) {
+                    this.currentState[i] = lerp(this.currentState[i], target[i], 0.05);
+                }
+
+                const [Ox, Oy, H1x, H1y, H2x, H2y, bondOpacity, energyGlow] = this.currentState;
+
+                // Draw Energy Wave (Stage 3)
+                if (energyGlow > 0.01) {
+                    this.ctx.beginPath();
+                    this.ctx.arc(cx + Ox, cy + Oy, 100 * (1-energyGlow) + 50, 0, Math.PI*2);
+                    this.ctx.strokeStyle = `rgba(0, 240, 255, ${energyGlow * 0.5})`;
+                    this.ctx.lineWidth = 10 * energyGlow;
+                    this.ctx.stroke();
+                }
+
+                // Draw Bonds
+                if (bondOpacity > 0) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(cx + Ox, cy + Oy);
+                    this.ctx.lineTo(cx + H1x, cy + H1y);
+                    this.ctx.moveTo(cx + Ox, cy + Oy);
+                    this.ctx.lineTo(cx + H2x, cy + H2y);
+                    this.ctx.strokeStyle = `rgba(255,255,255, ${bondOpacity * 0.4})`;
+                    this.ctx.lineWidth = 10;
+                    this.ctx.lineCap = 'round';
+                    this.ctx.stroke();
+                    
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(cx + Ox, cy + Oy);
+                    this.ctx.lineTo(cx + H1x, cy + H1y);
+                    this.ctx.moveTo(cx + Ox, cy + Oy);
+                    this.ctx.lineTo(cx + H2x, cy + H2y);
+                    this.ctx.strokeStyle = `rgba(0,240,255, ${bondOpacity})`;
+                    this.ctx.lineWidth = 4;
+                    this.ctx.stroke();
+                }
+
+                // Draw Atoms
+                // H1
+                this.drawAtom(this.ctx, cx + H1x, cy + H1y, 15, 'rgba(240, 240, 240, 1)', true);
+                // H2
+                this.drawAtom(this.ctx, cx + H2x, cy + H2y, 15, 'rgba(240, 240, 240, 1)', true);
+                // O
+                this.drawAtom(this.ctx, cx + Ox, cy + Oy, 30, 'rgba(230, 57, 70, 1)', true);
+
+                requestAnimationFrame(this.animate);
+            }
+        }
+        
+        new WorkingMechanism();
+
+
+        /**
+         * 5. SIMULATION BUILDER INTERACTION
+         */
+        const simRenderer = new MoleculeRenderer('sim-canvas', false);
+        simRenderer.setMolecule(MOLECULES['h2o']);
+
+        const simBtns = document.querySelectorAll('.sim-molecule-btn');
+        const simTitle = document.getElementById('sim-title');
+        const simDesc = document.getElementById('sim-desc');
+
+        const simDescriptions = {
+            'h2o': "Oxygen has 2 lone pairs pushing the hydrogen atoms down, creating a bent shape.",
+            'co2': "Carbon double-bonds to Oxygen on both sides. Maximum separation is achieved in a straight line (180°).",
+            'ch4': "Carbon bonds with 4 Hydrogens. To minimize repulsion in 3D space, they arrange in a tetrahedron (109.5°).",
+            'nh3': "Nitrogen bonds with 3 Hydrogens, but has 1 lone pair sitting on top, pushing the hydrogens down into a pyramid."
+        };
+
+        simBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                simBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                
+                const molId = btn.dataset.molecule;
+                simRenderer.setMolecule(MOLECULES[molId]);
+                
+                // Reset rotation for clarity
+                simRenderer.targetAngleX = 0;
+                simRenderer.targetAngleY = 0;
+                
+                simTitle.innerHTML = btn.querySelector('strong').innerHTML;
+                simDesc.innerText = simDescriptions[molId];
+            });
+        });
+
+    </script>
+</body>
+</html>

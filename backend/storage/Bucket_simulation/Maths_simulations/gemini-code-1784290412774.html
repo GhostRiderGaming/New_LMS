@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trigonometry Laboratory</title>
+    <style>
+        /* ==========================================================================
+           RESET & BASE STYLES
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        :root {
+            --bg-color: #030613;
+            --card-bg: rgba(12, 18, 38, 0.65);
+            --card-border: rgba(79, 195, 247, 0.15);
+            --cyan: #00E5FF;
+            --blue: #4FC3F7;
+            --purple: #8E44FF;
+            --orange: #FFA726;
+            --green: #00E676;
+            --red: #FF3D00;
+            --text-main: #FFFFFF;
+            --text-muted: #8B9BB4;
+            --glow-cyan: 0 0 15px rgba(0, 229, 255, 0.4);
+            --font-math: 'Cambria Math', 'Times New Roman', serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Particle Background Canvas */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 1500px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            /* Layout Constraint Fix */
+            width: 100%;
+            overflow-x: hidden; 
+        }
+
+        /* ==========================================================================
+           TYPOGRAPHY
+           ========================================================================== */
+        h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--cyan), var(--purple), var(--blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-align: center;
+            margin-bottom: 0.5rem;
+            filter: drop-shadow(0 0 12px rgba(142, 68, 255, 0.3));
+        }
+
+        h2, h3 {
+            color: var(--cyan);
+            font-weight: 600;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        h2::before {
+            content: '';
+            display: block;
+            width: 8px;
+            height: 8px;
+            background: var(--cyan);
+            border-radius: 50%;
+            box-shadow: var(--glow-cyan);
+        }
+
+        p { color: var(--text-muted); font-size: 1.05rem; }
+        strong { color: var(--text-main); }
+
+        /* ==========================================================================
+           GLASSMORPHISM CARDS
+           ========================================================================== */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+            /* STABILITY FIX: Prevent inner content from stretching card */
+            min-width: 0; 
+            overflow: hidden;
+        }
+
+        .glass-card:hover {
+            box-shadow: 0 12px 48px rgba(0, 229, 255, 0.1);
+            border-color: rgba(0, 229, 255, 0.3);
+        }
+
+        /* ==========================================================================
+           LAYOUT GRIDS
+           ========================================================================== */
+        .top-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .main-simulation-grid {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 2rem;
+            /* STABILITY FIX: Ensure grid doesn't expand horizontally */
+            width: 100%;
+            max-width: 100%;
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 1024px) {
+            .top-grid, .main-simulation-grid { grid-template-columns: 1fr; }
+        }
+
+        /* ==========================================================================
+           SIMULATION CANVAS CONTAINER
+           ========================================================================== */
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            /* STABILITY FIX: Removed fixed height, handled by JS aspect ratio */
+            border-radius: 12px;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #0B1229 0%, #030613 100%);
+            border: 1px solid rgba(79, 195, 247, 0.2);
+            box-shadow: inset 0 0 50px rgba(0, 0, 0, 0.9);
+            /* Prevent feedback loops */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #sim-canvas {
+            /* JS explicitly sets width/height, but CSS reinforces fit */
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+            touch-action: pan-y;
+        }
+
+        /* HUD Overlays */
+        .hud-overlay {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            pointer-events: none;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-family: monospace;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(4px);
+        }
+        
+        .color-box { width: 12px; height: 12px; border-radius: 3px; }
+
+        /* ==========================================================================
+           CONTROLS & PARAMETERS
+           ========================================================================== */
+        .controls-panel { display: flex; flex-direction: column; gap: 1.5rem; }
+        .param-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .param-header { display: flex; justify-content: space-between; align-items: center; }
+        
+        .param-label {
+            font-weight: 600;
+            font-size: 0.95rem;
+            color: var(--blue);
+            cursor: help;
+            border-bottom: 1px dashed var(--blue);
+        }
+
+        .param-value-container { display: flex; align-items: center; gap: 10px; }
+
+        input[type="number"] {
+            width: 80px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--blue);
+            color: var(--cyan);
+            padding: 0.5rem;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 1rem;
+            text-align: center;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+        input[type="number"]:focus { box-shadow: var(--glow-cyan); background: rgba(0, 229, 255, 0.1); }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--text-main);
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            transition: transform 0.1s, background 0.2s;
+        }
+        input[type="range"]:focus::-webkit-slider-thumb {
+            background: var(--cyan);
+            box-shadow: var(--glow-cyan);
+            transform: scale(1.15);
+        }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 1rem;
+        }
+
+        button {
+            background: rgba(0, 229, 255, 0.05);
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            padding: 0.8rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            text-align: center;
+        }
+        button:hover {
+            background: var(--cyan);
+            color: var(--bg-color);
+            box-shadow: var(--glow-cyan);
+            transform: translateY(-2px);
+        }
+        button.btn-accent {
+            border-color: var(--purple);
+            color: var(--purple);
+            background: rgba(142, 68, 255, 0.05);
+        }
+        button.btn-accent:hover {
+            background: var(--purple);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px rgba(142, 68, 255, 0.4);
+        }
+
+        /* ==========================================================================
+           LIVE CALCULATIONS
+           ========================================================================== */
+        .calculations-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .calc-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: 1.5rem;
+            border-top: 4px solid transparent;
+            font-family: var(--font-math);
+        }
+        .calc-card.sin-card { border-top-color: var(--orange); }
+        .calc-card.cos-card { border-top-color: var(--cyan); }
+        .calc-card.tan-card { border-top-color: var(--purple); }
+
+        .calc-header { font-size: 1.3rem; margin-bottom: 1rem; font-style: italic; }
+        .calc-body { display: flex; align-items: center; gap: 1rem; font-size: 1.2rem; margin-bottom: 1rem; }
+        
+        .calc-result-box {
+            font-size: 2rem;
+            font-weight: bold;
+            font-family: monospace;
+            background: rgba(0,0,0,0.4);
+            padding: 0.5rem 1.5rem;
+            border-radius: 8px;
+            width: 100%;
+        }
+
+        /* Alert/Fact Boxes */
+        .warning-banner {
+            display: none;
+            background: rgba(255, 61, 0, 0.15);
+            border: 1px solid var(--red);
+            color: var(--red);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 600;
+            margin-top: 1rem;
+        }
+
+        .fact-box { border-left: 4px solid var(--green); }
+
+        /* Formulas */
+        .math-container {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 2rem;
+            font-family: var(--font-math);
+            font-size: 1.4rem;
+            font-style: italic;
+            background: rgba(0,0,0,0.4);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border-left: 4px solid var(--purple);
+        }
+        .math-eq { display: flex; align-items: center; gap: 0.5rem; }
+        .fraction {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: middle;
+            margin: 0 0.2rem;
+        }
+        .fraction > span { padding: 0.2rem 0.4rem; font-size: 0.9em; }
+        .fraction > span.numerator { border-bottom: 2px solid rgba(255, 255, 255, 0.7); }
+        .sup { font-size: 0.6em; vertical-align: super; }
+
+        .sym-sin { color: var(--orange); }
+        .sym-cos { color: var(--cyan); }
+        .sym-tan { color: var(--purple); }
+        .sym-hyp { color: var(--green); }
+
+        /* Animations */
+        .flash-update { animation: flashText 0.4s ease-out; }
+        @keyframes flashText {
+            0% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.15); filter: brightness(2); text-shadow: 0 0 10px currentColor; }
+            100% { transform: scale(1); filter: brightness(1); }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        <header>
+            <h1>Trigonometry Laboratory</h1>
+        </header>
+
+        <div class="top-grid">
+            <div class="glass-card">
+                <h2>Concept Definition</h2>
+                <p><strong>Trigonometry</strong> is the branch of mathematics that studies relationships between side lengths and angles of triangles.</p><br>
+                <p>By mapping a right-angled triangle inside a circle (the <strong>Unit Circle</strong>), we can analyze cyclical phenomena like waves, oscillations, and rotations.</p>
+            </div>
+            
+            <div class="glass-card">
+                <h2>Core Mathematical Framework</h2>
+                <div class="math-container">
+                    <div class="math-eq">
+                        <span class="sym-sin">sin(θ)</span> = 
+                        <div class="fraction">
+                            <span class="numerator sym-sin">Opposite</span>
+                            <span class="denominator sym-hyp">Hypotenuse</span>
+                        </div>
+                    </div>
+                    <div class="math-eq">
+                        <span class="sym-cos">cos(θ)</span> = 
+                        <div class="fraction">
+                            <span class="numerator sym-cos">Adjacent</span>
+                            <span class="denominator sym-hyp">Hypotenuse</span>
+                        </div>
+                    </div>
+                    <div class="math-eq" style="width: 100%; justify-content: center; margin-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.2); padding-top: 1rem;">
+                        <span class="sym-sin">sin<span class="sup">2</span>(θ)</span> + <span class="sym-cos">cos<span class="sup">2</span>(θ)</span> = 1
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="glass-card fact-box">
+            <h3>Did You Know?</h3>
+            <p>Hipparchus of Nicaea (c. 190 – c. 120 BC) compiled the first trigonometric table to track the precise orbits of the sun and moon across the celestial sphere!</p>
+        </div>
+
+        <!-- MAIN SIMULATION -->
+        <div class="main-simulation-grid">
+            <!-- Container allows scaling, preventing expansion loops -->
+            <div class="glass-card sim-card-wrapper" style="padding: 1rem;">
+                <div class="canvas-container">
+                    <canvas id="sim-canvas"></canvas>
+                    <div class="hud-overlay">
+                        <div class="legend-item"><div class="color-box" style="background: var(--green);"></div> Radius / Hypotenuse</div>
+                        <div class="legend-item"><div class="color-box" style="background: var(--orange);"></div> Sine / Opposite</div>
+                        <div class="legend-item"><div class="color-box" style="background: var(--cyan);"></div> Cosine / Adjacent</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card controls-panel">
+                <h2>Control Panel</h2>
+                
+                <div class="param-group">
+                    <div class="param-header"><span class="param-label">Angle (θ)</span></div>
+                    <div class="param-value-container">
+                        <input type="range" id="slider-angle" min="0" max="360" step="1" value="45">
+                        <input type="number" id="input-angle" value="45" step="1">
+                        <span>°</span>
+                    </div>
+                </div>
+
+                <div class="param-group">
+                    <div class="param-header"><span class="param-label">Radius (R)</span></div>
+                    <div class="param-value-container">
+                        <input type="range" id="slider-radius" min="0.5" max="5" step="0.1" value="1.0">
+                        <input type="number" id="input-radius" value="1.0" step="0.1">
+                    </div>
+                </div>
+                
+                <div id="warning-msg" class="warning-banner">
+                    ⚠️ Math Anomaly: Tangent is Undefined (Division by Zero) at 90° and 270°.
+                </div>
+
+                <div class="button-grid">
+                    <button id="btn-play">▶ Play Orbit</button>
+                    <button id="btn-pause">⏸ Pause</button>
+                    <button id="btn-reset">⏹ Reset</button>
+                    <button id="btn-random" class="btn-accent">🎲 Randomize</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CALCULATIONS -->
+        <div class="calculations-grid">
+            <div class="glass-card calc-card sin-card">
+                <div class="calc-header"><span class="sym-sin">sin</span>(<span class="val-angle">45</span>°) = </div>
+                <div class="calc-body">
+                    <div class="fraction">
+                        <span class="numerator sym-sin val-opp">0.71</span>
+                        <span class="denominator sym-hyp val-rad">1.00</span>
+                    </div>
+                </div>
+                <div class="calc-result-box sym-sin" id="res-sin">0.7071</div>
+            </div>
+
+            <div class="glass-card calc-card cos-card">
+                <div class="calc-header"><span class="sym-cos">cos</span>(<span class="val-angle">45</span>°) = </div>
+                <div class="calc-body">
+                    <div class="fraction">
+                        <span class="numerator sym-cos val-adj">0.71</span>
+                        <span class="denominator sym-hyp val-rad">1.00</span>
+                    </div>
+                </div>
+                <div class="calc-result-box sym-cos" id="res-cos">0.7071</div>
+            </div>
+
+            <div class="glass-card calc-card tan-card">
+                <div class="calc-header"><span class="sym-tan">tan</span>(<span class="val-angle">45</span>°) = </div>
+                <div class="calc-body">
+                    <div class="fraction">
+                        <span class="numerator sym-sin val-opp">0.71</span>
+                        <span class="denominator sym-cos val-adj">0.71</span>
+                    </div>
+                </div>
+                <div class="calc-result-box sym-tan" id="res-tan">1.0000</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* Background Particles */
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let particles = [];
+        
+        function resizeBg() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeBg);
+        resizeBg();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * bgCanvas.width;
+                this.y = Math.random() * bgCanvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = Math.random() * 0.5 - 0.25;
+                this.speedY = Math.random() * 0.5 - 0.25;
+                this.alpha = Math.random() * 0.3 + 0.1;
+                this.color = Math.random() > 0.5 ? '0, 229, 255' : '142, 68, 255';
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x > bgCanvas.width) this.x = 0;
+                if (this.x < 0) this.x = bgCanvas.width;
+                if (this.y > bgCanvas.height) this.y = 0;
+                if (this.y < 0) this.y = bgCanvas.height;
+            }
+            draw() {
+                bgCtx.fillStyle = `rgba(${this.color}, ${this.alpha})`;
+                bgCtx.beginPath();
+                bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                bgCtx.fill();
+            }
+        }
+        for (let i = 0; i < 60; i++) particles.push(new Particle());
+        function animateBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            particles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(animateBg);
+        }
+        animateBg();
+
+        /* Simulation State */
+        const state = {
+            angleDeg: 45,
+            radius: 1.0,
+            isPlaying: false,
+            animSpeed: 1.2,
+            // Logical dimensions (internal drawing resolution)
+            width: 0,
+            height: 0,
+            colorSin: '#FFA726',
+            colorCos: '#00E5FF',
+            colorHyp: '#00E676'
+        };
+
+        const canvas = document.getElementById('sim-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Inputs
+        const sliderAngle = document.getElementById('slider-angle');
+        const inputAngle = document.getElementById('input-angle');
+        const sliderRadius = document.getElementById('slider-radius');
+        const inputRadius = document.getElementById('input-radius');
+
+        // Math DOM Elements
+        const elsAngle = document.querySelectorAll('.val-angle');
+        const elsOpp = document.querySelectorAll('.val-opp');
+        const elsAdj = document.querySelectorAll('.val-adj');
+        const elsRad = document.querySelectorAll('.val-rad');
+        const resSin = document.getElementById('res-sin');
+        const resCos = document.getElementById('res-cos');
+        const resTan = document.getElementById('res-tan');
+        const warningMsg = document.getElementById('warning-msg');
+
+        /* DPI SCALING & STABILITY FIX */
+        function resizeCanvas() {
+            const container = canvas.parentElement;
+            // AUTHORITATIVE FIX: Measure parent width first
+            const containerRect = container.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            
+            // Define an internal target aspect ratio suitable for both circle and waves (wide)
+            const targetAspectRatio = 21 / 9;
+
+            // Strict dimension calculation
+            state.width = containerRect.width;
+            
+            // Handle edge case of CSS not rendering yet
+            if (state.width === 0) state.width = 800; 
+            
+            state.height = state.width / targetAspectRatio;
+
+            // Set actual canvas memory size (high-DPI buffer)
+            canvas.width = state.width * dpr;
+            canvas.height = state.height * dpr;
+            
+            // STABILITY FIX: Enforce CSS display size explicitly based on width
+            canvas.style.width = `${state.width}px`;
+            canvas.style.height = `${state.height}px`;
+            
+            // Reset and apply transform matrix securely
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+        }
+
+        // Use ResizeObserver for the CONTAINER, not the window
+        const resizeObserver = new ResizeObserver(() => {
+            // This order is critical to prevent expansion loops
+            resizeCanvas(); 
+            drawSimulation(); // Redraw immediately on resize
+        });
+        resizeObserver.observe(canvas.parentElement);
+        
+        // Initial setup
+        resizeCanvas();
+
+        function toRad(deg) { return deg * (Math.PI / 180); }
+
+        function drawSimulation() {
+            if (!state.width || !state.height) return;
+            
+            const w = state.width;
+            const h = state.height;
+            
+            ctx.clearRect(0, 0, w, h);
+
+            // Layout
+            const circleCenterX = w * 0.25;
+            const centerY = h / 2;
+            const maxRadiusPx = Math.min(circleCenterX * 0.7, h * 0.4); 
+            const unitPx = maxRadiusPx / 5; // scaled units 0-5
+            const rPx = state.radius * unitPx;
+
+            const waveStartX = w * 0.55;
+            const waveWidth = w * 0.40;
+            const waveScaleX = waveWidth / 360; // Px per degree
+
+            // 1. Grids & Background Axes
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.beginPath();
+            // Circle Grid
+            for(let i = -5; i <= 5; i++) {
+                let px = circleCenterX + i * unitPx;
+                let py = centerY + i * unitPx;
+                ctx.moveTo(px, 0); ctx.lineTo(px, h);
+                ctx.moveTo(0, py); ctx.lineTo(w*0.5, py);
+            }
+            // Wave Grid
+            for(let i = 0; i <= 360; i+=45) {
+                let px = waveStartX + i * waveScaleX;
+                ctx.moveTo(px, 0); ctx.lineTo(px, h);
+            }
+            ctx.stroke();
+
+            // 2. Main Axes
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, centerY); ctx.lineTo(w*0.5, centerY); // Circle X
+            ctx.moveTo(circleCenterX, 0); ctx.lineTo(circleCenterX, h); // Circle Y
+            ctx.moveTo(waveStartX, centerY); ctx.lineTo(w, centerY); // Wave X
+            ctx.stroke();
+
+            const rad = toRad(state.angleDeg);
+            const cosVal = Math.cos(rad);
+            const sinVal = Math.sin(rad);
+            const px = circleCenterX + rPx * cosVal;
+            const py = centerY - rPx * sinVal; // Canvas Y inverted
+
+            // 3. Static Elements (Circle & Arc)
+            ctx.beginPath();
+            ctx.arc(circleCenterX, centerY, rPx, 0, Math.PI * 2);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.beginPath();
+            ctx.arc(circleCenterX, centerY, rPx * 0.3, 0, -rad, rad > 0);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.stroke();
+
+            // 4. Dynamic Triangle Components
+            // Adjacent (Cosine)
+            ctx.beginPath(); ctx.moveTo(circleCenterX, centerY); ctx.lineTo(px, centerY);
+            ctx.strokeStyle = state.colorCos; ctx.lineWidth = 4; ctx.stroke();
+            
+            // Opposite (Sine)
+            ctx.beginPath(); ctx.moveTo(px, centerY); ctx.lineTo(px, py);
+            ctx.strokeStyle = state.colorSin; ctx.stroke();
+            
+            // Hypotenuse (Radius)
+            ctx.beginPath(); ctx.moveTo(circleCenterX, centerY); ctx.lineTo(px, py);
+            ctx.strokeStyle = state.colorHyp; ctx.stroke();
+
+            // Point on circle
+            ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFF'; ctx.fill();
+
+            // 5. Waves Curves
+            drawWaveCurve(ctx, waveStartX, centerY, waveScaleX, unitPx, state.radius, Math.sin, state.colorSin, true);
+            drawWaveCurve(ctx, waveStartX, centerY, waveScaleX, unitPx, state.radius, Math.cos, state.colorCos, true);
+
+            // 6. Interactive Trackers
+            const curWaveX = waveStartX + state.angleDeg * waveScaleX;
+            const curSinY = centerY - rPx * Math.sin(rad);
+            const curCosY = centerY - rPx * Math.cos(rad);
+
+            // Projection lines
+            ctx.setLineDash([4, 4]); ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(curWaveX, curSinY); // connect to sine
+            ctx.strokeStyle = state.colorSin; ctx.stroke();
+
+            ctx.beginPath(); ctx.moveTo(curWaveX, centerY); ctx.lineTo(curWaveX, curCosY); // connect to cosine
+            ctx.strokeStyle = state.colorCos; ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Points on waves
+            ctx.beginPath(); ctx.arc(curWaveX, curSinY, 4, 0, Math.PI*2);
+            ctx.fillStyle = state.colorSin; ctx.fill();
+
+            ctx.beginPath(); ctx.arc(curWaveX, curCosY, 4, 0, Math.PI*2);
+            ctx.fillStyle = state.colorCos; ctx.fill();
+            
+            // Vertical Angle Line
+            ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+            ctx.beginPath(); ctx.moveTo(curWaveX, 0); ctx.lineTo(curWaveX, h); ctx.stroke();
+        }
+
+        function drawWaveCurve(ctx, startX, centerY, scaleX, scaleY, radius, func, color, invertY) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            for(let deg = 0; deg <= 360; deg += 2) {
+                let rad = toRad(deg);
+                let val = func(rad) * radius;
+                let px = startX + deg * scaleX;
+                let py = centerY + (invertY ? -val * scaleY : val * scaleY); 
+                if (deg === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+        }
+
+        /* Controls Logic */
+        function updateMathDOM(flash = false) {
+            const rad = toRad(state.angleDeg);
+            const r = state.radius;
+            const sinVal = Math.sin(rad);
+            const cosVal = Math.cos(rad);
+            
+            elsAngle.forEach(el => el.innerText = Math.round(state.angleDeg));
+            elsRad.forEach(el => el.innerText = r.toFixed(2));
+            elsOpp.forEach(el => el.innerText = (r * sinVal).toFixed(2));
+            elsAdj.forEach(el => el.innerText = (r * cosVal).toFixed(2));
+
+            resSin.innerText = sinVal.toFixed(4);
+            resCos.innerText = cosVal.toFixed(4);
+            
+            // Handle Tangent Division by Zero
+            if (state.angleDeg === 90 || state.angleDeg === 270) {
+                resTan.innerText = "Undefined";
+                resTan.style.color = "var(--red)";
+                warningMsg.style.display = "block";
+            } else {
+                resTan.innerText = Math.tan(rad).toFixed(4);
+                resTan.style.color = "var(--text-main)";
+                warningMsg.style.display = "none";
+            }
+
+            if (flash) {
+                [...elsAngle, ...elsRad, ...elsOpp, ...elsAdj, resSin, resCos, resTan].forEach(el => {
+                    el.classList.remove('flash-update');
+                    void el.offsetWidth; // force reflow
+                    el.classList.add('flash-update');
+                });
+            }
+        }
+
+        function handleStateChange(prop, val, fromUI = true) {
+            if(prop === 'angleDeg') {
+                val = ((val % 360) + 360) % 360;
+                sliderAngle.value = val;
+                inputAngle.value = Math.round(val);
+            } else if (prop === 'radius') {
+                sliderRadius.value = val;
+                inputRadius.value = val;
+            }
+            state[prop] = parseFloat(val);
+            updateMathDOM(fromUI);
+            drawSimulation(); // Redraw immediately on parameter change
+        }
+
+        // Listeners
+        sliderAngle.addEventListener('input', e => handleStateChange('angleDeg', e.target.value));
+        inputAngle.addEventListener('change', e => handleStateChange('angleDeg', e.target.value));
+        sliderRadius.addEventListener('input', e => handleStateChange('radius', e.target.value));
+        inputRadius.addEventListener('change', e => handleStateChange('radius', e.target.value));
+
+        /* Orbit Animation Logic */
+        let lastTime = 0;
+        function animate(timestamp) {
+            if (state.isPlaying) {
+                if (!lastTime) lastTime = timestamp;
+                
+                // Refresh Rate Independent Delta Time
+                let dt = timestamp - lastTime;
+                
+                // Clamp delta time to prevent massive jumps on lag/tab switch
+                if (dt > 60) dt = 16.66; 
+
+                // Scale speed (1.2deg per frame at 60fps)
+                let step = state.animSpeed * (dt / 16.66);
+                
+                handleStateChange('angleDeg', state.angleDeg + step, false);
+            }
+            lastTime = timestamp;
+            requestAnimationFrame(animate);
+        }
+
+        // Controls Buttons
+        document.getElementById('btn-play').addEventListener('click', () => {
+            state.isPlaying = true;
+            lastTime = performance.now();
+        });
+        document.getElementById('btn-pause').addEventListener('click', () => state.isPlaying = false);
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            state.isPlaying = false;
+            handleStateChange('angleDeg', 45);
+            handleStateChange('radius', 1.0);
+        });
+        document.getElementById('btn-random').addEventListener('click', () => {
+            handleStateChange('angleDeg', Math.floor(Math.random() * 360));
+            handleStateChange('radius', (Math.random() * 4.5 + 0.5).toFixed(1));
+        });
+
+        // Initialize
+        updateMathDOM();
+        drawSimulation();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>

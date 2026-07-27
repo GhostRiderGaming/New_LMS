@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Flower Pollination & Fertilization Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-color: #050507;
+            --surface-color: rgba(20, 22, 30, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.12);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            --accent-pollen: #fbbf24;      /* Amber */
+            --accent-male: #38bdf8;        /* Sky Blue */
+            --accent-female: #34d399;      /* Emerald */
+            --accent-petal: #c084fc;       /* Purple */
+            --accent-energy: #f43f5e;      /* Rose */
+            
+            --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            
+            --border-radius: 1.5rem;
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            font-size: clamp(14px, 1vw + 10px, 18px);
+        }
+
+        /* Animated Background Ambient Glow */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 15% 50%, rgba(52, 211, 153, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(192, 132, 252, 0.08) 0%, transparent 50%);
+            animation: pulseBg 15s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulseBg {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+        /* ==========================================================================
+           TYPOGRAPHY & LAYOUT
+           ========================================================================== */
+        .container {
+            width: min(100%, 1400px);
+            margin: 0 auto;
+            padding: clamp(16px, 3vw, 48px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 120px);
+        }
+
+        h1, h2, h3 {
+            line-height: 1.2;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 5vw, 5rem);
+            background: linear-gradient(135deg, #fff, #a5b4fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        h2 {
+            font-size: clamp(1.8rem, 3vw, 3rem);
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        h2::before {
+            content: '';
+            display: block;
+            width: 8px;
+            height: clamp(24px, 3vw, 32px);
+            background: var(--accent-female);
+            border-radius: 4px;
+            box-shadow: 0 0 15px var(--accent-female);
+        }
+
+        p { color: var(--text-muted); margin-bottom: 1rem; }
+
+        .glass-panel {
+            background: var(--surface-color);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            padding: clamp(20px, 4vw, 40px);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            text-align: center;
+            min-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        .hero p {
+            font-size: clamp(1.1rem, 1.5vw, 1.5rem);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background: rgba(52, 211, 153, 0.1);
+            color: var(--accent-female);
+            border: 1px solid rgba(52, 211, 153, 0.2);
+            border-radius: 2rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        /* ==========================================================================
+           ANATOMY SECTION (MARKER + LEGEND SYSTEM)
+           ========================================================================== */
+        .anatomy-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        @media (min-width: 1024px) {
+            .anatomy-layout {
+                grid-template-columns: 3fr 2fr;
+            }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: clamp(300px, 50vw, 600px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.02) 0%, transparent 70%);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--glass-border);
+        }
+
+        .svg-flower {
+            width: 100%;
+            height: 100%;
+            max-height: 600px;
+            filter: drop-shadow(0 0 30px rgba(0,0,0,0.5));
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #fff;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: var(--transition-smooth);
+            z-index: 10;
+            box-shadow: 0 0 15px currentColor, inset 0 0 10px rgba(255,255,255,0.5);
+            background: rgba(0,0,0,0.4);
+            border: 2px solid currentColor;
+        }
+
+        .marker::after {
+            content: '';
+            position: absolute;
+            top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%;
+            border: 1px solid currentColor;
+            opacity: 0;
+            transform: scale(0.8);
+            transition: var(--transition-smooth);
+        }
+
+        .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: currentColor;
+            color: #000;
+        }
+
+        .marker.active::after {
+            opacity: 1;
+            transform: scale(1.3);
+            animation: ripple 1.5s infinite;
+        }
+
+        @keyframes ripple {
+            0% { transform: scale(1.1); opacity: 0.8; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+
+        /* Marker Positions (Percentages based on SVG viewBox) */
+        #m-stigma { top: 22%; left: 50%; color: var(--accent-female); }
+        #m-style { top: 45%; left: 50%; color: var(--accent-female); }
+        #m-ovary { top: 75%; left: 50%; color: var(--accent-female); }
+        #m-ovule { top: 75%; left: 54%; color: var(--accent-energy); }
+        #m-anther { top: 35%; left: 30%; color: var(--accent-male); }
+        #m-filament { top: 55%; left: 34%; color: var(--accent-male); }
+        #m-petal { top: 40%; left: 75%; color: var(--accent-petal); }
+
+        /* Legend */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .legend-item {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 1rem;
+            align-items: center;
+            padding: 1rem;
+            border-radius: 1rem;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.05);
+            border-color: var(--glass-highlight);
+            transform: translateX(8px);
+        }
+
+        .legend-badge {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: #000;
+        }
+
+        .legend-content h4 {
+            font-size: 1.1rem;
+            color: var(--text-main);
+            margin-bottom: 0.2rem;
+        }
+
+        .legend-content p {
+            font-size: 0.85rem;
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (THE SEQUENCE)
+           ========================================================================== */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .mech-visual {
+            width: 100%;
+            height: clamp(350px, 60vw, 500px);
+            background: #000;
+            border-radius: var(--border-radius);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        /* SVG internal animations */
+        .mech-svg {
+            width: 100%; height: 100%;
+            transition: transform 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .bee {
+            transition: transform 1.5s ease-in-out, opacity 0.5s;
+        }
+
+        .pollen-particle {
+            fill: var(--accent-pollen);
+            opacity: 0;
+            transition: all 1s ease;
+            filter: drop-shadow(0 0 5px var(--accent-pollen));
+        }
+
+        .pollen-tube {
+            stroke: var(--accent-female);
+            stroke-width: 4;
+            stroke-dasharray: 500;
+            stroke-dashoffset: 500;
+            transition: stroke-dashoffset 2s linear;
+            fill: none;
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 8px var(--accent-female));
+        }
+
+        .sperm-cell {
+            fill: var(--accent-male);
+            opacity: 0;
+            filter: drop-shadow(0 0 5px var(--accent-male));
+        }
+
+        .fertilization-flash {
+            fill: #fff;
+            opacity: 0;
+            filter: blur(10px);
+            transition: opacity 0.3s;
+        }
+
+        /* Controls */
+        .mech-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            background: rgba(0,0,0,0.3);
+            padding: 1rem 1.5rem;
+            border-radius: 1rem;
+            border: 1px solid var(--glass-border);
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--glass-highlight);
+            color: #fff;
+            padding: 0.75rem 1.5rem;
+            border-radius: 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: inherit;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        .btn-primary {
+            background: var(--accent-female);
+            color: #000;
+            border: none;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: #10b981;
+            box-shadow: 0 0 20px rgba(52, 211, 153, 0.4);
+        }
+
+        .stage-info {
+            flex: 1;
+            text-align: center;
+            min-width: 250px;
+        }
+
+        .stage-title {
+            color: var(--accent-female);
+            font-weight: 700;
+            font-size: 1.2rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .stage-desc {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            min-height: 2.8em;
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 0.5rem;
+        }
+
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--glass-border);
+            transition: var(--transition-smooth);
+        }
+        .dot.active { background: var(--accent-female); box-shadow: 0 0 10px var(--accent-female); transform: scale(1.3); }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (CANVAS)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }
+        
+        @media (min-width: 768px) {
+            .sim-layout {
+                grid-template-columns: 3fr 1fr;
+            }
+        }
+
+        .canvas-container {
+            width: 100%;
+            height: clamp(300px, 50vw, 500px);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            position: relative;
+            background: #0a0e17;
+            border: 1px solid var(--glass-border);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            background: rgba(0,0,0,0.2);
+            padding: 1.5rem;
+            border-radius: 1rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .val-display { color: var(--text-main); font-weight: bold; font-family: var(--font-mono); }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: var(--glass-highlight);
+            border-radius: 2px;
+        }
+        
+        #windSlider::-webkit-slider-thumb { background: var(--accent-male); box-shadow: 0 0 10px var(--accent-male); }
+        #tempSlider::-webkit-slider-thumb { background: var(--accent-energy); box-shadow: 0 0 10px var(--accent-energy); }
+
+        /* ==========================================================================
+           GRID CARDS (Facts, Mistakes, etc.)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: var(--transition-smooth);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .card:hover {
+            background: rgba(255,255,255,0.05);
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.15);
+        }
+
+        .card-icon {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(255,255,255,0.05);
+        }
+        
+        .card.fact .card-icon { color: var(--accent-pollen); background: rgba(251, 191, 36, 0.1); }
+        .card.mistake .card-icon { color: var(--accent-energy); background: rgba(244, 63, 94, 0.1); }
+        .card.app .card-icon { color: var(--accent-female); background: rgba(52, 211, 153, 0.1); }
+
+        .card h4 { font-size: 1.2rem; color: #fff; }
+        .card p { font-size: 0.95rem; margin: 0; }
+
+        /* Reduced motion for low end */
+        @media (max-width: 768px) {
+            .glass-panel { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+            .ambient-bg { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ambient-bg"></div>
+
+    <div class="container">
+        
+        <!-- HERO SECTION -->
+        <section class="hero glass-panel">
+            <div class="badge">Plant Reproduction</div>
+            <h1>Pollination & Fertilization</h1>
+            <p>Explore the microscopic journey of life inside a flower. Discover how nature transforms pollen grains into seeds through a precise biological sequence.</p>
+        </section>
+
+        <!-- COMPONENT ANATOMY -->
+        <section class="glass-panel">
+            <h2>Flower Anatomy</h2>
+            <p>Before understanding the process, we must identify the biological machinery. Explore the male (stamen) and female (pistil) components.</p>
+            
+            <div class="anatomy-layout">
+                <!-- Illustration & Markers -->
+                <div class="illustration-container" id="anatomy-container">
+                    <!-- Complex SVG Flower Diagram -->
+                    <svg class="svg-flower" viewBox="0 0 800 800" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Gradients -->
+                            <radialGradient id="grad-ovary" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#34d399"/>
+                                <stop offset="100%" stop-color="#064e3b"/>
+                            </radialGradient>
+                            <linearGradient id="grad-style" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stop-color="#064e3b"/>
+                                <stop offset="50%" stop-color="#34d399"/>
+                                <stop offset="100%" stop-color="#064e3b"/>
+                            </linearGradient>
+                            <radialGradient id="grad-petal" cx="50%" cy="100%" r="100%">
+                                <stop offset="0%" stop-color="#c084fc"/>
+                                <stop offset="100%" stop-color="#581c87" stop-opacity="0.8"/>
+                            </radialGradient>
+                            <radialGradient id="grad-anther" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#fef08a"/>
+                                <stop offset="100%" stop-color="#b45309"/>
+                            </radialGradient>
+                            <!-- Drop Shadow -->
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="10" stdDeviation="15" flood-color="#000" flood-opacity="0.6"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Background Petals -->
+                        <path d="M400 400 C200 200, 100 400, 300 500" fill="url(#grad-petal)" filter="url(#shadow)" opacity="0.7"/>
+                        <path d="M400 400 C600 200, 700 400, 500 500" fill="url(#grad-petal)" filter="url(#shadow)" opacity="0.7"/>
+                        <path d="M400 400 C300 100, 500 100, 400 400" fill="url(#grad-petal)" filter="url(#shadow)" opacity="0.7"/>
+
+                        <!-- Receptacle & Sepals -->
+                        <path d="M370 650 Q400 680 430 650 L410 800 L390 800 Z" fill="#14532d"/>
+                        <path d="M370 650 Q300 600 280 680 Q350 670 390 650" fill="#166534" filter="url(#shadow)"/>
+                        <path d="M430 650 Q500 600 520 680 Q450 670 410 650" fill="#166534" filter="url(#shadow)"/>
+
+                        <!-- Male Parts (Stamen) Left -->
+                        <g filter="url(#shadow)">
+                            <path d="M380 600 Q300 450 250 300" fill="none" stroke="#7dd3fc" stroke-width="6" stroke-linecap="round"/>
+                            <ellipse cx="250" cy="280" rx="20" ry="30" fill="url(#grad-anther)"/>
+                            <path d="M250 250 L250 310" stroke="#78350f" stroke-width="2"/>
+                            
+                            <path d="M385 620 Q330 500 300 350" fill="none" stroke="#7dd3fc" stroke-width="4" stroke-linecap="round"/>
+                            <ellipse cx="300" cy="330" rx="15" ry="25" fill="url(#grad-anther)"/>
+                        </g>
+
+                        <!-- Male Parts (Stamen) Right -->
+                        <g filter="url(#shadow)">
+                            <path d="M420 600 Q500 450 550 300" fill="none" stroke="#7dd3fc" stroke-width="6" stroke-linecap="round"/>
+                            <ellipse cx="550" cy="280" rx="20" ry="30" fill="url(#grad-anther)"/>
+                            <path d="M550 250 L550 310" stroke="#78350f" stroke-width="2"/>
+
+                            <path d="M415 620 Q470 500 500 350" fill="none" stroke="#7dd3fc" stroke-width="4" stroke-linecap="round"/>
+                            <ellipse cx="500" cy="330" rx="15" ry="25" fill="url(#grad-anther)"/>
+                        </g>
+
+                        <!-- Female Part (Pistil) Center Focus -->
+                        <g filter="url(#shadow)">
+                            <!-- Ovary (Cutaway view) -->
+                            <path d="M330 650 C330 550, 370 500, 380 500 L420 500 C430 500, 470 550, 470 650 C470 720, 330 720, 330 650 Z" fill="url(#grad-ovary)"/>
+                            <!-- Ovules inside ovary -->
+                            <g fill="#a7f3d0" stroke="#059669" stroke-width="2">
+                                <ellipse cx="370" cy="600" rx="15" ry="25" transform="rotate(20 370 600)"/>
+                                <ellipse cx="430" cy="600" rx="15" ry="25" transform="rotate(-20 430 600)"/>
+                                <ellipse cx="370" cy="650" rx="15" ry="25" transform="rotate(40 370 650)"/>
+                                <ellipse cx="430" cy="650" rx="15" ry="25" transform="rotate(-40 430 650)"/>
+                            </g>
+                            
+                            <!-- Style -->
+                            <path d="M380 500 L385 200 L415 200 L420 500 Z" fill="url(#grad-style)"/>
+                            
+                            <!-- Stigma -->
+                            <path d="M385 200 C350 150, 450 150, 415 200 Z" fill="#6ee7b7"/>
+                            <circle cx="390" cy="180" r="10" fill="#a7f3d0" opacity="0.5"/>
+                            <circle cx="410" cy="180" r="12" fill="#a7f3d0" opacity="0.5"/>
+                            <circle cx="400" cy="165" r="15" fill="#a7f3d0" opacity="0.5"/>
+                        </g>
+
+                        <!-- Foreground Petals (Translucent) -->
+                        <path d="M400 450 C250 350, 150 500, 350 650" fill="url(#grad-petal)" filter="url(#shadow)" opacity="0.8"/>
+                        <path d="M400 450 C550 350, 650 500, 450 650" fill="url(#grad-petal)" filter="url(#shadow)" opacity="0.8"/>
+                    </svg>
+
+                    <!-- HTML Markers layered over SVG -->
+                    <div class="marker" id="m-stigma" data-target="leg-stigma" style="background-color: var(--accent-female)">1</div>
+                    <div class="marker" id="m-style" data-target="leg-style" style="background-color: var(--accent-female)">2</div>
+                    <div class="marker" id="m-ovary" data-target="leg-ovary" style="background-color: var(--accent-female)">3</div>
+                    <div class="marker" id="m-ovule" data-target="leg-ovule" style="background-color: var(--accent-energy)">4</div>
+                    <div class="marker" id="m-anther" data-target="leg-anther" style="background-color: var(--accent-male)">5</div>
+                    <div class="marker" id="m-filament" data-target="leg-filament" style="background-color: var(--accent-male)">6</div>
+                    <div class="marker" id="m-petal" data-target="leg-petal" style="background-color: var(--accent-petal)">7</div>
+                </div>
+
+                <!-- Legend -->
+                <div class="legend-list">
+                    <div class="legend-item" id="leg-stigma" data-target="m-stigma">
+                        <div class="legend-badge" style="background: var(--accent-female)">1</div>
+                        <div class="legend-content">
+                            <h4>Stigma</h4>
+                            <p>Sticky top surface of the pistil that catches pollen.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg-style" data-target="m-style">
+                        <div class="legend-badge" style="background: var(--accent-female)">2</div>
+                        <div class="legend-content">
+                            <h4>Style</h4>
+                            <p>Tube connecting stigma to ovary. Pathway for pollen tube.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg-ovary" data-target="m-ovary">
+                        <div class="legend-badge" style="background: var(--accent-female)">3</div>
+                        <div class="legend-content">
+                            <h4>Ovary</h4>
+                            <p>Swollen base containing ovules. Becomes the fruit.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg-ovule" data-target="m-ovule">
+                        <div class="legend-badge" style="background: var(--accent-energy)">4</div>
+                        <div class="legend-content">
+                            <h4>Ovule</h4>
+                            <p>Contains the egg cell. Becomes the seed after fertilization.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg-anther" data-target="m-anther">
+                        <div class="legend-badge" style="background: var(--accent-male)">5</div>
+                        <div class="legend-content">
+                            <h4>Anther</h4>
+                            <p>Pollen-producing sacs at the top of the stamen.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg-filament" data-target="m-filament">
+                        <div class="legend-badge" style="background: var(--accent-male)">6</div>
+                        <div class="legend-content">
+                            <h4>Filament</h4>
+                            <p>Slender stalk that supports the anther.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="leg-petal" data-target="m-petal">
+                        <div class="legend-badge" style="background: var(--accent-petal)">7</div>
+                        <div class="legend-content">
+                            <h4>Petal</h4>
+                            <p>Modified leaves, often colored to attract pollinators.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING PROCESS (MANDATORY DEDICATED SECTION) -->
+        <section class="glass-panel">
+            <h2>The Mechanism</h2>
+            <p>Watch the continuous sequence from pollination (transfer of pollen) to fertilization (fusion of cells). This is a linear biological sequence.</p>
+
+            <div class="mechanism-container">
+                
+                <div class="mech-visual">
+                    <!-- Dynamic SVG for Mechanism Animation -->
+                    <svg id="mechCanvas" class="mech-svg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice">
+                        <defs>
+                            <radialGradient id="glow-pollen" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#fbbf24"/>
+                                <stop offset="100%" stop-color="#b45309" stop-opacity="0"/>
+                            </radialGradient>
+                            <radialGradient id="glow-flash" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#fff"/>
+                                <stop offset="20%" stop-color="#f43f5e"/>
+                                <stop offset="100%" stop-color="#4c0519" stop-opacity="0"/>
+                            </radialGradient>
+                        </defs>
+                        
+                        <!-- Main Group, scaled/translated via JS for zooming -->
+                        <g id="mech-world">
+                            <!-- Background Flower (Left) -->
+                            <g id="flower-A" transform="translate(200, 300) scale(0.6)">
+                                <path d="M0 0 C-100 -100, -50 -200, 0 -250 C50 -200, 100 -100, 0 0" fill="#c084fc" opacity="0.6"/>
+                                <path d="M0 0 C-150 -50, -250 50, -200 150 C-100 100, -50 50, 0 0" fill="#c084fc" opacity="0.6"/>
+                                <path d="M0 0 C150 -50, 250 50, 200 150 C100 100, 50 50, 0 0" fill="#c084fc" opacity="0.6"/>
+                                <path d="M-10 100 Q-80 0 -120 -150" fill="none" stroke="#7dd3fc" stroke-width="10"/>
+                                <ellipse cx="-120" cy="-150" rx="30" ry="40" fill="#fef08a"/>
+                                <!-- Pollen on Anther A -->
+                                <circle class="pollen-particle p-a" cx="-130" cy="-160" r="8"/>
+                                <circle class="pollen-particle p-a" cx="-110" cy="-140" r="8"/>
+                                <circle class="pollen-particle p-a" cx="-125" cy="-130" r="8"/>
+                            </g>
+
+                            <!-- Target Flower (Right / Zoom Target) -->
+                            <g id="flower-B" transform="translate(800, 300) scale(0.6)">
+                                <path d="M0 0 C-100 -100, -50 -200, 0 -250 C50 -200, 100 -100, 0 0" fill="#c084fc" opacity="0.6"/>
+                                
+                                <!-- Pistil -->
+                                <path d="M-60 100 C-60 0, 0 -50, -20 -50 L20 -50 C0 -50, 60 0, 60 100 C60 180, -60 180, -60 100 Z" fill="#34d399"/>
+                                <path d="M-20 -50 L-10 -350 L10 -350 L20 -50 Z" fill="#059669"/>
+                                <path d="M-10 -350 C-50 -400, 50 -400, 10 -350 Z" fill="#6ee7b7" id="target-stigma"/>
+                                
+                                <!-- Ovule & Egg -->
+                                <ellipse cx="0" cy="100" rx="30" ry="45" fill="#a7f3d0" stroke="#064e3b" stroke-width="4"/>
+                                <circle id="egg-cell" cx="0" cy="120" r="10" fill="#f43f5e" opacity="0.8"/>
+                                
+                                <!-- Pollen Tube Path -->
+                                <path id="tube-path" class="pollen-tube" d="M0 -340 L0 -200 L0 -50 C0 50, -40 80, -20 120 C-10 135, 0 135, 0 135" />
+                                
+                                <!-- Sperm Cells -->
+                                <circle id="sperm-1" class="sperm-cell" cx="0" cy="-340" r="6"/>
+                                <circle id="sperm-2" class="sperm-cell" cx="0" cy="-355" r="6"/>
+
+                                <!-- Fertilization Flash -->
+                                <circle id="flash" class="fertilization-flash" cx="0" cy="120" r="60"/>
+                            </g>
+
+                            <!-- The Pollinator (Bee) -->
+                            <g id="bee" class="bee" transform="translate(-100, -100) scale(0.5)">
+                                <!-- Wings -->
+                                <ellipse cx="20" cy="-30" rx="15" ry="40" fill="#fff" opacity="0.5" transform="rotate(30)"/>
+                                <ellipse cx="-20" cy="-30" rx="15" ry="40" fill="#fff" opacity="0.5" transform="rotate(-30)"/>
+                                <!-- Body -->
+                                <ellipse cx="0" cy="0" rx="30" ry="50" fill="#eab308"/>
+                                <path d="M-30 0 C0 10, 30 0, 30 0" stroke="#000" stroke-width="10" fill="none"/>
+                                <path d="M-28 -20 C0 -10, 28 -20, 28 -20" stroke="#000" stroke-width="10" fill="none"/>
+                                <path d="M-25 20 C0 30, 25 20, 25 20" stroke="#000" stroke-width="10" fill="none"/>
+                                <!-- Head -->
+                                <circle cx="0" cy="-55" r="20" fill="#000"/>
+                                <!-- Carried Pollen (hidden initially) -->
+                                <g id="bee-pollen" opacity="0">
+                                    <circle cx="-10" cy="10" r="12" fill="url(#glow-pollen)"/>
+                                    <circle cx="15" cy="0" r="10" fill="url(#glow-pollen)"/>
+                                    <circle cx="0" cy="25" r="15" fill="url(#glow-pollen)"/>
+                                </g>
+                            </g>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Controls -->
+                <div class="mech-controls">
+                    <button class="btn" id="btn-prev" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                    </button>
+                    
+                    <div class="stage-info">
+                        <div class="stage-title" id="stage-title">Ready</div>
+                        <div class="stage-desc" id="stage-desc">Click Auto-Play or Next to begin the sequence.</div>
+                        <div class="progress-dots" id="progress-dots">
+                            <!-- Dots generated by JS -->
+                        </div>
+                    </div>
+
+                    <button class="btn" id="btn-next">
+                        Next <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                    <button class="btn btn-primary" id="btn-play">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Auto-Play
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION -->
+        <section class="glass-panel">
+            <h2>Environment Simulation</h2>
+            <p>Pollination relies heavily on environmental factors. Adjust wind and temperature to see how they affect pollen dispersal and pollinator activity.</p>
+            
+            <div class="sim-layout">
+                <div class="canvas-container" id="sim-container">
+                    <canvas id="envCanvas"></canvas>
+                </div>
+                
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Wind Speed</span>
+                            <span class="val-display" id="windVal">Low</span>
+                        </div>
+                        <input type="range" id="windSlider" min="0" max="100" value="20">
+                        <p style="font-size:0.8rem; margin:0; opacity:0.7">High wind increases random pollen spread (Anemophily).</p>
+                    </div>
+                    
+                    <hr style="border:0; border-top:1px solid var(--glass-border); margin: 0.5rem 0;">
+                    
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Temperature</span>
+                            <span class="val-display" id="tempVal">22°C</span>
+                        </div>
+                        <input type="range" id="tempSlider" min="5" max="40" value="22">
+                        <p style="font-size:0.8rem; margin:0; opacity:0.7">Bees are most active between 15°C and 30°C.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- CARDS SECTION -->
+        <section class="glass-panel">
+            <h2 style="margin-bottom: 1.5rem;">Knowledge Base</h2>
+            <div class="info-grid">
+                
+                <div class="card mistake">
+                    <div class="card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                    </div>
+                    <h4>Common Mistake</h4>
+                    <p><strong>"Pollination is the same as Fertilization."</strong><br>False. Pollination is merely the <i>delivery</i> of pollen to the stigma. Fertilization is the actual joining of the sperm and egg cells deep inside the ovary later on.</p>
+                </div>
+
+                <div class="card fact">
+                    <div class="card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <h4>Interesting Fact</h4>
+                    <p><strong>The Vanilla Problem.</strong><br>The vanilla orchid is naturally pollinated by a specific Melipona bee found only in Mexico. To grow vanilla anywhere else in the world, humans must hand-pollinate every single flower using a tiny wooden stick.</p>
+                </div>
+
+                <div class="card app">
+                    <div class="card-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                    </div>
+                    <h4>Global Application</h4>
+                    <p><strong>Agricultural Yield.</strong><br>Over 75% of global food crops rely on animal pollination. Without bees, butterflies, and bats, crops like apples, almonds, and coffee would suffer catastrophic yield drops.</p>
+                </div>
+
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            /* --------------------------------------------------------------------------
+               1. ANATOMY MARKER & LEGEND SYSTEM
+               -------------------------------------------------------------------------- */
+            const markers = document.querySelectorAll('.marker');
+            const legends = document.querySelectorAll('.legend-item');
+
+            function clearActiveAnatomy() {
+                markers.forEach(m => m.classList.remove('active'));
+                legends.forEach(l => l.classList.remove('active'));
+            }
+
+            function activateAnatomy(id) {
+                clearActiveAnatomy();
+                const marker = document.getElementById(id.startsWith('m-') ? id : 'm-' + id.split('-')[1]);
+                const legend = document.getElementById(id.startsWith('leg-') ? id : 'leg-' + id.split('-')[1]);
+                if (marker) marker.classList.add('active');
+                if (legend) {
+                    legend.classList.add('active');
+                    // Scroll legend into view on mobile if needed
+                    if (window.innerWidth < 1024) {
+                        legend.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                }
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => activateAnatomy(marker.id));
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); activateAnatomy(marker.id); }, {passive: false});
+            });
+
+            legends.forEach(legend => {
+                legend.addEventListener('mouseenter', () => activateAnatomy(legend.id));
+                legend.addEventListener('touchstart', (e) => { activateAnatomy(legend.id); }, {passive: true});
+            });
+
+            /* --------------------------------------------------------------------------
+               2. WORKING MECHANISM SEQUENCE (THE CORE LOGIC)
+               -------------------------------------------------------------------------- */
+            const DOM = {
+                world: document.getElementById('mech-world'),
+                bee: document.getElementById('bee'),
+                beePollen: document.getElementById('bee-pollen'),
+                flowerPollenA: document.querySelectorAll('.p-a'),
+                tube: document.getElementById('tube-path'),
+                sperm1: document.getElementById('sperm-1'),
+                sperm2: document.getElementById('sperm-2'),
+                flash: document.getElementById('flash'),
+                title: document.getElementById('stage-title'),
+                desc: document.getElementById('stage-desc'),
+                btnPrev: document.getElementById('btn-prev'),
+                btnNext: document.getElementById('btn-next'),
+                btnPlay: document.getElementById('btn-play'),
+                dotsContainer: document.getElementById('progress-dots')
+            };
+
+            // Define the sequence stages
+            const stages = [
+                {
+                    title: "0. Ready",
+                    desc: "Two flowers await. The pollinator is seeking nectar.",
+                    action: () => {
+                        // Reset transforms and opacities
+                        DOM.world.style.transform = 'translate(0px, 0px) scale(1)';
+                        DOM.bee.style.transform = 'translate(-100px, -100px) scale(0.5)';
+                        DOM.beePollen.setAttribute('opacity', '0');
+                        DOM.flowerPollenA.forEach(p => p.setAttribute('opacity', '1'));
+                        DOM.tube.style.strokeDashoffset = '500';
+                        DOM.sperm1.style.opacity = '0';
+                        DOM.sperm2.style.opacity = '0';
+                        DOM.flash.style.opacity = '0';
+                    }
+                },
+                {
+                    title: "1. Attraction",
+                    desc: "The bee is attracted to Flower A by its bright petals and scent.",
+                    action: () => {
+                        DOM.world.style.transform = 'translate(0px, 0px) scale(1)';
+                        DOM.bee.style.transform = 'translate(100px, 150px) scale(0.6)'; // Move to Anther A
+                    }
+                },
+                {
+                    title: "2. Collection",
+                    desc: "While drinking nectar, pollen grains stick to the bee's hairy body.",
+                    action: () => {
+                        DOM.beePollen.setAttribute('opacity', '1');
+                        DOM.flowerPollenA.forEach(p => p.setAttribute('opacity', '0.2')); // Deplete flower A
+                    }
+                },
+                {
+                    title: "3. Transfer (Pollination)",
+                    desc: "The bee visits Flower B. Pollen rubs off onto the sticky stigma. This is Cross-Pollination.",
+                    action: () => {
+                        DOM.bee.style.transform = 'translate(800px, -50px) scale(0.6)'; // Move to Stigma B
+                        // Need a slight delay before bee leaves to show transfer
+                    }
+                },
+                {
+                    title: "4. Germination",
+                    desc: "The bee leaves. The pollen grain absorbs water and germinates on the stigma.",
+                    action: () => {
+                        DOM.bee.style.transform = 'translate(1200px, -200px) scale(0.5)'; // Fly away
+                        DOM.beePollen.setAttribute('opacity', '0'); // Leaves pollen behind
+                        // Zoom into pistil
+                        DOM.world.style.transform = 'translate(-800px, -100px) scale(1.5)';
+                    }
+                },
+                {
+                    title: "5. Pollen Tube Growth",
+                    desc: "A tube grows down the style, carrying two sperm cells toward the ovary.",
+                    action: () => {
+                        DOM.world.style.transform = 'translate(-800px, -100px) scale(1.5)';
+                        DOM.tube.style.strokeDashoffset = '0'; // Animate CSS path drawing
+                        DOM.sperm1.style.opacity = '1';
+                        DOM.sperm2.style.opacity = '1';
+                        
+                        // Animate sperm down the path manually using CSS transforms
+                        DOM.sperm1.style.transition = 'transform 2s linear';
+                        DOM.sperm2.style.transition = 'transform 2s linear 0.1s';
+                        
+                        DOM.sperm1.style.transform = 'translateY(460px)'; // Approx distance down tube
+                        DOM.sperm2.style.transform = 'translateY(460px)';
+                    }
+                },
+                {
+                    title: "6. Double Fertilization",
+                    desc: "One sperm fertilizes the egg (forming a zygote). The other forms food storage (endosperm).",
+                    action: () => {
+                        DOM.world.style.transform = 'translate(-800px, -200px) scale(1.8)'; // Zoom more on ovary
+                        DOM.flash.style.opacity = '1';
+                        setTimeout(() => { DOM.flash.style.opacity = '0'; }, 500);
+                        setTimeout(() => { DOM.flash.style.opacity = '0.5'; }, 800); // Pulsing glow left behind
+                    }
+                }
+            ];
+
+            let currentStage = 0;
+            let isPlaying = false;
+            let playInterval;
+
+            // Generate dots
+            stages.forEach((_, index) => {
+                if(index === 0) return; // Skip stage 0 for dots
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                DOM.dotsContainer.appendChild(dot);
+            });
+            const dots = document.querySelectorAll('.dot');
+
+            function updateUI() {
+                DOM.title.textContent = stages[currentStage].title;
+                DOM.desc.textContent = stages[currentStage].desc;
+                
+                DOM.btnPrev.disabled = currentStage === 0;
+                DOM.btnNext.disabled = currentStage === stages.length - 1;
+
+                dots.forEach((dot, idx) => {
+                    dot.classList.toggle('active', idx === currentStage - 1);
+                });
+            }
+
+            function goToStage(stageNum) {
+                if (stageNum < 0 || stageNum >= stages.length) return;
+                
+                // If jumping multiple stages, execute previous setups quickly (simplified here by relying on CSS state)
+                // For a robust system, you'd reset and fast-forward. Since we use CSS transitions, we rely on them.
+                if(stageNum === 0) stages[0].action(); // Always hard reset if going to 0
+                
+                currentStage = stageNum;
+                stages[currentStage].action();
+                updateUI();
+            }
+
+            DOM.btnNext.addEventListener('click', () => { stopAutoPlay(); goToStage(currentStage + 1); });
+            DOM.btnPrev.addEventListener('click', () => { stopAutoPlay(); goToStage(currentStage - 1); });
+            
+            DOM.btnPlay.addEventListener('click', () => {
+                if (isPlaying) stopAutoPlay();
+                else startAutoPlay();
+            });
+
+            function startAutoPlay() {
+                isPlaying = true;
+                DOM.btnPlay.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zm8 0h4v16h-4z"/></svg> Pause';
+                DOM.btnPlay.classList.add('playing');
+                
+                if(currentStage === stages.length - 1) goToStage(0); // Loop back
+
+                playInterval = setInterval(() => {
+                    if (currentStage < stages.length - 1) {
+                        goToStage(currentStage + 1);
+                    } else {
+                        setTimeout(() => { goToStage(0); }, 3000); // Wait at end, then reset
+                    }
+                }, 3500); // Time between stages
+                
+                // Start first move immediately if at 0
+                if(currentStage === 0) goToStage(1);
+            }
+
+            function stopAutoPlay() {
+                isPlaying = false;
+                DOM.btnPlay.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Auto-Play';
+                DOM.btnPlay.classList.remove('playing');
+                clearInterval(playInterval);
+            }
+
+            // Init mechanism
+            goToStage(0);
+
+
+            /* --------------------------------------------------------------------------
+               3. INTERACTIVE CANVAS SIMULATION (WIND & TEMP)
+               -------------------------------------------------------------------------- */
+            const canvas = document.getElementById('envCanvas');
+            const ctx = canvas.getContext('2d', { alpha: false });
+            const container = document.getElementById('sim-container');
+            
+            const s_wind = document.getElementById('windSlider');
+            const s_temp = document.getElementById('tempSlider');
+            const v_wind = document.getElementById('windVal');
+            const v_temp = document.getElementById('tempVal');
+
+            let width, height;
+            let particles = [];
+            let simBees = [];
+
+            // Setup Resize Handler for sharp canvas
+            function resizeCanvas() {
+                const rect = container.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                
+                // Normalize coordinate system to use CSS pixels
+                ctx.scale(dpr, dpr);
+                width = rect.width;
+                height = rect.height;
+                
+                initSim(); // Re-init on resize to distribute elements
+            }
+            window.addEventListener('resize', resizeCanvas);
+            // Handle orientation change for mobile
+            window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+
+            // Sim Classes
+            class Pollen {
+                constructor() {
+                    this.reset();
+                    this.x = Math.random() * width; // Initial random scatter
+                }
+                reset() {
+                    this.x = width * 0.2 + (Math.random() * 40 - 20); // Source area (Flower)
+                    this.y = height * 0.6 + (Math.random() * 40 - 20);
+                    this.vx = (Math.random() - 0.5) * 0.5;
+                    this.vy = (Math.random() - 0.5) * 0.5 - 0.5; // Slight upward drift
+                    this.size = Math.random() * 2 + 1;
+                    this.life = 1.0;
+                    this.decay = Math.random() * 0.005 + 0.002;
+                }
+                update(windForce) {
+                    this.vx += windForce * 0.05; // Wind applies horizontal acceleration
+                    this.x += this.vx;
+                    this.y += this.vy;
+                    this.life -= this.decay;
+                    
+                    if (this.life <= 0 || this.x > width || this.y < 0) {
+                        this.reset();
+                    }
+                }
+                draw() {
+                    ctx.globalAlpha = this.life;
+                    ctx.fillStyle = '#fbbf24';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Glow
+                    ctx.shadowBlur = 5;
+                    ctx.shadowColor = '#fbbf24';
+                    ctx.fill();
+                    ctx.shadowBlur = 0; // Reset
+                }
+            }
+
+            class SimBee {
+                constructor() {
+                    this.x = Math.random() * width;
+                    this.y = Math.random() * height;
+                    this.angle = Math.random() * Math.PI * 2;
+                    this.speed = 0;
+                    this.baseSpeed = Math.random() * 2 + 1;
+                    this.targetX = width / 2;
+                    this.targetY = height / 2;
+                }
+                update(temp) {
+                    // Temperature affects activity (bell curve around 25C)
+                    let activityLevel = 1 - Math.abs(temp - 25) / 20;
+                    if(activityLevel < 0) activityLevel = 0; // Dead/Hibernating
+                    
+                    this.speed = this.baseSpeed * activityLevel;
+
+                    // Wander erratically
+                    this.angle += (Math.random() - 0.5) * 0.5;
+                    
+                    this.x += Math.cos(this.angle) * this.speed;
+                    this.y += Math.sin(this.angle) * this.speed;
+
+                    // Bounce off walls softly
+                    if(this.x < 0) { this.x = 0; this.angle = Math.PI - this.angle; }
+                    if(this.x > width) { this.x = width; this.angle = Math.PI - this.angle; }
+                    if(this.y < 0) { this.y = 0; this.angle = -this.angle; }
+                    if(this.y > height) { this.y = height; this.angle = -this.angle; }
+                }
+                draw() {
+                    ctx.globalAlpha = 1;
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(this.angle);
+                    
+                    // Simple bee drawing for canvas
+                    ctx.fillStyle = '#eab308'; // Body
+                    ctx.beginPath(); ctx.ellipse(0, 0, 8, 5, 0, 0, Math.PI*2); ctx.fill();
+                    ctx.fillStyle = '#000'; // Stripes
+                    ctx.fillRect(-2, -5, 2, 10);
+                    ctx.fillRect(2, -4, 2, 8);
+                    ctx.fillStyle = 'rgba(255,255,255,0.6)'; // Wings
+                    ctx.beginPath(); ctx.ellipse(-2, -5, 3, 6, Math.PI/4, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.ellipse(-2, 5, 3, 6, -Math.PI/4, 0, Math.PI*2); ctx.fill();
+                    
+                    ctx.restore();
+                }
+            }
+
+            function initSim() {
+                particles = [];
+                for(let i=0; i<100; i++) particles.push(new Pollen());
+                simBees = [];
+                for(let i=0; i<5; i++) simBees.push(new SimBee());
+            }
+
+            function updateSimUI() {
+                const wind = parseInt(s_wind.value);
+                const temp = parseInt(s_temp.value);
+                
+                let windText = "Calm";
+                if(wind > 30) windText = "Breeze";
+                if(wind > 70) windText = "Strong";
+                v_wind.textContent = windText;
+                
+                v_temp.textContent = temp + "°C";
+            }
+
+            function simLoop() {
+                // Clear with background color
+                ctx.fillStyle = '#0a0e17';
+                ctx.fillRect(0, 0, width, height);
+
+                // Draw static flower source indication
+                ctx.fillStyle = '#c084fc';
+                ctx.globalAlpha = 0.3;
+                ctx.beginPath();
+                ctx.arc(width*0.2, height*0.7, 40, 0, Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+
+                const windForce = (parseInt(s_wind.value) / 100) * 2; // scale 0 to 2
+                const temp = parseInt(s_temp.value);
+
+                particles.forEach(p => {
+                    p.update(windForce);
+                    p.draw();
+                });
+
+                simBees.forEach(b => {
+                    b.update(temp);
+                    b.draw();
+                });
+
+                requestAnimationFrame(simLoop);
+            }
+
+            // Bind listeners for sliders
+            s_wind.addEventListener('input', updateSimUI);
+            s_temp.addEventListener('input', updateSimUI);
+            
+            // Add touch support explicitly for sliders to ensure smooth mobile interaction
+            const sliders = [s_wind, s_temp];
+            sliders.forEach(slider => {
+                slider.addEventListener('touchstart', (e) => { e.stopPropagation(); }, {passive: true});
+                slider.addEventListener('touchmove', (e) => { e.stopPropagation(); updateSimUI(); }, {passive: true});
+            });
+
+            // Boot simulation
+            resizeCanvas(); // Will call initSim
+            updateSimUI();
+            simLoop();
+
+        });
+    </script>
+</body>
+</html>

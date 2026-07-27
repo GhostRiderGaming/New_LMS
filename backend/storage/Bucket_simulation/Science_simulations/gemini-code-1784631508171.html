@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Endocrine Gland Explorer</title>
+    <style>
+        /* ==========================================================================
+           BASE & VARIABLES
+           ========================================================================== */
+        :root {
+            --bg-base: #05050a;
+            --bg-panel: rgba(15, 15, 25, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --text-main: #f0f0f5;
+            --text-muted: #a0a0b8;
+            
+            --c-cyan: #00f3ff;
+            --c-magenta: #ff00ea;
+            --c-yellow: #ffb800;
+            --c-green: #00ff88;
+            --c-orange: #ff5500;
+            
+            --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            --spacing-sm: clamp(8px, 1vw, 12px);
+            --spacing-md: clamp(16px, 2vw, 24px);
+            --spacing-lg: clamp(24px, 4vw, 48px);
+            
+            --border-radius: 16px;
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 243, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(255, 0, 234, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Ambient Canvas Background */
+        #ambient-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Typography */
+        h1, h2, h3 {
+            font-weight: 300;
+            letter-spacing: -0.02em;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        h1 {
+            font-size: clamp(2rem, 5vw, 4rem);
+            background: linear-gradient(135deg, #fff, var(--text-muted));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); color: var(--c-cyan); }
+        p { font-size: clamp(0.9rem, 1.2vw, 1.1rem); color: var(--text-muted); }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-lg) 0;
+        }
+
+        /* ==========================================================================
+           SECTION 1: HERO
+           ========================================================================== */
+        .hero-section {
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .badge {
+            background: rgba(0, 243, 255, 0.1);
+            color: var(--c-cyan);
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(0, 243, 255, 0.3);
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: var(--spacing-md);
+            animation: pulse-glow 2s infinite alternate;
+        }
+
+        .hero-text {
+            max-width: 800px;
+            margin-top: var(--spacing-md);
+            font-size: clamp(1.1rem, 1.5vw, 1.4rem);
+        }
+
+        /* ==========================================================================
+           SECTION 2: EXPLORER (Components & Legend)
+           ========================================================================== */
+        .explorer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+            align-items: stretch;
+        }
+
+        .visual-container {
+            position: relative;
+            min-height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--spacing-md);
+        }
+
+        /* Premium SVG Styling */
+        .body-svg {
+            width: 100%;
+            height: 100%;
+            max-height: 70vh;
+            filter: drop-shadow(0 0 30px rgba(0, 243, 255, 0.1));
+        }
+
+        .gland-path {
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            transform-origin: center;
+        }
+
+        .gland-path:hover, .gland-path.active {
+            filter: drop-shadow(0 0 15px currentColor) brightness(1.3);
+        }
+
+        /* Numbered Markers */
+        .marker {
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        
+        .marker circle {
+            fill: var(--bg-panel);
+            stroke: currentColor;
+            stroke-width: 2;
+            transition: var(--transition-smooth);
+        }
+        
+        .marker text {
+            fill: #fff;
+            font-family: var(--font-main);
+            font-size: 14px;
+            font-weight: bold;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+
+        .marker:hover circle, .marker.active circle {
+            fill: currentColor;
+            filter: drop-shadow(0 0 10px currentColor);
+        }
+        
+        .marker:hover text, .marker.active text {
+            fill: #000;
+        }
+
+        /* Legend Sidebar */
+        .legend-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-md);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--glass-highlight);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            border: 2px solid currentColor;
+            color: currentColor;
+            flex-shrink: 0;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item.active .legend-badge {
+            background: currentColor;
+            color: #000;
+            box-shadow: 0 0 15px currentColor;
+        }
+
+        .legend-text h4 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--text-main);
+        }
+
+        .legend-text p {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Detail Panel */
+        .detail-panel {
+            margin-top: var(--spacing-md);
+            padding: var(--spacing-md);
+            border-top: 1px solid var(--glass-border);
+            display: none;
+            animation: fadeIn 0.5s ease;
+        }
+        .detail-panel.active { display: block; }
+        
+        .hormone-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+        }
+        
+        .h-tag {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            color: var(--c-cyan);
+            border: 1px solid rgba(0, 243, 255, 0.2);
+        }
+
+        /* ==========================================================================
+           SECTION 3: WORKING MECHANISM
+           ========================================================================== */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .mech-visual {
+            height: 400px;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(to bottom, rgba(10,10,20,0.8), rgba(20,10,20,0.8));
+        }
+
+        .mech-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Mechanism SVG Elements & Animations */
+        .mech-gland, .mech-blood, .mech-target, .mech-receptor {
+            transition: var(--transition-smooth);
+        }
+        
+        .hormone-particle {
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        /* Stage 1: Stimulus */
+        .stage-1 .mech-brain-signal { animation: stroke-dash 1.5s linear forwards; opacity: 1; }
+        .stage-1 .mech-gland { filter: drop-shadow(0 0 20px var(--c-cyan)); }
+
+        /* Stage 2: Secretion */
+        .stage-2 .mech-gland { filter: drop-shadow(0 0 20px var(--c-magenta)); }
+        .stage-2 .h-secrete { opacity: 1; animation: pop-out 1s ease-out forwards; }
+
+        /* Stage 3: Transport */
+        .stage-3 .mech-blood { fill: rgba(255, 0, 85, 0.2); }
+        .stage-3 .h-flow { opacity: 1; animation: flow-blood 2s linear infinite; }
+
+        /* Stage 4: Binding */
+        .stage-4 .mech-receptor { stroke: var(--c-cyan); filter: drop-shadow(0 0 10px var(--c-cyan)); }
+        .stage-4 .h-bind { opacity: 1; transform: translate(0, 0); }
+
+        /* Stage 5: Response */
+        .stage-5 .mech-target { fill: rgba(0, 243, 255, 0.15); filter: drop-shadow(0 0 20px var(--c-cyan)); }
+        .stage-5 .mech-target-core { animation: pulse-core 1.5s infinite alternate; }
+
+        /* Controls */
+        .mech-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-md);
+            align-items: center;
+        }
+
+        .progress-bar {
+            width: 100%;
+            max-width: 600px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            position: relative;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .progress-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background: var(--c-cyan);
+            border-radius: 2px;
+            transition: width 0.4s ease;
+            box-shadow: 0 0 10px var(--c-cyan);
+        }
+
+        .step-indicators {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 600px;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .step-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transition: var(--transition-smooth);
+        }
+
+        .step-dot.active {
+            background: var(--c-cyan);
+            box-shadow: 0 0 10px var(--c-cyan);
+            transform: scale(1.3);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 10px 24px;
+            border-radius: 30px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            font-family: var(--font-main);
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--c-cyan);
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+        }
+
+        button.primary {
+            background: rgba(0, 243, 255, 0.1);
+            border-color: var(--c-cyan);
+            color: var(--c-cyan);
+        }
+
+        .stage-info {
+            text-align: center;
+            min-height: 80px;
+        }
+
+        /* ==========================================================================
+           SECTION 4: SIMULATION (Glucose/Insulin)
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: var(--spacing-md);
+        }
+
+        .sim-visual {
+            height: 350px;
+            position: relative;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .slider-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--text-main);
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            transition: var(--transition-smooth);
+        }
+
+        #slider-food::-webkit-slider-thumb { background: var(--c-cyan); box-shadow: 0 0 10px var(--c-cyan); }
+        #slider-exercise::-webkit-slider-thumb { background: var(--c-magenta); box-shadow: 0 0 10px var(--c-magenta); }
+
+        .meter {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .meter-bar {
+            height: 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        
+        .meter-fill {
+            height: 100%;
+            width: 50%;
+            border-radius: 6px;
+            transition: width 0.5s cubic-bezier(0.1, 0.8, 0.3, 1);
+        }
+
+        /* ==========================================================================
+           SECTION 5: INFO CARDS
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .info-card {
+            padding: var(--spacing-md);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border-top: 3px solid transparent;
+        }
+        
+        .info-card h3 {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .card-fact { border-top-color: var(--c-cyan); }
+        .card-myth { border-top-color: var(--c-magenta); }
+        .card-rev { border-top-color: var(--c-yellow); }
+
+        /* ==========================================================================
+           ANIMATIONS & KEYFRAMES
+           ========================================================================== */
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 5px currentColor; }
+            100% { box-shadow: 0 0 20px currentColor; }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes stroke-dash {
+            from { stroke-dasharray: 100; stroke-dashoffset: 100; }
+            to { stroke-dasharray: 100; stroke-dashoffset: 0; }
+        }
+
+        @keyframes pop-out {
+            0% { transform: scale(0) translate(0,0); opacity: 0; }
+            50% { transform: scale(1.2) translate(10px, 10px); opacity: 1; }
+            100% { transform: scale(1) translate(20px, 20px); opacity: 0; }
+        }
+
+        @keyframes flow-blood {
+            0% { transform: translateX(0) scale(1); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateX(400px) scale(0.8); opacity: 0; }
+        }
+
+        @keyframes pulse-core {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            100% { transform: scale(1.05); opacity: 1; fill: var(--c-cyan); }
+        }
+
+        /* ==========================================================================
+           RESPONSIVE RULES
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .explorer-grid { grid-template-columns: 1fr; }
+            .visual-container { min-height: 350px; }
+            .legend-container { display: grid; grid-template-columns: 1fr 1fr; }
+            .sim-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(10px); /* Performance on mobile */
+                -webkit-backdrop-filter: blur(10px);
+            }
+            .legend-container { grid-template-columns: 1fr; }
+            .visual-container { min-height: 280px; padding: 0; }
+            .mech-visual { height: 250px; }
+            .btn-group { flex-wrap: wrap; justify-content: center; }
+            button { padding: 8px 16px; font-size: 0.9rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="ambient-canvas"></canvas>
+
+    <div class="container">
+        
+        <!-- HERO SECTION -->
+        <section class="hero-section">
+            <div class="badge">Interactive Visualization</div>
+            <h1>Endocrine Gland Explorer</h1>
+            <p class="hero-text">
+                Journey into the body's chemical communication network. 
+                Explore how invisible messengers called hormones regulate growth, energy, stress, and balance.
+            </p>
+        </section>
+
+        <!-- EXPLORER SECTION -->
+        <section class="glass-panel" style="margin-bottom: var(--spacing-lg);">
+            <div style="padding: var(--spacing-md); border-bottom: 1px solid var(--glass-border);">
+                <h2>1. The Endocrine Network</h2>
+                <p>Unlike the nervous system which uses fast electrical sparks, the endocrine system uses chemical messengers traveling through blood. Tap a marker to investigate.</p>
+            </div>
+            
+            <div class="explorer-grid">
+                <!-- Visual Area -->
+                <div class="visual-container">
+                    <svg class="body-svg" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Filters & Gradients for Premium Look -->
+                            <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="8" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                            <filter id="glow-magenta" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="6" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                            <linearGradient id="body-grad" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#1a1a2e" />
+                                <stop offset="100%" stop-color="#0f0f1a" />
+                            </linearGradient>
+                            <radialGradient id="gland-grad" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#fff" />
+                                <stop offset="100%" stop-color="currentColor" />
+                            </radialGradient>
+                        </defs>
+
+                        <!-- Abstract Human Silhouette -->
+                        <path d="M150,50 C150,20 250,20 250,50 C260,80 250,110 230,120 C280,130 330,160 340,220 C340,300 320,380 320,450 C320,550 300,600 300,600 L100,600 C100,600 80,550 80,450 C80,380 60,300 60,220 C70,160 120,130 170,120 C150,110 140,80 150,50 Z" 
+                              fill="url(#body-grad)" stroke="rgba(0, 243, 255, 0.2)" stroke-width="2" />
+                        
+                        <!-- Internal context lines (ribs/spine abstract) -->
+                        <path d="M200,120 L200,400 M150,180 Q200,200 250,180 M140,230 Q200,250 260,230 M150,280 Q200,300 250,280" 
+                              stroke="rgba(255,255,255,0.05)" stroke-width="1" fill="none" />
+
+                        <!-- Glands & Markers -->
+                        <!-- 1. Pineal/Pituitary (Brain) -->
+                        <g class="gland-group" data-id="1">
+                            <circle class="gland-path" cx="200" cy="70" r="8" fill="url(#gland-grad)" style="color: var(--c-cyan);" filter="url(#glow-cyan)"/>
+                            <g class="marker" transform="translate(225, 55)" style="color: var(--c-cyan);">
+                                <circle cx="0" cy="0" r="12" />
+                                <text x="0" y="1">1</text>
+                            </g>
+                        </g>
+
+                        <!-- 2. Thyroid (Neck) -->
+                        <g class="gland-group" data-id="2">
+                            <path class="gland-path" d="M185,130 Q200,140 215,130 Q220,150 210,160 Q200,155 190,160 Q180,150 185,130 Z" 
+                                  fill="url(#gland-grad)" style="color: var(--c-magenta);" filter="url(#glow-magenta)"/>
+                            <g class="marker" transform="translate(240, 145)" style="color: var(--c-magenta);">
+                                <circle cx="0" cy="0" r="12" />
+                                <text x="0" y="1">2</text>
+                            </g>
+                        </g>
+
+                        <!-- 3. Adrenal Glands (On Kidneys) -->
+                        <g class="gland-group" data-id="3">
+                            <!-- Kidneys context -->
+                            <path d="M150,300 C130,300 130,340 150,340 C160,340 160,320 155,320 C160,300 150,300 150,300 Z" fill="rgba(255,255,255,0.05)" />
+                            <path d="M250,300 C270,300 270,340 250,340 C240,340 240,320 245,320 C240,300 250,300 250,300 Z" fill="rgba(255,255,255,0.05)" />
+                            <!-- Adrenals -->
+                            <path class="gland-path" d="M140,295 L150,285 L160,295 L150,305 Z" fill="url(#gland-grad)" style="color: var(--c-orange);"/>
+                            <path class="gland-path" d="M240,295 L250,285 L260,295 L250,305 Z" fill="url(#gland-grad)" style="color: var(--c-orange);"/>
+                            <g class="marker" transform="translate(120, 280)" style="color: var(--c-orange);">
+                                <circle cx="0" cy="0" r="12" />
+                                <text x="0" y="1">3</text>
+                            </g>
+                        </g>
+
+                        <!-- 4. Pancreas -->
+                        <g class="gland-group" data-id="4">
+                            <path class="gland-path" d="M170,330 Q200,310 230,340 Q210,350 170,330 Z" 
+                                  fill="url(#gland-grad)" style="color: var(--c-yellow);"/>
+                            <g class="marker" transform="translate(260, 335)" style="color: var(--c-yellow);">
+                                <circle cx="0" cy="0" r="12" />
+                                <text x="0" y="1">4</text>
+                            </g>
+                        </g>
+
+                        <!-- 5. Reproductive (Generic representation) -->
+                        <g class="gland-group" data-id="5">
+                            <ellipse class="gland-path" cx="170" cy="420" rx="15" ry="10" fill="url(#gland-grad)" style="color: var(--c-green);"/>
+                            <ellipse class="gland-path" cx="230" cy="420" rx="15" ry="10" fill="url(#gland-grad)" style="color: var(--c-green);"/>
+                            <g class="marker" transform="translate(270, 420)" style="color: var(--c-green);">
+                                <circle cx="0" cy="0" r="12" />
+                                <text x="0" y="1">5</text>
+                            </g>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Legend / Details Area -->
+                <div class="legend-container">
+                    <div class="legend-item" data-id="1" style="color: var(--c-cyan);">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-text">
+                            <h4>Pituitary Gland</h4>
+                            <p>The "Master Gland" directing others.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="2" style="color: var(--c-magenta);">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-text">
+                            <h4>Thyroid Gland</h4>
+                            <p>Controls metabolism and energy use.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="3" style="color: var(--c-orange);">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-text">
+                            <h4>Adrenal Glands</h4>
+                            <p>Manages stress and fight-or-flight.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="4" style="color: var(--c-yellow);">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-text">
+                            <h4>Pancreas</h4>
+                            <p>Regulates blood sugar levels.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="5" style="color: var(--c-green);">
+                        <div class="legend-badge">5</div>
+                        <div class="legend-text">
+                            <h4>Gonads (Ovaries/Testes)</h4>
+                            <p>Controls reproduction and development.</p>
+                        </div>
+                    </div>
+
+                    <!-- Detail Panel (Updates dynamically) -->
+                    <div class="glass-panel detail-panel" id="gland-details">
+                        <h3 id="detail-title">Select a Gland</h3>
+                        <p id="detail-desc">Hover or tap on a marker in the illustration or a legend item to explore its function and the hormones it produces.</p>
+                        <div class="hormone-tags" id="detail-tags"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- MECHANISM SECTION -->
+        <section class="glass-panel" style="margin-bottom: var(--spacing-lg);">
+            <div style="padding: var(--spacing-md); border-bottom: 1px solid var(--glass-border);">
+                <h2>2. Working Mechanism: Continuous Flow</h2>
+                <p>How does a hormone actually cause a change? It operates like a radio broadcast — only cells tuned to the right frequency (receptors) react.</p>
+            </div>
+
+            <div class="mechanism-container">
+                <!-- Visual Stage -->
+                <div class="mech-visual" id="mech-container">
+                    <svg class="mech-svg" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+                        <!-- Background grid -->
+                        <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+                        </pattern>
+                        <rect width="100%" height="100%" fill="url(#grid)" />
+
+                        <!-- Brain/Signal Area -->
+                        <path d="M 50 50 Q 80 20 120 50 T 180 50" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="4"/>
+                        <path class="mech-brain-signal" d="M 50 50 Q 80 20 120 50 T 180 50" fill="none" stroke="var(--c-yellow)" stroke-width="4" stroke-dasharray="100" stroke-dashoffset="100" style="opacity:0;"/>
+                        
+                        <!-- Endocrine Gland Cell -->
+                        <g transform="translate(100, 150)">
+                            <circle class="mech-gland" cx="50" cy="50" r="40" fill="rgba(0, 243, 255, 0.1)" stroke="var(--c-cyan)" stroke-width="2"/>
+                            <circle cx="50" cy="50" r="15" fill="rgba(255,255,255,0.2)"/>
+                            <!-- Particles generated via JS/CSS -->
+                            <circle class="hormone-particle h-secrete" cx="80" cy="50" r="5" fill="var(--c-magenta)" />
+                            <circle class="hormone-particle h-secrete" cx="70" cy="70" r="5" fill="var(--c-magenta)" style="animation-delay: 0.2s;" />
+                            <circle class="hormone-particle h-secrete" cx="60" cy="80" r="5" fill="var(--c-magenta)" style="animation-delay: 0.4s;" />
+                        </g>
+
+                        <!-- Bloodstream -->
+                        <path class="mech-blood" d="M 0 250 Q 400 220 800 250 L 800 320 Q 400 290 0 320 Z" fill="rgba(255,255,255,0.02)" stroke="rgba(255, 0, 85, 0.3)" stroke-width="1"/>
+                        
+                        <!-- Flowing Particles -->
+                        <g transform="translate(150, 270)">
+                            <circle class="hormone-particle h-flow" cx="0" cy="0" r="5" fill="var(--c-magenta)" />
+                            <circle class="hormone-particle h-flow" cx="-40" cy="20" r="5" fill="var(--c-magenta)" style="animation-delay: 0.6s;" />
+                            <circle class="hormone-particle h-flow" cx="-80" cy="-10" r="5" fill="var(--c-magenta)" style="animation-delay: 1.2s;" />
+                        </g>
+
+                        <!-- Target Cell -->
+                        <g transform="translate(600, 120)">
+                            <path class="mech-target" d="M 20 80 Q 50 10 100 20 T 160 100 Q 140 180 80 160 T 20 80 Z" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+                            <circle class="mech-target-core" cx="90" cy="90" r="25" fill="rgba(255,255,255,0.1)"/>
+                            
+                            <!-- Receptors (Shape matches hormone) -->
+                            <path class="mech-receptor" d="M 15 60 L 0 50 L 10 70 Z" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+                            <path class="mech-receptor" d="M 40 140 L 30 155 L 50 150 Z" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+                            
+                            <!-- Binding Particles -->
+                            <circle class="hormone-particle h-bind" cx="6" cy="60" r="5" fill="var(--c-magenta)" style="transform: translate(-50px, 50px); transition: transform 0.5s ease;" />
+                        </g>
+
+                    </svg>
+                </div>
+
+                <!-- Controls -->
+                <div class="mech-controls">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="mech-progress"></div>
+                    </div>
+                    <div class="step-indicators" id="mech-dots">
+                        <div class="step-dot active"></div>
+                        <div class="step-dot"></div>
+                        <div class="step-dot"></div>
+                        <div class="step-dot"></div>
+                        <div class="step-dot"></div>
+                    </div>
+                    
+                    <div class="stage-info">
+                        <h3 id="mech-title">1. Stimulus</h3>
+                        <p id="mech-desc">The brain or body detects a change and sends a signal to an endocrine gland.</p>
+                    </div>
+
+                    <div class="btn-group">
+                        <button id="btn-prev">Previous</button>
+                        <button id="btn-play" class="primary">Auto-Play</button>
+                        <button id="btn-next">Next Stage</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SIMULATION SECTION -->
+        <section class="glass-panel" style="margin-bottom: var(--spacing-lg);">
+            <div style="padding: var(--spacing-md); border-bottom: 1px solid var(--glass-border);">
+                <h2>3. Interactive Lab: Blood Sugar Regulation</h2>
+                <p>The body uses a negative feedback loop to keep glucose levels stable. Act as the Pancreas and see how Insulin and Glucagon respond to your actions.</p>
+            </div>
+            
+            <div class="sim-grid" style="padding: var(--spacing-md);">
+                
+                <!-- Dynamic Chart Canvas -->
+                <div class="sim-visual">
+                    <canvas id="sim-canvas" width="800" height="350"></canvas>
+                    <!-- Absolute positioned labels over canvas -->
+                    <div style="position:absolute; top:10px; left:20px; color:var(--text-muted); font-size:0.8rem;">Time →</div>
+                    <div style="position:absolute; top:50%; left:10px; transform:translateY(-50%) rotate(-90deg); color:var(--text-muted); font-size:0.8rem;">Concentration</div>
+                </div>
+
+                <!-- Controls & Meters -->
+                <div class="sim-controls">
+                    <div class="glass-panel" style="padding: 15px; background: rgba(0,0,0,0.2);">
+                        <h4 style="margin-bottom: 10px; color:var(--text-main);">Current State</h4>
+                        
+                        <div class="meter" style="margin-bottom: 15px;">
+                            <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                                <span style="color:#fff;">Blood Glucose</span>
+                                <span id="val-glucose">90 mg/dL</span>
+                            </div>
+                            <div class="meter-bar"><div class="meter-fill" id="bar-glucose" style="background:#fff; width:45%;"></div></div>
+                        </div>
+
+                        <div class="meter" style="margin-bottom: 15px;">
+                            <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                                <span style="color:var(--c-cyan);">Insulin</span>
+                                <span id="val-insulin">Low</span>
+                            </div>
+                            <div class="meter-bar"><div class="meter-fill" id="bar-insulin" style="background:var(--c-cyan); width:20%;"></div></div>
+                        </div>
+
+                        <div class="meter">
+                            <div style="display:flex; justify-content:space-between; font-size:0.8rem;">
+                                <span style="color:var(--c-magenta);">Glucagon</span>
+                                <span id="val-glucagon">Low</span>
+                            </div>
+                            <div class="meter-bar"><div class="meter-fill" id="bar-glucagon" style="background:var(--c-magenta); width:20%;"></div></div>
+                        </div>
+                    </div>
+
+                    <div class="slider-group">
+                        <label><span>Eat Carbohydrates</span></label>
+                        <button id="btn-eat" style="background: rgba(255,255,255,0.1); border:1px solid #fff;">Eat Meal (Spike Glucose)</button>
+                    </div>
+
+                    <div class="slider-group" style="margin-top: 10px;">
+                        <label><span>Vigorous Exercise</span></label>
+                        <button id="btn-exercise" style="background: rgba(255,0,234,0.1); border:1px solid var(--c-magenta); color: var(--c-magenta);">Exercise (Burn Glucose)</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INFO CARDS -->
+        <section class="info-grid">
+            <div class="glass-panel info-card card-fact">
+                <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--c-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg> Fascinating Fact</h3>
+                <p>The Pineal gland in your brain is sensitive to light, even though it's deep inside your skull. It uses signals from your eyes to produce <strong>Melatonin</strong>, controlling your sleep-wake cycle based on the sun.</p>
+            </div>
+            
+            <div class="glass-panel info-card card-myth">
+                <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--c-magenta)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg> Common Mistake</h3>
+                <p>Many people confuse the <strong>Endocrine</strong> and <strong>Exocrine</strong> systems. Endocrine glands release hormones <em>directly into the blood</em>. Exocrine glands (like sweat or salivary glands) release fluids through ducts outside the body or into the digestive tract.</p>
+            </div>
+
+            <div class="glass-panel info-card card-rev">
+                <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--c-yellow)" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg> Quick Revision</h3>
+                <ul style="padding-left: 20px; color: var(--text-muted); font-size: 0.9rem;">
+                    <li><strong>Hormone:</strong> Chemical messenger.</li>
+                    <li><strong>Gland:</strong> Organ that produces hormones.</li>
+                    <li><strong>Target Cell:</strong> Cell with matching receptors.</li>
+                    <li><strong>Negative Feedback:</strong> System turning itself off when levels are restored (like a thermostat).</li>
+                </ul>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        // ----------------------------------------------------------------------
+        // 1. Ambient Background Particles
+        // ----------------------------------------------------------------------
+        const canvasBg = document.getElementById('ambient-canvas');
+        const ctxBg = canvasBg.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvasBg.width = window.innerWidth;
+            canvasBg.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * canvasBg.width;
+                this.y = Math.random() * canvasBg.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedY = Math.random() * 0.5 - 0.25;
+                this.speedX = Math.random() * 0.5 - 0.25;
+                this.alpha = Math.random() * 0.5 + 0.1;
+            }
+            update() {
+                this.y += this.speedY;
+                this.x += this.speedX;
+                if (this.y < 0 || this.y > canvasBg.height) this.speedY *= -1;
+                if (this.x < 0 || this.x > canvasBg.width) this.speedX *= -1;
+            }
+            draw() {
+                ctxBg.fillStyle = `rgba(255, 255, 255, ${this.alpha * 0.5})`;
+                ctxBg.beginPath();
+                ctxBg.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctxBg.fill();
+            }
+        }
+
+        for (let i = 0; i < 50; i++) particles.push(new Particle());
+
+        function animateBg() {
+            ctxBg.clearRect(0, 0, canvasBg.width, canvasBg.height);
+            particles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(animateBg);
+        }
+        animateBg();
+
+        // ----------------------------------------------------------------------
+        // 2. Explorer Interaction
+        // ----------------------------------------------------------------------
+        const glandData = {
+            1: { title: "Pituitary Gland", desc: "Located at the base of the brain, it acts as the 'Master Gland' because its hormones control other parts of the endocrine system (like the thyroid and adrenals).", tags: ["Growth Hormone (GH)", "TSH", "Oxytocin"] },
+            2: { title: "Thyroid Gland", desc: "A butterfly-shaped gland in the neck. It extracts iodine from blood to produce hormones that control the body's metabolic rate, heart function, and digestive function.", tags: ["Thyroxine (T4)", "Triiodothyronine (T3)"] },
+            3: { title: "Adrenal Glands", desc: "Sitting atop the kidneys, these prepare the body for 'fight or flight' by rapidly increasing heart rate, blood pressure, and energy availability during stress.", tags: ["Adrenaline (Epinephrine)", "Cortisol"] },
+            4: { title: "Pancreas", desc: "A dual-purpose organ behind the stomach. Its endocrine portion (Islets of Langerhans) tightly regulates blood glucose levels to ensure cells have energy.", tags: ["Insulin", "Glucagon"] },
+            5: { title: "Gonads", desc: "The primary reproductive organs (Ovaries in females, Testes in males). They control sexual development, puberty, and the reproductive cycle.", tags: ["Estrogen", "Testosterone", "Progesterone"] }
+        };
+
+        const glandGroups = document.querySelectorAll('.gland-group');
+        const legendItems = document.querySelectorAll('.legend-item');
+        const detailPanel = document.getElementById('gland-details');
+        const dTitle = document.getElementById('detail-title');
+        const dDesc = document.getElementById('detail-desc');
+        const dTags = document.getElementById('detail-tags');
+
+        function activateGland(id) {
+            // Reset all
+            glandGroups.forEach(g => {
+                g.querySelector('.gland-path').classList.remove('active');
+                g.querySelector('.marker').classList.remove('active');
+            });
+            legendItems.forEach(l => l.classList.remove('active'));
+
+            // Activate specific
+            const activeGroup = document.querySelector(`.gland-group[data-id="${id}"]`);
+            const activeLegend = document.querySelector(`.legend-item[data-id="${id}"]`);
+            
+            if(activeGroup && activeLegend) {
+                activeGroup.querySelector('.gland-path').classList.add('active');
+                activeGroup.querySelector('.marker').classList.add('active');
+                activeLegend.classList.add('active');
+                
+                // Update Panel
+                const data = glandData[id];
+                dTitle.textContent = data.title;
+                dTitle.style.color = activeLegend.style.color;
+                dDesc.textContent = data.desc;
+                dTags.innerHTML = data.tags.map(t => `<span class="h-tag" style="color:${activeLegend.style.color}; border-color:${activeLegend.style.color}">${t}</span>`).join('');
+                
+                detailPanel.classList.remove('active');
+                void detailPanel.offsetWidth; // trigger reflow
+                detailPanel.classList.add('active');
+            }
+        }
+
+        glandGroups.forEach(g => {
+            g.addEventListener('click', () => activateGland(g.dataset.id));
+            g.addEventListener('mouseenter', () => { if(window.innerWidth > 768) activateGland(g.dataset.id) });
+        });
+
+        legendItems.forEach(l => {
+            l.addEventListener('click', () => activateGland(l.dataset.id));
+            l.addEventListener('mouseenter', () => { if(window.innerWidth > 768) activateGland(l.dataset.id) });
+        });
+
+        // ----------------------------------------------------------------------
+        // 3. Working Mechanism Animation Logic
+        // ----------------------------------------------------------------------
+        const stages = [
+            { title: "1. Stimulus", desc: "The brain detects a change (e.g., low temperature, stress, food) and sends a chemical or electrical signal to an endocrine gland." },
+            { title: "2. Secretion", desc: "The gland cell activates and manufactures hormone molecules, releasing them into the surrounding extracellular fluid." },
+            { title: "3. Transport", desc: "Hormones enter the bloodstream. They are carried throughout the entire body by the continuous flow of blood." },
+            { title: "4. Binding", desc: "Hormones pass by millions of cells, but only bind to 'Target Cells' that possess specific matching receptor proteins on their surface." },
+            { title: "5. Response", desc: "The bound receptor triggers a chemical chain reaction inside the target cell, altering its behavior to restore balance." }
+        ];
+
+        let currentStage = 0;
+        let mechInterval = null;
+        let isPlaying = false;
+        
+        const mechContainer = document.getElementById('mech-container');
+        const mechProgress = document.getElementById('mech-progress');
+        const dots = document.querySelectorAll('.step-dot');
+        const mTitle = document.getElementById('mech-title');
+        const mDesc = document.getElementById('mech-desc');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnPlay = document.getElementById('btn-play');
+
+        function setMechStage(index) {
+            currentStage = index;
+            
+            // Update UI texts
+            mTitle.textContent = stages[index].title;
+            mDesc.textContent = stages[index].desc;
+            
+            // Update Progress bar & dots
+            mechProgress.style.width = `${(index / (stages.length - 1)) * 100}%`;
+            dots.forEach((d, i) => {
+                d.classList.toggle('active', i <= index);
+            });
+
+            // Update SVG Classes for CSS Animations
+            mechContainer.className = 'mech-visual stage-' + (index + 1);
+        }
+
+        function nextStage() {
+            let next = currentStage + 1;
+            if (next >= stages.length) next = 0; // loop
+            setMechStage(next);
+        }
+
+        function prevStage() {
+            let prev = currentStage - 1;
+            if (prev < 0) prev = stages.length - 1;
+            setMechStage(prev);
+        }
+
+        btnNext.addEventListener('click', () => { pauseAuto(); nextStage(); });
+        btnPrev.addEventListener('click', () => { pauseAuto(); prevStage(); });
+        
+        function togglePlay() {
+            if (isPlaying) {
+                pauseAuto();
+            } else {
+                isPlaying = true;
+                btnPlay.textContent = "Pause";
+                btnPlay.style.background = "rgba(255,0,234,0.2)";
+                btnPlay.style.borderColor = "var(--c-magenta)";
+                btnPlay.style.color = "var(--c-magenta)";
+                nextStage(); // start immediately
+                mechInterval = setInterval(nextStage, 2500); // 2.5s per stage
+            }
+        }
+
+        function pauseAuto() {
+            isPlaying = false;
+            clearInterval(mechInterval);
+            btnPlay.textContent = "Auto-Play";
+            btnPlay.style.background = "rgba(0, 243, 255, 0.1)";
+            btnPlay.style.borderColor = "var(--c-cyan)";
+            btnPlay.style.color = "var(--c-cyan)";
+        }
+
+        btnPlay.addEventListener('click', togglePlay);
+        
+        // Init Stage 1
+        setMechStage(0);
+
+        // ----------------------------------------------------------------------
+        // 4. Interactive Simulation (Canvas Chart)
+        // ----------------------------------------------------------------------
+        const simCanvas = document.getElementById('sim-canvas');
+        const simCtx = simCanvas.getContext('2d');
+        
+        // Sim State
+        let time = 0;
+        let glucoseHistory = [];
+        let insulinHistory = [];
+        let glucagonHistory = [];
+        
+        let glucose = 90; // Normal resting mg/dL (target 90)
+        let insulin = 10;
+        let glucagon = 10;
+        
+        const MAX_HISTORY = 200; // Points on chart
+        const TARGET_GLUCOSE = 90;
+        
+        // DOM Elements
+        const vGlucose = document.getElementById('val-glucose');
+        const vInsulin = document.getElementById('val-insulin');
+        const vGlucagon = document.getElementById('val-glucagon');
+        const bGlucose = document.getElementById('bar-glucose');
+        const bInsulin = document.getElementById('bar-insulin');
+        const bGlucagon = document.getElementById('bar-glucagon');
+
+        // Handle high-res displays
+        function setupCanvas(canvas) {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            return canvas.getContext('2d');
+        }
+
+        window.addEventListener('resize', () => {
+            setupCanvas(simCanvas);
+        });
+        setupCanvas(simCanvas);
+
+        // Buttons
+        document.getElementById('btn-eat').addEventListener('click', () => {
+            glucose += 60; // Huge spike
+        });
+
+        document.getElementById('btn-exercise').addEventListener('click', () => {
+            glucose -= 30; // Drop
+            if(glucose < 50) glucose = 50;
+        });
+
+        function updateSimulation() {
+            // --- Physics / Math Model ---
+            
+            // 1. Pancreas senses glucose and releases hormones
+            if (glucose > TARGET_GLUCOSE + 5) {
+                // High blood sugar -> Release Insulin, suppress Glucagon
+                insulin += (glucose - TARGET_GLUCOSE) * 0.05;
+                glucagon *= 0.9; 
+            } else if (glucose < TARGET_GLUCOSE - 5) {
+                // Low blood sugar -> Release Glucagon, suppress Insulin
+                glucagon += (TARGET_GLUCOSE - glucose) * 0.05;
+                insulin *= 0.9;
+            } else {
+                // Normal -> decay back to baseline (10)
+                insulin += (10 - insulin) * 0.02;
+                glucagon += (10 - glucagon) * 0.02;
+            }
+
+            // Cap hormones
+            insulin = Math.min(Math.max(insulin, 0), 100);
+            glucagon = Math.min(Math.max(glucagon, 0), 100);
+
+            // 2. Hormones act on Liver/Cells to change glucose
+            // Insulin removes glucose from blood
+            glucose -= (insulin * 0.05);
+            // Glucagon adds glucose to blood from liver stores
+            glucose += (glucagon * 0.05);
+
+            // Body naturally uses small amounts of glucose constantly
+            glucose -= 0.1;
+            // Liver slowly trickles glucose to prevent crashing
+            if(glucose < 80) glucose += 0.2;
+
+            // Cap glucose
+            glucose = Math.min(Math.max(glucose, 40), 200);
+
+            // --- Record History ---
+            glucoseHistory.push(glucose);
+            insulinHistory.push(insulin);
+            glucagonHistory.push(glucagon);
+            
+            if(glucoseHistory.length > MAX_HISTORY) {
+                glucoseHistory.shift();
+                insulinHistory.shift();
+                glucagonHistory.shift();
+            }
+
+            // --- Update UI Text/Bars ---
+            vGlucose.textContent = `${Math.round(glucose)} mg/dL`;
+            bGlucose.style.width = `${(glucose/200)*100}%`;
+            
+            // Color code glucose based on danger levels
+            if(glucose > 140) bGlucose.style.background = "var(--c-orange)";
+            else if(glucose < 70) bGlucose.style.background = "var(--c-magenta)";
+            else bGlucose.style.background = "#fff";
+
+            vInsulin.textContent = Math.round(insulin);
+            bInsulin.style.width = `${insulin}%`;
+            
+            vGlucagon.textContent = Math.round(glucagon);
+            bGlucagon.style.width = `${glucagon}%`;
+
+            // --- Draw Chart ---
+            drawChart();
+
+            time++;
+            requestAnimationFrame(updateSimulation);
+        }
+
+        function drawChart() {
+            const w = simCanvas.width;
+            const h = simCanvas.height;
+            simCtx.clearRect(0, 0, w, h);
+
+            // Draw Grid Lines (Target zone)
+            simCtx.fillStyle = "rgba(255,255,255,0.05)";
+            // 70-120 mg/dL normal range box
+            const topY = h - ((120/200) * h);
+            const bottomY = h - ((70/200) * h);
+            simCtx.fillRect(0, topY, w, bottomY - topY);
+            
+            simCtx.strokeStyle = "rgba(255,255,255,0.2)";
+            simCtx.setLineDash([5, 5]);
+            simCtx.beginPath();
+            const targetY = h - ((TARGET_GLUCOSE/200) * h);
+            simCtx.moveTo(0, targetY);
+            simCtx.lineTo(w, targetY);
+            simCtx.stroke();
+            simCtx.setLineDash([]);
+
+            const step = w / MAX_HISTORY;
+
+            // Helper to draw a line
+            function drawLine(data, color, scaleMax, lineWidth) {
+                if(data.length === 0) return;
+                simCtx.beginPath();
+                simCtx.strokeStyle = color;
+                simCtx.lineWidth = lineWidth;
+                
+                // Shadow/Glow
+                simCtx.shadowColor = color;
+                simCtx.shadowBlur = 10;
+
+                for(let i=0; i<data.length; i++) {
+                    const x = i * step;
+                    const y = h - ((data[i] / scaleMax) * h);
+                    if(i === 0) simCtx.moveTo(x, y);
+                    else simCtx.lineTo(x, y);
+                }
+                simCtx.stroke();
+                simCtx.shadowBlur = 0; // reset
+            }
+
+            // Draw data
+            // Glucagon (Scale 0-100)
+            drawLine(glucagonHistory, 'rgba(255, 0, 234, 0.5)', 100, 2);
+            // Insulin (Scale 0-100)
+            drawLine(insulinHistory, 'rgba(0, 243, 255, 0.5)', 100, 2);
+            // Glucose (Scale 0-200) - Draw last so it's on top
+            drawLine(glucoseHistory, '#ffffff', 200, 3);
+        }
+
+        // Start simulation
+        updateSimulation();
+
+    </script>
+</body>
+</html>

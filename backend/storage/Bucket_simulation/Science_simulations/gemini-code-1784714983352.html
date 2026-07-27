@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Planetary Motion: Orbital Mechanics Explorer</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & GLOBAL SETTINGS
+           ========================================================================== */
+        :root {
+            /* Space Palette */
+            --bg-deep: #05050A;
+            --bg-space: #0B0C15;
+            --panel-bg: rgba(20, 22, 35, 0.6);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            
+            /* Accents */
+            --accent-sun: #FFB347;
+            --accent-sun-glow: rgba(255, 179, 71, 0.4);
+            --accent-planet: #4facfe;
+            --accent-planet-glow: rgba(79, 172, 254, 0.4);
+            --accent-vector-v: #00f2fe;
+            --accent-vector-g: #ff0844;
+            --text-main: #FFFFFF;
+            --text-muted: #8B90A0;
+
+            /* Typography */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            
+            /* Fluid Sizing */
+            --space-sm: clamp(8px, 1vw, 12px);
+            --space-md: clamp(16px, 2vw, 24px);
+            --space-lg: clamp(24px, 4vw, 48px);
+            --space-xl: clamp(48px, 6vw, 80px);
+            --radius-md: 16px;
+            --radius-lg: 24px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            font-size: clamp(14px, 1.2vw, 16px);
+        }
+
+        /* Animated Background Canvas */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            background: radial-gradient(circle at 50% 50%, var(--bg-space) 0%, var(--bg-deep) 100%);
+        }
+
+        h1, h2, h3 {
+            font-weight: 700;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
+        }
+
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); background: linear-gradient(to right, #fff, #8B90A0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.8rem, 3vw, 2.5rem); margin-bottom: var(--space-md); }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); margin-bottom: var(--space-sm); color: #E0E2E8;}
+        p { color: var(--text-muted); margin-bottom: var(--space-md); }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--space-md);
+        }
+
+        /* Glassmorphism Panel */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ==========================================================================
+           LAYOUT SECTIONS
+           ========================================================================== */
+        section {
+            padding: var(--space-xl) 0;
+            position: relative;
+        }
+
+        /* Hero */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            flex-direction: column;
+            gap: var(--space-md);
+            position: relative;
+        }
+        .hero-graphics {
+            width: 300px;
+            height: 300px;
+            position: relative;
+            margin-bottom: var(--space-lg);
+        }
+
+        /* ==========================================================================
+           COMPONENTS DIAGRAM (Strict Marker Rule Implementation)
+           ========================================================================== */
+        .components-layout {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: var(--space-lg);
+            align-items: center;
+        }
+
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/10;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--panel-border);
+            overflow: visible; /* Allow glowing markers to exceed bounds slightly */
+            min-height: 240px;
+        }
+
+        .diagram-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Glowing Markers */
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            background: var(--panel-bg);
+            border: 2px solid var(--accent-planet);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: white;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 150%;
+            height: 150%;
+            border-radius: 50%;
+            background: var(--accent-planet-glow);
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform: scale(0.8);
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.15);
+            background: var(--accent-planet);
+            border-color: white;
+            color: var(--bg-deep);
+            box-shadow: 0 0 20px var(--accent-planet-glow);
+            z-index: 20;
+        }
+        .marker:hover::before, .marker.active::before {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Marker specific positions (Percentages for fluid scaling) */
+        #marker-1 { left: 35%; top: 50%; border-color: var(--accent-sun); } /* Star */
+        #marker-1:hover, #marker-1.active { background: var(--accent-sun); box-shadow: 0 0 20px var(--accent-sun-glow); }
+        #marker-2 { left: 85%; top: 50%; } /* Planet */
+        #marker-3 { left: 10%; top: 50%; } /* Perihelion */
+        #marker-4 { left: 90%; top: 50%; } /* Aphelion */
+        #marker-5 { left: 50%; top: 50%; border-color: #a855f7; } /* Center/Axis */
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-sm);
+            padding: var(--space-sm);
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.2);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: var(--accent-planet);
+        }
+        
+        .legend-item[data-target="1"] .legend-badge { color: var(--accent-sun); }
+        .legend-item[data-target="5"] .legend-badge { color: #a855f7; }
+
+        .legend-content h4 {
+            color: #fff;
+            margin: 0 0 4px 0;
+            font-size: 1.1rem;
+        }
+        .legend-content p {
+            margin: 0;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (Kepler's Laws)
+           ========================================================================== */
+        .working-layout {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .working-visual {
+            width: 100%;
+            aspect-ratio: 21/9;
+            background: rgba(0,0,0,0.5);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--panel-border);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        canvas.sim-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Controls Area */
+        .working-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.3);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+            flex-wrap: wrap;
+            gap: var(--space-sm);
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-1px);
+        }
+        
+        .btn.primary {
+            background: var(--accent-planet);
+            border-color: transparent;
+            color: #000;
+        }
+        .btn.primary:hover {
+            background: #fff;
+            box-shadow: 0 0 15px var(--accent-planet-glow);
+        }
+
+        /* Stage Indicator */
+        .stage-info {
+            flex: 1;
+            text-align: center;
+            min-width: 250px;
+        }
+        .stage-title {
+            color: var(--accent-sun);
+            font-weight: 700;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+        }
+        .stage-desc {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+        .progress-dots {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+        .dot.active {
+            background: var(--accent-planet);
+            box-shadow: 0 0 8px var(--accent-planet);
+            transform: scale(1.3);
+        }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (Sandbox)
+           ========================================================================== */
+        .sandbox-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: var(--space-md);
+        }
+
+        .sandbox-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+            padding-right: var(--space-md);
+        }
+
+        .control-slider {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .val-display { color: var(--accent-planet); }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--accent-planet);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -6px;
+            box-shadow: 0 0 10px var(--accent-planet-glow);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        .sandbox-visual {
+            width: 100%;
+            aspect-ratio: 1/1;
+            background: radial-gradient(circle at center, rgba(20,22,35,0.8) 0%, #000 100%);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--panel-border);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .sandbox-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            pointer-events: none;
+            background: rgba(0,0,0,0.5);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 0.85rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        /* ==========================================================================
+           INFO GRIDS (Facts, Mistakes, Apps)
+           ========================================================================== */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-md);
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+            transition: all 0.3s;
+        }
+        .info-card:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.1);
+            transform: translateY(-5px);
+        }
+        .info-card h4 {
+            color: var(--accent-planet);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .info-card p { margin: 0; font-size: 0.95rem; }
+
+        .mistake-card h4 { color: var(--accent-vector-g); }
+        .mistake-card .truth { margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); color: #4ade80;}
+
+        /* ==========================================================================
+           RESPONSIVE RULES (Mandatory Technical)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .components-layout {
+                grid-template-columns: 1fr;
+            }
+            .sandbox-layout {
+                grid-template-columns: 1fr;
+            }
+            .sandbox-controls {
+                padding-right: 0;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: var(--space-md);
+            }
+            .sandbox-visual {
+                aspect-ratio: 16/9;
+            }
+            .working-visual {
+                aspect-ratio: 16/9;
+            }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --space-xl: 40px; /* Tighter padding */
+            }
+            body { font-size: 15px; }
+            .glass-panel {
+                backdrop-filter: blur(10px); /* Reduce blur on mobile for performance */
+                -webkit-backdrop-filter: blur(10px);
+                padding: var(--space-md);
+            }
+            .sandbox-controls { grid-template-columns: 1fr; }
+            .working-controls { flex-direction: column; text-align: center; }
+            .stage-info { order: -1; margin-bottom: 10px; }
+            .control-group { width: 100%; justify-content: center; }
+            .sandbox-visual { aspect-ratio: 1/1; }
+            
+            /* Ensure tap targets are large enough */
+            .btn, .marker, .legend-item { min-height: 44px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Background Canvas -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        
+        <!-- INTRO HERO -->
+        <section class="hero" id="intro">
+            <div class="hero-graphics" id="hero-orb">
+                <!-- SVG Planet/Star graphic purely for initial visual impact -->
+                <svg viewBox="0 0 200 200" width="100%" height="100%">
+                    <defs>
+                        <radialGradient id="sunGlow" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#fff" stop-opacity="1" />
+                            <stop offset="30%" stop-color="#FFB347" stop-opacity="0.8" />
+                            <stop offset="100%" stop-color="#FF4500" stop-opacity="0" />
+                        </radialGradient>
+                        <linearGradient id="planetGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#4facfe" />
+                            <stop offset="100%" stop-color="#00f2fe" />
+                        </linearGradient>
+                    </defs>
+                    <!-- Sun -->
+                    <circle cx="100" cy="100" r="40" fill="url(#sunGlow)" />
+                    <!-- Orbit Path -->
+                    <ellipse cx="100" cy="100" rx="80" ry="40" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1" transform="rotate(-15 100 100)" />
+                    <!-- Planet -->
+                    <g transform="rotate(-15 100 100)">
+                        <circle cx="180" cy="100" r="8" fill="url(#planetGrad)" id="hero-planet">
+                            <animateTransform attributeName="transform" type="rotate" from="0 100 100" to="360 100 100" dur="10s" repeatCount="indefinite" />
+                        </circle>
+                    </g>
+                </svg>
+            </div>
+            <h1>Planetary Motion</h1>
+            <p style="max-width: 600px; font-size: 1.1rem;">Discover the invisible forces that govern the cosmos. Explore orbits, velocity, and gravity through interactive visualization.</p>
+        </section>
+
+        <!-- OVERVIEW & COMPONENTS -->
+        <section id="components">
+            <h2>The Anatomy of an Orbit</h2>
+            <p>An orbit is the gravitationally curved trajectory of an object. To understand how planets move, we must first identify the structural components of their path.</p>
+            
+            <div class="glass-panel components-layout">
+                
+                <!-- DIAGRAM -->
+                <div class="diagram-container" id="components-diagram">
+                    <svg class="diagram-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="5" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                            <!-- Arrow Marker for Vectors -->
+                            <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="#fff" />
+                            </marker>
+                        </defs>
+                        
+                        <!-- Grid/Space background subtle lines -->
+                        <line x1="0" y1="250" x2="800" y2="250" stroke="rgba(255,255,255,0.05)" stroke-dasharray="5,5" />
+                        <line x1="400" y1="0" x2="400" y2="500" stroke="rgba(255,255,255,0.05)" stroke-dasharray="5,5" />
+
+                        <!-- Elliptical Orbit Path -->
+                        <ellipse cx="400" cy="250" rx="320" ry="180" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2" />
+                        
+                        <!-- Major Axis Line -->
+                        <line x1="80" y1="250" x2="720" y2="250" stroke="rgba(168, 85, 247, 0.4)" stroke-width="1.5" stroke-dasharray="4,4" />
+                        
+                        <!-- Sun (Primary Focus) at x=280 (eccentricity ~0.375) -->
+                        <circle cx="280" cy="250" r="25" fill="#FFB347" filter="url(#glow)" />
+                        <!-- Empty Focus -->
+                        <circle cx="520" cy="250" r="4" fill="rgba(255,255,255,0.2)" />
+                        
+                        <!-- Planet -->
+                        <g transform="translate(680, 163)"> <!-- Roughly at an angle -->
+                            <!-- Gravity Vector -->
+                            <line x1="0" y1="0" x2="-200" y2="43" stroke="var(--accent-vector-g)" stroke-width="2" marker-end="url(#arrow)" />
+                            <!-- Velocity Vector (Tangent) -->
+                            <line x1="0" y1="0" x2="40" y2="-120" stroke="var(--accent-vector-v)" stroke-width="2" marker-end="url(#arrow)" />
+                            <!-- Planet Body -->
+                            <circle cx="0" cy="0" r="12" fill="var(--accent-planet)" filter="url(#glow)" />
+                        </g>
+
+                        <!-- Semi-major axis brace/indicator -->
+                        <path d="M 400 240 Q 560 220 720 240" fill="none" stroke="rgba(168, 85, 247, 0.8)" stroke-width="1" />
+                    </svg>
+
+                    <!-- Absolutely positioned HTML markers (Never overlap, responsive percentages) -->
+                    <!-- Position relative to diagram-container bounding box -->
+                    <div class="marker" id="marker-1" style="left: 35%; top: 50%;" data-target="1">1</div>
+                    <div class="marker" id="marker-2" style="left: 85%; top: 32.6%;" data-target="2">2</div> <!-- Planet position -->
+                    <div class="marker" id="marker-3" style="left: 10%; top: 50%;" data-target="3">3</div>
+                    <div class="marker" id="marker-4" style="left: 90%; top: 50%;" data-target="4">4</div>
+                    <div class="marker" id="marker-5" style="left: 70%; top: 46%;" data-target="5">5</div>
+                </div>
+
+                <!-- LEGEND LIST (Safe flow layout) -->
+                <div class="legend-list" id="components-legend">
+                    <div class="legend-item" data-target="1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Primary Focus (Star)</h4>
+                            <p>The massive body being orbited. It sits at one focal point of the ellipse, not the exact center.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="2">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4>Orbital Body (Planet)</h4>
+                            <p>Moving continuously due to the balance of its forward velocity (blue) and gravitational pull (red).</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="3">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4>Perihelion</h4>
+                            <p>The point in the orbit closest to the star. The planet travels fastest here.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="4">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-content">
+                            <h4>Aphelion</h4>
+                            <p>The point farthest from the star. Gravitational pull is weakest, so velocity is slowest.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="5">
+                        <div class="legend-badge">5</div>
+                        <div class="legend-content">
+                            <h4>Semi-Major Axis</h4>
+                            <p>Half of the longest diameter of the ellipse. Determines the orbital period.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING PROCESS (Kepler's Laws) -->
+        <section id="working">
+            <h2>Mechanism: Kepler's Laws of Planetary Motion</h2>
+            <p>How does a planet actually move through space? The mechanism is governed by three fundamental laws discovered by Johannes Kepler. Observe the continuous cycle.</p>
+            
+            <div class="glass-panel working-layout">
+                
+                <!-- Canvas for Animation -->
+                <div class="working-visual">
+                    <canvas id="kepler-canvas" class="sim-canvas"></canvas>
+                </div>
+
+                <!-- Controls -->
+                <div class="working-controls">
+                    <div class="control-group">
+                        <button class="btn" id="kep-prev">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                        </button>
+                        <button class="btn" id="kep-next">
+                            Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                    
+                    <div class="stage-info">
+                        <div class="stage-title" id="kep-title">1. Law of Ellipses</div>
+                        <p class="stage-desc" id="kep-desc">Planets orbit in an ellipse, with the Sun at one focus.</p>
+                        <div class="progress-dots">
+                            <div class="dot active" id="dot-1"></div>
+                            <div class="dot" id="dot-2"></div>
+                            <div class="dot" id="dot-3"></div>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <button class="btn primary" id="kep-play">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Auto-Play
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION -->
+        <section id="simulation">
+            <h2>Newton's Orbital Engine</h2>
+            <p>Interact with the forces directly. Adjust the initial velocity and the mass of the star to see how it dictates the shape of the resulting orbit based on universal gravitation.</p>
+
+            <div class="glass-panel sandbox-layout">
+                
+                <div class="sandbox-controls">
+                    <div class="control-slider">
+                        <div class="control-header">
+                            <span>Initial Tangential Velocity</span>
+                            <span class="val-display" id="val-v">4.5 km/s</span>
+                        </div>
+                        <input type="range" id="sim-v" min="2" max="6.5" step="0.1" value="4.5">
+                        <p style="font-size: 0.8rem; margin:0;">Too fast escapes orbit; too slow crashes.</p>
+                    </div>
+
+                    <div class="control-slider" style="margin-top: var(--space-md)">
+                        <div class="control-header">
+                            <span>Star Mass (Gravity Strength)</span>
+                            <span class="val-display" id="val-m">1.0 M☉</span>
+                        </div>
+                        <input type="range" id="sim-m" min="0.5" max="3" step="0.1" value="1.0">
+                        <p style="font-size: 0.8rem; margin:0;">Bends spacetime, pulling the planet inward.</p>
+                    </div>
+                    
+                    <div style="margin-top: auto; display: flex; gap: 10px;">
+                        <button class="btn" id="sim-reset" style="flex:1; justify-content:center;">Reset System</button>
+                        <button class="btn primary" id="sim-toggle-vectors" style="flex:1; justify-content:center;">Hide Vectors</button>
+                    </div>
+                </div>
+
+                <div class="sandbox-visual">
+                    <canvas id="sandbox-canvas" class="sim-canvas"></canvas>
+                    <div class="sandbox-overlay">
+                        Orbital Status: <span id="sim-status" style="color: #4ade80;">Stable</span><br>
+                        Distance (r): <span id="sim-r">1.00</span> AU
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FACTS & MISCONCEPTIONS -->
+        <section>
+            <div class="grid-3">
+                <div class="glass-panel info-card">
+                    <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-planet)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg> Real-world Application</h4>
+                    <p><strong>Satellite Deployment:</strong> Engineers use orbital mechanics to place GPS, weather, and communication satellites into exact orbits. Geostationary orbits match Earth's rotation perfectly.</p>
+                </div>
+                
+                <div class="glass-panel info-card mistake-card">
+                    <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-vector-g)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Common Mistake</h4>
+                    <p>"There is no gravity in space."</p>
+                    <p class="truth"><strong>Truth:</strong> There is a lot of gravity! Astronauts on the ISS float because they are in <em>continuous freefall</em> (orbiting), not because gravity is zero. Earth's gravity at ISS altitude is still ~90% as strong as on the surface.</p>
+                </div>
+
+                <div class="glass-panel info-card">
+                    <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFB347" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Interesting Fact</h4>
+                    <p><strong>Slingshot Maneuver:</strong> Spacecraft steal a tiny fraction of a planet's orbital momentum when flying closely past it (Gravity Assist), significantly boosting their speed towards deep space.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        /**
+         * Canvas Utility: Handles high-DPI scaling and responsive resizing
+         */
+        function setupCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d', { alpha: false }); // false for background, true for others if transparent
+            
+            function resize() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
+                return { w: rect.width, h: rect.height };
+            }
+            
+            // Allow parent to handle initial transparency
+            if(canvasId !== 'bg-canvas') {
+                canvas.getContext('2d').clearRect(0,0, canvas.width, canvas.height);
+            }
+
+            return { canvas, ctx, resize };
+        }
+
+        // ==========================================================================
+        // 1. Animated Starfield Background
+        // ==========================================================================
+        const bgSetup = setupCanvas('bg-canvas');
+        const bgCtx = bgSetup.canvas.getContext('2d', { alpha: false });
+        let bgStars = [];
+
+        function initStars(width, height) {
+            bgStars = [];
+            const numStars = window.innerWidth < 768 ? 100 : 250;
+            for(let i=0; i<numStars; i++) {
+                bgStars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    r: Math.random() * 1.5,
+                    opacity: Math.random(),
+                    speed: (Math.random() * 0.05) + 0.01
+                });
+            }
+        }
+
+        function drawBackground() {
+            const dims = bgSetup.resize(); // Handle resize dynamically
+            if(bgStars.length === 0) initStars(dims.w, dims.h);
+
+            // Base deep space gradient
+            const grad = bgCtx.createRadialGradient(dims.w/2, dims.h/2, 0, dims.w/2, dims.h/2, Math.max(dims.w, dims.h));
+            grad.addColorStop(0, '#0B0C15');
+            grad.addColorStop(1, '#020205');
+            bgCtx.fillStyle = grad;
+            bgCtx.fillRect(0, 0, dims.w, dims.h);
+
+            // Draw Stars
+            bgStars.forEach(star => {
+                star.opacity += star.speed;
+                if(star.opacity > 1 || star.opacity < 0.2) star.speed *= -1; // Twinkle
+                
+                // Slow drift
+                star.y -= 0.1;
+                if(star.y < 0) star.y = dims.h;
+
+                bgCtx.beginPath();
+                bgCtx.arc(star.x, star.y, star.r, 0, Math.PI*2);
+                bgCtx.fillStyle = `rgba(255, 255, 255, ${star.opacity})`;
+                bgCtx.fill();
+            });
+            requestAnimationFrame(drawBackground);
+        }
+        drawBackground();
+        window.addEventListener('resize', () => { bgStars = []; }); // Re-init on resize
+
+        // ==========================================================================
+        // 2. Component Diagram Interaction (Strict UI Rules)
+        // ==========================================================================
+        const markers = document.querySelectorAll('.marker');
+        const legends = document.querySelectorAll('.legend-item');
+
+        function clearActive() {
+            markers.forEach(m => m.classList.remove('active'));
+            legends.forEach(l => l.classList.remove('active'));
+        }
+
+        function setActive(targetId) {
+            clearActive();
+            document.querySelector(`.marker[data-target="${targetId}"]`).classList.add('active');
+            const legend = document.querySelector(`.legend-item[data-target="${targetId}"]`);
+            legend.classList.add('active');
+            // Slight scroll into view for legend if on mobile
+            if(window.innerWidth < 768) {
+               // legend.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        markers.forEach(marker => {
+            // Support touch and hover
+            marker.addEventListener('mouseenter', () => setActive(marker.dataset.target));
+            marker.addEventListener('touchstart', (e) => { e.preventDefault(); setActive(marker.dataset.target); });
+        });
+
+        legends.forEach(legend => {
+            legend.addEventListener('mouseenter', () => setActive(legend.dataset.target));
+            legend.addEventListener('touchstart', (e) => { e.preventDefault(); setActive(legend.dataset.target); });
+        });
+
+        // ==========================================================================
+        // 3. Mechanism: Kepler's Laws Animation (Canvas State Machine)
+        // ==========================================================================
+        const kepSetup = setupCanvas('kepler-canvas');
+        const kCtx = kepSetup.canvas.getContext('2d');
+        
+        let kepState = {
+            stage: 1,
+            time: 0,
+            isPlaying: false,
+            animId: null
+        };
+
+        const stages = [
+            { id: 1, title: "1. Law of Ellipses", desc: "Planets travel in elliptical orbits, not perfect circles, with the Sun at one of the two focal points." },
+            { id: 2, title: "2. Law of Equal Areas", desc: "A line connecting a planet to the Sun sweeps out equal areas in equal time intervals. It moves faster near the Sun." },
+            { id: 3, title: "3. Law of Harmonies", desc: "The square of an orbital period is proportional to the cube of its semi-major axis. Outer planets take much longer." }
+        ];
+
+        // Shared orbit parameters
+        const kepOrbit = {
+            a: 250, // semi-major axis
+            e: 0.6, // eccentricity (exaggerated for visual)
+            get b() { return this.a * Math.sqrt(1 - this.e*this.e); }, // semi-minor
+            get c() { return this.a * this.e; } // focus distance from center
+        };
+
+        function drawKepler() {
+            const dims = kepSetup.resize();
+            const cx = dims.w / 2;
+            const cy = dims.h / 2;
+
+            kCtx.clearRect(0, 0, dims.w, dims.h);
+
+            // Time progression if playing
+            if(kepState.isPlaying) kepState.time += 0.01;
+
+            // Draw Orbit Path
+            kCtx.beginPath();
+            kCtx.ellipse(cx, cy, kepOrbit.a, kepOrbit.b, 0, 0, 2*Math.PI);
+            kCtx.strokeStyle = 'rgba(255,255,255,0.15)';
+            kCtx.lineWidth = 2;
+            kCtx.stroke();
+
+            // Draw Sun (Focus 1)
+            const sunX = cx + kepOrbit.c;
+            const sunY = cy;
+            
+            // Sun Glow
+            let gradient = kCtx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 40);
+            gradient.addColorStop(0, '#fff');
+            gradient.addColorStop(0.2, '#FFB347');
+            gradient.addColorStop(1, 'rgba(255,179,71,0)');
+            kCtx.fillStyle = gradient;
+            kCtx.beginPath(); kCtx.arc(sunX, sunY, 40, 0, 2*Math.PI); kCtx.fill();
+            
+            // Solid Sun
+            kCtx.fillStyle = '#FFB347';
+            kCtx.beginPath(); kCtx.arc(sunX, sunY, 15, 0, 2*Math.PI); kCtx.fill();
+
+            // Stage Specific Rendering
+            if(kepState.stage === 1) {
+                // Highlight foci and ellipse structure
+                kCtx.fillStyle = 'rgba(255,255,255,0.5)';
+                kCtx.beginPath(); kCtx.arc(cx - kepOrbit.c, cy, 4, 0, 2*Math.PI); kCtx.fill();
+                kCtx.fillText("Empty Focus", cx - kepOrbit.c - 30, cy + 20);
+
+                // Axis line
+                kCtx.beginPath();
+                kCtx.moveTo(cx - kepOrbit.a, cy);
+                kCtx.lineTo(cx + kepOrbit.a, cy);
+                kCtx.strokeStyle = 'rgba(168, 85, 247, 0.5)';
+                kCtx.strokeDasharray = [5, 5];
+                kCtx.stroke();
+                kCtx.strokeDasharray = []; // reset
+
+                // Single planet moving
+                drawParametricPlanet(cx, cy, kepOrbit.a, kepOrbit.b, kepState.time, '#4facfe');
+            } 
+            else if (kepState.stage === 2) {
+                // Equal Areas
+                // Draw swept areas (visually approximated for performance)
+                const drawWedge = (startE, endE, color) => {
+                    kCtx.beginPath();
+                    kCtx.moveTo(sunX, sunY);
+                    for(let e = startE; e <= endE; e+=0.05) {
+                        kCtx.lineTo(cx + kepOrbit.a * Math.cos(e), cy + kepOrbit.b * Math.sin(e));
+                    }
+                    kCtx.lineTo(sunX, sunY);
+                    kCtx.fillStyle = color;
+                    kCtx.fill();
+                };
+
+                // Area 1 (Perihelion - fast, wide angle)
+                drawWedge(-0.4, 0.4, 'rgba(0, 242, 254, 0.2)');
+                // Area 2 (Aphelion - slow, narrow angle)
+                drawWedge(Math.PI - 0.15, Math.PI + 0.15, 'rgba(255, 8, 68, 0.2)');
+
+                // Animate planet - adjust speed based on distance (simplified Kepler equation)
+                let E = kepState.time * 2; 
+                // Very rough approximation of faster at perihelion (e=0 is perihelion here visually due to +a cos(e))
+                let adjustedTime = E - kepOrbit.e * Math.sin(E); 
+                
+                let px = cx + kepOrbit.a * Math.cos(adjustedTime);
+                let py = cy + kepOrbit.b * Math.sin(adjustedTime);
+
+                // Planet
+                kCtx.fillStyle = '#4facfe';
+                kCtx.beginPath(); kCtx.arc(px, py, 8, 0, 2*Math.PI); kCtx.fill();
+                
+                // Radius vector line
+                kCtx.beginPath();
+                kCtx.moveTo(sunX, sunY);
+                kCtx.lineTo(px, py);
+                kCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+                kCtx.stroke();
+            }
+            else if (kepState.stage === 3) {
+                // Harmonies - draw second outer orbit
+                const outA = kepOrbit.a * 1.5;
+                const outB = kepOrbit.b * 1.5;
+                
+                kCtx.beginPath();
+                kCtx.ellipse(cx, cy, outA, outB, 0, 0, 2*Math.PI);
+                kCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+                kCtx.stroke();
+
+                // Inner Planet (Fast)
+                drawParametricPlanet(cx, cy, kepOrbit.a, kepOrbit.b, kepState.time * 2, '#4facfe');
+                // Outer Planet (Slow - Kepler's 3rd law P^2 ~ a^3 implies v is slower)
+                drawParametricPlanet(cx, cy, outA, outB, kepState.time * 0.7, '#a855f7');
+            }
+
+            kepState.animId = requestAnimationFrame(drawKepler);
+        }
+
+        function drawParametricPlanet(cx, cy, a, b, time, color) {
+            let px = cx + a * Math.cos(time);
+            let py = cy + b * Math.sin(time);
+            kCtx.fillStyle = color;
+            kCtx.shadowColor = color;
+            kCtx.shadowBlur = 10;
+            kCtx.beginPath(); kCtx.arc(px, py, 8, 0, 2*Math.PI); kCtx.fill();
+            kCtx.shadowBlur = 0; // reset
+        }
+
+        function updateStageUI() {
+            document.getElementById('kep-title').textContent = stages[kepState.stage - 1].title;
+            document.getElementById('kep-desc').textContent = stages[kepState.stage - 1].desc;
+            document.querySelectorAll('.dot').forEach(d => d.classList.remove('active'));
+            document.getElementById(`dot-${kepState.stage}`).classList.add('active');
+        }
+
+        // Controls Logic
+        document.getElementById('kep-next').addEventListener('click', () => {
+            kepState.stage = kepState.stage % 3 + 1;
+            kepState.time = 0; // reset anim
+            updateStageUI();
+        });
+        document.getElementById('kep-prev').addEventListener('click', () => {
+            kepState.stage = kepState.stage === 1 ? 3 : kepState.stage - 1;
+            kepState.time = 0;
+            updateStageUI();
+        });
+        const playBtn = document.getElementById('kep-play');
+        playBtn.addEventListener('click', () => {
+            kepState.isPlaying = !kepState.isPlaying;
+            playBtn.innerHTML = kepState.isPlaying ? 
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg> Pause' : 
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Auto-Play';
+        });
+
+        // Start Kepler Loop
+        kepState.isPlaying = true;
+        updateStageUI();
+        drawKepler();
+
+
+        // ==========================================================================
+        // 4. Interactive Simulation (Newton's Gravity Sandbox)
+        // ==========================================================================
+        const simSetup = setupCanvas('sandbox-canvas');
+        const sCtx = simSetup.canvas.getContext('2d');
+        
+        let sim = {
+            running: true,
+            showVectors: true,
+            G: 0.5, // Arbitrary gravitational constant for visual scaling
+            sun: { x: 0, y: 0, mass: 1000 },
+            planet: { x: 0, y: 0, vx: 0, vy: 0, mass: 1 },
+            trail: [],
+            status: "Stable"
+        };
+
+        // DOM Elements
+        const vSlider = document.getElementById('sim-v');
+        const mSlider = document.getElementById('sim-m');
+        const vDisplay = document.getElementById('val-v');
+        const mDisplay = document.getElementById('val-m');
+        const statusDisplay = document.getElementById('sim-status');
+        const rDisplay = document.getElementById('sim-r');
+
+        function resetSim() {
+            sim.trail = [];
+            // Center coordinates will be set during draw loop based on canvas size
+            sim.planet.x = 200; // Relative to center
+            sim.planet.y = 0;
+            sim.planet.vx = 0;
+            sim.planet.vy = parseFloat(vSlider.value);
+            sim.sun.mass = parseFloat(mSlider.value) * 1000;
+            sim.status = "Stable";
+            statusDisplay.style.color = "#4ade80";
+        }
+
+        // Listeners for sliders
+        vSlider.addEventListener('input', (e) => {
+            vDisplay.textContent = `${e.target.value} km/s`;
+            sim.planet.vy = parseFloat(e.target.value) * (sim.planet.vy > 0 ? 1 : -1); // Keep direction
+            sim.trail = []; // Clear trail on change
+        });
+        mSlider.addEventListener('input', (e) => {
+            mDisplay.textContent = `${e.target.value} M☉`;
+            sim.sun.mass = parseFloat(e.target.value) * 1000;
+            sim.trail = [];
+        });
+
+        document.getElementById('sim-reset').addEventListener('click', resetSim);
+        document.getElementById('sim-toggle-vectors').addEventListener('click', (e) => {
+            sim.showVectors = !sim.showVectors;
+            e.target.textContent = sim.showVectors ? "Hide Vectors" : "Show Vectors";
+        });
+
+        function physicsLoop() {
+            // Calculate distance
+            let dx = sim.sun.x - sim.planet.x;
+            let dy = sim.sun.y - sim.planet.y;
+            let distSq = dx*dx + dy*dy;
+            let dist = Math.sqrt(distSq);
+
+            // Update UI
+            rDisplay.textContent = (dist / 200).toFixed(2); // Normalize visually
+
+            // Crash detection
+            if (dist < 20) {
+                sim.status = "CRASHED";
+                statusDisplay.style.color = "#ff0844";
+                sim.planet.vx = 0; sim.planet.vy = 0;
+                return;
+            }
+            // Escape detection
+            if (dist > 800) {
+                sim.status = "ESCAPED";
+                statusDisplay.style.color = "#8B90A0";
+                return; // Stop updating trail
+            }
+            sim.status = "Stable";
+            statusDisplay.style.color = "#4ade80";
+
+            // F = G * (m1*m2)/r^2
+            let force = sim.G * (sim.sun.mass * sim.planet.mass) / distSq;
+            
+            // a = F/m (planet mass cancels out)
+            let ax = force * (dx / dist);
+            let ay = force * (dy / dist);
+
+            // Update velocity & position (Euler integration)
+            sim.planet.vx += ax;
+            sim.planet.vy += ay;
+            sim.planet.x += sim.planet.vx;
+            sim.planet.y += sim.planet.vy;
+
+            // Save trail
+            sim.trail.push({x: sim.planet.x, y: sim.planet.y});
+            if(sim.trail.length > 300) sim.trail.shift(); // Limit trail length
+        }
+
+        // Helper to draw arrow
+        function drawArrow(ctx, fromx, fromy, tox, toy, color) {
+            var headlen = 8;
+            var dx = tox - fromx;
+            var dy = toy - fromy;
+            var angle = Math.atan2(dy, dx);
+            ctx.beginPath();
+            ctx.moveTo(fromx, fromy);
+            ctx.lineTo(tox, toy);
+            ctx.lineTo(tox - headlen * Math.cos(angle - Math.PI / 6), toy - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.moveTo(tox, toy);
+            ctx.lineTo(tox - headlen * Math.cos(angle + Math.PI / 6), toy - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        function drawSandbox() {
+            const dims = simSetup.resize();
+            const cx = dims.w / 2;
+            const cy = dims.h / 2;
+            
+            sCtx.clearRect(0, 0, dims.w, dims.h);
+
+            // Run physics steps multiple times per frame for smoother faster movement visually
+            if(sim.status === "Stable") {
+                physicsLoop();
+                physicsLoop();
+            }
+            statusDisplay.textContent = sim.status;
+
+            // Draw Trail
+            if (sim.trail.length > 1) {
+                sCtx.beginPath();
+                sCtx.moveTo(cx + sim.trail[0].x, cy + sim.trail[0].y);
+                for (let i = 1; i < sim.trail.length; i++) {
+                    sCtx.lineTo(cx + sim.trail[i].x, cy + sim.trail[i].y);
+                }
+                sCtx.strokeStyle = 'rgba(79, 172, 254, 0.4)';
+                sCtx.lineWidth = 2;
+                sCtx.stroke();
+            }
+
+            // Draw Sun
+            let sunGrad = sCtx.createRadialGradient(cx, cy, 0, cx, cy, 30 * (sim.sun.mass/1000)); // Size scales slightly with mass
+            sunGrad.addColorStop(0, '#fff');
+            sunGrad.addColorStop(0.3, '#FFB347');
+            sunGrad.addColorStop(1, 'rgba(255,179,71,0)');
+            sCtx.fillStyle = sunGrad;
+            sCtx.beginPath(); sCtx.arc(cx, cy, 40 * (sim.sun.mass/1000), 0, 2*Math.PI); sCtx.fill();
+            
+            sCtx.fillStyle = '#FFB347';
+            sCtx.beginPath(); sCtx.arc(cx, cy, 15, 0, 2*Math.PI); sCtx.fill();
+
+            // Draw Planet
+            const px = cx + sim.planet.x;
+            const py = cy + sim.planet.y;
+            
+            sCtx.fillStyle = '#4facfe';
+            sCtx.beginPath(); sCtx.arc(px, py, 8, 0, 2*Math.PI); sCtx.fill();
+
+            // Draw Vectors
+            if(sim.showVectors && sim.status === "Stable") {
+                // Velocity Vector (Green/Blue)
+                let scaleV = 10;
+                drawArrow(sCtx, px, py, px + sim.planet.vx * scaleV, py + sim.planet.vy * scaleV, '#00f2fe');
+
+                // Gravity Vector (Red)
+                let dx = sim.sun.x - sim.planet.x;
+                let dy = sim.sun.y - sim.planet.y;
+                let distSq = dx*dx + dy*dy;
+                let dist = Math.sqrt(distSq);
+                let force = sim.G * (sim.sun.mass * sim.planet.mass) / distSq;
+                let scaleG = 500; // visual scaling for vector
+                
+                let gx = (dx / dist) * force * scaleG;
+                let gy = (dy / dist) * force * scaleG;
+                
+                // Cap gravity vector length visually so it doesn't cover screen on near passes
+                let gLen = Math.sqrt(gx*gx + gy*gy);
+                if(gLen > 100) { gx = (gx/gLen)*100; gy = (gy/gLen)*100; }
+
+                drawArrow(sCtx, px, py, px + gx, py + gy, '#ff0844');
+            }
+
+            requestAnimationFrame(drawSandbox);
+        }
+
+        // Initialize Simulation
+        resetSim();
+        drawSandbox();
+
+    </script>
+</body>
+</html>

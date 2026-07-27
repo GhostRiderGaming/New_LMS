@@ -1,0 +1,1258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Chemical Formula Builder | Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & FOUNDATION
+           ========================================================================== */
+        :root {
+            --bg-color: #070913;
+            --surface-color: rgba(18, 22, 38, 0.6);
+            --surface-highlight: rgba(30, 38, 60, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-glow: rgba(0, 229, 255, 0.15);
+            
+            --text-main: #E2E8F0;
+            --text-muted: #94A3B8;
+            
+            --neon-cyan: #00E5FF;
+            --neon-magenta: #FF007F;
+            --neon-gold: #FFC107;
+            --neon-green: #00E676;
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: 'Fira Code', 'Courier New', Courier, monospace;
+            
+            --transition-smooth: 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            font-size: clamp(14px, 1.5vw, 16px);
+        }
+
+        /* Background Canvas */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4 {
+            line-height: 1.2;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        
+        h1 { font-size: clamp(2rem, 5vw, 4rem); background: linear-gradient(135deg, #fff, var(--neon-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); margin-bottom: 1.5rem; color: #fff; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.8rem); margin-bottom: 1rem; color: var(--neon-cyan); }
+        
+        p { margin-bottom: 1rem; color: var(--text-muted); }
+
+        /* ==========================================================================
+           LAYOUT & CONTAINERS
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 4vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 100px);
+        }
+
+        .glass-panel {
+            background: var(--surface-color);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: clamp(20px, 4vw, 40px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Mobile optimization for glassmorphism */
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(10px);
+                -webkit-backdrop-filter: blur(10px);
+                background: rgba(18, 22, 38, 0.85);
+            }
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+            gap: clamp(20px, 4vw, 40px);
+            align-items: center;
+        }
+
+        /* ==========================================================================
+           COMPONENTS & LABELS (STRICT MARKER PATTERN)
+           ========================================================================== */
+        .diagram-section {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        
+        @media (min-width: 1024px) {
+            .diagram-section {
+                flex-direction: row;
+                align-items: flex-start;
+            }
+        }
+
+        .diagram-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: radial-gradient(circle at center, rgba(0, 229, 255, 0.1) 0%, transparent 70%);
+            border-radius: var(--radius-md);
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .diagram-svg {
+            width: 100%;
+            height: 100%;
+            max-width: 500px;
+            overflow: visible;
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--surface-highlight);
+            border: 2px solid var(--neon-cyan);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.5);
+            transition: var(--transition-smooth);
+            z-index: 10;
+            transform: translate(-50%, -50%);
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.3);
+            background: var(--neon-cyan);
+            color: #000;
+            box-shadow: 0 0 25px var(--neon-cyan);
+        }
+
+        /* Legend */
+        .legend-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-sm);
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .legend-item.active {
+            background: rgba(0, 229, 255, 0.1);
+            border-color: var(--neon-cyan);
+            transform: translateX(10px);
+        }
+
+        .legend-badge {
+            width: 24px;
+            height: 24px;
+            background: var(--surface-highlight);
+            border: 1px solid var(--neon-cyan);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            color: var(--neon-cyan);
+            flex-shrink: 0;
+        }
+        
+        .legend-item.active .legend-badge {
+            background: var(--neon-cyan);
+            color: #000;
+        }
+
+        .legend-text strong {
+            display: block;
+            color: #fff;
+            font-size: 1rem;
+        }
+        
+        .legend-text span {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           WORKING PROCESS (DEDICATED SECTION)
+           ========================================================================== */
+        .mechanism-viewer {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .mechanism-display {
+            width: 100%;
+            height: clamp(250px, 40vh, 400px);
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .stage-visual {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transform: scale(0.95);
+            transition: opacity 0.6s ease, transform 0.6s ease;
+            pointer-events: none;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .stage-visual.active {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+
+        .mechanism-controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            background: rgba(255,255,255,0.02);
+            padding: 16px;
+            border-radius: var(--radius-md);
+        }
+
+        .controls-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn-control {
+            background: var(--surface-highlight);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition-smooth);
+            font-family: inherit;
+        }
+
+        .btn-control:hover {
+            background: rgba(0, 229, 255, 0.2);
+            border-color: var(--neon-cyan);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.3);
+        }
+        
+        .btn-control.primary {
+            background: rgba(0, 229, 255, 0.1);
+            color: var(--neon-cyan);
+            border-color: var(--neon-cyan);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-smooth);
+        }
+
+        .dot.active {
+            background: var(--neon-cyan);
+            box-shadow: 0 0 10px var(--neon-cyan);
+            transform: scale(1.3);
+        }
+
+        .stage-caption {
+            text-align: center;
+            font-size: clamp(1rem, 2vw, 1.2rem);
+            color: var(--neon-gold);
+            min-height: 3em;
+        }
+
+        /* SVG Animations within Mechanism */
+        .criss-cross-arrow {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+        }
+        .stage-visual.active .criss-cross-arrow {
+            animation: drawArrow 1.5s forwards ease-in-out;
+        }
+        @keyframes drawArrow { to { stroke-dashoffset: 0; } }
+        
+        .floating-ion { animation: float 3s infinite ease-in-out alternate; }
+        @keyframes float { from { transform: translateY(-5px); } to { transform: translateY(5px); } }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION BUILDER
+           ========================================================================== */
+        .builder-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+        
+        @media (min-width: 1024px) {
+            .builder-layout {
+                grid-template-columns: 250px 1fr 250px;
+            }
+        }
+
+        .ion-panel {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .ion-panel h4 {
+            text-align: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--glass-border);
+            margin-bottom: 10px;
+        }
+        
+        .ion-panel.cations h4 { color: var(--neon-cyan); }
+        .ion-panel.anions h4 { color: var(--neon-magenta); }
+
+        .ion-btn {
+            background: var(--surface-highlight);
+            border: 1px solid transparent;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            color: #fff;
+            font-family: var(--font-mono);
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cations .ion-btn:hover, .cations .ion-btn.selected {
+            border-color: var(--neon-cyan);
+            background: rgba(0, 229, 255, 0.1);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
+        }
+        
+        .anions .ion-btn:hover, .anions .ion-btn.selected {
+            border-color: var(--neon-magenta);
+            background: rgba(255, 0, 127, 0.1);
+            box-shadow: 0 0 15px rgba(255, 0, 127, 0.2);
+        }
+
+        .builder-stage {
+            background: radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 80%);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            padding: 20px;
+        }
+
+        .formula-result {
+            margin-top: auto;
+            background: rgba(0,0,0,0.5);
+            padding: 15px 30px;
+            border-radius: 30px;
+            border: 1px solid var(--neon-gold);
+            font-family: var(--font-mono);
+            font-size: clamp(1.5rem, 3vw, 2.5rem);
+            color: var(--neon-gold);
+            box-shadow: 0 0 20px rgba(255, 193, 7, 0.2);
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.5s ease;
+        }
+        
+        .formula-result.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .math-breakdown {
+            position: absolute;
+            top: 20px;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        /* Simulation Canvas Area */
+        #sim-canvas-container {
+            width: 100%;
+            height: 300px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .molecule-node {
+            position: absolute;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-family: var(--font-mono);
+            font-weight: bold;
+            color: #fff;
+            box-shadow: inset -5px -5px 15px rgba(0,0,0,0.5), 0 0 20px currentColor;
+            transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+            opacity: 0;
+            transform: scale(0);
+        }
+        
+        .molecule-node.appear {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        .node-cation { background: radial-gradient(circle at 30% 30%, #4dd0e1, #00838f); color: var(--neon-cyan); }
+        .node-anion { background: radial-gradient(circle at 30% 30%, #f06292, #c2185b); color: var(--neon-magenta); }
+
+        .bond-line {
+            position: absolute;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta));
+            height: 4px;
+            transform-origin: left center;
+            opacity: 0;
+            transition: opacity 0.5s ease 0.8s; /* Delayed appearance */
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            z-index: -1;
+        }
+        .bond-line.appear { opacity: 1; }
+
+        /* ==========================================================================
+           MISC SECTIONS (Cards, Lists)
+           ========================================================================== */
+        .info-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--glass-border);
+            padding: 24px;
+            border-radius: var(--radius-md);
+            transition: var(--transition-smooth);
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 16px;
+        }
+
+        ul.styled-list {
+            list-style: none;
+        }
+        
+        ul.styled-list li {
+            position: relative;
+            padding-left: 30px;
+            margin-bottom: 12px;
+        }
+        
+        ul.styled-list li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--neon-cyan);
+            font-weight: bold;
+        }
+
+        .highlight { color: var(--neon-gold); }
+        .mistake { color: #FF3B30; text-decoration: line-through; }
+        .correct { color: var(--neon-green); }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background Canvas -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        
+        <!-- ==========================================================================
+             INTRODUCTION
+             ========================================================================== -->
+        <header class="glass-panel" style="text-align: center; border-top: 4px solid var(--neon-cyan);">
+            <div style="display:inline-block; padding: 10px 20px; background: rgba(0,229,255,0.1); border-radius: 30px; color: var(--neon-cyan); font-weight: bold; margin-bottom: 16px; font-size: 0.9rem; letter-spacing: 2px; text-transform: uppercase;">Interactive Simulation</div>
+            <h1>Chemical Formula Builder</h1>
+            <p style="max-width: 600px; margin: 0 auto; font-size: 1.2rem;">Discover how atoms bond in exact mathematical ratios to form the compounds that build our universe.</p>
+        </header>
+
+        <!-- ==========================================================================
+             TOPIC OVERVIEW
+             ========================================================================== -->
+        <section class="glass-panel grid-2">
+            <div>
+                <h2>The Blueprint of Matter</h2>
+                <p>A chemical formula is like a recipe. It tells us exactly <strong>which elements</strong> are in a compound and <strong>how many atoms</strong> of each element are present.</p>
+                <p>Atoms combine to reach a stable state, similar to noble gases. They do this by gaining, losing, or sharing electrons. The number of electrons an atom needs to lose or gain is called its <strong class="highlight">Valency</strong>.</p>
+                <ul class="styled-list">
+                    <li><strong>Symbols</strong> represent the elements (e.g., <em>Na</em> for Sodium).</li>
+                    <li><strong>Subscripts</strong> represent the number of atoms (e.g., the <em>2</em> in H₂O).</li>
+                </ul>
+            </div>
+            
+            <div style="position: relative; display: flex; justify-content: center;">
+                <!-- Glowing Water Molecule Illustration -->
+                <svg viewBox="0 0 400 300" style="width: 100%; max-width: 350px; filter: drop-shadow(0 0 20px rgba(0,229,255,0.2));">
+                    <defs>
+                        <radialGradient id="grad-o" cx="30%" cy="30%" r="70%">
+                            <stop offset="0%" stop-color="#ff6b6b"/>
+                            <stop offset="100%" stop-color="#c0392b"/>
+                        </radialGradient>
+                        <radialGradient id="grad-h" cx="30%" cy="30%" r="70%">
+                            <stop offset="0%" stop-color="#e0f7fa"/>
+                            <stop offset="100%" stop-color="#00acc1"/>
+                        </radialGradient>
+                        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="8" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+                    <!-- Bonds -->
+                    <line x1="200" y1="120" x2="120" y2="200" stroke="rgba(255,255,255,0.4)" stroke-width="12" stroke-linecap="round"/>
+                    <line x1="200" y1="120" x2="280" y2="200" stroke="rgba(255,255,255,0.4)" stroke-width="12" stroke-linecap="round"/>
+                    <!-- Atoms -->
+                    <circle cx="200" cy="120" r="60" fill="url(#grad-o)" filter="url(#glow)"/>
+                    <text x="200" y="135" font-family="sans-serif" font-size="40" fill="#fff" text-anchor="middle" font-weight="bold">O</text>
+                    
+                    <circle cx="120" cy="200" r="40" fill="url(#grad-h)" filter="url(#glow)"/>
+                    <text x="120" y="212" font-family="sans-serif" font-size="30" fill="#fff" text-anchor="middle" font-weight="bold">H</text>
+                    
+                    <circle cx="280" cy="200" r="40" fill="url(#grad-h)" filter="url(#glow)"/>
+                    <text x="280" y="212" font-family="sans-serif" font-size="30" fill="#fff" text-anchor="middle" font-weight="bold">H</text>
+                    
+                    <!-- Floating Text formula -->
+                    <text x="200" y="280" font-family="monospace" font-size="36" fill="var(--neon-cyan)" text-anchor="middle" font-weight="bold" letter-spacing="4">H₂O</text>
+                </svg>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             MAIN COMPONENTS (STRICT MARKER PATTERN)
+             ========================================================================== -->
+        <section class="glass-panel">
+            <h2>Anatomy of a Formula</h2>
+            <p>Explore the components of an ionic compound. Hover or tap the numbered markers below to understand how Aluminum Oxide (Al₂O₃) is written.</p>
+            
+            <div class="diagram-section">
+                
+                <!-- Illustration Side -->
+                <div class="diagram-container">
+                    <svg class="diagram-svg" viewBox="0 0 500 300">
+                        <defs>
+                            <linearGradient id="bg-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+                            </linearGradient>
+                            <radialGradient id="glow-text" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="rgba(0, 229, 255, 0.4)"/>
+                                <stop offset="100%" stop-color="transparent"/>
+                            </radialGradient>
+                        </defs>
+                        <rect width="100%" height="100%" fill="url(#bg-grid)"/>
+                        
+                        <!-- Base Formula Display -->
+                        <g transform="translate(250, 160)" text-anchor="middle">
+                            <!-- Background Glow -->
+                            <ellipse cx="0" cy="-20" rx="150" ry="80" fill="url(#glow-text)" />
+                            
+                            <!-- Al -->
+                            <text x="-60" y="0" font-family="'Fira Code', monospace" font-size="80" fill="var(--neon-cyan)" font-weight="bold">Al</text>
+                            
+                            <!-- Subscript 2 -->
+                            <text x="-5" y="20" font-family="'Fira Code', monospace" font-size="50" fill="var(--neon-gold)" font-weight="bold">2</text>
+                            
+                            <!-- O -->
+                            <text x="50" y="0" font-family="'Fira Code', monospace" font-size="80" fill="var(--neon-magenta)" font-weight="bold">O</text>
+                            
+                            <!-- Subscript 3 -->
+                            <text x="105" y="20" font-family="'Fira Code', monospace" font-size="50" fill="var(--neon-gold)" font-weight="bold">3</text>
+                        </g>
+                    </svg>
+
+                    <!-- Absolutely positioned markers based on SVG coordinate mapping visually -->
+                    <!-- Al symbol -->
+                    <div class="marker marker-btn" style="top: 45%; left: 35%;" data-marker="1">1</div>
+                    <!-- Subscript 2 -->
+                    <div class="marker marker-btn" style="top: 60%; left: 47%;" data-marker="2">2</div>
+                    <!-- O Symbol -->
+                    <div class="marker marker-btn" style="top: 45%; left: 60%;" data-marker="3">3</div>
+                    <!-- Subscript 3 -->
+                    <div class="marker marker-btn" style="top: 60%; left: 70%;" data-marker="4">4</div>
+                </div>
+
+                <!-- Legend Side -->
+                <div class="legend-container">
+                    <div class="legend-item" data-marker="1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-text">
+                            <strong>Cation Symbol (Positive Ion)</strong>
+                            <span>Usually a metal. Aluminum loses 3 electrons to become stable (Al³⁺).</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-marker="2">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-text">
+                            <strong>Subscript of Cation</strong>
+                            <span>Shows we need TWO Aluminum atoms to balance the total charge.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-marker="3">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-text">
+                            <strong>Anion Symbol (Negative Ion)</strong>
+                            <span>Usually a non-metal. Oxygen gains 2 electrons to become stable (O²⁻).</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-marker="4">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-text">
+                            <strong>Subscript of Anion</strong>
+                            <span>Shows we need THREE Oxygen atoms. 2(3+) + 3(2-) = 0 total charge.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             WORKING PROCESS (THE CRISS-CROSS METHOD)
+             ========================================================================== -->
+        <section class="glass-panel">
+            <h2>How It Works: The Criss-Cross Method</h2>
+            <p>Chemical formulas are built by balancing electrical charges to reach a neutral state (zero). Watch how Magnesium (Mg) and Chlorine (Cl) form Magnesium Chloride.</p>
+            
+            <div class="mechanism-viewer">
+                
+                <div class="mechanism-display">
+                    
+                    <!-- Stage 1: Write Symbols & Valencies -->
+                    <div class="stage-visual active" id="stage-0">
+                        <svg viewBox="0 0 600 300" width="100%" height="100%">
+                            <!-- Mg -->
+                            <circle cx="200" cy="150" r="50" fill="rgba(0,229,255,0.1)" stroke="var(--neon-cyan)" stroke-width="3" class="floating-ion" style="animation-delay: 0s;"/>
+                            <text x="200" y="160" font-family="monospace" font-size="40" fill="#fff" text-anchor="middle" font-weight="bold">Mg</text>
+                            <text x="240" y="110" font-family="monospace" font-size="24" fill="var(--neon-cyan)" font-weight="bold">+2</text>
+                            
+                            <!-- Cl -->
+                            <circle cx="400" cy="150" r="50" fill="rgba(255,0,127,0.1)" stroke="var(--neon-magenta)" stroke-width="3" class="floating-ion" style="animation-delay: -1s;"/>
+                            <text x="400" y="160" font-family="monospace" font-size="40" fill="#fff" text-anchor="middle" font-weight="bold">Cl</text>
+                            <text x="440" y="110" font-family="monospace" font-size="24" fill="var(--neon-magenta)" font-weight="bold">-1</text>
+                        </svg>
+                    </div>
+
+                    <!-- Stage 2: Separate Number from Sign -->
+                    <div class="stage-visual" id="stage-1">
+                        <svg viewBox="0 0 600 300" width="100%" height="100%">
+                            <text x="200" y="150" font-family="monospace" font-size="50" fill="#fff" text-anchor="middle">Mg</text>
+                            <text x="230" y="100" font-family="monospace" font-size="30" fill="var(--neon-cyan)" text-anchor="middle" opacity="0.4">+</text>
+                            <text x="250" y="100" font-family="monospace" font-size="40" fill="var(--neon-gold)" text-anchor="middle" font-weight="bold">2</text>
+                            
+                            <text x="400" y="150" font-family="monospace" font-size="50" fill="#fff" text-anchor="middle">Cl</text>
+                            <text x="430" y="100" font-family="monospace" font-size="30" fill="var(--neon-magenta)" text-anchor="middle" opacity="0.4">-</text>
+                            <text x="450" y="100" font-family="monospace" font-size="40" fill="var(--neon-gold)" text-anchor="middle" font-weight="bold">1</text>
+                        </svg>
+                    </div>
+
+                    <!-- Stage 3: The Criss-Cross -->
+                    <div class="stage-visual" id="stage-2">
+                        <svg viewBox="0 0 600 300" width="100%" height="100%">
+                            <text x="200" y="150" font-family="monospace" font-size="50" fill="#fff" text-anchor="middle">Mg</text>
+                            <text x="400" y="150" font-family="monospace" font-size="50" fill="#fff" text-anchor="middle">Cl</text>
+                            
+                            <!-- Numbers starting top, crossing over -->
+                            <text x="250" y="100" font-family="monospace" font-size="30" fill="var(--neon-gold)" text-anchor="middle">2</text>
+                            <text x="450" y="100" font-family="monospace" font-size="30" fill="var(--neon-gold)" text-anchor="middle">1</text>
+                            
+                            <!-- Animated Arrows -->
+                            <path class="criss-cross-arrow" d="M 260 110 Q 330 180 430 180" fill="none" stroke="rgba(255,193,7,0.8)" stroke-width="4" stroke-linecap="round" marker-end="url(#arrowhead)"/>
+                            <path class="criss-cross-arrow" style="animation-delay: 0.5s;" d="M 440 110 Q 370 180 230 180" fill="none" stroke="rgba(255,193,7,0.8)" stroke-width="4" stroke-linecap="round" marker-end="url(#arrowhead)"/>
+                            
+                            <defs>
+                                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                                    <polygon points="0 0, 10 3.5, 0 7" fill="rgba(255,193,7,0.8)" />
+                                </marker>
+                            </defs>
+                        </svg>
+                    </div>
+
+                    <!-- Stage 4: Final Formula -->
+                    <div class="stage-visual" id="stage-3">
+                        <svg viewBox="0 0 600 300" width="100%" height="100%">
+                            <!-- Glow -->
+                            <circle cx="300" cy="150" r="100" fill="radial-gradient(circle, rgba(0,255,100,0.2) 0%, transparent 70%)" />
+                            
+                            <text x="300" y="170" font-family="monospace" font-size="70" fill="#fff" text-anchor="middle" font-weight="bold">
+                                Mg<tspan fill="var(--text-muted)" font-size="40" dy="20">1</tspan><tspan dy="-20">Cl</tspan><tspan fill="var(--neon-gold)" font-size="50" dy="20">2</tspan>
+                            </text>
+                            
+                            <!-- Strikeout line over the 1 -->
+                            <line x1="260" y1="190" x2="280" y2="160" stroke="#FF007F" stroke-width="4" />
+                            
+                            <text x="300" y="240" font-family="sans-serif" font-size="16" fill="var(--neon-green)" text-anchor="middle">(The '1' is dropped for the final formula: MgCl₂)</text>
+                        </svg>
+                    </div>
+
+                </div>
+
+                <div class="stage-caption" id="mechanism-caption">
+                    1. Write the symbols and their valency charges side-by-side.
+                </div>
+
+                <div class="mechanism-controls">
+                    <button class="btn-control" id="btn-prev">← Prev</button>
+                    
+                    <div class="progress-dots" id="mech-dots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    
+                    <div class="controls-group">
+                        <button class="btn-control primary" id="btn-play">Auto-Play ⏵</button>
+                        <button class="btn-control" id="btn-next">Next →</button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             INTERACTIVE SIMULATION
+             ========================================================================== -->
+        <section class="glass-panel">
+            <h2>Interactive Builder</h2>
+            <p>Select a Cation (Metal) and an Anion (Non-metal). Watch the simulation automatically calculate how many of each atom are needed to achieve a balanced, neutral compound.</p>
+            
+            <div class="builder-layout">
+                
+                <!-- Cations Panel -->
+                <div class="ion-panel cations">
+                    <h4>Cations (Metals)</h4>
+                    <button class="ion-btn cation-btn" data-sym="Na" data-val="1" data-name="Sodium">
+                        <span>Sodium (Na)</span> <span class="valency">+1</span>
+                    </button>
+                    <button class="ion-btn cation-btn" data-sym="Ca" data-val="2" data-name="Calcium">
+                        <span>Calcium (Ca)</span> <span class="valency">+2</span>
+                    </button>
+                    <button class="ion-btn cation-btn" data-sym="Al" data-val="3" data-name="Aluminum">
+                        <span>Aluminum (Al)</span> <span class="valency">+3</span>
+                    </button>
+                    <button class="ion-btn cation-btn" data-sym="Pb" data-val="4" data-name="Lead">
+                        <span>Lead (Pb)</span> <span class="valency">+4</span>
+                    </button>
+                </div>
+
+                <!-- Simulation View -->
+                <div class="builder-stage">
+                    <div class="math-breakdown" id="sim-math">Select ions to begin reaction...</div>
+                    
+                    <div id="sim-canvas-container">
+                        <!-- Molecule nodes generated by JS go here -->
+                    </div>
+
+                    <div class="formula-result" id="sim-result">Formula</div>
+                </div>
+
+                <!-- Anions Panel -->
+                <div class="ion-panel anions">
+                    <h4>Anions (Non-Metals)</h4>
+                    <button class="ion-btn anion-btn" data-sym="Cl" data-val="1" data-name="Chlorine">
+                        <span>Chloride (Cl)</span> <span class="valency">-1</span>
+                    </button>
+                    <button class="ion-btn anion-btn" data-sym="O" data-val="2" data-name="Oxygen">
+                        <span>Oxide (O)</span> <span class="valency">-2</span>
+                    </button>
+                    <button class="ion-btn anion-btn" data-sym="N" data-val="3" data-name="Nitrogen">
+                        <span>Nitride (N)</span> <span class="valency">-3</span>
+                    </button>
+                    <button class="ion-btn anion-btn poly" data-sym="SO₄" data-val="2" data-name="Sulfate">
+                        <span>Sulfate (SO₄)</span> <span class="valency">-2</span>
+                    </button>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             FACTS, APPLICATIONS, MISTAKES
+             ========================================================================== -->
+        <div class="grid-2">
+            
+            <section class="glass-panel">
+                <h3><span class="card-icon">🌍</span> Real World Applications</h3>
+                <ul class="styled-list">
+                    <li><strong>Medicine:</strong> Formulas dictate exact dosages. Altering one atom can change a cure into a poison.</li>
+                    <li><strong>Material Science:</strong> Designing new batteries requires balancing complex lithium compounds (e.g., LiCoO₂).</li>
+                    <li><strong>Environment:</strong> Catalytic converters use Platinum (Pt) to break down toxic NO₂ into harmless N₂ and O₂.</li>
+                </ul>
+            </section>
+
+            <section class="glass-panel">
+                <h3><span class="card-icon">⚠️</span> Common Mistakes</h3>
+                <ul class="styled-list">
+                    <li><span class="mistake">Ca₂O₂</span> → <span class="correct">CaO</span><br>
+                        <em>Mistake:</em> Forgetting to simplify the ratio. Formulas show the <em>simplest whole-number ratio</em>.
+                    </li>
+                    <li><span class="mistake">AlSO₄3</span> → <span class="correct">Al₂(SO₄)₃</span><br>
+                        <em>Mistake:</em> Forgetting brackets around polyatomic ions when there is more than one.
+                    </li>
+                    <li><span class="mistake">mgcl2</span> → <span class="correct">MgCl₂</span><br>
+                        <em>Mistake:</em> Incorrect capitalization. The first letter is always uppercase, the second is lowercase.
+                    </li>
+                </ul>
+            </section>
+
+        </div>
+
+        <section class="glass-panel" style="text-align: center;">
+            <h3><span class="card-icon">🧠</span> Mind-Blowing Fact</h3>
+            <p style="font-size: 1.1rem;">The largest known chemical formula belongs to the human protein <strong>Titin</strong>. Its chemical formula is:<br>
+            <strong style="color: var(--neon-cyan); word-break: break-all; display: block; margin-top: 10px; font-family: var(--font-mono); font-size: 1.5rem;">C<sub>132983</sub>H<sub>211861</sub>N<sub>36149</sub>O<sub>40883</sub>S<sub>693</sub></strong><br>
+            It consists of 34,350 amino acids and its full chemical name takes about 3.5 hours to pronounce!</p>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* ----------------------------------------------------------------------
+               1. AMBIENT BACKGROUND CANVAS (Particles & Grid)
+               ---------------------------------------------------------------------- */
+            const canvas = document.getElementById('bg-canvas');
+            const ctx = canvas.getContext('2d');
+            let width, height;
+            let particles = [];
+
+            function resizeCanvas() {
+                width = window.innerWidth;
+                height = window.innerHeight;
+                canvas.width = width * window.devicePixelRatio;
+                canvas.height = height * window.devicePixelRatio;
+                ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            class Particle {
+                constructor() {
+                    this.x = Math.random() * width;
+                    this.y = Math.random() * height;
+                    this.size = Math.random() * 2 + 0.5;
+                    this.speedX = Math.random() * 0.5 - 0.25;
+                    this.speedY = Math.random() * 0.5 - 0.25;
+                    this.alpha = Math.random() * 0.5 + 0.1;
+                    this.color = Math.random() > 0.5 ? '0, 229, 255' : '255, 0, 127';
+                }
+                update() {
+                    this.x += this.speedX;
+                    this.y += this.speedY;
+                    if (this.x > width) this.x = 0;
+                    if (this.x < 0) this.x = width;
+                    if (this.y > height) this.y = 0;
+                    if (this.y < 0) this.y = height;
+                }
+                draw() {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(${this.color}, ${this.alpha})`;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = `rgba(${this.color}, 1)`;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            for (let i = 0; i < 40; i++) particles.push(new Particle());
+
+            function drawGrid() {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+                ctx.lineWidth = 1;
+                const gridSize = 50;
+                for (let x = 0; x < width; x += gridSize) {
+                    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
+                }
+                for (let y = 0; y < height; y += gridSize) {
+                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
+                }
+            }
+
+            function animateBg() {
+                ctx.clearRect(0, 0, width, height);
+                drawGrid();
+                particles.forEach(p => { p.update(); p.draw(); });
+                requestAnimationFrame(animateBg);
+            }
+            animateBg();
+
+            /* ----------------------------------------------------------------------
+               2. STRICT MARKER LOGIC
+               ---------------------------------------------------------------------- */
+            const markers = document.querySelectorAll('.marker-btn');
+            const legends = document.querySelectorAll('.legend-item');
+
+            function activateMarker(id) {
+                markers.forEach(m => m.classList.remove('active'));
+                legends.forEach(l => l.classList.remove('active'));
+                
+                document.querySelector(`.marker-btn[data-marker="${id}"]`).classList.add('active');
+                document.querySelector(`.legend-item[data-marker="${id}"]`).classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                const trigger = (e) => { e.preventDefault(); activateMarker(marker.dataset.marker); };
+                marker.addEventListener('mouseenter', trigger);
+                marker.addEventListener('click', trigger);
+                marker.addEventListener('touchstart', trigger, {passive:false});
+            });
+
+            legends.forEach(legend => {
+                const trigger = (e) => { e.preventDefault(); activateMarker(legend.dataset.marker); };
+                legend.addEventListener('mouseenter', trigger);
+                legend.addEventListener('click', trigger);
+                legend.addEventListener('touchstart', trigger, {passive:false});
+            });
+
+
+            /* ----------------------------------------------------------------------
+               3. WORKING PROCESS (CRISS-CROSS MECHANISM)
+               ---------------------------------------------------------------------- */
+            let currentStage = 0;
+            const totalStages = 4;
+            const stages = document.querySelectorAll('.stage-visual');
+            const dots = document.querySelectorAll('#mech-dots .dot');
+            const caption = document.getElementById('mechanism-caption');
+            let autoPlayInterval;
+            let isPlaying = false;
+
+            const stageCaptions = [
+                "1. Identify ions and write their symbols with valency charges.",
+                "2. Separate the absolute number from the + or - sign.",
+                "3. Criss-cross the valency numbers to the opposite base subscript.",
+                "4. Final Formula: Remove any 1s and simplify the ratio if needed."
+            ];
+
+            function showStage(index) {
+                stages.forEach((s, i) => {
+                    if (i === index) s.classList.add('active');
+                    else s.classList.remove('active');
+                });
+                dots.forEach((d, i) => {
+                    if (i === index) d.classList.add('active');
+                    else d.classList.remove('active');
+                });
+                caption.style.opacity = 0;
+                setTimeout(() => {
+                    caption.textContent = stageCaptions[index];
+                    caption.style.opacity = 1;
+                }, 200);
+            }
+
+            function nextStage() {
+                currentStage = (currentStage + 1) % totalStages;
+                showStage(currentStage);
+            }
+
+            function prevStage() {
+                currentStage = (currentStage - 1 + totalStages) % totalStages;
+                showStage(currentStage);
+            }
+
+            document.getElementById('btn-next').addEventListener('click', () => { stopAuto(); nextStage(); });
+            document.getElementById('btn-prev').addEventListener('click', () => { stopAuto(); prevStage(); });
+            
+            const btnPlay = document.getElementById('btn-play');
+            btnPlay.addEventListener('click', () => {
+                if (isPlaying) stopAuto();
+                else startAuto();
+            });
+
+            function startAuto() {
+                isPlaying = true;
+                btnPlay.textContent = "Pause ⏸";
+                btnPlay.classList.remove('primary');
+                // Auto advance every 3 seconds
+                nextStage();
+                autoPlayInterval = setInterval(nextStage, 3000);
+            }
+
+            function stopAuto() {
+                isPlaying = false;
+                btnPlay.textContent = "Auto-Play ⏵";
+                btnPlay.classList.add('primary');
+                clearInterval(autoPlayInterval);
+            }
+
+
+            /* ----------------------------------------------------------------------
+               4. INTERACTIVE SIMULATION (Molecule Builder)
+               ---------------------------------------------------------------------- */
+            let selectedCat = null;
+            let selectedAn = null;
+            
+            const catBtns = document.querySelectorAll('.cation-btn');
+            const anBtns = document.querySelectorAll('.anion-btn');
+            const simContainer = document.getElementById('sim-canvas-container');
+            const simMath = document.getElementById('sim-math');
+            const simResult = document.getElementById('sim-result');
+
+            // Utility: Greatest Common Divisor to simplify ratios (e.g. Ca2 O2 -> Ca1 O1)
+            function gcd(a, b) { return b === 0 ? a : gcd(b, a % b); }
+
+            function formatFormula(sym, count, isPoly) {
+                if (count === 1) return sym;
+                if (isPoly) return `(${sym})<sub>${count}</sub>`;
+                return `${sym}<sub>${count}</sub>`;
+            }
+
+            function updateSimulation() {
+                if (!selectedCat || !selectedAn) return;
+
+                // Clear container
+                simContainer.innerHTML = '';
+                simResult.classList.remove('visible');
+
+                const catSym = selectedCat.dataset.sym;
+                const catVal = parseInt(selectedCat.dataset.val);
+                const anSym = selectedAn.dataset.sym;
+                const anVal = parseInt(selectedAn.dataset.val);
+                const anIsPoly = selectedAn.classList.contains('poly');
+
+                // Math logic
+                let rawCatCount = anVal;
+                let rawAnCount = catVal;
+                let divisor = gcd(rawCatCount, rawAnCount);
+                
+                const finalCatCount = rawCatCount / divisor;
+                const finalAnCount = rawAnCount / divisor;
+
+                // Update text math
+                simMath.innerHTML = `Balancing: <strong>${finalCatCount}</strong>(${catSym}<sup>+${catVal}</sup>) + <strong>${finalAnCount}</strong>(${anSym}<sup>-${anVal}</sup>) = 0 Charge`;
+
+                // Calculate geometry for visualization
+                // Center the Cations, orbit the Anions (simplified visualization layout)
+                const containerW = simContainer.clientWidth || 300;
+                const containerH = simContainer.clientHeight || 300;
+                const centerX = containerW / 2;
+                const centerY = containerH / 2;
+                
+                const nodeSize = 60;
+                let nodes = [];
+                let bonds = [];
+
+                // Position logic based on total atom count
+                if (finalCatCount === 1 && finalAnCount === 1) {
+                    nodes.push({type: 'cat', sym: catSym, x: centerX - 60, y: centerY});
+                    nodes.push({type: 'an', sym: anSym, x: centerX + 60, y: centerY});
+                    bonds.push({x1: centerX - 60, y1: centerY, x2: centerX + 60, y2: centerY});
+                } 
+                else if (finalCatCount === 1) {
+                    // 1 cation center, multiple anions around
+                    nodes.push({type: 'cat', sym: catSym, x: centerX, y: centerY});
+                    const radius = 90;
+                    for(let i=0; i<finalAnCount; i++) {
+                        const angle = (Math.PI * 2 * i) / finalAnCount;
+                        const nx = centerX + radius * Math.cos(angle);
+                        const ny = centerY + radius * Math.sin(angle);
+                        nodes.push({type: 'an', sym: anSym, x: nx, y: ny});
+                        bonds.push({x1: centerX, y1: centerY, x2: nx, y2: ny});
+                    }
+                }
+                else if (finalAnCount === 1) {
+                    // 1 anion center, multiple cations around
+                    nodes.push({type: 'an', sym: anSym, x: centerX, y: centerY});
+                    const radius = 90;
+                    for(let i=0; i<finalCatCount; i++) {
+                        const angle = (Math.PI * 2 * i) / finalCatCount;
+                        const nx = centerX + radius * Math.cos(angle);
+                        const ny = centerY + radius * Math.sin(angle);
+                        nodes.push({type: 'cat', sym: catSym, x: nx, y: ny});
+                        bonds.push({x1: centerX, y1: centerY, x2: nx, y2: ny});
+                    }
+                }
+                else {
+                    // Complex (e.g. Al2 O3) - Side by side groups
+                    const spacing = 70;
+                    const startCatX = centerX - 80;
+                    const startAnX = centerX + 80;
+                    
+                    for(let i=0; i<finalCatCount; i++) {
+                        let y = centerY - ((finalCatCount-1)*spacing/2) + (i*spacing);
+                        nodes.push({type: 'cat', sym: catSym, x: startCatX, y: y});
+                        // Create web of bonds between all
+                        for(let j=0; j<finalAnCount; j++) {
+                            let ay = centerY - ((finalAnCount-1)*spacing/2) + (j*spacing);
+                            bonds.push({x1: startCatX, y1: y, x2: startAnX, y2: ay});
+                        }
+                    }
+                    for(let j=0; j<finalAnCount; j++) {
+                        let y = centerY - ((finalAnCount-1)*spacing/2) + (j*spacing);
+                        nodes.push({type: 'an', sym: anSym, x: startAnX, y: y});
+                    }
+                }
+
+                // Render Bonds first
+                bonds.forEach((b, idx) => {
+                    const line = document.createElement('div');
+                    line.className = 'bond-line';
+                    const length = Math.sqrt(Math.pow(b.x2 - b.x1, 2) + Math.pow(b.y2 - b.y1, 2));
+                    const angle = Math.atan2(b.y2 - b.y1, b.x2 - b.x1) * 180 / Math.PI;
+                    
+                    line.style.width = `${length}px`;
+                    line.style.left = `${b.x1}px`;
+                    line.style.top = `${b.y1}px`;
+                    line.style.transform = `rotate(${angle}deg)`;
+                    
+                    simContainer.appendChild(line);
+                    
+                    // Delay animation
+                    setTimeout(() => line.classList.add('appear'), 50 + (idx*50));
+                });
+
+                // Render Nodes
+                nodes.forEach((n, idx) => {
+                    const el = document.createElement('div');
+                    el.className = `molecule-node node-${n.type === 'cat' ? 'cation' : 'anion'}`;
+                    el.style.width = `${nodeSize}px`;
+                    el.style.height = `${nodeSize}px`;
+                    el.style.left = `${n.x - nodeSize/2}px`;
+                    el.style.top = `${n.y - nodeSize/2}px`;
+                    el.innerHTML = n.sym;
+                    
+                    simContainer.appendChild(el);
+                    
+                    // Cascade animate in
+                    setTimeout(() => el.classList.add('appear'), idx * 150);
+                });
+
+                // Set and show final formula
+                setTimeout(() => {
+                    const formulaStr = formatFormula(catSym, finalCatCount, false) + formatFormula(anSym, finalAnCount, anIsPoly);
+                    simResult.innerHTML = formulaStr;
+                    simResult.classList.add('visible');
+                }, nodes.length * 150 + 500);
+            }
+
+            function handleSelection(e, type) {
+                const btn = e.currentTarget;
+                if (type === 'cat') {
+                    catBtns.forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedCat = btn;
+                } else {
+                    anBtns.forEach(b => b.classList.remove('selected'));
+                    btn.classList.add('selected');
+                    selectedAn = btn;
+                }
+                updateSimulation();
+            }
+
+            catBtns.forEach(btn => btn.addEventListener('click', (e) => handleSelection(e, 'cat')));
+            anBtns.forEach(btn => btn.addEventListener('click', (e) => handleSelection(e, 'an')));
+
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energy Efficiency Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & THEME SETUP
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-color: #050914;
+            --bg-gradient: radial-gradient(circle at 50% 0%, #1a2238 0%, #050914 70%);
+            
+            --glass-bg: rgba(20, 25, 40, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            /* Thematic Colors */
+            --color-electricity: #00f3ff;
+            --color-light: #ffd700;
+            --color-heat: #ff4500;
+            --color-success: #10b981;
+            --color-incandescent: #f59e0b;
+            
+            /* Typography (Fluid) */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --step--2: clamp(0.78rem, calc(0.71rem + 0.35vw), 0.96rem);
+            --step--1: clamp(0.94rem, calc(0.84rem + 0.51vw), 1.20rem);
+            --step-0: clamp(1.13rem, calc(0.98rem + 0.73vw), 1.50rem);
+            --step-1: clamp(1.35rem, calc(1.15rem + 1.02vw), 1.88rem);
+            --step-2: clamp(1.62rem, calc(1.34rem + 1.41vw), 2.34rem);
+            --step-3: clamp(1.94rem, calc(1.55rem + 1.94vw), 2.93rem);
+            --step-4: clamp(2.33rem, calc(1.79rem + 2.65vw), 3.66rem);
+            
+            /* Spacing */
+            --space-xs: clamp(0.5rem, 1vw, 0.75rem);
+            --space-sm: clamp(1rem, 2vw, 1.5rem);
+            --space-md: clamp(1.5rem, 3vw, 2.5rem);
+            --space-lg: clamp(2rem, 5vw, 4rem);
+            
+            /* Border Radius */
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-pill: 9999px;
+            
+            /* Transitions */
+            --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-smooth: 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* ==========================================================================
+           2. GLOBAL RESET & BASE STYLES
+           ========================================================================== */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            background-image: var(--bg-gradient);
+            background-attachment: fixed;
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1, h2, h3, h4 {
+            line-height: 1.2;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        p { color: var(--text-muted); }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--space-sm);
+        }
+
+        /* ==========================================================================
+           3. UI COMPONENTS (GLASSMORPHISM)
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-md);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25em 0.75em;
+            border-radius: var(--radius-pill);
+            font-size: var(--step--2);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        /* Controls */
+        .slider-container {
+            margin-top: var(--space-md);
+            background: rgba(0,0,0,0.2);
+            padding: var(--space-sm);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: var(--space-xs);
+            font-size: var(--step--1);
+        }
+
+        .value-highlight {
+            color: var(--text-main);
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 24px;
+            cursor: pointer;
+        }
+
+        input[type=range]:focus { outline: none; }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: var(--radius-pill);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--text-main);
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            transition: var(--transition-fast);
+        }
+        
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        /* ==========================================================================
+           4. LAYOUT SECTIONS
+           ========================================================================== */
+        header {
+            padding: var(--space-md) 0;
+            text-align: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .title-glow {
+            font-size: var(--step-4);
+            background: linear-gradient(to right, var(--color-electricity), #fff, var(--color-electricity));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 20px rgba(0, 243, 255, 0.3));
+            margin-bottom: var(--space-xs);
+        }
+
+        section { padding: var(--space-lg) 0; }
+
+        .section-title {
+            font-size: var(--step-2);
+            margin-bottom: var(--space-md);
+            text-align: center;
+        }
+
+        /* Simulation Grid */
+        .simulation-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-md);
+        }
+
+        @media (max-width: 900px) {
+            .simulation-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Simulation Card Internals */
+        .sim-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .sim-header {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-sm);
+        }
+
+        .sim-visual-container {
+            position: relative;
+            width: 100%;
+            height: clamp(300px, 40vh, 500px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: var(--space-md);
+        }
+
+        /* SVG & Canvas Integration */
+        .sim-svg {
+            position: absolute;
+            width: auto;
+            height: 80%;
+            z-index: 2;
+            transition: var(--transition-smooth);
+        }
+
+        .sim-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 3;
+            pointer-events: none;
+        }
+
+        /* Ambient Lights behind bulbs */
+        .ambient-light {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50%; height: 50%;
+            border-radius: 50%;
+            filter: blur(60px);
+            z-index: 1;
+            opacity: 0.5;
+            transition: var(--transition-smooth);
+        }
+
+        #light-incan { background: var(--color-incandescent); }
+        #light-led { background: var(--color-light); }
+
+        /* Data Readouts */
+        .data-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: var(--space-xs);
+            width: 100%;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            padding: var(--space-sm);
+        }
+
+        .data-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: var(--space-xs);
+            border-right: 1px solid rgba(255,255,255,0.05);
+        }
+        .data-item:last-child { border-right: none; }
+        
+        .data-label { font-size: var(--step--2); color: var(--text-muted); text-transform: uppercase; }
+        .data-val { font-size: var(--step-0); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+        .val-energy { color: var(--color-electricity); }
+        .val-light { color: var(--color-light); }
+        .val-heat { color: var(--color-heat); }
+
+        /* Efficiency Bar */
+        .efficiency-bar-container {
+            width: 100%;
+            height: 12px;
+            background: rgba(255,255,255,0.1);
+            border-radius: var(--radius-pill);
+            margin-top: var(--space-sm);
+            overflow: hidden;
+            display: flex;
+        }
+
+        .eff-bar-light { background: var(--color-light); transition: var(--transition-smooth); }
+        .eff-bar-heat { background: var(--color-heat); transition: var(--transition-smooth); }
+
+        /* ==========================================================================
+           5. MECHANISM / WORKING SECTION (MANDATORY)
+           ========================================================================== */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .mech-visual {
+            position: relative;
+            width: 100%;
+            height: clamp(250px, 30vh, 400px);
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-md) 10%;
+            overflow: hidden;
+        }
+
+        .mech-node {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 2;
+            opacity: 0.3;
+            transform: scale(0.9);
+            transition: var(--transition-smooth);
+        }
+
+        .mech-node.active {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        .node-icon {
+            width: clamp(60px, 8vw, 100px);
+            height: clamp(60px, 8vw, 100px);
+            border-radius: 50%;
+            background: var(--glass-bg);
+            border: 2px solid var(--glass-border);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            margin-bottom: var(--space-xs);
+            position: relative;
+        }
+
+        .mech-node.active .node-icon {
+            border-color: var(--color-electricity);
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.4);
+        }
+
+        .node-label { font-size: var(--step--1); font-weight: 600; }
+
+        /* Connecting Lines */
+        .mech-connection {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+
+        .mech-flow {
+            height: 100%;
+            width: 0%;
+            background: var(--color-electricity);
+            box-shadow: 0 0 10px var(--color-electricity);
+            transition: width 0.5s linear;
+        }
+
+        .mech-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: var(--space-md);
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: var(--text-main);
+            padding: 0.75em 1.5em;
+            border-radius: var(--radius-pill);
+            cursor: pointer;
+            font-size: var(--step--1);
+            font-weight: 600;
+            transition: var(--transition-fast);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+        }
+        
+        .btn:active { transform: translateY(0); }
+
+        .btn-primary {
+            background: rgba(0, 243, 255, 0.15);
+            border-color: var(--color-electricity);
+            color: var(--color-electricity);
+        }
+        .btn-primary:hover { background: rgba(0, 243, 255, 0.25); }
+
+        .mech-caption {
+            text-align: center;
+            font-size: var(--step-0);
+            min-height: 3em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-fast);
+        }
+
+        .dot.active {
+            background: var(--color-electricity);
+            box-shadow: 0 0 10px var(--color-electricity);
+            transform: scale(1.3);
+        }
+
+        /* ==========================================================================
+           6. COMPONENTS / LABELS (MANDATORY PATTERN)
+           ========================================================================== */
+        .components-layout {
+            display: flex;
+            gap: var(--space-lg);
+            align-items: center;
+        }
+
+        @media (max-width: 1024px) {
+            .components-layout {
+                flex-direction: column;
+            }
+        }
+
+        .comp-visual-area {
+            flex: 1;
+            position: relative;
+            min-height: 350px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            padding: var(--space-md);
+        }
+
+        .comp-svg {
+            width: 100%;
+            max-width: 300px;
+            height: auto;
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: rgba(0, 243, 255, 0.1);
+            border: 2px solid var(--color-electricity);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
+            transition: var(--transition-fast);
+            z-index: 10;
+        }
+        
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            border: 1px solid var(--color-electricity);
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        .marker:hover, .marker.active {
+            transform: scale(1.2);
+            background: var(--color-electricity);
+            color: #000;
+        }
+
+        /* Legend */
+        .comp-legend {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+            width: 100%;
+        }
+
+        .legend-item {
+            display: flex;
+            gap: var(--space-sm);
+            padding: var(--space-sm);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            transition: var(--transition-fast);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 243, 255, 0.05);
+            border-color: rgba(0, 243, 255, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-num {
+            width: 32px; height: 32px;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 700;
+        }
+        
+        .legend-item.active .legend-num {
+            background: var(--color-electricity);
+            color: #000;
+        }
+
+        .legend-text h4 { margin-bottom: 4px; color: var(--text-main); }
+        .legend-text p { font-size: var(--step--1); margin: 0; }
+
+        /* ==========================================================================
+           7. INFO CARDS & MISC
+           ========================================================================== */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--space-md);
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            border-left: 4px solid var(--color-electricity);
+            padding: var(--space-md);
+            border-radius: 0 var(--radius-md) var(--radius-md) 0;
+        }
+        
+        .info-card.warning { border-left-color: var(--color-heat); }
+        .info-card.success { border-left-color: var(--color-success); }
+
+        .info-card h4 { margin-bottom: var(--space-xs); display: flex; align-items: center; gap: 8px;}
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="container">
+            <h1 class="title-glow">Energy Efficiency</h1>
+            <p style="font-size: var(--step-0);">Visualizing the difference between Useful Output and Wasted Energy.</p>
+        </div>
+    </header>
+
+    <main class="container">
+
+        <!-- ==========================================================================
+             SECTION: THE INTERACTIVE SIMULATION (CORE)
+             ========================================================================== -->
+        <section id="simulation">
+            <div class="glass-panel">
+                <h2 class="section-title">Efficiency Simulation: Incandescent vs LED</h2>
+                <p style="text-align: center; margin-bottom: var(--space-md);">Adjust the desired light output (lumens) to see how each technology handles the electrical energy input.</p>
+                
+                <div class="simulation-grid">
+                    
+                    <!-- Incandescent Card -->
+                    <div class="sim-card glass-panel" style="background: rgba(20,20,20,0.6);">
+                        <div class="sim-header">
+                            <h3>Incandescent Bulb</h3>
+                            <span class="badge" style="color: var(--color-heat); border-color: var(--color-heat);">~5% Efficient</span>
+                        </div>
+                        
+                        <div class="sim-visual-container">
+                            <div id="light-incan" class="ambient-light"></div>
+                            
+                            <!-- High Quality SVG Illustration -->
+                            <svg class="sim-svg" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <linearGradient id="baseGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#444"/>
+                                        <stop offset="50%" stop-color="#888"/>
+                                        <stop offset="100%" stop-color="#333"/>
+                                    </linearGradient>
+                                    <linearGradient id="contactGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#111"/>
+                                        <stop offset="50%" stop-color="#444"/>
+                                        <stop offset="100%" stop-color="#111"/>
+                                    </linearGradient>
+                                </defs>
+                                <!-- Glass Bulb -->
+                                <path d="M60,100 C60,40 140,40 140,100 C140,140 115,180 115,220 L85,220 C85,180 60,140 60,100 Z" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.3)" stroke-width="2"/>
+                                <!-- Inner Stem -->
+                                <path d="M95,220 L95,160 M105,220 L105,160" stroke="#555" stroke-width="4" fill="none"/>
+                                <!-- Support Wires -->
+                                <path d="M95,160 L75,110 M105,160 L125,110" stroke="#777" stroke-width="1.5" fill="none"/>
+                                <!-- Filament (Glow adjusted by JS via canvas, this is base) -->
+                                <path d="M75,110 Q100,80 125,110" stroke="#ff8c00" stroke-width="2" fill="none" opacity="0.8" id="incan-filament"/>
+                                <!-- Screw Base (Threads) -->
+                                <rect x="80" y="220" width="40" height="8" fill="url(#baseGrad)" rx="2"/>
+                                <rect x="82" y="228" width="36" height="8" fill="url(#baseGrad)" rx="2"/>
+                                <rect x="80" y="236" width="40" height="8" fill="url(#baseGrad)" rx="2"/>
+                                <rect x="82" y="244" width="36" height="8" fill="url(#baseGrad)" rx="2"/>
+                                <rect x="80" y="252" width="40" height="8" fill="url(#baseGrad)" rx="2"/>
+                                <!-- Bottom Contact -->
+                                <path d="M85,260 L115,260 L105,275 L95,275 Z" fill="url(#contactGrad)"/>
+                            </svg>
+                            
+                            <!-- Overlay for particle rendering -->
+                            <canvas id="canvas-incan" class="sim-canvas"></canvas>
+                        </div>
+
+                        <div class="data-grid">
+                            <div class="data-item">
+                                <span class="data-label">Input</span>
+                                <span class="data-val val-energy" id="in-watts-incan">60 W</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Useful (Light)</span>
+                                <span class="data-val val-light" id="in-light-incan">3 W</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Waste (Heat)</span>
+                                <span class="data-val val-heat" id="in-heat-incan">57 W</span>
+                            </div>
+                        </div>
+                        
+                        <div class="efficiency-bar-container">
+                            <div class="eff-bar-light" style="width: 5%"></div>
+                            <div class="eff-bar-heat" style="width: 95%"></div>
+                        </div>
+                    </div>
+
+                    <!-- LED Card -->
+                    <div class="sim-card glass-panel" style="background: rgba(20,20,30,0.6);">
+                        <div class="sim-header">
+                            <h3>LED Bulb</h3>
+                            <span class="badge" style="color: var(--color-success); border-color: var(--color-success);">~85% Efficient</span>
+                        </div>
+                        
+                        <div class="sim-visual-container">
+                            <div id="light-led" class="ambient-light"></div>
+                            
+                            <!-- High Quality SVG Illustration -->
+                            <svg class="sim-svg" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <linearGradient id="baseGradLED" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#ddd"/>
+                                        <stop offset="50%" stop-color="#fff"/>
+                                        <stop offset="100%" stop-color="#bbb"/>
+                                    </linearGradient>
+                                    <linearGradient id="heatSink" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#e2e8f0"/>
+                                        <stop offset="30%" stop-color="#fff"/>
+                                        <stop offset="70%" stop-color="#cbd5e1"/>
+                                        <stop offset="100%" stop-color="#94a3b8"/>
+                                    </linearGradient>
+                                    <filter id="glow">
+                                        <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                        <feMerge>
+                                            <feMergeNode in="coloredBlur"/>
+                                            <feMergeNode in="SourceGraphic"/>
+                                        </feMerge>
+                                    </filter>
+                                </defs>
+                                <!-- Diffuser Dome (Opaque/Frosted) -->
+                                <path d="M60,120 C60,50 140,50 140,120 C140,150 130,170 120,180 L80,180 C70,170 60,150 60,120 Z" fill="rgba(255,255,255,0.85)" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>
+                                
+                                <!-- Internal LED Chips (subtly visible through frosted dome) -->
+                                <rect x="92" y="140" width="16" height="6" fill="#ffd700" rx="2" opacity="0.6"/>
+                                <rect x="85" y="150" width="12" height="6" fill="#ffd700" rx="2" opacity="0.6"/>
+                                <rect x="103" y="150" width="12" height="6" fill="#ffd700" rx="2" opacity="0.6"/>
+
+                                <!-- Heat Sink (Ceramic/Plastic casing) -->
+                                <path d="M80,180 L120,180 L115,220 L85,220 Z" fill="url(#heatSink)"/>
+                                <line x1="83" y1="190" x2="117" y2="190" stroke="#cbd5e1" stroke-width="2"/>
+                                <line x1="84" y1="200" x2="116" y2="200" stroke="#cbd5e1" stroke-width="2"/>
+                                <line x1="84.5" y1="210" x2="115.5" y2="210" stroke="#cbd5e1" stroke-width="2"/>
+
+                                <!-- Screw Base -->
+                                <rect x="80" y="220" width="40" height="8" fill="url(#baseGradLED)" rx="2"/>
+                                <rect x="82" y="228" width="36" height="8" fill="url(#baseGradLED)" rx="2"/>
+                                <rect x="80" y="236" width="40" height="8" fill="url(#baseGradLED)" rx="2"/>
+                                <rect x="82" y="244" width="36" height="8" fill="url(#baseGradLED)" rx="2"/>
+                                <rect x="80" y="252" width="40" height="8" fill="url(#baseGradLED)" rx="2"/>
+                                <!-- Bottom Contact -->
+                                <path d="M85,260 L115,260 L105,275 L95,275 Z" fill="#333"/>
+                            </svg>
+                            
+                            <!-- Overlay for particle rendering -->
+                            <canvas id="canvas-led" class="sim-canvas"></canvas>
+                        </div>
+
+                        <div class="data-grid">
+                            <div class="data-item">
+                                <span class="data-label">Input</span>
+                                <span class="data-val val-energy" id="in-watts-led">9 W</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Useful (Light)</span>
+                                <span class="data-val val-light" id="in-light-led">7.6 W</span>
+                            </div>
+                            <div class="data-item">
+                                <span class="data-label">Waste (Heat)</span>
+                                <span class="data-val val-heat" id="in-heat-led">1.4 W</span>
+                            </div>
+                        </div>
+                        
+                        <div class="efficiency-bar-container">
+                            <div class="eff-bar-light" style="width: 85%"></div>
+                            <div class="eff-bar-heat" style="width: 15%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Global Controls -->
+                <div class="slider-container">
+                    <div class="slider-header">
+                        <span>Required Brightness (Lumens)</span>
+                        <span class="value-highlight" id="lumen-val">800 lm</span>
+                    </div>
+                    <!-- Values roughly map to standard bulb brightnesses: 450, 800, 1100, 1600 -->
+                    <input type="range" id="brightness-slider" min="400" max="1600" step="10" value="800">
+                    <div style="display:flex; justify-content: space-between; font-size: var(--step--2); color: var(--text-muted); margin-top: 4px;">
+                        <span>Dim (400)</span>
+                        <span>Bright (1600)</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             SECTION: THE WORKING MECHANISM (LINEAR FLOW)
+             ========================================================================== -->
+        <section id="mechanism">
+            <h2 class="section-title">The Energy Conversion Process</h2>
+            <div class="glass-panel mechanism-container">
+                
+                <div class="mech-visual">
+                    <div class="mech-connection">
+                        <div class="mech-flow" id="mech-flow-line"></div>
+                    </div>
+                    
+                    <div class="mech-node" id="node-1">
+                        <div class="node-icon">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-electricity)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                        </div>
+                        <span class="node-label">1. Input</span>
+                    </div>
+                    
+                    <div class="mech-node" id="node-2">
+                        <div class="node-icon">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        </div>
+                        <span class="node-label">2. Conversion</span>
+                    </div>
+                    
+                    <div class="mech-node" id="node-3">
+                        <div class="node-icon">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-success)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                        </div>
+                        <span class="node-label">3. Output</span>
+                    </div>
+                </div>
+
+                <div class="mech-caption" id="mech-caption">
+                    Electrical energy enters the system from the grid. 100% of the input energy must go somewhere due to conservation of energy.
+                </div>
+
+                <div class="mech-controls">
+                    <button class="btn" id="btn-prev">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg> Prev
+                    </button>
+                    <div class="progress-dots" id="mech-dots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    <button class="btn btn-primary" id="btn-next">
+                        Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                    </button>
+                    <button class="btn" id="btn-play">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Auto
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             SECTION: ANATOMY (MARKER & LEGEND PATTERN)
+             ========================================================================== -->
+        <section id="anatomy">
+            <h2 class="section-title">Anatomy of Efficiency</h2>
+            <div class="glass-panel">
+                <div class="components-layout">
+                    
+                    <!-- Visual Area with Markers -->
+                    <div class="comp-visual-area">
+                        <!-- Cross section of LED -->
+                        <svg class="comp-svg" viewBox="0 0 200 300" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Diffuser Dome (Cutaway) -->
+                            <path d="M60,120 C60,50 140,50 140,120 C140,150 130,170 120,180 L80,180 C70,170 60,150 60,120 Z" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.8)" stroke-width="2" stroke-dasharray="4"/>
+                            
+                            <!-- Internal PCB & LED Chips -->
+                            <rect x="75" y="170" width="50" height="10" fill="#2d3748"/>
+                            <!-- LED Chip -->
+                            <rect x="90" y="162" width="20" height="8" fill="#ffd700" stroke="#eab308"/>
+                            <path d="M85,162 L90,170 M115,162 L110,170" stroke="#718096" stroke-width="1.5"/>
+
+                            <!-- Heat Sink (Cutaway showing fins) -->
+                            <path d="M80,180 L120,180 L115,220 L85,220 Z" fill="#475569" stroke="#94a3b8" stroke-width="2"/>
+                            <!-- Fins -->
+                            <line x1="75" y1="190" x2="125" y2="190" stroke="#94a3b8" stroke-width="3"/>
+                            <line x1="78" y1="200" x2="122" y2="200" stroke="#94a3b8" stroke-width="3"/>
+                            <line x1="81" y1="210" x2="119" y2="210" stroke="#94a3b8" stroke-width="3"/>
+
+                            <!-- Driver Circuit Board (inside base) -->
+                            <rect x="90" y="222" width="20" height="30" fill="#166534"/>
+                            <!-- Capacitors/Components -->
+                            <circle cx="95" cy="230" r="3" fill="#3b82f6"/>
+                            <circle cx="105" cy="240" r="4" fill="#ef4444"/>
+                            <rect x="95" y="245" width="10" height="5" fill="#f59e0b"/>
+
+                            <!-- Base Outline -->
+                            <path d="M80,220 L120,220 L115,255 L105,270 L95,270 L85,255 Z" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="4"/>
+                        </svg>
+
+                        <!-- Absolute Positioned Markers -->
+                        <div class="marker" data-target="item-1" style="top: 15%; left: 50%; transform: translateX(-50%);">1</div>
+                        <div class="marker" data-target="item-2" style="top: 52%; left: 45%;">2</div>
+                        <div class="marker" data-target="item-3" style="top: 65%; left: 75%;">3</div>
+                        <div class="marker" data-target="item-4" style="top: 80%; left: 50%; transform: translateX(-50%);">4</div>
+                    </div>
+
+                    <!-- Non-overlapping Legend -->
+                    <div class="comp-legend">
+                        <div class="legend-item" id="item-1">
+                            <div class="legend-num">1</div>
+                            <div class="legend-text">
+                                <h4>Diffuser Dome</h4>
+                                <p>Spreads intense light evenly. Made of durable plastic, unlike fragile glass.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="item-2">
+                            <div class="legend-text">
+                            <div class="legend-num" style="float: left; margin-right: 12px; margin-bottom: 24px;">2</div>
+                                <h4>SMD LED Chips</h4>
+                                <p>The source of light. Semiconductors emit photons directly when current passes through, skipping the heat-generating filament stage.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="item-3">
+                             <div class="legend-text">
+                             <div class="legend-num" style="float: left; margin-right: 12px; margin-bottom: 24px;">3</div>
+                                <h4>Heat Sink</h4>
+                                <p>Crucial for lifespan. Pulls the small amount of waste heat away from the chips. LEDs are efficient but sensitive to heat.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="item-4">
+                             <div class="legend-text">
+                             <div class="legend-num" style="float: left; margin-right: 12px; margin-bottom: 24px;">4</div>
+                                <h4>Driver Circuit</h4>
+                                <p>Converts high-voltage AC from the grid into stable, low-voltage DC required by the LED chips.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================================================
+             SECTION: FACTS & APPLICATION
+             ========================================================================== -->
+        <section>
+            <h2 class="section-title">Impact & Facts</h2>
+            <div class="grid-3">
+                <div class="info-card glass-panel warning">
+                    <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> The Heat Mistake</h4>
+                    <p>An incandescent bulb is essentially a space heater that happens to produce a little light. 90-95% of the energy you pay for is wasted as invisible infrared heat.</p>
+                </div>
+                
+                <div class="info-card glass-panel success">
+                    <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg> Beyond Lighting</h4>
+                    <p>This principle applies everywhere. Electric vehicles convert over 77% of electrical energy to the wheels. Gasoline engines convert only 12%–30% (the rest is heat and noise).</p>
+                </div>
+                
+                <div class="info-card glass-panel">
+                    <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg> Cost Savings</h4>
+                    <p>Replacing one 60W incandescent with a 9W LED saves roughly $1.20 per month (if used 5hrs/day). Across a whole house over years, it's hundreds of dollars.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* ----------------------------------------------------------------------
+               1. PHYSICS SIMULATION LOGIC (CANVAS & PARTICLES)
+               ---------------------------------------------------------------------- */
+            const slider = document.getElementById('brightness-slider');
+            const lumenVal = document.getElementById('lumen-val');
+            
+            // DOM Elements - Incandescent
+            const inWattsIncan = document.getElementById('in-watts-incan');
+            const inLightIncan = document.getElementById('in-light-incan');
+            const inHeatIncan = document.getElementById('in-heat-incan');
+            const barLightIncan = document.querySelector('#light-incan + svg').parentElement.parentElement.querySelector('.eff-bar-light');
+            const barHeatIncan = document.querySelector('#light-incan + svg').parentElement.parentElement.querySelector('.eff-bar-heat');
+            const glowIncan = document.getElementById('light-incan');
+            const canvasIncan = document.getElementById('canvas-incan');
+            
+            // DOM Elements - LED
+            const inWattsLed = document.getElementById('in-watts-led');
+            const inLightLed = document.getElementById('in-light-led');
+            const inHeatLed = document.getElementById('in-heat-led');
+            const barLightLed = document.querySelector('#light-led + svg').parentElement.parentElement.querySelector('.eff-bar-light');
+            const barHeatLed = document.querySelector('#light-led + svg').parentElement.parentElement.querySelector('.eff-bar-heat');
+            const glowLed = document.getElementById('light-led');
+            const canvasLed = document.getElementById('canvas-led');
+
+            // Constants
+            const INCAN_LUMENS_PER_WATT = 13.3; // 60W ≈ 800lm
+            const LED_LUMENS_PER_WATT = 88.8;   // 9W ≈ 800lm
+            
+            const INCAN_EFFICIENCY = 0.05; // 5% light, 95% heat
+            const LED_EFFICIENCY = 0.85;   // 85% light, 15% heat
+
+            // Global State for Animation
+            let simState = { lumens: 800, incanPower: 60, ledPower: 9 };
+
+            // Update DOM Values based on Lumens
+            function updateSimulation(lumens) {
+                lumenVal.textContent = lumens + " lm";
+                simState.lumens = lumens;
+
+                // Calculate Power (Watts) needed
+                let incanPower = lumens / INCAN_LUMENS_PER_WATT;
+                let ledPower = lumens / LED_LUMENS_PER_WATT;
+                simState.incanPower = incanPower;
+                simState.ledPower = ledPower;
+
+                // Update text (rounded to 1 decimal)
+                inWattsIncan.textContent = incanPower.toFixed(1) + " W";
+                inLightIncan.textContent = (incanPower * INCAN_EFFICIENCY).toFixed(1) + " W";
+                inHeatIncan.textContent = (incanPower * (1 - INCAN_EFFICIENCY)).toFixed(1) + " W";
+
+                inWattsLed.textContent = ledPower.toFixed(1) + " W";
+                inLightLed.textContent = (ledPower * LED_EFFICIENCY).toFixed(1) + " W";
+                inHeatLed.textContent = (ledPower * (1 - LED_EFFICIENCY)).toFixed(1) + " W";
+
+                // Update Glow Intensity based on Lumens (400-1600 range mapped to opacity/scale)
+                let intensityScale = (lumens / 1600);
+                glowIncan.style.opacity = (intensityScale * 0.4) + 0.1;
+                glowIncan.style.transform = `translate(-50%, -50%) scale(${0.8 + intensityScale * 0.5})`;
+                
+                glowLed.style.opacity = (intensityScale * 0.8) + 0.2;
+                glowLed.style.transform = `translate(-50%, -50%) scale(${0.8 + intensityScale * 0.6})`;
+
+                // Filament glow for incandescent
+                document.getElementById('incan-filament').setAttribute('stroke-width', 1 + (intensityScale * 3));
+            }
+
+            slider.addEventListener('input', (e) => updateSimulation(Number(e.target.value)));
+            updateSimulation(800); // Init
+
+            /* --- Particle System --- */
+            
+            class ParticleSystem {
+                constructor(canvas, type) {
+                    this.canvas = canvas;
+                    this.ctx = canvas.getContext('2d');
+                    this.type = type; // 'incan' or 'led'
+                    this.particles = [];
+                    this.resize();
+                    window.addEventListener('resize', () => this.resize());
+                }
+
+                resize() {
+                    const rect = this.canvas.parentElement.getBoundingClientRect();
+                    // Handle high DPI displays
+                    const dpr = window.devicePixelRatio || 1;
+                    this.canvas.width = rect.width * dpr;
+                    this.canvas.height = rect.height * dpr;
+                    this.ctx.scale(dpr, dpr);
+                    this.w = rect.width;
+                    this.h = rect.height;
+                }
+
+                emit() {
+                    let power = this.type === 'incan' ? simState.incanPower : simState.ledPower;
+                    let efficiency = this.type === 'incan' ? INCAN_EFFICIENCY : LED_EFFICIENCY;
+                    
+                    // Emission rate scales with power, but maxes out to avoid lag
+                    let emissionRate = Math.min(power / 10, 5); 
+                    
+                    if (Math.random() < emissionRate) {
+                        // Base coordinates relative to center-bottom of canvas
+                        const centerX = this.w / 2;
+                        
+                        // Emit Electricity (Blue, moves up from base)
+                        if (Math.random() < 0.3) {
+                            this.particles.push({
+                                kind: 'electric',
+                                x: centerX + (Math.random() - 0.5) * 20,
+                                y: this.h - 10,
+                                vx: (Math.random() - 0.5) * 0.5,
+                                vy: -Math.random() * 2 - 1,
+                                life: 1,
+                                decay: 0.015 + Math.random() * 0.01,
+                                size: Math.random() * 2 + 1
+                            });
+                        }
+
+                        // Emit Heat (Red, moves outward from bulb center based on inefficiency)
+                        let heatFactor = 1 - efficiency; // 0.95 vs 0.15
+                        // Emit more heat particles if higher heat factor and higher power
+                        let heatEmissionChance = heatFactor * (power / 30);
+                        
+                        if (Math.random() < heatEmissionChance) {
+                            let angle = Math.random() * Math.PI * 2;
+                            let speed = Math.random() * 1.5 + 0.5;
+                            // Start higher up, in the bulb area
+                            let startY = this.h * 0.4;
+                            
+                            this.particles.push({
+                                kind: 'heat',
+                                x: centerX,
+                                y: startY,
+                                vx: Math.cos(angle) * speed,
+                                vy: Math.sin(angle) * speed - 0.5, // Natural rise
+                                life: 1,
+                                decay: 0.01 + Math.random() * 0.02,
+                                size: Math.random() * 4 + 2
+                            });
+                        }
+                    }
+                }
+
+                updateAndDraw() {
+                    this.ctx.clearRect(0, 0, this.w, this.h);
+                    
+                    for (let i = this.particles.length - 1; i >= 0; i--) {
+                        let p = this.particles[i];
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        p.life -= p.decay;
+
+                        if (p.life <= 0) {
+                            this.particles.splice(i, 1);
+                            continue;
+                        }
+
+                        this.ctx.beginPath();
+                        this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        
+                        if (p.kind === 'electric') {
+                            this.ctx.fillStyle = `rgba(0, 243, 255, ${p.life})`;
+                            this.ctx.shadowBlur = 5;
+                            this.ctx.shadowColor = '#00f3ff';
+                        } else {
+                            // Heat particle: red to yellow gradient based on life
+                            this.ctx.fillStyle = `rgba(255, ${Math.floor(p.life * 100)}, 0, ${p.life * 0.6})`;
+                            this.ctx.shadowBlur = 8;
+                            this.ctx.shadowColor = '#ff4500';
+                            // Heat rises and waves slightly
+                            p.vx += (Math.random() - 0.5) * 0.2; 
+                        }
+                        
+                        this.ctx.fill();
+                        this.ctx.shadowBlur = 0; // reset
+                    }
+                }
+            }
+
+            const sysIncan = new ParticleSystem(canvasIncan, 'incan');
+            const sysLed = new ParticleSystem(canvasLed, 'led');
+
+            function animationLoop() {
+                sysIncan.emit();
+                sysIncan.updateAndDraw();
+                
+                sysLed.emit();
+                sysLed.updateAndDraw();
+                
+                requestAnimationFrame(animationLoop);
+            }
+            animationLoop();
+
+            /* ----------------------------------------------------------------------
+               2. MECHANISM SECTION (LINEAR FLOW LOGIC)
+               ---------------------------------------------------------------------- */
+            let currentStage = 1;
+            const totalStages = 3;
+            let autoPlayInterval = null;
+            
+            const nodes = [
+                document.getElementById('node-1'),
+                document.getElementById('node-2'),
+                document.getElementById('node-3')
+            ];
+            const dots = document.querySelectorAll('#mech-dots .dot');
+            const flowLine = document.getElementById('mech-flow-line');
+            const caption = document.getElementById('mech-caption');
+
+            const stageData = [
+                { width: '0%', text: "Electrical energy enters the system from the grid. 100% of the input energy must be accounted for due to the laws of physics." },
+                { width: '50%', text: "The conversion element (a tungsten filament or an LED chip) receives the electricity. Its design dictates what happens next." },
+                { width: '100%', text: "Energy is emitted. Inefficient designs release mostly heat (infrared). Efficient designs release mostly visible light." }
+            ];
+
+            function setStage(stage) {
+                currentStage = stage;
+                
+                // Update Nodes & Dots
+                nodes.forEach((n, i) => {
+                    if (i < stage) n.classList.add('active');
+                    else n.classList.remove('active');
+                });
+                
+                dots.forEach((d, i) => {
+                    if (i === stage - 1) d.classList.add('active');
+                    else d.classList.remove('active');
+                });
+
+                // Animate Flow Line & Text
+                flowLine.style.width = stageData[stage-1].width;
+                
+                // Text transition
+                caption.style.opacity = 0;
+                setTimeout(() => {
+                    caption.textContent = stageData[stage-1].text;
+                    caption.style.opacity = 1;
+                }, 200);
+            }
+
+            document.getElementById('btn-prev').addEventListener('click', () => {
+                stopAutoPlay();
+                if (currentStage > 1) setStage(currentStage - 1);
+            });
+
+            document.getElementById('btn-next').addEventListener('click', () => {
+                stopAutoPlay();
+                if (currentStage < totalStages) setStage(currentStage + 1);
+            });
+
+            function startAutoPlay() {
+                document.getElementById('btn-play').classList.add('btn-primary');
+                autoPlayInterval = setInterval(() => {
+                    let next = currentStage >= totalStages ? 1 : currentStage + 1;
+                    
+                    // Instant reset if looping
+                    if(next === 1) {
+                        flowLine.style.transition = 'none';
+                        flowLine.style.width = '0%';
+                        setTimeout(() => {
+                            flowLine.style.transition = 'width 0.5s linear';
+                            setStage(1);
+                        }, 50);
+                    } else {
+                        setStage(next);
+                    }
+                }, 3000);
+            }
+
+            function stopAutoPlay() {
+                if(autoPlayInterval) {
+                    clearInterval(autoPlayInterval);
+                    autoPlayInterval = null;
+                    document.getElementById('btn-play').classList.remove('btn-primary');
+                }
+            }
+
+            document.getElementById('btn-play').addEventListener('click', () => {
+                if (autoPlayInterval) stopAutoPlay();
+                else startAutoPlay();
+            });
+
+            caption.style.transition = 'opacity 0.2s';
+            setStage(1); // Init
+
+            /* ----------------------------------------------------------------------
+               3. COMPONENTS ANATOMY (MARKER HOVER LOGIC)
+               ---------------------------------------------------------------------- */
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function highlightComponent(id) {
+                // Reset all
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                
+                // Activate target
+                if (id) {
+                    document.querySelector(`.marker[data-target="${id}"]`).classList.add('active');
+                    document.getElementById(id).classList.add('active');
+                }
+            }
+
+            // Bind events
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => highlightComponent(marker.dataset.target));
+                // For mobile tap
+                marker.addEventListener('touchstart', (e) => { 
+                    e.preventDefault(); 
+                    highlightComponent(marker.dataset.target); 
+                });
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => highlightComponent(item.id));
+                item.addEventListener('touchstart', (e) => { 
+                     highlightComponent(item.id); 
+                }, {passive: true});
+            });
+
+            // Clear on leave container
+            document.querySelector('.components-layout').addEventListener('mouseleave', () => highlightComponent(null));
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Winnowing: The Aerodynamics of Separation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-dark: #09090b;
+            --bg-panel: rgba(24, 24, 27, 0.65);
+            --bg-panel-hover: rgba(39, 39, 42, 0.8);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            
+            --accent-grain: #fbbf24; /* Amber/Gold */
+            --accent-grain-glow: rgba(251, 191, 36, 0.3);
+            --accent-chaff: #d4d4d8; /* Light Grey */
+            --accent-wind: #38bdf8; /* Sky Blue */
+            --accent-wind-glow: rgba(56, 189, 248, 0.25);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            /* Typography (Fluid) */
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --step--2: clamp(0.78rem, calc(0.77rem + 0.03vw), 0.80rem);
+            --step--1: clamp(0.94rem, calc(0.92rem + 0.11vw), 1.00rem);
+            --step-0: clamp(1.13rem, calc(1.08rem + 0.22vw), 1.25rem);
+            --step-1: clamp(1.35rem, calc(1.28rem + 0.37vw), 1.56rem);
+            --step-2: clamp(1.62rem, calc(1.50rem + 0.58vw), 1.95rem);
+            --step-3: clamp(1.94rem, calc(1.77rem + 0.87vw), 2.44rem);
+            --step-4: clamp(2.33rem, calc(2.08rem + 1.25vw), 3.05rem);
+            --step-5: clamp(2.80rem, calc(2.45rem + 1.77vw), 3.82rem);
+
+            /* Spacing & Layout */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --spacing-section: clamp(3rem, 8vw, 6rem);
+            --container-width: 1200px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(251, 191, 36, 0.05), transparent 25%);
+            background-attachment: fixed;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 5px; }
+        ::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+        /* ==========================================================================
+           2. UTILITIES & GLASSMORPHISM
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: var(--container-width);
+            margin: 0 auto;
+            padding: 0 clamp(16px, 4vw, 32px);
+        }
+
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .glass-panel:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        h1, h2, h3 { line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }
+        h1 { font-size: var(--step-5); background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--step-3); margin-bottom: 1.5rem; display: flex; align-items: center; gap: 12px; }
+        h3 { font-size: var(--step-1); margin-bottom: 0.5rem; color: var(--accent-grain); }
+        p { font-size: var(--step-0); color: var(--text-muted); margin-bottom: 1rem; }
+
+        .section { padding: var(--spacing-section) 0; }
+        
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            font-size: var(--step--2);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-wind);
+            margin-bottom: 1rem;
+        }
+
+        /* ==========================================================================
+           3. HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            padding-top: 80px;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 10;
+            max-width: 800px;
+        }
+
+        .hero p {
+            font-size: var(--step-1);
+            max-width: 600px;
+        }
+
+        /* Ambient Hero Animation */
+        .ambient-particles {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ==========================================================================
+           4. COMPONENTS DIAGRAM (STRICT LEGEND PATTERN)
+           ========================================================================== */
+        .diagram-layout {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        .diagram-visual {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            aspect-ratio: 4/3;
+            background: radial-gradient(circle at center, rgba(39,39,42,0.5) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .diagram-visual svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        /* Interactive Markers */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--bg-dark);
+            border: 2px solid var(--accent-wind);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--accent-wind-glow);
+            transform: translate(-50%, -50%);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+        }
+
+        .marker::before {
+            content: '';
+            position: absolute;
+            top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%;
+            border: 1px solid var(--accent-wind);
+            opacity: 0;
+            transition: all 0.3s ease;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.15);
+            background: var(--accent-wind);
+            box-shadow: 0 0 25px var(--accent-wind-glow);
+        }
+        .marker:hover::before, .marker.active::before {
+            opacity: 1;
+            transform: scale(1.3);
+        }
+
+        .marker[data-color="grain"] { border-color: var(--accent-grain); box-shadow: 0 0 15px var(--accent-grain-glow); }
+        .marker[data-color="grain"]:hover, .marker[data-color="grain"].active { background: var(--accent-grain); }
+        .marker[data-color="grain"]::before { border-color: var(--accent-grain); }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.06);
+            transform: translateX(5px);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: var(--bg-dark);
+            border: 2px solid var(--accent-wind);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item[data-color="grain"] .legend-badge { border-color: var(--accent-grain); }
+        
+        .legend-item.active .legend-badge {
+            background: var(--accent-wind);
+            color: #000;
+        }
+        .legend-item[data-color="grain"].active .legend-badge { background: var(--accent-grain); }
+
+        .legend-content h4 { font-size: var(--step-0); margin-bottom: 2px; color: #fff; }
+        .legend-content p { font-size: var(--step--1); margin-bottom: 0; }
+
+        /* ==========================================================================
+           5. WORKING MECHANISM (DEDICATED SECTION)
+           ========================================================================== */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .mech-visual-area {
+            position: relative;
+            width: 100%;
+            height: 450px;
+            background: #000;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid var(--border-glass);
+        }
+
+        /* The SVG Mechanism Animation */
+        #mech-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* SVG Internal Animations based on State */
+        .mech-grain, .mech-chaff, .mech-wind-lines, .mech-basket-group {
+            transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Initial States */
+        .mech-wind-lines { opacity: 0; stroke-dasharray: 100; stroke-dashoffset: 100; }
+        .mech-particle { opacity: 0; transform: translateY(-20px); }
+        .mech-basket-group { transform-origin: 200px 150px; }
+
+        /* State 1: Preparation */
+        .stage-1 .mech-basket-group { transform: rotate(0deg); }
+        .stage-1 .mech-mixture-pile { opacity: 1; }
+        
+        /* State 2: Dropping */
+        .stage-2 .mech-basket-group { transform: rotate(-25deg); }
+        .stage-2 .mech-particle { opacity: 1; animation: fall 1.5s linear infinite; }
+        .stage-2 .mech-wind-lines { opacity: 0.2; animation: windBlow 2s linear infinite; }
+
+        /* State 3: Wind Action */
+        .stage-3 .mech-basket-group { transform: rotate(-25deg); }
+        .stage-3 .mech-wind-lines { opacity: 1; stroke-dashoffset: 0; animation: windBlowFast 1s linear infinite; }
+        .stage-3 .mech-grain { animation: fallStraight 1.2s linear infinite; opacity: 1; }
+        .stage-3 .mech-chaff { animation: blowAway 1.2s ease-in infinite; opacity: 1; }
+
+        /* State 4: Separation Complete */
+        .stage-4 .mech-basket-group { transform: rotate(0deg); }
+        .stage-4 .mech-wind-lines { opacity: 0; }
+        .stage-4 .mech-grain-pile { opacity: 1; transition: opacity 1s; }
+        .stage-4 .mech-chaff-pile { opacity: 1; transition: opacity 1s; }
+
+        @keyframes fall { 0% { transform: translate(0, 0); opacity: 1; } 100% { transform: translate(0, 200px); opacity: 0; } }
+        @keyframes fallStraight { 0% { transform: translate(220px, 160px); opacity: 1; } 100% { transform: translate(220px, 350px); opacity: 0; } }
+        @keyframes blowAway { 0% { transform: translate(220px, 160px); opacity: 1; } 100% { transform: translate(450px, 330px); opacity: 0; } }
+        @keyframes windBlow { to { stroke-dashoffset: -100; } }
+        @keyframes windBlowFast { to { stroke-dashoffset: -200; } }
+
+        /* Mechanism Controls */
+        .mech-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .mech-info { flex: 1; min-width: 250px; }
+        .mech-info h4 { font-size: var(--step-0); color: var(--accent-wind); margin-bottom: 4px; }
+        .mech-info p { font-size: var(--step--1); margin: 0; color: #fff; }
+
+        .mech-buttons {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: var(--step--1);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: inherit;
+        }
+
+        .btn:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: var(--accent-wind); color: #000; border: none; font-weight: bold; }
+        .btn-primary:hover:not(:disabled) { background: #7dd3fc; box-shadow: 0 0 15px var(--accent-wind-glow); }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+        .dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: 0.3s;
+        }
+        .dot.active { background: var(--accent-wind); transform: scale(1.2); box-shadow: 0 0 8px var(--accent-wind); }
+
+        /* ==========================================================================
+           6. INTERACTIVE SIMULATION
+           ========================================================================== */
+        .simulation-container {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 24px;
+            background: #000;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-glass);
+            overflow: hidden;
+            height: 500px;
+        }
+
+        .sim-canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        #simCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .sim-controls {
+            padding: 24px;
+            background: var(--bg-panel);
+            border-left: 1px solid var(--border-glass);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            overflow-y: auto;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--step--1);
+            font-weight: bold;
+        }
+
+        .val-display { color: var(--accent-wind); }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent-wind);
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+
+        /* Metric overlays on canvas */
+        .sim-metric {
+            position: absolute;
+            bottom: 20px;
+            padding: 8px 16px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: var(--radius-sm);
+            font-size: var(--step--2);
+            pointer-events: none;
+        }
+        #metric-grain { left: 20px; border-bottom: 2px solid var(--accent-grain); }
+        #metric-chaff { right: 20px; border-bottom: 2px solid var(--accent-chaff); }
+
+        /* ==========================================================================
+           7. INFO GRIDS
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+        }
+
+        .info-card {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .info-icon {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .info-icon svg { width: 24px; height: 24px; stroke: var(--accent-wind); }
+        
+        .card-grain .info-icon svg { stroke: var(--accent-grain); }
+
+        /* ==========================================================================
+           8. RESPONSIVE DESIGN (STRICT RULES)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .diagram-layout { grid-template-columns: 1fr; }
+            .diagram-visual { min-height: 400px; aspect-ratio: auto; }
+            
+            .simulation-container {
+                grid-template-columns: 1fr;
+                height: auto;
+                display: flex;
+                flex-direction: column;
+            }
+            .sim-canvas-wrapper { height: 400px; }
+            .sim-controls { border-left: none; border-top: 1px solid var(--border-glass); flex-direction: row; flex-wrap: wrap; }
+            .control-group { flex: 1; min-width: 200px; }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --spacing-section: 3rem;
+            }
+            
+            .glass-panel { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); } /* Performance */
+            
+            .hero { padding-top: 60px; min-height: 80vh; }
+            
+            .diagram-visual { min-height: 320px; }
+            .legend-item { padding: 12px; }
+            
+            .mech-visual-area { height: 300px; }
+            .mech-controls { flex-direction: column; align-items: flex-start; }
+            .mech-buttons { width: 100%; justify-content: space-between; }
+            
+            .sim-canvas-wrapper { height: 300px; }
+            .sim-controls { flex-direction: column; padding: 16px; }
+            .control-group { width: 100%; }
+            
+            .info-grid { grid-template-columns: 1fr; }
+        }
+        
+        /* Utility */
+        .flex-center { display: flex; justify-content: center; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <!-- HERO SECTION -->
+    <section class="hero container">
+        <canvas class="ambient-particles" id="ambientCanvas"></canvas>
+        <div class="hero-content">
+            <span class="tag">Physics in Agriculture</span>
+            <h1>Winnowing</h1>
+            <p>An ancient method of separating grain from chaff, relying entirely on the elegant interplay of <strong>aerodynamic drag</strong> and <strong>gravity</strong>.</p>
+        </div>
+    </section>
+
+    <!-- COMPONENTS SECTION (STRICT LEGEND) -->
+    <section class="section container">
+        <h2>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-wind)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            The System Components
+        </h2>
+        <p>A successful winnowing process requires a mixture, a dropping mechanism, and a horizontal force. Hover over the markers or list items to explore.</p>
+
+        <div class="diagram-layout">
+            <!-- Visual Area -->
+            <div class="diagram-visual glass-panel" id="component-diagram">
+                <!-- SVG Illustration -->
+                <svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                        <linearGradient id="basketGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#854d0e" />
+                            <stop offset="100%" stop-color="#422006" />
+                        </linearGradient>
+                        <radialGradient id="grainGlow" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#fbbf24" stop-opacity="0.8"/>
+                            <stop offset="100%" stop-color="#b45309" stop-opacity="0"/>
+                        </radialGradient>
+                    </defs>
+                    
+                    <!-- Wind visualization (Background) -->
+                    <g opacity="0.3">
+                        <path d="M 100 200 Q 250 180 400 220 T 700 200" fill="none" stroke="var(--accent-wind)" stroke-width="4" stroke-dasharray="10 15"/>
+                        <path d="M 50 300 Q 200 280 350 320 T 750 280" fill="none" stroke="var(--accent-wind)" stroke-width="2" stroke-dasharray="5 10"/>
+                        <path d="M 150 400 Q 300 380 450 420 T 650 400" fill="none" stroke="var(--accent-wind)" stroke-width="6" stroke-dasharray="15 20" opacity="0.5"/>
+                    </g>
+
+                    <!-- The Basket / Soop -->
+                    <g transform="translate(150, 150)">
+                        <path d="M 0,0 C 50,80 150,80 200,0 C 180,40 120,60 100,60 C 80,60 20,40 0,0 Z" fill="url(#basketGrad)" filter="drop-shadow(0 10px 10px rgba(0,0,0,0.5))" transform="rotate(-15)"/>
+                        <!-- Mixture in basket -->
+                        <ellipse cx="100" cy="20" rx="60" ry="15" fill="#ca8a04" transform="rotate(-15)"/>
+                    </g>
+
+                    <!-- Falling Stream (Simplified representation) -->
+                    <path d="M 280 180 Q 300 300 280 450" fill="none" stroke="#fbbf24" stroke-width="3" stroke-dasharray="4 8"/>
+                    <path d="M 280 180 Q 400 300 500 480" fill="none" stroke="#d4d4d8" stroke-width="2" stroke-dasharray="2 6"/>
+
+                    <!-- Piles on the ground -->
+                    <!-- Grain Pile (Heavy, falls straight) -->
+                    <g transform="translate(280, 500)">
+                        <ellipse cx="0" cy="0" rx="80" ry="25" fill="url(#grainGlow)"/>
+                        <path d="M -60 0 Q 0 -40 60 0 Z" fill="#fbbf24"/>
+                        <path d="M -50 5 Q 0 -30 50 5 Z" fill="#f59e0b"/>
+                    </g>
+
+                    <!-- Chaff Pile (Light, blown away) -->
+                    <g transform="translate(520, 500)">
+                        <ellipse cx="0" cy="0" rx="100" ry="20" fill="rgba(212, 212, 216, 0.2)"/>
+                        <path d="M -80 0 Q 0 -25 80 0 Z" fill="#d4d4d8" opacity="0.8"/>
+                        <path d="M -60 5 Q 0 -15 60 5 Z" fill="#e4e4e7" opacity="0.9"/>
+                    </g>
+                </svg>
+
+                <!-- DOM Markers overlaid on SVG via CSS percentages -->
+                <!-- Positioning based on SVG viewBox coordinates -->
+                <div class="marker" data-target="item-basket" style="left: 20%; top: 25%;">1</div>
+                <div class="marker" data-target="item-wind" style="left: 10%; top: 60%;">2</div>
+                <div class="marker" data-target="item-grain" data-color="grain" style="left: 35%; top: 85%;">3</div>
+                <div class="marker" data-target="item-chaff" style="left: 65%; top: 85%;">4</div>
+            </div>
+
+            <!-- Legend List -->
+            <div class="legend-list">
+                <div class="legend-item glass-panel" id="item-basket" data-target="1">
+                    <div class="legend-badge">1</div>
+                    <div class="legend-content">
+                        <h4>Winnowing Basket</h4>
+                        <p>Used to scoop the mixture and drop it from a height, providing initial velocity.</p>
+                    </div>
+                </div>
+                
+                <div class="legend-item glass-panel" id="item-wind" data-target="2">
+                    <div class="legend-badge">2</div>
+                    <div class="legend-content">
+                        <h4>Crosswind</h4>
+                        <p>Natural or artificial air current that exerts horizontal drag force on falling particles.</p>
+                    </div>
+                </div>
+
+                <div class="legend-item glass-panel" id="item-grain" data-target="3" data-color="grain">
+                    <div class="legend-badge">3</div>
+                    <div class="legend-content">
+                        <h4>Grain (High Mass)</h4>
+                        <p>Higher mass-to-surface-area ratio means wind affects it less. Falls almost vertically.</p>
+                    </div>
+                </div>
+
+                <div class="legend-item glass-panel" id="item-chaff" data-target="4">
+                    <div class="legend-badge">4</div>
+                    <div class="legend-content">
+                        <h4>Chaff (Low Mass)</h4>
+                        <p>Husks and dust. High drag relative to mass causes horizontal displacement by wind.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING MECHANISM SECTION -->
+    <section class="section container">
+        <h2>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-wind)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Mechanism: Stage by Stage
+        </h2>
+        <p>Observe how continuous input (the mixture) is transformed into separated outputs through physical forces.</p>
+
+        <div class="mechanism-container glass-panel">
+            <!-- Visual Area -->
+            <div class="mech-visual-area stage-1" id="mech-visual">
+                <svg id="mech-svg" viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice">
+                    <defs>
+                        <clipPath id="basketClip">
+                            <rect x="0" y="0" width="800" height="450"/>
+                        </clipPath>
+                    </defs>
+                    
+                    <!-- Background Grid for scale -->
+                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+                    </pattern>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+
+                    <!-- Dynamic Wind Lines -->
+                    <g class="mech-wind-lines" stroke="var(--accent-wind)" stroke-width="2" fill="none">
+                        <path d="M -100 200 L 800 200" />
+                        <path d="M -100 250 L 800 250" stroke-width="1" opacity="0.5"/>
+                        <path d="M -100 300 L 800 300" stroke-width="3" />
+                    </g>
+
+                    <!-- Particles (Instanced via multiple SVG elements for CSS animation) -->
+                    <!-- Grain falling straight -->
+                    <g class="mech-grain">
+                        <circle cx="0" cy="0" r="4" fill="var(--accent-grain)" />
+                        <circle cx="-10" cy="-20" r="4" fill="var(--accent-grain)" animation-delay="0.2s"/>
+                        <circle cx="10" cy="-40" r="4" fill="var(--accent-grain)" animation-delay="0.4s"/>
+                        <circle cx="5" cy="-10" r="4" fill="var(--accent-grain)" animation-delay="0.1s"/>
+                    </g>
+                    <!-- Chaff blowing away -->
+                    <g class="mech-chaff">
+                        <path d="M 0,0 L 6,3 L 3,6 Z" fill="var(--accent-chaff)" />
+                        <path d="M 0,-20 L -5,-15 L -2,-10 Z" fill="var(--accent-chaff)" animation-delay="0.15s"/>
+                        <path d="M 10,-30 L 15,-28 L 12,-20 Z" fill="var(--accent-chaff)" animation-delay="0.3s"/>
+                    </g>
+
+                    <!-- Basket Group -->
+                    <g class="mech-basket-group">
+                        <path d="M 150 150 Q 250 180 280 150 L 250 130 Q 200 150 150 130 Z" fill="#854d0e" stroke="#422006" stroke-width="2"/>
+                        <!-- Mixture on basket -->
+                        <ellipse cx="215" cy="145" rx="30" ry="10" fill="#a16207" class="mech-mixture-pile"/>
+                    </g>
+
+                    <!-- Result Piles -->
+                    <path d="M 180 450 Q 220 400 260 450 Z" fill="var(--accent-grain)" class="mech-grain-pile" opacity="0"/>
+                    <path d="M 400 450 Q 480 380 560 450 Z" fill="var(--accent-chaff)" class="mech-chaff-pile" opacity="0"/>
+                    
+                    <!-- Ground Line -->
+                    <line x1="0" y1="448" x2="800" y2="448" stroke="rgba(255,255,255,0.2)" stroke-width="4"/>
+                </svg>
+            </div>
+
+            <!-- Controls & Info -->
+            <div class="mech-controls">
+                <div class="mech-info">
+                    <h4 id="mech-title">1. Preparation</h4>
+                    <p id="mech-desc">The mixture of grain and chaff is collected in a shallow basket, ready to be dropped into the air current.</p>
+                </div>
+                
+                <div class="mech-buttons">
+                    <button class="btn" id="btn-prev" disabled>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        Prev
+                    </button>
+                    
+                    <div class="progress-dots" id="mech-dots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+
+                    <button class="btn" id="btn-next">
+                        Next
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+
+                    <button class="btn btn-primary" id="btn-auto">Auto-Play</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION -->
+    <section class="section container">
+        <h2>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-wind)" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+            Physics Simulator
+        </h2>
+        <p>Adjust variables in real-time to see how wind velocity and drop height affect the separation efficiency. Aim for distinct piles.</p>
+
+        <div class="simulation-container">
+            <!-- Canvas Area -->
+            <div class="sim-canvas-wrapper">
+                <canvas id="simCanvas"></canvas>
+                <div class="sim-metric" id="metric-grain">Grain Collected: 0%</div>
+                <div class="sim-metric" id="metric-chaff">Chaff Blown: 0%</div>
+            </div>
+
+            <!-- Controls -->
+            <div class="sim-controls">
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Wind Velocity</span>
+                        <span class="val-display" id="val-wind">5 m/s</span>
+                    </div>
+                    <input type="range" id="slider-wind" min="0" max="15" step="0.5" value="5">
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top:4px; line-height:1.2;">Higher velocity pushes particles further right.</p>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Drop Height</span>
+                        <span class="val-display" id="val-height">Medium</span>
+                    </div>
+                    <input type="range" id="slider-height" min="1" max="3" step="1" value="2">
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top:4px; line-height:1.2;">Increases time in air, allowing wind more time to act.</p>
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Mixture Ratio</span>
+                        <span class="val-display" id="val-ratio">50/50</span>
+                    </div>
+                    <input type="range" id="slider-ratio" min="10" max="90" step="10" value="50">
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top:4px; line-height:1.2;">% Grain vs % Chaff being dropped.</p>
+                </div>
+
+                <div style="margin-top: auto;">
+                    <button class="btn btn-primary" id="btn-reset-sim" style="width: 100%; justify-content: center;">Clear Piles</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INFORMATION GRID -->
+    <section class="section container">
+        <div class="info-grid">
+            <div class="glass-panel info-card">
+                <div class="info-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <h3>The Physics Rule</h3>
+                <p>Winnowing works because of differing <strong>terminal velocities</strong>. Drag force ($F_d = \frac{1}{2}\rho v^2 C_d A$) affects the low-mass, high-surface-area chaff much more than the dense grain grain, causing divergent parabolic trajectories.</p>
+            </div>
+
+            <div class="glass-panel info-card card-grain">
+                <div class="info-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h14a2 2 0 0 0 2-2V7.5L14.5 2H6a2 2 0 0 0-2 2v4"/><polyline points="14 2 14 8 20 8"/><path d="M2 15h10"/><path d="M9 18l3-3-3-3"/></svg>
+                </div>
+                <h3>Modern Application</h3>
+                <p>Modern combine harvesters still use this exact principle! Inside the massive machines, mechanical fans generate controlled wind while sieves shake the crop, rapidly sorting tons of grain per hour based on mass.</p>
+            </div>
+
+            <div class="glass-panel info-card">
+                <div class="info-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </div>
+                <h3>Common Mistake</h3>
+                <p>If the wind velocity is too high, or the drop height is too extreme, the horizontal force overcomes the grain's mass advantage. The result? Good grain is blown away with the chaff, reducing yield.</p>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        /* ==========================================================================
+           1. COMPONENTS DIAGRAM INTERACTION (Markers & Legend)
+           ========================================================================== */
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function activatePair(targetId) {
+            // Remove active class from all
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            // Add active to matching pair
+            const marker = document.querySelector(`.marker[data-target="item-${targetId}"]`);
+            const legend = document.getElementById(`item-${targetId}`);
+            
+            if(marker) marker.classList.add('active');
+            if(legend) legend.classList.add('active');
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => {
+                const target = marker.getAttribute('data-target').replace('item-', '');
+                activatePair(target);
+            });
+            marker.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Prevent scroll jump on touch
+                const target = marker.getAttribute('data-target').replace('item-', '');
+                activatePair(target);
+            });
+        });
+
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => {
+                const target = item.id.replace('item-', '');
+                activatePair(target);
+            });
+            item.addEventListener('touchstart', (e) => {
+                const target = item.id.replace('item-', '');
+                activatePair(target);
+            });
+        });
+
+
+        /* ==========================================================================
+           2. WORKING MECHANISM (Stage Controller)
+           ========================================================================== */
+        const stages = [
+            {
+                title: "1. Preparation",
+                desc: "The mixture of dense grain and light chaff is collected in a basket. No vertical or horizontal forces act upon the particles yet.",
+                class: "stage-1"
+            },
+            {
+                title: "2. Initial Drop",
+                desc: "The basket is tilted. Gravity begins pulling the mixture downward uniformly. Both grain and chaff accelerate towards the ground.",
+                class: "stage-2"
+            },
+            {
+                title: "3. Wind Separation",
+                desc: "Crosswind applies horizontal drag force. The low-mass chaff is rapidly accelerated sideways, while high-mass grain resists the change.",
+                class: "stage-3"
+            },
+            {
+                title: "4. Resulting Piles",
+                desc: "Due to distinct trajectories, two distinct piles form on the ground: pure grain directly below, and chaff blown safely away.",
+                class: "stage-4"
+            }
+        ];
+
+        let currentStage = 0;
+        let isAutoPlaying = false;
+        let autoPlayInterval;
+
+        const visualArea = document.getElementById('mech-visual');
+        const titleEl = document.getElementById('mech-title');
+        const descEl = document.getElementById('mech-desc');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnAuto = document.getElementById('btn-auto');
+        const dots = document.querySelectorAll('#mech-dots .dot');
+
+        function updateMechanism(index) {
+            // Update classes for CSS animations
+            visualArea.className = `mech-visual-area ${stages[index].class}`;
+            
+            // Update Text
+            titleEl.textContent = stages[index].title;
+            descEl.textContent = stages[index].desc;
+            
+            // Update UI
+            btnPrev.disabled = index === 0;
+            btnNext.disabled = index === stages.length - 1;
+            
+            dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === index);
+            });
+            currentStage = index;
+        }
+
+        btnPrev.addEventListener('click', () => {
+            if (currentStage > 0) updateMechanism(currentStage - 1);
+            stopAutoPlay();
+        });
+
+        btnNext.addEventListener('click', () => {
+            if (currentStage < stages.length - 1) updateMechanism(currentStage + 1);
+            stopAutoPlay();
+        });
+
+        btnAuto.addEventListener('click', () => {
+            if (isAutoPlaying) {
+                stopAutoPlay();
+            } else {
+                isAutoPlaying = true;
+                btnAuto.textContent = "Stop Auto";
+                btnAuto.style.background = "#ef4444"; // Red for stop
+                // Start cycle
+                autoPlayInterval = setInterval(() => {
+                    let next = currentStage + 1;
+                    if (next >= stages.length) next = 0;
+                    updateMechanism(next);
+                }, 2500); // 2.5s per stage
+            }
+        });
+
+        function stopAutoPlay() {
+            isAutoPlaying = false;
+            clearInterval(autoPlayInterval);
+            btnAuto.textContent = "Auto-Play";
+            btnAuto.style.background = "var(--accent-wind)";
+        }
+
+
+        /* ==========================================================================
+           3. CANVAS SIMULATION & ENGINE
+           ========================================================================== */
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Sim Variables linked to UI
+        let windVelocity = 5;
+        let dropHeightLevel = 2;
+        let grainRatio = 0.5; // 50%
+        
+        let dpr = window.devicePixelRatio || 1;
+        let width, height;
+
+        // Ground piles tracking for metrics
+        let totalDropped = 0;
+        let grainInZone = 0;
+        let chaffInZone = 0;
+        let maxPileHeight = 60; // visual cap
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            width = rect.width;
+            height = rect.height;
+            
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${width}px`;
+            canvas.style.height = `${height}px`;
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Physics Constants
+        const GRAVITY = 0.2;
+        
+        class Particle {
+            constructor(x, y, type) {
+                this.x = x;
+                this.y = y;
+                this.type = type; // 'grain' or 'chaff'
+                
+                // Randomize initial drop slightly
+                this.vx = (Math.random() - 0.5) * 1;
+                this.vy = Math.random() * 2;
+                
+                // Physical properties
+                if (type === 'grain') {
+                    this.mass = 15;
+                    this.size = 4;
+                    this.drag = 0.99; // Less air resistance
+                    this.color = '#fbbf24';
+                } else {
+                    this.mass = 2;
+                    this.size = Math.random() * 3 + 2;
+                    this.drag = 0.85; // High air resistance
+                    this.color = '#d4d4d8';
+                    this.shapeRotation = Math.random() * Math.PI;
+                    this.rotSpeed = (Math.random() - 0.5) * 0.2;
+                }
+                
+                this.active = true;
+            }
+
+            update(windStr) {
+                if (!this.active) return;
+
+                // Apply Gravity (F = mg, so a = g)
+                this.vy += GRAVITY;
+                
+                // Apply Wind (Force = Wind, a = F/m)
+                // Wind force is a vector pushing right
+                const windForce = windStr * 0.1; 
+                this.vx += windForce / this.mass;
+
+                // Apply Aerodynamic Drag (simplified: velocity decays more for chaff)
+                this.vx *= this.drag;
+                // Vertical drag (terminal velocity limit)
+                if (this.vy > 10) this.vy = 10; 
+                if (this.type === 'chaff') this.vy *= 0.95; 
+
+                // Move
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                if (this.type === 'chaff') {
+                    this.shapeRotation += this.rotSpeed;
+                }
+
+                // Floor collision
+                const floorY = height - 20;
+                if (this.y > floorY) {
+                    this.y = floorY;
+                    this.active = false; // Stop moving
+                    
+                    // Simple pile logic based on x position
+                    // Grain target zone: near drop point (width/4 to width/2)
+                    // Chaff target zone: further right (> width/2)
+                    if (this.type === 'grain') {
+                        if (this.x > width * 0.1 && this.x < width * 0.5) grainInZone++;
+                    } else {
+                        if (this.x > width * 0.4) chaffInZone++;
+                    }
+                    updateMetrics();
+                }
+                
+                // Off-screen cleanup
+                if (this.x > width + 50) this.active = false;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                if (this.type === 'grain') {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.ellipse(0, 0, this.size, this.size*0.6, 0, 0, Math.PI*2);
+                    ctx.fill();
+                } else {
+                    ctx.rotate(this.shapeRotation);
+                    ctx.fillStyle = this.color;
+                    ctx.globalAlpha = 0.7;
+                    ctx.beginPath();
+                    ctx.moveTo(-this.size, -this.size/2);
+                    ctx.lineTo(this.size, -this.size/2);
+                    ctx.lineTo(this.size/2, this.size);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+        }
+
+        let particles = [];
+        let inactiveParticles = []; // To render piles without updating physics
+        let isEmitting = true;
+
+        // UI Controls Linking
+        const sliderWind = document.getElementById('slider-wind');
+        const valWind = document.getElementById('val-wind');
+        sliderWind.addEventListener('input', (e) => {
+            windVelocity = parseFloat(e.target.value);
+            valWind.textContent = `${windVelocity} m/s`;
+        });
+
+        const sliderHeight = document.getElementById('slider-height');
+        const valHeight = document.getElementById('val-height');
+        const heightLabels = ["Low", "Medium", "High"];
+        sliderHeight.addEventListener('input', (e) => {
+            dropHeightLevel = parseInt(e.target.value);
+            valHeight.textContent = heightLabels[dropHeightLevel - 1];
+        });
+
+        const sliderRatio = document.getElementById('slider-ratio');
+        const valRatio = document.getElementById('val-ratio');
+        sliderRatio.addEventListener('input', (e) => {
+            grainRatio = parseInt(e.target.value) / 100;
+            valRatio.textContent = `${e.target.value}/${100 - e.target.value}`;
+        });
+
+        document.getElementById('btn-reset-sim').addEventListener('click', () => {
+            particles = [];
+            inactiveParticles = [];
+            totalDropped = 0;
+            grainInZone = 0;
+            chaffInZone = 0;
+            updateMetrics();
+        });
+
+        const metricGrain = document.getElementById('metric-grain');
+        const metricChaff = document.getElementById('metric-chaff');
+
+        function updateMetrics() {
+            if (totalDropped === 0) return;
+            // Simplify metrics for display
+            metricGrain.textContent = `Clean Grain: ${grainInZone}`;
+            metricChaff.textContent = `Chaff Blown: ${chaffInZone}`;
+        }
+
+        function drawWindVisualization(ctx) {
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.1)';
+            ctx.lineWidth = 2;
+            const time = Date.now() * 0.002;
+            
+            ctx.beginPath();
+            for(let i=0; i<3; i++) {
+                let y = height/2 + (i * 50) - 50;
+                let offset = (time * windVelocity * 10 + (i * 100)) % width;
+                ctx.moveTo(0, y);
+                // Draw wavy line
+                for(let x=0; x<width; x+=50) {
+                    let wave = Math.sin((x + offset*5)*0.01) * (windVelocity);
+                    ctx.lineTo(x, y + wave);
+                }
+            }
+            ctx.stroke();
+        }
+
+        function simLoop() {
+            ctx.clearRect(0, 0, width, height);
+
+            // Draw Wind
+            if (windVelocity > 0) drawWindVisualization(ctx);
+
+            // Draw Drop Platform
+            const dropY = height * [0.6, 0.3, 0.1][dropHeightLevel - 1];
+            const dropX = width * 0.25;
+            
+            ctx.fillStyle = '#854d0e'; // Basket color
+            ctx.fillRect(dropX - 30, dropY, 60, 10);
+            
+            // Emit new particles
+            if (Math.random() < 0.3) {
+                const isGrain = Math.random() < grainRatio;
+                particles.push(new Particle(dropX + (Math.random()-0.5)*40, dropY + 10, isGrain ? 'grain' : 'chaff'));
+                totalDropped++;
+            }
+
+            // Ground line
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, height - 20);
+            ctx.lineTo(width, height - 20);
+            ctx.stroke();
+
+            // Draw inactive piles (simplified rendering for performance)
+            inactiveParticles.forEach(p => p.draw(ctx));
+
+            // Update and draw active particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.update(windVelocity);
+                p.draw(ctx);
+                
+                if (!p.active) {
+                    // Move to inactive array to save update cycles
+                    // Limit pile size so canvas doesn't lag over time
+                    if(inactiveParticles.length < 500) {
+                        inactiveParticles.push(p);
+                    }
+                    particles.splice(i, 1);
+                }
+            }
+
+            requestAnimationFrame(simLoop);
+        }
+
+        // Start Simulation Loop
+        simLoop();
+
+
+        /* ==========================================================================
+           4. AMBIENT HERO ANIMATION
+           ========================================================================== */
+        const ambCanvas = document.getElementById('ambientCanvas');
+        const ambCtx = ambCanvas.getContext('2d');
+        let ambW, ambH;
+        let dustParticles = [];
+
+        function resizeAmb() {
+            ambW = ambCanvas.parentElement.clientWidth;
+            ambH = ambCanvas.parentElement.clientHeight;
+            ambCanvas.width = ambW;
+            ambCanvas.height = ambH;
+        }
+        window.addEventListener('resize', resizeAmb);
+        resizeAmb();
+
+        for(let i=0; i<50; i++) {
+            dustParticles.push({
+                x: Math.random() * ambW,
+                y: Math.random() * ambH,
+                s: Math.random() * 2 + 0.5, // size
+                vx: Math.random() * 1 + 0.2, // move right slowly
+                vy: (Math.random() - 0.5) * 0.5
+            });
+        }
+
+        function ambientLoop() {
+            ambCtx.clearRect(0, 0, ambW, ambH);
+            ambCtx.fillStyle = 'rgba(251, 191, 36, 0.4)'; // Grain dust color
+            
+            dustParticles.forEach(p => {
+                p.x += p.vx;
+                p.y += Math.sin(Date.now()*0.001 + p.x) * 0.5 + p.vy;
+                
+                if(p.x > ambW) p.x = 0;
+                if(p.y < 0) p.y = ambH;
+                if(p.y > ambH) p.y = 0;
+                
+                ambCtx.beginPath();
+                ambCtx.arc(p.x, p.y, p.s, 0, Math.PI*2);
+                ambCtx.fill();
+            });
+            
+            requestAnimationFrame(ambientLoop);
+        }
+        ambientLoop();
+
+    </script>
+</body>
+</html>

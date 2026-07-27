@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wind & Cloud Formation Simulator</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & BASE SETUP
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-deep: #050b14;
+            --bg-mid: #0a192f;
+            --bg-light: #112240;
+            --text-main: #ccd6f6;
+            --text-muted: #8892b0;
+            
+            /* Accents */
+            --accent-cyan: #64ffda;
+            --accent-blue: #3b82f6;
+            --accent-hot: #ef4444;
+            --accent-cold: #0ea5e9;
+            --accent-vapor: #a78bfa;
+            
+            /* Glassmorphism */
+            --glass-bg: rgba(17, 34, 64, 0.4);
+            --glass-border: rgba(100, 255, 218, 0.1);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            
+            /* Typography (Fluid) */
+            --font-title: clamp(2rem, 4vw, 3.5rem);
+            --font-h2: clamp(1.5rem, 3vw, 2.5rem);
+            --font-h3: clamp(1.2rem, 2vw, 1.5rem);
+            --font-body: clamp(0.9rem, 1.2vw, 1.1rem);
+            --font-small: clamp(0.8rem, 1vw, 0.9rem);
+            
+            /* Layout */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --spacing-section: clamp(40px, 8vw, 100px);
+            --container-w: 1200px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-deep);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(100, 255, 218, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(59, 130, 246, 0.05), transparent 25%);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Ambient Animated Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+        }
+        .ambient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: floatOrb 20s infinite ease-in-out alternate;
+        }
+        .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: radial-gradient(circle, var(--accent-blue) 0%, transparent 70%); animation-delay: 0s; }
+        .orb-2 { bottom: -20%; right: -10%; width: 60vw; height: 60vw; background: radial-gradient(circle, #4c1d95 0%, transparent 70%); animation-delay: -5s; }
+
+        @keyframes floatOrb {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(5%, 5%) scale(1.1); }
+        }
+
+        /* ==========================================================================
+           2. UTILITIES & LAYOUT
+           ========================================================================== */
+        .container {
+            max-width: var(--container-w);
+            margin: 0 auto;
+            padding: 0 5%;
+        }
+
+        section {
+            padding: var(--spacing-section) 0;
+            position: relative;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: clamp(20px, 4vw, 40px);
+            box-shadow: var(--glass-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Mobile Optimization for Glassmorphism */
+        @media (max-width: 768px) {
+            .glass-card {
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                padding: 16px;
+            }
+            .ambient-orb { filter: blur(40px); opacity: 0.2; }
+        }
+
+        h1, h2, h3 { color: #fff; font-weight: 700; line-height: 1.2; }
+        h1 { font-size: var(--font-title); margin-bottom: 20px; letter-spacing: -1px; }
+        h2 { font-size: var(--font-h2); margin-bottom: 24px; display: flex; align-items: center; gap: 12px;}
+        h3 { font-size: var(--font-h3); margin-bottom: 12px; color: var(--accent-cyan); }
+        p { font-size: var(--font-body); color: var(--text-muted); margin-bottom: 16px; }
+
+        .text-highlight { color: var(--accent-cyan); }
+        .text-hot { color: var(--accent-hot); }
+        .text-cold { color: var(--accent-cold); }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+        @media (max-width: 1024px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        /* ==========================================================================
+           3. HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding-top: 100px;
+        }
+        .hero-subtitle {
+            font-size: var(--font-h3);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: var(--accent-cyan);
+            margin-bottom: 16px;
+        }
+        .scroll-indicator {
+            margin-top: 50px;
+            width: 30px; height: 50px;
+            border: 2px solid var(--text-muted);
+            border-radius: 15px;
+            position: relative;
+            opacity: 0.7;
+        }
+        .scroll-dot {
+            width: 6px; height: 6px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            position: absolute; left: 50%; top: 10px;
+            transform: translateX(-50%);
+            animation: scrollDown 2s infinite;
+        }
+        @keyframes scrollDown {
+            0% { top: 10px; opacity: 1; }
+            100% { top: 30px; opacity: 0; }
+        }
+
+        /* ==========================================================================
+           4. MARKER & LEGEND SYSTEM (MANDATORY RULE)
+           ========================================================================== */
+        .diagram-container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+        @media (max-width: 1024px) {
+            .diagram-container { grid-template-columns: 1fr; }
+        }
+
+        .illustration-wrapper {
+            position: relative;
+            width: 100%;
+            background: #0a1020;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            aspect-ratio: 16/10;
+            min-height: 240px;
+        }
+        .illustration-wrapper svg {
+            width: 100%; height: 100%;
+            display: block;
+        }
+
+        .marker {
+            position: absolute;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: var(--bg-deep);
+            border: 2px solid var(--accent-cyan);
+            color: var(--text-main);
+            font-weight: bold;
+            font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(100, 255, 218, 0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+        }
+        .marker.hot { border-color: var(--accent-hot); box-shadow: 0 0 10px rgba(239, 68, 68, 0.3); }
+        .marker.cold { border-color: var(--accent-cold); box-shadow: 0 0 10px rgba(14, 165, 233, 0.3); }
+        .marker.vapor { border-color: var(--accent-vapor); box-shadow: 0 0 10px rgba(167, 139, 250, 0.3); }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--accent-cyan);
+            color: var(--bg-deep);
+            box-shadow: 0 0 20px var(--accent-cyan);
+        }
+        .marker.hot:hover, .marker.hot.active { background: var(--accent-hot); color: white; box-shadow: 0 0 20px var(--accent-hot); }
+        .marker.cold:hover, .marker.cold.active { background: var(--accent-cold); color: white; box-shadow: 0 0 20px var(--accent-cold); }
+        .marker.vapor:hover, .marker.vapor.active { background: var(--accent-vapor); color: white; box-shadow: 0 0 20px var(--accent-vapor); }
+
+
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(100, 255, 218, 0.1);
+            border-color: rgba(100, 255, 218, 0.3);
+            transform: translateX(5px);
+        }
+        .legend-item.active.hot { background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3); }
+        .legend-item.active.cold { background: rgba(14, 165, 233, 0.1); border-color: rgba(14, 165, 233, 0.3); }
+        .legend-item.active.vapor { background: rgba(167, 139, 250, 0.1); border-color: rgba(167, 139, 250, 0.3); }
+
+        .legend-badge {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: var(--bg-deep);
+            border: 2px solid var(--accent-cyan);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 14px;
+            flex-shrink: 0;
+        }
+        .legend-item.hot .legend-badge { border-color: var(--accent-hot); }
+        .legend-item.cold .legend-badge { border-color: var(--accent-cold); }
+        .legend-item.vapor .legend-badge { border-color: var(--accent-vapor); }
+
+        .legend-text { display: flex; flex-direction: column; }
+        .legend-title { font-weight: 600; color: #fff; font-size: var(--font-body); }
+        .legend-desc { font-size: var(--font-small); color: var(--text-muted); }
+
+        /* ==========================================================================
+           5. SVG ANIMATIONS (CSS)
+           ========================================================================== */
+        .anim-dash {
+            stroke-dasharray: 10, 10;
+            animation: dashMove 2s linear infinite;
+        }
+        @keyframes dashMove { to { stroke-dashoffset: -20; } }
+
+        .anim-pulse { animation: pulseOpacity 3s ease-in-out infinite alternate; }
+        @keyframes pulseOpacity { 0% { opacity: 0.6; } 100% { opacity: 1; filter: drop-shadow(0 0 8px var(--accent-hot)); } }
+
+        .anim-float { animation: floatVapor 4s ease-in-out infinite alternate; }
+        @keyframes floatVapor { 0% { transform: translateY(0px); } 100% { transform: translateY(-15px); } }
+
+        /* ==========================================================================
+           6. WORKING PROCESS SECTION (MANDATORY)
+           ========================================================================== */
+        .process-layout {
+            display: flex; flex-direction: column; gap: 24px;
+        }
+        .process-visual {
+            width: 100%; aspect-ratio: 16/9; min-height: 300px;
+            background: linear-gradient(to bottom, #071529, #0a1f3d);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            position: relative; overflow: hidden;
+        }
+        .process-controls {
+            display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+            background: rgba(0,0,0,0.2); padding: 16px 24px; border-radius: var(--radius-sm);
+            gap: 16px;
+        }
+        .btn {
+            background: transparent; border: 1px solid var(--accent-cyan); color: var(--accent-cyan);
+            padding: 8px 24px; border-radius: 20px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s; font-size: var(--font-body); display: flex; align-items: center; gap: 8px;
+        }
+        .btn:hover, .btn.primary { background: var(--accent-cyan); color: var(--bg-deep); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+        
+        .progress-bar {
+            display: flex; gap: 8px; flex: 1; justify-content: center; min-width: 150px;
+        }
+        .progress-dot {
+            width: 12px; height: 12px; border-radius: 50%; background: var(--glass-border);
+            transition: all 0.3s;
+        }
+        .progress-dot.active { background: var(--accent-cyan); box-shadow: 0 0 10px var(--accent-cyan); transform: scale(1.2); }
+
+        .stage-caption {
+            text-align: center; min-height: 80px; display: flex; flex-direction: column; justify-content: center;
+        }
+        .stage-title { font-size: var(--font-h3); color: var(--accent-cyan); margin-bottom: 4px; }
+        .stage-desc { font-size: var(--font-body); color: #fff; }
+
+        /* SVG Stage Visibility Classes */
+        .wp-el { opacity: 0; transition: opacity 0.8s ease, transform 0.8s ease; }
+        /* Define states in JS section below */
+
+        /* ==========================================================================
+           7. INTERACTIVE SIMULATION (CANVAS)
+           ========================================================================== */
+        .sim-container {
+            display: grid; grid-template-columns: 1fr 300px; gap: 24px;
+        }
+        @media (max-width: 1024px) { .sim-container { grid-template-columns: 1fr; } }
+        
+        .canvas-wrapper {
+            width: 100%; aspect-ratio: 16/9; min-height: 300px;
+            border-radius: var(--radius-md); overflow: hidden;
+            border: 1px solid var(--glass-border); position: relative;
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+        
+        .sim-controls {
+            display: flex; flex-direction: column; gap: 24px;
+        }
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-header { display: flex; justify-content: space-between; font-size: var(--font-small); color: var(--text-muted); }
+        .control-val { font-weight: bold; color: #fff; }
+        
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; margin: 10px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer;
+            background: rgba(255,255,255,0.1); border-radius: 4px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px; width: 20px; border-radius: 50%;
+            background: var(--accent-cyan); cursor: pointer;
+            -webkit-appearance: none; margin-top: -7px;
+            box-shadow: 0 0 10px rgba(100,255,218,0.5);
+        }
+        #tempSlider::-webkit-slider-thumb { background: var(--accent-hot); box-shadow: 0 0 10px rgba(239,68,68,0.5); }
+        #humidSlider::-webkit-slider-thumb { background: var(--accent-blue); box-shadow: 0 0 10px rgba(59,130,246,0.5); }
+
+        /* ==========================================================================
+           8. CARDS (Types, Facts)
+           ========================================================================== */
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        @media (max-width: 1024px) { .grid-3 { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .grid-3 { grid-template-columns: 1fr; } }
+
+        .type-card { text-align: center; padding: 24px; transition: transform 0.3s; }
+        .type-card:hover { transform: translateY(-5px); border-color: var(--accent-cyan); }
+        .type-icon { width: 100px; height: 100px; margin: 0 auto 16px auto; }
+        
+        .fact-card {
+            border-left: 4px solid var(--accent-cyan);
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-2"></div>
+    </div>
+
+    <!-- ================== HERO ================== -->
+    <section class="hero container">
+        <div class="hero-subtitle">Interactive Physics Engine</div>
+        <h1>Wind & Cloud Formation</h1>
+        <p style="max-width: 600px; margin: 0 auto; font-size: var(--font-h3);">
+            Discover the invisible thermodynamic engine of our atmosphere. 
+            Explore how heat, pressure, and moisture shape the weather.
+        </p>
+        <div class="scroll-indicator">
+            <div class="scroll-dot"></div>
+        </div>
+    </section>
+
+    <!-- ================== CORE COMPONENTS (Diagram + Legend) ================== -->
+    <section class="container" id="components">
+        <div class="glass-card">
+            <h2>The Atmospheric Engine</h2>
+            <p>Wind and clouds don't just appear; they are driven by the unequal heating of Earth's surface and the resulting movement of air and moisture.</p>
+            
+            <div class="diagram-container">
+                <!-- Visual -->
+                <div class="illustration-wrapper">
+                    <!-- SVG viewBox ensures responsiveness -->
+                    <svg viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#0a1930" />
+                                <stop offset="100%" stop-color="#2a4a73" />
+                            </linearGradient>
+                            <linearGradient id="landGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#8b5a2b" />
+                                <stop offset="100%" stop-color="#4a3014" />
+                            </linearGradient>
+                            <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#1e90ff" />
+                                <stop offset="100%" stop-color="#00008b" />
+                            </linearGradient>
+                            <radialGradient id="sunGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#fff" />
+                                <stop offset="40%" stop-color="#ffd700" />
+                                <stop offset="100%" stop-color="rgba(255,215,0,0)" />
+                            </radialGradient>
+                            <linearGradient id="cloudGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#ffffff" />
+                                <stop offset="100%" stop-color="#a0b0c0" />
+                            </linearGradient>
+                            
+                            <!-- Arrow Marker -->
+                            <marker id="arrowRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-hot)" />
+                            </marker>
+                            <marker id="arrowBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-cold)" />
+                            </marker>
+                            
+                            <!-- Filters -->
+                            <filter id="glowSun" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="15" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                            <filter id="shadow">
+                                <feDropShadow dx="0" dy="10" stdDeviation="10" flood-opacity="0.5"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Background -->
+                        <rect width="800" height="500" fill="url(#skyGrad)" />
+                        
+                        <!-- Sun -->
+                        <circle cx="150" cy="100" r="40" fill="url(#sunGrad)" filter="url(#glowSun)" class="anim-pulse" />
+                        <!-- Sun Rays -->
+                        <path d="M 170 120 L 250 180 M 150 140 L 150 220 M 130 120 L 50 180" stroke="#ffd700" stroke-width="2" stroke-dasharray="5 5" class="anim-dash" opacity="0.6"/>
+
+                        <!-- Terrain: Land (Left) -->
+                        <path d="M 0 250 Q 150 250 350 350 Q 400 380 400 500 L 0 500 Z" fill="url(#landGrad)" filter="url(#shadow)"/>
+                        
+                        <!-- Terrain: Water (Right) -->
+                        <path d="M 350 350 Q 550 350 800 350 L 800 500 L 400 500 Z" fill="url(#waterGrad)" filter="url(#shadow)"/>
+
+                        <!-- Cloud -->
+                        <g transform="translate(300, 80)" filter="url(#shadow)">
+                            <path d="M 50 80 A 30 30 0 0 1 50 20 A 40 40 0 0 1 120 10 A 35 35 0 0 1 180 30 A 25 25 0 0 1 180 80 Z" fill="url(#cloudGrad)"/>
+                        </g>
+
+                        <!-- Convection Vectors (Animated) -->
+                        <!-- Warm Air Rising (Over Land) -->
+                        <path d="M 200 330 C 200 200, 300 150, 350 150" fill="none" stroke="var(--accent-hot)" stroke-width="4" marker-end="url(#arrowRed)" class="anim-dash" stroke-dasharray="15 15"/>
+                        <!-- Cold Air Sinking (Over Water) -->
+                        <path d="M 600 150 C 600 250, 500 320, 450 320" fill="none" stroke="var(--accent-cold)" stroke-width="4" marker-end="url(#arrowBlue)" class="anim-dash" stroke-dasharray="15 15"/>
+                        <!-- Surface Wind (Water to Land) -->
+                        <path d="M 550 340 L 250 340" fill="none" stroke="#fff" stroke-width="3" marker-end="url(#arrowBlue)" class="anim-dash" stroke-dasharray="10 10" opacity="0.7"/>
+
+                        <!-- Vapor Rising -->
+                        <g stroke="var(--accent-vapor)" stroke-width="2" stroke-linecap="round" class="anim-float" opacity="0.8">
+                            <path d="M 500 330 L 490 280 M 550 330 L 560 270 M 600 330 L 590 290" />
+                        </g>
+                    </svg>
+
+                    <!-- Overlay Markers (Absolute Positioned via CSS/inline percentages) -->
+                    <!-- Pattern: style="left: x%; top: y%;" -->
+                    <div class="marker hot" style="left: 18%; top: 20%;" data-link="sun">1</div>
+                    <div class="marker hot" style="left: 25%; top: 60%;" data-link="updraft">2</div>
+                    <div class="marker cold" style="left: 75%; top: 40%;" data-link="downdraft">3</div>
+                    <div class="marker vapor" style="left: 68%; top: 60%;" data-link="evap">4</div>
+                    <div class="marker cold" style="left: 50%; top: 68%;" data-link="wind">5</div>
+                    <div class="marker" style="left: 48%; top: 20%;" data-link="cloud">6</div>
+                </div>
+
+                <!-- Legend List (Normal Flow) -->
+                <div class="legend-list">
+                    <div class="legend-item hot" data-link="sun">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Solar Heating</span>
+                            <span class="legend-desc">Sunlight heats land much faster than water.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item hot" data-link="updraft">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Thermal Updraft</span>
+                            <span class="legend-desc">Heated air expands, becomes less dense, and rises (Low Pressure).</span>
+                        </div>
+                    </div>
+                    <div class="legend-item cold" data-link="downdraft">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Cool Downdraft</span>
+                            <span class="legend-desc">Cooler, denser air over water sinks (High Pressure).</span>
+                        </div>
+                    </div>
+                    <div class="legend-item vapor" data-link="evap">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Evaporation</span>
+                            <span class="legend-desc">Liquid water turns into invisible water vapor gas.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item cold" data-link="wind">
+                        <div class="legend-badge">5</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Surface Wind</span>
+                            <span class="legend-desc">Air flows from High to Low pressure along the surface.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-link="cloud">
+                        <div class="legend-badge">6</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Condensation Level</span>
+                            <span class="legend-desc">Rising air cools. Vapor turns back to liquid drops, forming clouds.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================== WORKING PROCESS (MANDATORY SECTION) ================== -->
+    <section class="container" id="working">
+        <div class="glass-card">
+            <h2>Mechanism: The Convection Cycle</h2>
+            <p>Weather is a continuous flow engine. Watch how a single air parcel transforms as it travels through the thermodynamic cycle.</p>
+            
+            <div class="process-layout">
+                
+                <!-- SVG Animation Frame -->
+                <div class="process-visual">
+                    <svg id="processSvg" viewBox="0 0 1000 400" preserveAspectRatio="xMidYMid slice" style="width: 100%; height: 100%;">
+                        <defs>
+                            <linearGradient id="wpSky" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#0a1930" />
+                                <stop offset="100%" stop-color="#1a365d" />
+                            </linearGradient>
+                            <radialGradient id="wpSun" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#ffd700" />
+                                <stop offset="100%" stop-color="rgba(255,215,0,0)" />
+                            </radialGradient>
+                            <!-- Particle markers -->
+                            <marker id="dotRed" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4">
+                                <circle cx="5" cy="5" r="5" fill="var(--accent-hot)" />
+                            </marker>
+                            <marker id="dotBlue" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4">
+                                <circle cx="5" cy="5" r="5" fill="var(--accent-cold)" />
+                            </marker>
+                        </defs>
+
+                        <!-- Static BG -->
+                        <rect width="1000" height="400" fill="url(#wpSky)" />
+                        <!-- Terrain -->
+                        <path d="M 0 300 Q 250 280 500 350 L 1000 350 L 1000 400 L 0 400 Z" fill="#2d3748" />
+                        <rect x="500" y="350" width="500" height="50" fill="#2b6cb0" />
+
+                        <!-- Stage Elements (Toggled via JS) -->
+                        
+                        <!-- Stage 1: Solar Heating -->
+                        <g id="wp-stg-1" class="wp-el">
+                            <circle cx="150" cy="80" r="50" fill="url(#wpSun)" />
+                            <path d="M 150 130 L 150 300 M 100 120 L 50 280 M 200 120 L 250 280" stroke="#ffd700" stroke-width="2" stroke-dasharray="10 10" class="anim-dash" opacity="0.5"/>
+                            <rect x="50" y="290" width="300" height="20" fill="var(--accent-hot)" opacity="0.3" filter="blur(10px)"/>
+                        </g>
+
+                        <!-- Stage 2: Evaporation -->
+                        <g id="wp-stg-2" class="wp-el">
+                            <g class="anim-float" stroke="var(--accent-vapor)" stroke-width="3" stroke-linecap="round">
+                                <path d="M 600 340 L 600 280 M 700 340 L 700 260 M 800 340 L 800 290" />
+                                <circle cx="600" cy="280" r="3" fill="#fff"/>
+                                <circle cx="700" cy="260" r="3" fill="#fff"/>
+                                <circle cx="800" cy="290" r="3" fill="#fff"/>
+                            </g>
+                        </g>
+
+                        <!-- Stage 3: Convection Updraft -->
+                        <g id="wp-stg-3" class="wp-el">
+                            <path d="M 250 300 C 250 200, 250 150, 450 100" fill="none" stroke="var(--accent-hot)" stroke-width="8" opacity="0.7" marker-end="url(#arrowRed)" stroke-dasharray="20 20" class="anim-dash"/>
+                            <!-- Particles entering updraft -->
+                            <circle cx="200" cy="280" r="4" fill="var(--accent-vapor)" class="anim-float"/>
+                            <circle cx="300" cy="290" r="4" fill="var(--accent-vapor)" class="anim-float"/>
+                        </g>
+
+                        <!-- Stage 4: Adiabatic Cooling & Condensation -->
+                        <g id="wp-stg-4" class="wp-el">
+                            <!-- Cloud forming -->
+                            <g transform="translate(400, 50)" opacity="0">
+                                <animate attributeName="opacity" values="0;1" dur="1s" fill="freeze" begin="wp-stg-4.class-added" />
+                                <path d="M 50 80 A 30 30 0 0 1 50 20 A 40 40 0 0 1 120 10 A 40 40 0 0 1 190 30 A 30 30 0 0 1 190 80 Z" fill="#fff" opacity="0.9"/>
+                            </g>
+                            <!-- Color transition line -->
+                            <line x1="200" y1="180" x2="800" y2="180" stroke="#fff" stroke-width="1" stroke-dasharray="5 5" opacity="0.3"/>
+                            <text x="810" y="185" fill="#fff" font-size="12" opacity="0.5">Dew Point Line</text>
+                        </g>
+
+                        <!-- Stage 5: High Pressure Downdraft & Wind -->
+                        <g id="wp-stg-5" class="wp-el">
+                            <!-- Downdraft -->
+                            <path d="M 600 100 C 750 100, 750 250, 750 340" fill="none" stroke="var(--accent-cold)" stroke-width="8" opacity="0.7" marker-end="url(#arrowBlue)" stroke-dasharray="20 20" class="anim-dash"/>
+                            <!-- Surface Wind completing loop -->
+                            <path d="M 700 340 L 300 340" fill="none" stroke="#fff" stroke-width="4" marker-end="url(#arrowBlue)" class="anim-dash" stroke-dasharray="15 15"/>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Text & Progress -->
+                <div class="stage-caption">
+                    <div class="stage-title" id="stageTitle">1. Solar Heating</div>
+                    <div class="stage-desc" id="stageDesc">Sunlight strikes the Earth. Land surfaces absorb heat quickly, warming the air immediately directly above it.</div>
+                </div>
+
+                <!-- Controls -->
+                <div class="process-controls">
+                    <button class="btn" id="btnPrev">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        Prev
+                    </button>
+                    
+                    <div class="progress-bar" id="progressBar">
+                        <!-- Dots injected via JS -->
+                    </div>
+
+                    <button class="btn" id="btnAuto">Auto-Play ⏵</button>
+                    
+                    <button class="btn primary" id="btnNext">
+                        Next
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================== INTERACTIVE SIMULATION ================== -->
+    <section class="container" id="simulation">
+        <div class="glass-card">
+            <h2>Thermodynamic Sandbox</h2>
+            <p>Adjust environmental variables to see how they impact wind speed and cloud density in real-time. Computed via Canvas particle simulation.</p>
+            
+            <div class="sim-container">
+                <div class="canvas-wrapper">
+                    <canvas id="simCanvas"></canvas>
+                </div>
+                
+                <div class="sim-controls">
+                    <div class="glass-card" style="padding: 20px; background: rgba(0,0,0,0.2); border:none;">
+                        <h3>Variables</h3>
+                        
+                        <div class="control-group">
+                            <div class="control-header">
+                                <span>Temp Gradient (Land vs Water)</span>
+                                <span class="control-val" id="valTemp">High</span>
+                            </div>
+                            <!-- Values 1 to 10 -->
+                            <input type="range" id="tempSlider" min="1" max="10" value="7">
+                            <p style="font-size: 12px; margin:0;">Drives wind speed. Higher difference = faster convection.</p>
+                        </div>
+                        
+                        <div style="height: 24px;"></div>
+
+                        <div class="control-group">
+                            <div class="control-header">
+                                <span>Atmospheric Humidity</span>
+                                <span class="control-val" id="valHumid">60%</span>
+                            </div>
+                            <input type="range" id="humidSlider" min="0" max="100" value="60">
+                            <p style="font-size: 12px; margin:0;">Determines cloud mass and condensation level.</p>
+                        </div>
+                    </div>
+
+                    <div class="fact-card" style="padding: 16px; background: rgba(100, 255, 218, 0.05); border-radius: 8px;">
+                        <span style="display:block; color: var(--accent-cyan); font-weight:bold; margin-bottom: 4px;">Simulation Data:</span>
+                        <div style="font-size: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <span class="text-muted">Wind Velocity:</span> <span id="dataWind" class="text-main">15 knots</span>
+                            <span class="text-muted">Cloud Base:</span> <span id="dataBase" class="text-main">4,000 ft</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================== CLOUD TYPES (Pure SVG Vector) ================== -->
+    <section class="container">
+        <h2>Primary Cloud Formations</h2>
+        <div class="grid-3">
+            <!-- Cumulus -->
+            <div class="glass-card type-card">
+                <svg class="type-icon" viewBox="0 0 100 100">
+                    <defs>
+                        <linearGradient id="cumulusG" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#fff" />
+                            <stop offset="100%" stop-color="#b0c4de" />
+                        </linearGradient>
+                        <filter id="c-drop"><feDropShadow dx="0" dy="4" stdDeviation="4" flood-opacity="0.3"/></filter>
+                    </defs>
+                    <path d="M 20 60 A 20 20 0 0 1 20 20 A 25 25 0 0 1 60 10 A 25 25 0 0 1 90 30 A 20 20 0 0 1 80 65 Z" fill="url(#cumulusG)" filter="url(#c-drop)"/>
+                    <path d="M 20 60 L 80 65" stroke="#90a4ae" stroke-width="2" opacity="0.5"/> <!-- Flat base indicator -->
+                </svg>
+                <h3>Cumulus</h3>
+                <p><strong>Low Altitude</strong><br>Puffy, cotton-like clouds with flat bases. Formed by strong localized updrafts of warm, moist air.</p>
+            </div>
+
+            <!-- Stratus -->
+            <div class="glass-card type-card">
+                <svg class="type-icon" viewBox="0 0 100 100">
+                    <defs>
+                        <linearGradient id="stratusG" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#cfd8dc" />
+                            <stop offset="100%" stop-color="#78909c" />
+                        </linearGradient>
+                    </defs>
+                    <rect x="5" y="40" width="90" height="20" rx="10" fill="url(#stratusG)" filter="url(#c-drop)"/>
+                    <rect x="15" y="30" width="70" height="15" rx="7.5" fill="url(#stratusG)" opacity="0.8"/>
+                </svg>
+                <h3>Stratus</h3>
+                <p><strong>Low Altitude</strong><br>Flat, featureless, uniform layers covering the sky. Formed when a large mass of air rises slowly and evenly.</p>
+            </div>
+
+            <!-- Cirrus -->
+            <div class="glass-card type-card">
+                <svg class="type-icon" viewBox="0 0 100 100">
+                    <path d="M 10 30 Q 30 20 50 40 Q 70 60 90 30" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+                    <path d="M 20 50 Q 40 40 60 60 Q 80 80 95 50" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity="0.7"/>
+                    <path d="M 30 70 Q 50 60 70 80" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+                </svg>
+                <h3>Cirrus</h3>
+                <p><strong>High Altitude (>20,000 ft)</strong><br>Wispy, hair-like streaks. Because it is so cold at this altitude, they are made entirely of ice crystals, not water droplets.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ================== FACTS & MYTHS ================== -->
+    <section class="container" style="margin-bottom: 100px;">
+        <div class="grid-2">
+            <div class="glass-card fact-card">
+                <h3 style="color: var(--accent-blue)">Fascinating Fact</h3>
+                <p>A single fluffy cumulus cloud can weigh over <strong>1 million pounds (500,000 kg)</strong>. How does it float? The weight is distributed among trillions of microscopic water droplets spread across a massive volume, and the warm updraft rising from the earth pushes against them, keeping them suspended.</p>
+            </div>
+            
+            <div class="glass-card fact-card" style="border-left-color: var(--accent-hot)">
+                <h3 style="color: var(--accent-hot)">Common Mistake</h3>
+                <p><strong>Myth:</strong> Clouds are made of water vapor.<br>
+                   <strong>Reality:</strong> Water vapor is an <em>invisible</em> gas. The clouds you see are liquid water droplets or solid ice crystals. When vapor cools to the "dew point", it condenses onto microscopic dust/smoke particles (aerosols) to become visible.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        // -----------------------------------------------------------------
+        // 1. MARKER & LEGEND INTERACTION SYSTEM
+        // -----------------------------------------------------------------
+        const markers = document.querySelectorAll('.marker');
+        const legends = document.querySelectorAll('.legend-item');
+
+        function clearActiveLinks() {
+            markers.forEach(m => m.classList.remove('active'));
+            legends.forEach(l => l.classList.remove('active'));
+        }
+
+        function activateLink(linkData) {
+            clearActiveLinks();
+            if(!linkData) return;
+            const targetMarker = document.querySelector(`.marker[data-link="${linkData}"]`);
+            const targetLegend = document.querySelector(`.legend-item[data-link="${linkData}"]`);
+            if(targetMarker) targetMarker.classList.add('active');
+            if(targetLegend) targetLegend.classList.add('active');
+        }
+
+        // Add events
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => activateLink(marker.dataset.link));
+            marker.addEventListener('mouseleave', clearActiveLinks);
+            marker.addEventListener('click', () => activateLink(marker.dataset.link)); // Touch support
+        });
+
+        legends.forEach(legend => {
+            legend.addEventListener('mouseenter', () => activateLink(legend.dataset.link));
+            legend.addEventListener('mouseleave', clearActiveLinks);
+            legend.addEventListener('click', () => activateLink(legend.dataset.link));
+        });
+
+
+        // -----------------------------------------------------------------
+        // 2. WORKING PROCESS (State Machine & Animation)
+        // -----------------------------------------------------------------
+        const processData = [
+            {
+                title: "1. Solar Heating",
+                desc: "Sunlight passes through the transparent atmosphere and strikes the Earth. Land surfaces absorb heat quickly, warming the air immediately above it through conduction.",
+                elements: [1] // IDs of SVG groups to show
+            },
+            {
+                title: "2. Evaporation",
+                desc: "Solar energy breaks the bonds of liquid water on the surface, turning it into water vapor—an invisible, highly energetic gas.",
+                elements: [1, 2]
+            },
+            {
+                title: "3. Thermal Updraft (Convection)",
+                desc: "Heated air expands and becomes less dense than surrounding cooler air. Like a hot air balloon, this warm, moist air parcel begins to rise vertically, creating a Low Pressure zone at the surface.",
+                elements: [1, 2, 3]
+            },
+            {
+                title: "4. Adiabatic Cooling & Condensation",
+                desc: "As the air parcel rises, atmospheric pressure drops, causing it to expand and cool. Once it cools to its 'Dew Point', the invisible vapor condenses around dust particles into visible liquid droplets: a cloud is born.",
+                elements: [1, 2, 3, 4]
+            },
+            {
+                title: "5. Downdraft & Surface Wind",
+                desc: "Air over cooler areas (like water) is dense and sinks, creating High Pressure. To balance the atmosphere, air flows along the surface from High to Low pressure. This horizontal movement is Wind, completing the convection cycle.",
+                elements: [1, 3, 4, 5] // Hide evap to show closed loop flow
+            }
+        ];
+
+        let currentStage = 0;
+        let autoPlayTimer = null;
+        const totalStages = processData.length;
+
+        // UI Elements
+        const titleEl = document.getElementById('stageTitle');
+        const descEl = document.getElementById('stageDesc');
+        const btnPrev = document.getElementById('btnPrev');
+        const btnNext = document.getElementById('btnNext');
+        const btnAuto = document.getElementById('btnAuto');
+        const progressContainer = document.getElementById('progressBar');
+
+        // Initialize Progress Dots
+        for(let i=0; i<totalStages; i++) {
+            const dot = document.createElement('div');
+            dot.className = 'progress-dot';
+            dot.dataset.idx = i;
+            dot.addEventListener('click', () => goToStage(i));
+            progressContainer.appendChild(dot);
+        }
+        const dots = document.querySelectorAll('.progress-dot');
+
+        function updateProcessUI() {
+            const data = processData[currentStage];
+            
+            // Update Text
+            titleEl.textContent = data.title;
+            descEl.textContent = data.desc;
+
+            // Update Buttons
+            btnPrev.disabled = currentStage === 0;
+            btnNext.disabled = currentStage === totalStages - 1;
+
+            // Update Dots
+            dots.forEach((dot, idx) => {
+                if(idx === currentStage) dot.classList.add('active');
+                else dot.classList.remove('active');
+            });
+
+            // Update SVG Visibility (Fade in/out logic)
+            // First, reset all
+            for(let i=1; i<=5; i++) {
+                const el = document.getElementById(`wp-stg-${i}`);
+                if(el) {
+                    el.style.opacity = '0';
+                    // force reflow to allow transition restart
+                    void el.offsetWidth;
+                }
+            }
+            
+            // Show active elements
+            data.elements.forEach(id => {
+                const el = document.getElementById(`wp-stg-${id}`);
+                if(el) el.style.opacity = '1';
+            });
+        }
+
+        function goToStage(idx) {
+            currentStage = idx;
+            updateProcessUI();
+        }
+
+        function nextStage() {
+            if(currentStage < totalStages - 1) {
+                goToStage(currentStage + 1);
+            } else if (autoPlayTimer) {
+                goToStage(0); // Loop in autoplay
+            }
+        }
+
+        function prevStage() {
+            if(currentStage > 0) goToStage(currentStage - 1);
+        }
+
+        function toggleAutoPlay() {
+            if(autoPlayTimer) {
+                clearInterval(autoPlayTimer);
+                autoPlayTimer = null;
+                btnAuto.innerHTML = "Auto-Play ⏵";
+                btnAuto.classList.remove('primary');
+            } else {
+                nextStage(); // trigger immediately
+                autoPlayTimer = setInterval(nextStage, 4000);
+                btnAuto.innerHTML = "Pause ⏸";
+                btnAuto.classList.add('primary');
+            }
+        }
+
+        btnPrev.addEventListener('click', () => { clearInterval(autoPlayTimer); autoPlayTimer=null; btnAuto.innerHTML="Auto-Play ⏵"; btnAuto.classList.remove('primary'); prevStage(); });
+        btnNext.addEventListener('click', () => { clearInterval(autoPlayTimer); autoPlayTimer=null; btnAuto.innerHTML="Auto-Play ⏵"; btnAuto.classList.remove('primary'); nextStage(); });
+        btnAuto.addEventListener('click', toggleAutoPlay);
+
+        // Init first stage
+        updateProcessUI();
+
+
+        // -----------------------------------------------------------------
+        // 3. INTERACTIVE SIMULATION (CANVAS)
+        // -----------------------------------------------------------------
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = canvas.parentElement;
+
+        // Sliders & Data UI
+        const tempSlider = document.getElementById('tempSlider');
+        const humidSlider = document.getElementById('humidSlider');
+        const valTemp = document.getElementById('valTemp');
+        const valHumid = document.getElementById('valHumid');
+        const dataWind = document.getElementById('dataWind');
+        const dataBase = document.getElementById('dataBase');
+
+        // State
+        let cw, ch;
+        let simTemp = parseInt(tempSlider.value); // 1-10
+        let simHumid = parseInt(humidSlider.value); // 0-100
+
+        // Handle Resize (Responsive Canvas Rule)
+        function resizeCanvas() {
+            const rect = container.getBoundingClientRect();
+            // Handle retina displays
+            const dpr = window.devicePixelRatio || 1;
+            cw = rect.width;
+            ch = rect.height;
+            canvas.width = cw * dpr;
+            canvas.height = ch * dpr;
+            ctx.scale(dpr, dpr);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('orientationchange', resizeCanvas);
+        resizeCanvas();
+
+        // Object Definitions
+        class WindParticle {
+            constructor() {
+                this.reset();
+                this.x = Math.random() * cw; // initial scatter
+            }
+            reset() {
+                this.x = cw + Math.random() * 50; // Start offscreen right (wind moves right to left based on our previous diagrams)
+                // Actually, let's make it flow left to right to match the slider direction intuitively
+                this.x = -Math.random() * 50;
+                this.y = ch - 20 - Math.random() * 80; // Surface layer
+                this.length = 10 + Math.random() * 20;
+                this.baseSpeed = 0.5 + Math.random() * 1;
+                this.opacity = 0.2 + Math.random() * 0.5;
+            }
+            update(tempDiff) {
+                // Speed is heavily influenced by temp difference
+                const currentSpeed = this.baseSpeed * (tempDiff * 0.8);
+                this.x += currentSpeed;
+                if(this.x > cw) this.reset();
+            }
+            draw(ctx) {
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(this.x + this.length, this.y);
+                ctx.strokeStyle = `rgba(255, 255, 255, ${this.opacity})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
+
+        class CloudCluster {
+            constructor() {
+                this.circles = [];
+                for(let i=0; i<6; i++) {
+                    this.circles.push({
+                        ox: (Math.random() - 0.5) * 80, // offset x
+                        oy: (Math.random() - 0.5) * 40,
+                        r: 20 + Math.random() * 40
+                    });
+                }
+                this.x = cw * 0.5;
+                this.y = ch * 0.3;
+                this.drift = Math.random() * 1000;
+            }
+            
+            update(humidity, temp) {
+                // Altitude based on temp (hotter = higher condensation level)
+                const targetY = ch * 0.5 - (temp * 15);
+                this.y += (targetY - this.y) * 0.1; // Smooth interpolate
+
+                // Center position gently drifting
+                const time = Date.now() / 3000;
+                this.x = (cw/2) + Math.sin(time + this.drift) * 50;
+            }
+
+            draw(ctx, humidity) {
+                if(humidity < 10) return; // Too dry to form
+                
+                // Calculate size multiplier based on humidity
+                const scale = humidity / 60; // 60 is baseline 1.0
+                const opacity = Math.min(1, humidity / 40) * 0.9;
+
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.scale(scale, scale);
+                
+                // Shadow/Bottom layer
+                ctx.fillStyle = `rgba(160, 176, 192, ${opacity})`;
+                ctx.beginPath();
+                for(const c of this.circles) {
+                    ctx.moveTo(c.ox, c.oy + 10);
+                    ctx.arc(c.ox, c.oy + 10, c.r, 0, Math.PI*2);
+                }
+                ctx.fill();
+
+                // Highlight/Top layer
+                ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+                ctx.beginPath();
+                for(const c of this.circles) {
+                    ctx.moveTo(c.ox, c.oy);
+                    ctx.arc(c.ox, c.oy, c.r, 0, Math.PI*2);
+                }
+                ctx.fill();
+
+                ctx.restore();
+            }
+        }
+
+        // Init Objects
+        const particles = Array.from({length: 40}, () => new WindParticle());
+        const cloud = new CloudCluster();
+
+        // Update UI Text
+        function updateSimUI() {
+            simTemp = parseInt(tempSlider.value);
+            simHumid = parseInt(humidSlider.value);
+
+            // Labels
+            if(simTemp < 4) valTemp.textContent = "Low";
+            else if(simTemp < 7) valTemp.textContent = "Moderate";
+            else valTemp.textContent = "High";
+
+            valHumid.textContent = simHumid + "%";
+
+            // Metrics
+            const windSpeed = Math.floor(simTemp * 3.5);
+            dataWind.textContent = windSpeed + " knots";
+            
+            // Base altitude (rough approximation formula for education)
+            // Higher temp diff = higher updraft = higher base. Humidity lowers it.
+            const baseAlt = 1000 + (simTemp * 500) - (simHumid * 20);
+            dataBase.textContent = Math.max(500, Math.floor(baseAlt)) + " ft";
+        }
+
+        // Listeners for mobile/desktop
+        ['input', 'change', 'touchmove'].forEach(evt => {
+            tempSlider.addEventListener(evt, updateSimUI);
+            humidSlider.addEventListener(evt, updateSimUI);
+        });
+        updateSimUI();
+
+        // Render Loop
+        function animateCanvas() {
+            // Clear
+            ctx.clearRect(0, 0, cw, ch);
+
+            // Draw Background Sky Gradient
+            const skyGrad = ctx.createLinearGradient(0, 0, 0, ch);
+            skyGrad.addColorStop(0, '#0a192f');
+            // Bottom color depends on temp (warmer = lighter haze)
+            const hazeH = 200 + (simTemp * 5); // adjust hue slightly
+            skyGrad.addColorStop(1, `hsl(${hazeH}, 50%, 20%)`);
+            ctx.fillStyle = skyGrad;
+            ctx.fillRect(0, 0, cw, ch);
+
+            // Draw Terrain Profile
+            ctx.fillStyle = '#112240';
+            ctx.beginPath();
+            ctx.moveTo(0, ch);
+            ctx.lineTo(0, ch - 50);
+            ctx.quadraticCurveTo(cw*0.5, ch-100, cw, ch-30);
+            ctx.lineTo(cw, ch);
+            ctx.fill();
+
+            // Update & Draw Wind
+            particles.forEach(p => {
+                p.update(simTemp);
+                p.draw(ctx);
+            });
+
+            // Update & Draw Cloud
+            cloud.update(simHumid, simTemp);
+            cloud.draw(ctx, simHumid);
+
+            requestAnimationFrame(animateCanvas);
+        }
+        
+        // Start Loop
+        requestAnimationFrame(animateCanvas);
+
+    </script>
+</body>
+</html>

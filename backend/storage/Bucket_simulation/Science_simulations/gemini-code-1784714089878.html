@@ -1,0 +1,1493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Earthquake Wave Simulator | Premium Educational Visualization</title>
+    <style>
+        /* ==========================================================================
+           BASE STYLES & TYPOGRAPHY
+           ========================================================================== */
+        :root {
+            --bg-color: #050508;
+            --surface-color: rgba(255, 255, 255, 0.03);
+            --surface-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f0f0f5;
+            --text-muted: #8a8a9d;
+            
+            /* Thematic Colors */
+            --accent-p: #00e5ff; /* Cyan for P-Waves */
+            --accent-s: #ff2a6d; /* Pink for S-Waves */
+            --accent-surface: #01ffc3; /* Green for Surface Waves */
+            --accent-fault: #ffab00; /* Orange/Yellow for Earth/Faults */
+            
+            /* Fluid Typography */
+            --font-xs: clamp(0.75rem, 1vw, 0.875rem);
+            --font-sm: clamp(0.875rem, 1.2vw, 1rem);
+            --font-base: clamp(1rem, 1.5vw, 1.125rem);
+            --font-lg: clamp(1.25rem, 2vw, 1.5rem);
+            --font-xl: clamp(1.75rem, 3vw, 2.5rem);
+            --font-xxl: clamp(2.5rem, 5vw, 4rem);
+
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            
+            --spacing-sm: clamp(8px, 2vw, 16px);
+            --spacing-md: clamp(16px, 3vw, 32px);
+            --spacing-lg: clamp(32px, 5vw, 64px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 100%, #1a1a2e 0%, var(--bg-color) 70%);
+        }
+        .glow-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.15;
+            animation: float 20s infinite alternate ease-in-out;
+        }
+        .orb-1 { top: 20%; left: 10%; width: 40vw; height: 40vw; background: var(--accent-p); }
+        .orb-2 { bottom: -10%; right: 10%; width: 50vw; height: 50vw; background: var(--accent-s); animation-delay: -5s; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(30px, -50px) scale(1.1); }
+        }
+
+        /* Layout */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-md);
+        }
+
+        section {
+            padding: var(--spacing-lg) 0;
+            position: relative;
+        }
+
+        h1, h2, h3 { line-height: 1.2; font-weight: 700; margin-bottom: var(--spacing-sm); }
+        h1 { font-size: var(--font-xxl); letter-spacing: -1px; }
+        h2 { font-size: var(--font-xl); color: #fff; }
+        h3 { font-size: var(--font-lg); }
+        p { font-size: var(--font-base); color: var(--text-muted); margin-bottom: var(--spacing-sm); }
+
+        .glass-panel {
+            background: var(--surface-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--surface-border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-md);
+            box-shadow: 0 24px 48px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .text-gradient {
+            background: linear-gradient(135deg, #fff 0%, #a0a0b0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ==========================================================================
+           HEADER & INTRO
+           ========================================================================== */
+        header {
+            min-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+            padding-top: var(--spacing-lg);
+        }
+        
+        .hero-canvas-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, black 50%, transparent 100%);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: var(--font-xs);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(0, 229, 255, 0.1);
+            color: var(--accent-p);
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            margin-bottom: var(--spacing-sm);
+        }
+
+        /* ==========================================================================
+           COMPONENTS (MARKER SYSTEM)
+           ========================================================================== */
+        .components-grid {
+            display: grid;
+            grid-template-columns: 1.5fr 1fr;
+            gap: var(--spacing-md);
+            align-items: center;
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--spacing-md);
+        }
+
+        .illustration-container svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #fff;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+        
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            background: inherit;
+            z-index: -1;
+            animation: pulse-marker 2s infinite;
+        }
+
+        @keyframes pulse-marker {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: #fff;
+            color: var(--bg-color);
+        }
+        
+        .m-focus { top: 70%; left: 50%; border-color: var(--accent-p); }
+        .m-focus::before { background: var(--accent-p); }
+        .m-epicenter { top: 20%; left: 50%; border-color: var(--accent-surface); }
+        .m-epicenter::before { background: var(--accent-surface); }
+        .m-fault { top: 45%; left: 35%; border-color: var(--accent-fault); }
+        .m-fault::before { background: var(--accent-fault); }
+        .m-waves { top: 55%; left: 70%; border-color: var(--accent-s); }
+        .m-waves::before { background: var(--accent-s); }
+
+        /* Legend */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateX(5px);
+        }
+
+        .legend-num {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+        
+        .l-focus .legend-num { color: var(--accent-p); border: 1px solid var(--accent-p); }
+        .l-epicenter .legend-num { color: var(--accent-surface); border: 1px solid var(--accent-surface); }
+        .l-fault .legend-num { color: var(--accent-fault); border: 1px solid var(--accent-fault); }
+        .l-waves .legend-num { color: var(--accent-s); border: 1px solid var(--accent-s); }
+
+        .legend-text h4 { margin: 0 0 4px 0; font-size: var(--font-base); color: #fff; }
+        .legend-text p { margin: 0; font-size: var(--font-xs); }
+
+        /* ==========================================================================
+           WORKING MECHANISM (MANDATORY STRUCTURE)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .working-canvas-wrapper {
+            width: 100%;
+            height: 400px;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            position: relative;
+            background: #0a0a10;
+            border: 1px solid var(--surface-border);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .stage-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
+            padding: 12px 20px;
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255,255,255,0.1);
+            pointer-events: none;
+        }
+        .stage-overlay h4 { color: #fff; margin: 0; font-size: var(--font-base); display: flex; align-items: center; gap: 8px;}
+        .stage-overlay h4 span { color: var(--accent-fault); font-size: 1.2em; font-weight: 900;}
+        .stage-overlay p { margin: 4px 0 0 0; font-size: var(--font-sm); color: #ccc; }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: var(--font-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        button:hover { background: rgba(255, 255, 255, 0.2); transform: translateY(-2px); }
+        button:active { transform: translateY(0); }
+        
+        button.primary {
+            background: var(--accent-p);
+            color: #000;
+            border: none;
+        }
+        button.primary:hover {
+            background: #33eaff;
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.4);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+        .dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transition: 0.3s;
+        }
+        .dot.active { background: var(--accent-p); transform: scale(1.3); }
+
+        /* ==========================================================================
+           WAVE COMPARISON (VISUAL EXPLANATION)
+           ========================================================================== */
+        .wave-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: var(--spacing-md);
+        }
+        
+        .wave-card {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .wave-visual {
+            height: 200px;
+            border-radius: var(--radius-md);
+            background: #0d0d14;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--surface-border);
+        }
+        
+        .wave-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .wave-header h4 { margin: 0; color: #fff; }
+        .speed-pill {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATOR
+           ========================================================================== */
+        .simulator-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: var(--spacing-md);
+        }
+
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--font-sm);
+            color: #ccc;
+        }
+        
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        .seismograph-display {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .map-view {
+            height: 200px;
+            border-radius: var(--radius-md);
+            background: #0d0d14;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--surface-border);
+        }
+
+        .paper-view {
+            height: 250px;
+            border-radius: var(--radius-md);
+            background: #f4f4f0; /* Paper color */
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+        }
+        
+        .paper-grid {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-size: 20px 20px;
+            background-image: 
+                linear-gradient(to right, rgba(0, 0, 255, 0.05) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(0, 0, 255, 0.05) 1px, transparent 1px);
+            pointer-events: none;
+        }
+
+        .seismo-canvas {
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
+        }
+
+        .sim-btn-group {
+            display: flex;
+            gap: 10px;
+            margin-top: auto;
+        }
+
+        /* ==========================================================================
+           INFO GRID (FACTS, MISTAKES)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-md);
+        }
+
+        .info-card h4 {
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .icon-circle {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+        }
+
+        /* ==========================================================================
+           RESPONSIVE RULES (MANDATORY)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .components-grid { grid-template-columns: 1fr; }
+            .simulator-layout { grid-template-columns: 1fr; }
+            .control-panel { flex-direction: row; flex-wrap: wrap; }
+            .slider-group { flex: 1; min-width: 200px; }
+            .sim-btn-group { width: 100%; }
+        }
+
+        @media (max-width: 768px) {
+            :root {
+                --spacing-lg: 40px; /* Reduce padding on mobile */
+            }
+            .glass-panel {
+                backdrop-filter: blur(8px); /* Reduce GPU load */
+                -webkit-backdrop-filter: blur(8px);
+                padding: 16px;
+            }
+            .wave-grid { grid-template-columns: 1fr; }
+            .control-panel { flex-direction: column; }
+            .marker { width: 28px; height: 28px; font-size: 12px; }
+            
+            /* Sizing Discipline */
+            .working-canvas-wrapper { height: 300px; }
+            .wave-visual { height: 150px; }
+            .paper-view { height: 200px; }
+            
+            /* Ensure tap targets are large enough */
+            button { padding: 12px 24px; min-height: 44px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="ambient-bg">
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+    </div>
+
+    <!-- HERO SECTION -->
+    <header id="intro">
+        <div class="hero-canvas-container" id="heroCanvasContainer">
+            <canvas id="heroCanvas"></canvas>
+        </div>
+        <div class="container" style="z-index: 1;">
+            <span class="badge">Interactive Simulation</span>
+            <h1 class="text-gradient">Earthquake Waves</h1>
+            <p style="max-width: 600px; margin: 0 auto; color: #a0a0b0;">
+                Visualize the hidden forces beneath our feet. Understand how energy travels through the Earth, the different types of seismic waves, and how we measure them.
+            </p>
+        </div>
+    </header>
+
+    <!-- COMPONENTS SECTION (Marker System) -->
+    <section id="components">
+        <div class="container">
+            <h2>Anatomy of an Earthquake</h2>
+            <p>Before waves can travel, energy must be released. Explore the structural components of a seismic event.</p>
+            
+            <div class="components-grid mt-4">
+                <div class="illustration-container glass-panel">
+                    <!-- Premium Vector Illustration (SVG) -->
+                    <svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="crustGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#4a3b32" />
+                                <stop offset="100%" stop-color="#2a1f1a" />
+                            </linearGradient>
+                            <linearGradient id="mantleGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#8a3000" />
+                                <stop offset="100%" stop-color="#4a0000" />
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        
+                        <!-- Sky/Surface -->
+                        <path d="M 50 150 Q 250 130 450 160 T 750 140 L 750 180 L 50 180 Z" fill="#2c3e50" opacity="0.5"/>
+                        
+                        <!-- Left Block (Crust) -->
+                        <path d="M 50 180 L 350 200 L 250 550 L 50 500 Z" fill="url(#crustGrad)" stroke="#5a4b42" stroke-width="2"/>
+                        <!-- Right Block (Crust - Slipped) -->
+                        <path d="M 370 240 L 750 180 L 750 480 L 270 590 Z" fill="url(#crustGrad)" stroke="#5a4b42" stroke-width="2"/>
+                        
+                        <!-- Top Surface details -->
+                        <path d="M 50 180 L 350 200 L 400 150 L 100 130 Z" fill="#5c7a52" opacity="0.8"/>
+                        <path d="M 370 240 L 750 180 L 800 130 L 420 190 Z" fill="#5c7a52" opacity="0.6"/>
+                        
+                        <!-- Fault Plane (The Gap) -->
+                        <polygon points="350,200 370,240 270,590 250,550" fill="#111" />
+                        
+                        <!-- Seismic Waves (Concentric Arcs from Focus) -->
+                        <g stroke="var(--accent-s)" stroke-width="2" fill="none" opacity="0.6" filter="url(#glow)">
+                            <path d="M 280 430 A 50 50 0 0 1 350 370" />
+                            <path d="M 240 450 A 100 100 0 0 1 390 320" />
+                            <path d="M 190 470 A 150 150 0 0 1 430 270" />
+                        </g>
+                        
+                        <!-- Epicenter indicator -->
+                        <circle cx="360" cy="220" r="40" fill="none" stroke="var(--accent-surface)" stroke-width="1" opacity="0.5">
+                            <animate attributeName="r" values="0; 80" dur="2s" repeatCount="indefinite"/>
+                            <animate attributeName="opacity" values="1; 0" dur="2s" repeatCount="indefinite"/>
+                        </circle>
+                    </svg>
+
+                    <!-- Markers -->
+                    <div class="marker m-focus" data-target="l-focus">1</div>
+                    <div class="marker m-epicenter" data-target="l-epicenter">2</div>
+                    <div class="marker m-fault" data-target="l-fault">3</div>
+                    <div class="marker m-waves" data-target="l-waves">4</div>
+                </div>
+
+                <!-- Legend List (Normal Document Flow) -->
+                <div class="legend-list glass-panel">
+                    <div class="legend-item l-focus" data-target="m-focus">
+                        <div class="legend-num">1</div>
+                        <div class="legend-text">
+                            <h4>Focus (Hypocenter)</h4>
+                            <p>The exact point inside the Earth's crust where the rock ruptures and energy is initially released.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item l-epicenter" data-target="m-epicenter">
+                        <div class="legend-num">2</div>
+                        <div class="legend-text">
+                            <h4>Epicenter</h4>
+                            <p>The point on the Earth's surface directly vertically above the focus. Usually where shaking is most severe.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item l-fault" data-target="m-fault">
+                        <div class="legend-num">3</div>
+                        <div class="legend-text">
+                            <h4>Fault Line</h4>
+                            <p>A fracture in rock where there has been movement. Tectonic plates grind against each other here.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item l-waves" data-target="m-waves">
+                        <div class="legend-num">4</div>
+                        <div class="legend-text">
+                            <h4>Seismic Waves</h4>
+                            <p>Radiating energy pulses traveling outward from the focus in all directions, like ripples in a pond.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING SECTION (Mandatory Stage-by-Stage) -->
+    <section id="working">
+        <div class="container">
+            <h2>Mechanism: How It Works</h2>
+            <p>An earthquake is not a single moment, but a linear sequence of energy accumulation and sudden release. Watch the stages.</p>
+            
+            <div class="working-container glass-panel mt-4">
+                <div class="working-canvas-wrapper">
+                    <canvas id="mechanismCanvas"></canvas>
+                    <div class="stage-overlay">
+                        <h4><span id="stageNum">1</span><span style="margin:0 8px; font-weight: normal; color:#555;">|</span><span id="stageTitle">Stress Build-up</span></h4>
+                        <p id="stageDesc">Tectonic forces push rocks in opposite directions. Friction prevents movement, causing elastic energy to build up over years.</p>
+                    </div>
+                </div>
+                
+                <div class="controls">
+                    <button id="btnPrev">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        Prev
+                    </button>
+                    
+                    <div class="progress-dots" id="mechProgress">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    
+                    <button id="btnNext">
+                        Next
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                    
+                    <button id="btnAuto" class="primary" style="margin-left: auto;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        Auto-Play
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WAVE TYPES (Visual Explanation) -->
+    <section id="wave-types">
+        <div class="container">
+            <h2>Types of Seismic Waves</h2>
+            <p>Energy travels through rock in different ways. Notice how the <b>particle motion</b> (dots) differs from the <b>wave direction</b> (arrow).</p>
+            
+            <div class="wave-grid mt-4">
+                <!-- P Wave -->
+                <div class="wave-card glass-panel">
+                    <div class="wave-header">
+                        <h4>P-Wave (Primary)</h4>
+                        <span class="speed-pill" style="color: var(--accent-p); border: 1px solid var(--accent-p);">Fastest (~6 km/s)</span>
+                    </div>
+                    <p style="font-size: var(--font-xs);">Compressional wave. Particles push and pull in the same direction the wave travels. Travels through solid and liquid.</p>
+                    <div class="wave-visual">
+                        <canvas id="pWaveCanvas"></canvas>
+                        <div style="position:absolute; bottom:10px; right:10px; opacity:0.5;">➔ Direction</div>
+                    </div>
+                </div>
+                
+                <!-- S Wave -->
+                <div class="wave-card glass-panel">
+                    <div class="wave-header">
+                        <h4>S-Wave (Secondary)</h4>
+                        <span class="speed-pill" style="color: var(--accent-s); border: 1px solid var(--accent-s);">Slower (~3.5 km/s)</span>
+                    </div>
+                    <p style="font-size: var(--font-xs);">Shear wave. Particles move up and down, perpendicular to wave direction. Travels only through solids.</p>
+                    <div class="wave-visual">
+                        <canvas id="sWaveCanvas"></canvas>
+                        <div style="position:absolute; bottom:10px; right:10px; opacity:0.5;">➔ Direction</div>
+                    </div>
+                </div>
+
+                <!-- Rayleigh Wave -->
+                <div class="wave-card glass-panel">
+                    <div class="wave-header">
+                        <h4>Rayleigh Wave (Surface)</h4>
+                        <span class="speed-pill" style="color: var(--accent-surface); border: 1px solid var(--accent-surface);">Slowest, Most Damage</span>
+                    </div>
+                    <p style="font-size: var(--font-xs);">Rolls along the surface like an ocean wave. Particles move in elliptical paths. Causes complex ground shaking.</p>
+                    <div class="wave-visual">
+                        <canvas id="rayleighCanvas"></canvas>
+                    </div>
+                </div>
+
+                <!-- Love Wave -->
+                <div class="wave-card glass-panel">
+                    <div class="wave-header">
+                        <h4>Love Wave (Surface)</h4>
+                        <span class="speed-pill" style="color: var(--accent-surface); border: 1px solid var(--accent-surface);">Horizontal Shear</span>
+                    </div>
+                    <p style="font-size: var(--font-xs);">Moves the surface of the earth side-to-side horizontally. Extremely damaging to building foundations.</p>
+                    <div class="wave-visual">
+                        <canvas id="loveCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATOR -->
+    <section id="simulator">
+        <div class="container">
+            <h2>Seismograph Simulator</h2>
+            <p>Generate an earthquake and watch how a seismometer records it. Notice how distance affects arrival time and magnitude affects amplitude.</p>
+            
+            <div class="simulator-layout glass-panel mt-4">
+                <div class="control-panel">
+                    <div>
+                        <h3 style="color:#fff; margin-bottom:4px;">Parameters</h3>
+                        <p style="font-size: var(--font-xs);">Adjust conditions to simulate.</p>
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Magnitude (Energy)</span>
+                            <span id="magValue" style="color:var(--accent-p); font-weight:bold;">7.0 M</span>
+                        </div>
+                        <input type="range" id="simMagnitude" min="4" max="9" step="0.1" value="7.0">
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Station Distance</span>
+                            <span id="distValue" style="color:var(--accent-surface); font-weight:bold;">200 km</span>
+                        </div>
+                        <input type="range" id="simDistance" min="50" max="1000" step="10" value="200">
+                    </div>
+
+                    <div class="sim-btn-group">
+                        <button id="btnTriggerQuake" class="primary" style="flex: 1; justify-content: center;">
+                            Trigger Earthquake
+                        </button>
+                        <button id="btnResetSim" style="padding: 10px;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                        </button>
+                    </div>
+                    
+                    <div style="margin-top:auto; padding: 12px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); font-size: 12px; border-left: 3px solid var(--accent-p);">
+                        <b>Note:</b> Time gap between P and S waves ($\Delta t = t_s - t_p$) is how scientists calculate distance to epicenter.
+                    </div>
+                </div>
+
+                <div class="seismograph-display">
+                    <!-- Map/Cross Section View -->
+                    <div class="map-view">
+                        <canvas id="simMapCanvas"></canvas>
+                        <!-- Labels -->
+                        <div style="position:absolute; bottom:10px; left:10px; font-size:10px; color:#aaa;">Epicenter</div>
+                        <div style="position:absolute; bottom:10px; right:10px; font-size:10px; color:#aaa;">Station</div>
+                        <!-- Key -->
+                        <div style="position:absolute; top:10px; right:10px; font-size:10px; display:flex; gap:10px;">
+                            <span style="color:var(--accent-p)">● P</span>
+                            <span style="color:var(--accent-s)">● S</span>
+                            <span style="color:var(--accent-surface)">● Surface</span>
+                        </div>
+                    </div>
+
+                    <!-- Paper Drum View -->
+                    <div class="paper-view">
+                        <div class="paper-grid"></div>
+                        <canvas id="simSeismoCanvas" class="seismo-canvas"></canvas>
+                        
+                        <!-- Pen mechanism UI -->
+                        <div style="position:absolute; top:50%; right:0; width:40px; height:2px; background:#444; transform:translateY(-50%); z-index:10; box-shadow: 0 2px 5px rgba(0,0,0,0.5);">
+                            <div style="position:absolute; left:0; top:-4px; width:10px; height:10px; border-radius:50%; background:#111; border:2px solid #ccc;"></div>
+                        </div>
+                        
+                        <div style="position:absolute; top:10px; left:10px; font-size:12px; color:#555; font-weight:bold; font-family:monospace;">SEISMOGRAM TRACE</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INFO GRID -->
+    <section id="info">
+        <div class="container">
+            <div class="info-grid">
+                <div class="info-card glass-panel">
+                    <h4>
+                        <div class="icon-circle text-gradient">💡</div>
+                        Interesting Fact
+                    </h4>
+                    <p style="font-size: var(--font-sm);">The Earth is completely "liquid" to S-waves in its outer core. Because S-waves cannot travel through liquids, they create massive "shadow zones" on the opposite side of the Earth from an earthquake, which is how we discovered the liquid outer core!</p>
+                </div>
+                <div class="info-card glass-panel">
+                    <h4>
+                        <div class="icon-circle text-gradient">❌</div>
+                        Common Mistake
+                    </h4>
+                    <p style="font-size: var(--font-sm);">People often confuse <b>Magnitude</b> with <b>Intensity</b>. Magnitude (Richter/Moment scale) measures total energy released at the source (one number per quake). Intensity (Mercalli scale) measures the shaking effect at a specific location (changes based on distance).</p>
+                </div>
+                <div class="info-card glass-panel">
+                    <h4>
+                        <div class="icon-circle text-gradient">🏗️</div>
+                        Application
+                    </h4>
+                    <p style="font-size: var(--font-sm);">Engineers use shake tables to simulate surface waves (Rayleigh/Love) on building models. To counter resonance, modern skyscrapers use "Tuned Mass Dampers"—giant pendulums that sway in the opposite direction of the building during a quake.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // ==========================================================================
+        // UTILITY: Canvas Engine (Handles retina displays & resizing)
+        // ==========================================================================
+        class CanvasEngine {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d', { alpha: false }); // Optimize for no transparency if full bg
+                if(!this.canvas.parentElement.style.backgroundColor) {
+                    this.ctx = this.canvas.getContext('2d'); // Fallback to alpha if needed
+                }
+                
+                this.width = 0;
+                this.height = 0;
+                this.dpr = window.devicePixelRatio || 1;
+                
+                this.resize = this.resize.bind(this);
+                window.addEventListener('resize', this.resize);
+                window.addEventListener('orientationchange', () => setTimeout(this.resize, 100));
+                
+                this.resize();
+            }
+
+            resize() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                this.width = rect.width;
+                this.height = rect.height;
+                
+                this.canvas.width = this.width * this.dpr;
+                this.canvas.height = this.height * this.dpr;
+                
+                this.ctx.scale(this.dpr, this.dpr);
+                
+                // Allow custom redraw on resize
+                if(this.onResize) this.onResize();
+            }
+
+            clear() {
+                this.ctx.clearRect(0, 0, this.width, this.height);
+            }
+        }
+
+        // ==========================================================================
+        // INTERACTION: Marker & Legend Logic
+        // ==========================================================================
+        function setupMarkers() {
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function activate(targetClass) {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                
+                // Find matching elements based on classes
+                const markerTarget = document.querySelector(`.m-${targetClass.split('-')[1]}`);
+                const legendTarget = document.querySelector(`.l-${targetClass.split('-')[1]}`);
+                
+                if(markerTarget) markerTarget.classList.add('active');
+                if(legendTarget) legendTarget.classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', (e) => activate(e.target.classList[1]));
+                marker.addEventListener('click', (e) => activate(e.target.classList[1]));
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', (e) => activate(e.currentTarget.classList[1]));
+                item.addEventListener('click', (e) => activate(e.currentTarget.classList[1]));
+            });
+            
+            // Auto trigger first one
+            setTimeout(() => activate('m-focus'), 1000);
+        }
+
+        // ==========================================================================
+        // ANIMATION: Hero Background (Radiating Waves)
+        // ==========================================================================
+        const heroEngine = new CanvasEngine('heroCanvas');
+        let heroWaves = [];
+        
+        function drawHero() {
+            heroEngine.clear();
+            const ctx = heroEngine.ctx;
+            const cx = heroEngine.width / 2;
+            const cy = heroEngine.height; // Bottom center
+            
+            // Spawn waves
+            if(Math.random() < 0.03) {
+                heroWaves.push({ r: 10, alpha: 1, speed: 2 + Math.random() });
+            }
+            
+            // Update and draw
+            for(let i = heroWaves.length - 1; i >= 0; i--) {
+                let w = heroWaves[i];
+                w.r += w.speed;
+                w.alpha -= 0.002;
+                
+                if(w.alpha <= 0) {
+                    heroWaves.splice(i, 1);
+                    continue;
+                }
+                
+                ctx.beginPath();
+                ctx.arc(cx, cy, w.r, Math.PI, 2*Math.PI);
+                ctx.strokeStyle = `rgba(0, 229, 255, ${w.alpha * 0.3})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            requestAnimationFrame(drawHero);
+        }
+
+        // ==========================================================================
+        // ANIMATION: Wave Types Comparison (Particles)
+        // ==========================================================================
+        class ParticleWaveEngine extends CanvasEngine {
+            constructor(id, type) {
+                super(id);
+                this.type = type;
+                this.particles = [];
+                this.time = 0;
+                this.cols = 20;
+                this.rows = 8;
+                this.spacingX = 0;
+                this.spacingY = 0;
+                
+                this.onResize = () => this.initParticles();
+                this.initParticles();
+            }
+            
+            initParticles() {
+                this.particles = [];
+                this.spacingX = this.width / (this.cols + 1);
+                this.spacingY = this.height / (this.rows + 1);
+                
+                for(let i=0; i<this.cols; i++) {
+                    for(let j=0; j<this.rows; j++) {
+                        this.particles.push({
+                            x0: (i+1) * this.spacingX,
+                            y0: (j+1) * this.spacingY,
+                            i: i,
+                            j: j
+                        });
+                    }
+                }
+            }
+            
+            draw() {
+                this.ctx.fillStyle = '#0d0d14';
+                this.ctx.fillRect(0, 0, this.width, this.height);
+                
+                this.time += 0.05;
+                const k = 0.5; // Wave number
+                const w = 2.0; // Angular frequency
+                const A = 15;  // Amplitude
+                
+                this.ctx.fillStyle = 'rgba(255,255,255,0.8)';
+                
+                for(let p of this.particles) {
+                    let phase = k * p.x0 - w * this.time;
+                    let nx = p.x0;
+                    let ny = p.y0;
+                    
+                    if(this.type === 'P') {
+                        nx = p.x0 + A * Math.sin(phase);
+                        this.ctx.fillStyle = '#00e5ff';
+                    } 
+                    else if(this.type === 'S') {
+                        ny = p.y0 + A * Math.sin(phase);
+                        this.ctx.fillStyle = '#ff2a6d';
+                    }
+                    else if(this.type === 'Rayleigh') {
+                        // Amplitude decays with depth (j)
+                        let depthDecay = Math.exp(-p.j * 0.3);
+                        nx = p.x0 + (A * 0.8) * Math.sin(phase) * depthDecay;
+                        ny = p.y0 + A * Math.cos(phase) * depthDecay;
+                        this.ctx.fillStyle = '#01ffc3';
+                    }
+                    else if(this.type === 'Love') {
+                        // Simulate in/out of screen by changing size and horizontal shift
+                        let depthDecay = Math.exp(-p.j * 0.2);
+                        let shift = A * Math.sin(phase) * depthDecay;
+                        nx = p.x0 + shift;
+                        let size = 2 + Math.cos(phase) * 1.5 * depthDecay;
+                        this.ctx.fillStyle = '#01ffc3';
+                        this.ctx.beginPath();
+                        this.ctx.arc(nx, ny, size, 0, Math.PI*2);
+                        this.ctx.fill();
+                        continue; // Skip normal drawing
+                    }
+                    
+                    this.ctx.beginPath();
+                    this.ctx.arc(nx, ny, 2, 0, Math.PI*2);
+                    this.ctx.fill();
+                }
+                requestAnimationFrame(() => this.draw());
+            }
+        }
+
+        // ==========================================================================
+        // ANIMATION: Mechanism Stages (Working Section)
+        // ==========================================================================
+        const mechEngine = new CanvasEngine('mechanismCanvas');
+        const mechStages = [
+            { title: "Stress Build-up", desc: "Tectonic plates push against each other. Friction locks the fault, causing rock to bend and store elastic energy over years." },
+            { title: "Rupture (Focus)", desc: "The stress exceeds the rock's strength. The fault suddenly slips at a point deep underground called the focus." },
+            { title: "Body Waves Radiate", desc: "Fast P-waves and S-waves explode outward spherically through the Earth's interior from the focus." },
+            { title: "Surface Waves Form", desc: "When body waves hit the surface (Epicenter), they generate destructive surface waves that roll outwards." }
+        ];
+        
+        let currentStage = 0;
+        let stageProgress = 0; // 0.0 to 1.0 within a stage
+        let isAutoPlaying = false;
+        let lastTime = 0;
+        
+        // UI Elements
+        const elStageNum = document.getElementById('stageNum');
+        const elStageTitle = document.getElementById('stageTitle');
+        const elStageDesc = document.getElementById('stageDesc');
+        const dots = document.querySelectorAll('#mechProgress .dot');
+        const btnPrev = document.getElementById('btnPrev');
+        const btnNext = document.getElementById('btnNext');
+        const btnAuto = document.getElementById('btnAuto');
+        
+        function updateMechUI() {
+            elStageNum.innerText = currentStage + 1;
+            elStageTitle.innerText = mechStages[currentStage].title;
+            elStageDesc.innerText = mechStages[currentStage].desc;
+            
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentStage);
+            });
+        }
+        
+        function setStage(index) {
+            currentStage = Math.max(0, Math.min(index, 3));
+            stageProgress = 0;
+            updateMechUI();
+        }
+
+        btnNext.addEventListener('click', () => setStage(currentStage + 1));
+        btnPrev.addEventListener('click', () => setStage(currentStage - 1));
+        btnAuto.addEventListener('click', () => {
+            isAutoPlaying = !isAutoPlaying;
+            btnAuto.innerHTML = isAutoPlaying ? '⏸ Pause' : '▶ Auto-Play';
+            btnAuto.classList.toggle('primary', !isAutoPlaying);
+        });
+        
+        function drawMechanism(timestamp) {
+            const dt = (timestamp - lastTime) / 1000 || 0;
+            lastTime = timestamp;
+            
+            if(isAutoPlaying) {
+                stageProgress += dt * 0.4; // 2.5 seconds per stage
+                if(stageProgress >= 1) {
+                    stageProgress = 0;
+                    currentStage = (currentStage + 1) % 4;
+                    updateMechUI();
+                }
+            } else {
+                // Smoothly clamp progress to 1 if manually controlled
+                stageProgress = Math.min(1, stageProgress + dt * 2);
+            }
+            
+            const ctx = mechEngine.ctx;
+            const w = mechEngine.width;
+            const h = mechEngine.height;
+            const cx = w/2;
+            const cy = h/2;
+            
+            // Background
+            ctx.fillStyle = '#0a0a10';
+            ctx.fillRect(0,0,w,h);
+            
+            // Draw Earth Block (Cross section)
+            ctx.save();
+            ctx.translate(cx, cy + 50);
+            
+            // Calculate deformations based on stage
+            let faultSlip = 0;
+            let stressBend = 0;
+            let waveRadius = 0;
+            let surfaceWaveRadius = 0;
+            
+            if (currentStage === 0) {
+                // Build up: bending rock
+                stressBend = Math.sin(stageProgress * Math.PI/2) * 20;
+            } else if (currentStage === 1) {
+                // Rupture: snap back and slip
+                stressBend = 20 * (1 - stageProgress * 5); // Fast snap
+                if(stressBend < 0) stressBend = 0;
+                faultSlip = Math.min(1, stageProgress * 3) * 30;
+                waveRadius = stageProgress * 50; // Initial small waves
+            } else if (currentStage === 2) {
+                // Body waves
+                faultSlip = 30;
+                waveRadius = 50 + stageProgress * 200;
+            } else if (currentStage === 3) {
+                // Surface waves
+                faultSlip = 30;
+                waveRadius = 250 + stageProgress * 100;
+                surfaceWaveRadius = stageProgress * 200;
+            }
+            
+            // Draw Left Block
+            ctx.fillStyle = '#2a1f1a';
+            ctx.strokeStyle = '#5a4b42';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-200, -100);
+            ctx.lineTo(0, -100 + stressBend + faultSlip); // Fault line
+            ctx.lineTo(0, 150 + faultSlip);
+            ctx.lineTo(-200, 150);
+            ctx.fill(); ctx.stroke();
+            
+            // Draw Right Block
+            ctx.fillStyle = '#3a2a22';
+            ctx.beginPath();
+            ctx.moveTo(0, -100 - stressBend - faultSlip); // Fault line
+            ctx.lineTo(200, -100);
+            ctx.lineTo(200, 150);
+            ctx.lineTo(0, 150 - faultSlip);
+            ctx.fill(); ctx.stroke();
+            
+            // Draw Fault Glow during rupture
+            if (currentStage === 1 && stageProgress < 0.3) {
+                ctx.strokeStyle = '#ffab00';
+                ctx.lineWidth = 4 + Math.random()*4;
+                ctx.beginPath();
+                ctx.moveTo(0, -100);
+                ctx.lineTo(0, 150);
+                ctx.stroke();
+            }
+            
+            // Draw Body Waves (Circles from focus)
+            const focusY = 25; // Depth
+            if (waveRadius > 0) {
+                ctx.strokeStyle = 'rgba(0, 229, 255, 0.5)';
+                ctx.lineWidth = 2;
+                for(let i=0; i<3; i++) {
+                    let r = waveRadius - i*20;
+                    if(r > 0) {
+                        ctx.beginPath();
+                        ctx.arc(0, focusY, r, 0, Math.PI*2);
+                        ctx.stroke();
+                    }
+                }
+                // Focus marker
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(0, focusY, 5, 0, Math.PI*2);
+                ctx.fill();
+            }
+            
+            // Draw Surface Waves
+            if (surfaceWaveRadius > 0) {
+                ctx.strokeStyle = 'rgba(1, 255, 195, 0.8)';
+                ctx.lineWidth = 3;
+                let epicenterY = -100 + faultSlip/2;
+                
+                // Draw ripples along surface
+                ctx.beginPath();
+                ctx.moveTo(-surfaceWaveRadius, epicenterY);
+                for(let x = -surfaceWaveRadius; x <= surfaceWaveRadius; x+=5) {
+                    let decay = 1 - Math.abs(x)/surfaceWaveRadius;
+                    let y = Math.sin((x + this.time*100) * 0.1) * 10 * decay;
+                    ctx.lineTo(x, epicenterY + y);
+                }
+                ctx.stroke();
+            }
+            
+            // Arrow indicators for stress
+            if (currentStage === 0) {
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.font = '24px sans-serif';
+                ctx.fillText('⬆', -100, -20);
+                ctx.fillText('⬇', 80, -20);
+            }
+            
+            ctx.restore();
+            requestAnimationFrame(drawMechanism);
+        }
+
+        // ==========================================================================
+        // SIMULATOR LOGIC
+        // ==========================================================================
+        const simMap = new CanvasEngine('simMapCanvas');
+        const simSeismo = new CanvasEngine('simSeismoCanvas');
+        
+        // UI Controls
+        const magSlider = document.getElementById('simMagnitude');
+        const distSlider = document.getElementById('simDistance');
+        const magValue = document.getElementById('magValue');
+        const distValue = document.getElementById('distValue');
+        const btnTrigger = document.getElementById('btnTriggerQuake');
+        const btnReset = document.getElementById('btnResetSim');
+        
+        // Sim State
+        let simActive = false;
+        let simTime = 0; // seconds
+        let simMag = parseFloat(magSlider.value);
+        let simDist = parseFloat(distSlider.value); // km
+        let traceData = []; // Array of {t, amplitude}
+        
+        // Constants (simplified physics)
+        const VP = 6.0; // km/s
+        const VS = 3.5; // km/s
+        const VSurf = 2.0; // km/s
+        
+        magSlider.addEventListener('input', (e) => {
+            simMag = parseFloat(e.target.value);
+            magValue.innerText = simMag.toFixed(1) + ' M';
+        });
+        
+        distSlider.addEventListener('input', (e) => {
+            simDist = parseFloat(e.target.value);
+            distValue.innerText = Math.round(simDist) + ' km';
+        });
+        
+        btnTrigger.addEventListener('click', () => {
+            simActive = true;
+            simTime = 0;
+            traceData = [];
+            btnTrigger.disabled = true;
+            btnTrigger.style.opacity = '0.5';
+        });
+        
+        btnReset.addEventListener('click', () => {
+            simActive = false;
+            simTime = 0;
+            traceData = [];
+            btnTrigger.disabled = false;
+            btnTrigger.style.opacity = '1';
+        });
+
+        // Generate Seismogram Noise based on physics
+        function getAmplitudeAtTime(t, mag, dist) {
+            // Base line noise
+            let amp = (Math.random() - 0.5) * 2; 
+            
+            let tP = dist / VP;
+            let tS = dist / VS;
+            let tSurf = dist / VSurf;
+            
+            // Attenuation factor: amplitude drops significantly with distance
+            // Energy scales exponentially with magnitude
+            let baseEnergy = Math.pow(10, mag - 4); // Normalize against M4
+            let attenuation = baseEnergy / (dist * 0.1); 
+            
+            if (t > tP && t < tS) {
+                // P-wave phase: High frequency, moderate amplitude
+                let decay = Math.exp(-(t - tP) * 0.2);
+                amp += (Math.random() - 0.5) * 15 * attenuation * decay;
+                amp += Math.sin(t * 50) * 5 * attenuation * decay;
+            } 
+            else if (t > tS && t < tSurf) {
+                // S-wave phase: Lower freq, higher amplitude
+                let decay = Math.exp(-(t - tS) * 0.1);
+                amp += (Math.random() - 0.5) * 40 * attenuation * decay;
+                amp += Math.sin(t * 20) * 20 * attenuation * decay;
+            }
+            else if (t > tSurf) {
+                // Surface wave phase: Low freq, highest amplitude, long decay
+                let decay = Math.exp(-(t - tSurf) * 0.05);
+                amp += Math.sin(t * 8) * 80 * attenuation * decay;
+                amp += (Math.random() - 0.5) * 20 * attenuation * decay;
+            }
+            
+            return amp;
+        }
+
+        function drawSimulator() {
+            // Update Time
+            if (simActive) {
+                // Accelerate time slightly for UX (1 sec real = ~4 sec sim)
+                simTime += 0.2; 
+                
+                // Calculate new data point
+                let amp = getAmplitudeAtTime(simTime, simMag, simDist);
+                // Clamp amplitude to keep inside canvas
+                amp = Math.max(-simSeismo.height/2 + 10, Math.min(simSeismo.height/2 - 10, amp));
+                
+                traceData.push({ t: simTime, a: amp });
+                
+                // Stop after waves pass
+                if (simTime > (simDist / VSurf) + 150) {
+                    simActive = false;
+                    btnTrigger.disabled = false;
+                    btnTrigger.style.opacity = '1';
+                }
+            }
+            
+            // --- DRAW MAP VIEW ---
+            const mCtx = simMap.ctx;
+            const mW = simMap.width;
+            const mH = simMap.height;
+            mCtx.fillStyle = '#0d0d14';
+            mCtx.fillRect(0,0,mW,mH);
+            
+            // Draw Map elements
+            const epiX = 30;
+            const cy = mH / 2;
+            const maxDistPixels = mW - 60;
+            
+            // Map station position
+            const stationPixelDist = (simDist / 1000) * maxDistPixels; // 1000km is max slider val
+            const stationX = epiX + stationPixelDist;
+            
+            // Draw ground line
+            mCtx.strokeStyle = 'rgba(255,255,255,0.1)';
+            mCtx.beginPath(); mCtx.moveTo(0, cy); mCtx.lineTo(mW, cy); mCtx.stroke();
+            
+            // Draw Epicenter & Station
+            mCtx.fillStyle = '#fff';
+            mCtx.beginPath(); mCtx.arc(epiX, cy, 5, 0, Math.PI*2); mCtx.fill(); // Epi
+            mCtx.beginPath(); mCtx.rect(stationX - 5, cy - 10, 10, 10); mCtx.fill(); // Station
+            
+            // Draw propagating waves on map
+            if (simActive) {
+                let pRad = simTime * VP;
+                let sRad = simTime * VS;
+                let surfRad = simTime * VSurf;
+                
+                // Convert km radius to pixels
+                let scale = maxDistPixels / 1000;
+                
+                mCtx.lineWidth = 2;
+                if(pRad < 1000) { mCtx.strokeStyle = 'var(--accent-p)'; mCtx.beginPath(); mCtx.arc(epiX, cy, pRad*scale, -Math.PI/2, Math.PI/2); mCtx.stroke(); }
+                if(sRad < 1000) { mCtx.strokeStyle = 'var(--accent-s)'; mCtx.beginPath(); mCtx.arc(epiX, cy, sRad*scale, -Math.PI/2, Math.PI/2); mCtx.stroke(); }
+                if(surfRad < 1000) { mCtx.strokeStyle = 'var(--accent-surface)'; mCtx.beginPath(); mCtx.arc(epiX, cy, surfRad*scale, -Math.PI/2, Math.PI/2); mCtx.stroke(); }
+            }
+
+            // --- DRAW SEISMOGRAM ---
+            const sCtx = simSeismo.ctx;
+            const sW = simSeismo.width;
+            const sH = simSeismo.height;
+            
+            simSeismo.clear(); // Transparent bg, CSS grid shows through
+            
+            if (traceData.length === 0) return requestAnimationFrame(drawSimulator);
+
+            sCtx.strokeStyle = '#111'; // Dark ink color
+            sCtx.lineWidth = 1.5;
+            sCtx.lineJoin = 'round';
+            sCtx.beginPath();
+            
+            // The "pen" is always at x = sW (right side). 
+            // Older data moves to the left.
+            const timeWindow = 200; // units of simTime visible on screen
+            
+            // Find rightmost time
+            let currentTime = simActive ? simTime : traceData[traceData.length-1].t;
+            
+            for (let i = 0; i < traceData.length; i++) {
+                let point = traceData[i];
+                // Map time to X pixel (moving left)
+                let timeDiff = currentTime - point.t;
+                let x = sW - (timeDiff / timeWindow) * sW;
+                let y = sH/2 + point.a;
+                
+                if (x < 0) continue; // Off screen left
+                
+                if (i === 0) sCtx.moveTo(x, y);
+                else sCtx.lineTo(x, y);
+            }
+            sCtx.stroke();
+            
+            // If active, draw connection to the pen
+            if (simActive) {
+                let lastPoint = traceData[traceData.length-1];
+                sCtx.beginPath();
+                sCtx.moveTo(sW, sH/2 + lastPoint.a);
+                sCtx.lineTo(sW, sH/2); // Pen neutral
+                sCtx.strokeStyle = 'rgba(0,0,0,0.2)';
+                sCtx.stroke();
+            }
+
+            requestAnimationFrame(drawSimulator);
+        }
+
+        // ==========================================================================
+        // INITIALIZATION
+        // ==========================================================================
+        window.addEventListener('load', () => {
+            setupMarkers();
+            
+            // Start Canvas Loops
+            requestAnimationFrame(drawHero);
+            
+            const pWave = new ParticleWaveEngine('pWaveCanvas', 'P');
+            const sWave = new ParticleWaveEngine('sWaveCanvas', 'S');
+            const rWave = new ParticleWaveEngine('rayleighCanvas', 'Rayleigh');
+            const lWave = new ParticleWaveEngine('loveCanvas', 'Love');
+            
+            pWave.draw();
+            sWave.draw();
+            rWave.draw();
+            lWave.draw();
+            
+            requestAnimationFrame(drawMechanism);
+            requestAnimationFrame(drawSimulator);
+            
+            // Initial UI state
+            updateMechUI();
+        });
+
+    </script>
+</body>
+</html>

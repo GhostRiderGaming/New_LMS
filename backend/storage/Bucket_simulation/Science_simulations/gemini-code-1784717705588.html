@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Botanical Anomalies Explorer</title>
+    <style>
+        :root {
+            /* Core Theme Colors */
+            --bg-base: #050b14;
+            --bg-surface: rgba(16, 28, 48, 0.6);
+            --bg-surface-hover: rgba(26, 42, 68, 0.8);
+            --border-glass: rgba(255, 255, 255, 0.1);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            
+            /* Thematic Accents */
+            --accent-insect: #ec4899; /* Pink/Red for Flytrap */
+            --accent-parasite: #f59e0b; /* Amber/Orange for Dodder */
+            --accent-saprophyte: #38bdf8; /* Pale blue/white for Indian Pipe */
+            
+            /* Typography */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-mono: "SF Mono", "Consolas", monospace;
+            
+            /* Fluid Spacing & Sizes */
+            --spacing-sm: clamp(0.5rem, 1vw, 1rem);
+            --spacing-md: clamp(1rem, 2vw, 1.5rem);
+            --spacing-lg: clamp(1.5rem, 3vw, 2.5rem);
+            
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-full: 9999px;
+            
+            --current-accent: var(--accent-insect);
+        }
+
+        /* Reset & Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Ambient Background */
+        #ambient-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .bg-glow {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80vw;
+            height: 80vh;
+            background: radial-gradient(circle, var(--current-accent) 0%, transparent 60%);
+            opacity: 0.05;
+            filter: blur(100px);
+            z-index: -1;
+            transition: background 1s ease;
+        }
+
+        /* Layout & Structure */
+        header {
+            padding: var(--spacing-md) var(--spacing-lg);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-glass);
+            background: rgba(5, 11, 20, 0.4);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #22c55e, var(--current-accent));
+            border-radius: 8px;
+            box-shadow: 0 0 15px var(--current-accent);
+            transition: background 1s ease, box-shadow 1s ease;
+        }
+
+        nav.type-selector {
+            display: flex;
+            gap: 8px;
+            background: rgba(0,0,0,0.4);
+            padding: 6px;
+            border-radius: var(--radius-full);
+            border: 1px solid var(--border-glass);
+        }
+
+        .type-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px 16px;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .type-btn.active {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        .type-btn:hover:not(.active) {
+            color: white;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        main {
+            flex: 1;
+            padding: var(--spacing-lg);
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        /* Glassmorphism Cards */
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-lg);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        }
+
+        /* Grid Layouts */
+        .hero-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+            align-items: center;
+            min-height: 50vh;
+        }
+
+        .content-section {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: var(--spacing-lg);
+        }
+
+        /* Typography */
+        h1 {
+            font-size: clamp(2rem, 5vw, 4rem);
+            line-height: 1.1;
+            margin-bottom: 1rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #fff, var(--text-muted));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        h2 {
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            margin-bottom: 1.5rem;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h2::before {
+            content: '';
+            display: block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: var(--current-accent);
+            box-shadow: 0 0 10px var(--current-accent);
+        }
+
+        p {
+            font-size: clamp(1rem, 1.2vw, 1.1rem);
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: var(--radius-full);
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(255,255,255,0.1);
+            color: var(--current-accent);
+            border: 1px solid rgba(255,255,255,0.05);
+            margin-bottom: 1rem;
+        }
+
+        /* Illustrations Container */
+        .illustration-container {
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.03) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+        }
+
+        .svg-art {
+            width: 100%;
+            height: 100%;
+            max-width: 500px;
+            max-height: 500px;
+            overflow: visible;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
+        }
+
+        /* Components Labeling System (Mandatory Pattern) */
+        .components-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+        }
+
+        .diagram-wrapper {
+            position: relative;
+            width: 100%;
+            min-height: 350px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--bg-base);
+            border: 2px solid var(--current-accent);
+            color: var(--current-accent);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5), 0 0 0 4px rgba(0,0,0,0.2);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+        }
+
+        .marker::after {
+            content: '';
+            position: absolute;
+            top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%;
+            border: 1px solid var(--current-accent);
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.3s;
+        }
+
+        .marker.active, .marker:hover {
+            background: var(--current-accent);
+            color: var(--bg-base);
+            transform: scale(1.15);
+            box-shadow: 0 0 20px var(--current-accent);
+        }
+
+        .marker.active::after, .marker:hover::after {
+            opacity: 1;
+            transform: scale(1.3);
+            animation: pulse-ring 2s infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.6); opacity: 0; }
+        }
+
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: var(--radius-md);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item.active, .legend-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.1);
+            transform: translateX(8px);
+        }
+
+        .legend-item.active {
+            border-color: var(--current-accent);
+            box-shadow: inset 4px 0 0 var(--current-accent);
+        }
+
+        .legend-num {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            background: var(--current-accent);
+            color: var(--bg-base);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .legend-content h4 {
+            font-size: 1rem;
+            color: var(--text-main);
+            margin-bottom: 2px;
+            font-weight: 600;
+        }
+
+        .legend-content p {
+            font-size: 0.85rem;
+            margin: 0;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* Working Mechanism Section */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        .mechanism-visual {
+            width: 100%;
+            height: 400px;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-glass);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mechanism-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .progress-bar {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            padding: 0 10px;
+        }
+
+        .progress-line {
+            position: absolute;
+            top: 50%;
+            left: 20px;
+            right: 20px;
+            height: 2px;
+            background: rgba(255,255,255,0.1);
+            z-index: 1;
+            transform: translateY(-50%);
+        }
+
+        .progress-line-fill {
+            position: absolute;
+            top: 0; left: 0; height: 100%;
+            background: var(--current-accent);
+            transition: width 0.4s ease;
+            box-shadow: 0 0 10px var(--current-accent);
+        }
+
+        .step-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-surface);
+            border: 2px solid rgba(255,255,255,0.2);
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--text-muted);
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .step-dot.completed {
+            border-color: var(--current-accent);
+            background: var(--current-accent);
+            color: var(--bg-base);
+        }
+
+        .step-dot.active {
+            border-color: var(--current-accent);
+            box-shadow: 0 0 15px var(--current-accent);
+            color: white;
+            transform: scale(1.2);
+        }
+
+        .control-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: white;
+            padding: 12px 24px;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--current-accent);
+            transform: translateY(-2px);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--current-accent);
+            color: var(--bg-base);
+            border: none;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: white;
+            box-shadow: 0 0 25px var(--current-accent);
+        }
+
+        .step-info {
+            background: rgba(0,0,0,0.2);
+            padding: 20px;
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--current-accent);
+            min-height: 120px;
+        }
+        
+        .step-info h4 {
+            color: var(--current-accent);
+            margin-bottom: 8px;
+            font-size: 1.2rem;
+        }
+
+        /* Interactive Simulation Slider */
+        .simulation-area {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-lg);
+            align-items: center;
+        }
+        
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            padding: 24px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .slider-value {
+            font-family: var(--font-mono);
+            color: var(--current-accent);
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: var(--current-accent);
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 0 10px var(--current-accent);
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+        
+        .sim-visual {
+            height: 300px;
+            border-radius: var(--radius-md);
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Facts Grid */
+        .facts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .fact-card {
+            background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(0,0,0,0.2));
+            padding: 24px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+            transition: transform 0.3s ease;
+        }
+
+        .fact-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--current-accent);
+        }
+
+        .fact-icon {
+            font-size: 2rem;
+            margin-bottom: 12px;
+            filter: drop-shadow(0 0 8px var(--current-accent));
+        }
+
+        /* SVG Animations & Classes */
+        .anim-float { animation: float 6s ease-in-out infinite; }
+        .anim-pulse { animation: opacity-pulse 3s ease-in-out infinite; }
+        .anim-flow { stroke-dasharray: 10; animation: dash-flow 1s linear infinite; }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+        @keyframes opacity-pulse {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+        @keyframes dash-flow {
+            to { stroke-dashoffset: -20; }
+        }
+
+        /* Views management */
+        .view {
+            display: none;
+            opacity: 0;
+            animation: fadeIn 0.5s forwards;
+        }
+        .view.active {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        /* Responsive Breakpoints */
+        @media (max-width: 1024px) {
+            .hero-section, .content-section, .components-grid, .simulation-area {
+                grid-template-columns: 1fr;
+            }
+            .hero-section {
+                text-align: center;
+            }
+            .tag {
+                margin: 0 auto 1rem auto;
+            }
+            .illustration-container {
+                min-height: 350px;
+                order: -1;
+            }
+            .mechanism-visual {
+                height: 350px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                gap: 16px;
+                padding: 16px;
+            }
+            main {
+                padding: 16px;
+                gap: 24px;
+            }
+            .glass-panel {
+                padding: 20px;
+            }
+            nav.type-selector {
+                width: 100%;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+            .control-buttons {
+                flex-wrap: wrap;
+            }
+            .diagram-wrapper {
+                min-height: 280px;
+            }
+            .btn {
+                padding: 10px 20px;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Canvas Background -->
+    <canvas id="ambient-canvas"></canvas>
+    <div class="bg-glow" id="bg-glow"></div>
+
+    <header>
+        <div class="logo">
+            <div class="logo-icon"></div>
+            Botanical Anomalies
+        </div>
+        <nav class="type-selector" id="main-nav">
+            <button class="type-btn active" data-type="insectivorous">Insectivorous</button>
+            <button class="type-btn" data-type="parasitic">Parasitic</button>
+            <button class="type-btn" data-type="saprophytic">Saprophytic</button>
+        </nav>
+    </header>
+
+    <main id="app-container">
+        <!-- Views will be injected here by JS to keep DOM clean and dynamic -->
+    </main>
+
+    <script>
+        // --- DATA DEFINITIONS ---
+
+        const APP_DATA = {
+            insectivorous: {
+                id: 'insectivorous',
+                name: 'Insectivorous Plants',
+                accent: '#ec4899',
+                tag: 'Predatory Flora',
+                description: 'Plants that derive some or most of their nutrients (but not energy) from trapping and consuming animals or protozoans, typically insects and other arthropods. They evolved in nitrogen-poor soils.',
+                heroSvg: `
+                    <svg class="svg-art anim-float" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="leafBase" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="#166534"/>
+                                <stop offset="100%" stop-color="#22c55e"/>
+                            </linearGradient>
+                            <linearGradient id="trapInner" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#be123c"/>
+                                <stop offset="100%" stop-color="#fb7185"/>
+                            </linearGradient>
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="10" stdDeviation="8" flood-color="#ec4899" flood-opacity="0.3"/>
+                            </filter>
+                        </defs>
+                        <!-- Stem -->
+                        <path d="M100,200 Q90,140 100,100" fill="none" stroke="url(#leafBase)" stroke-width="8" stroke-linecap="round"/>
+                        <!-- Left Lobe -->
+                        <path d="M100,100 C60,110 30,80 40,40 C60,20 90,50 100,90 Z" fill="url(#leafBase)" filter="url(#shadow)"/>
+                        <path d="M96,92 C64,100 40,76 48,44 C64,28 88,52 96,84 Z" fill="url(#trapInner)"/>
+                        <!-- Right Lobe -->
+                        <path d="M100,100 C140,110 170,80 160,40 C140,20 110,50 100,90 Z" fill="url(#leafBase)" filter="url(#shadow)"/>
+                        <path d="M104,92 C136,100 160,76 152,44 C136,28 112,52 104,84 Z" fill="url(#trapInner)"/>
+                        <!-- Teeth Left -->
+                        <path d="M42,35 L25,25 M35,45 L15,40 M48,58 L25,55 M60,70 L40,75 M75,82 L60,95" stroke="#dcfce7" stroke-width="3" stroke-linecap="round"/>
+                        <!-- Teeth Right -->
+                        <path d="M158,35 L175,25 M165,45 L185,40 M152,58 L175,55 M140,70 L160,75 M125,82 L140,95" stroke="#dcfce7" stroke-width="3" stroke-linecap="round"/>
+                        <!-- Trigger Hairs -->
+                        <line x1="70" y1="60" x2="75" y2="50" stroke="#000" stroke-width="1.5" opacity="0.6"/>
+                        <line x1="60" y1="75" x2="68" y2="65" stroke="#000" stroke-width="1.5" opacity="0.6"/>
+                        <line x1="85" y1="70" x2="88" y2="58" stroke="#000" stroke-width="1.5" opacity="0.6"/>
+                        <line x1="130" y1="60" x2="125" y2="50" stroke="#000" stroke-width="1.5" opacity="0.6"/>
+                        <line x1="140" y1="75" x2="132" y2="65" stroke="#000" stroke-width="1.5" opacity="0.6"/>
+                        <line x1="115" y1="70" x2="112" y2="58" stroke="#000" stroke-width="1.5" opacity="0.6"/>
+                    </svg>
+                `,
+                components: [
+                    { id: 1, name: 'Marginal Spikes (Cilia)', desc: 'Interlock when the trap closes to prevent prey escape.', x: 15, y: 35 },
+                    { id: 2, name: 'Anthocyanin Pigment', desc: 'Red interior attracts insects simulating a flower/meat.', x: 35, y: 55 },
+                    { id: 3, name: 'Trigger Hairs', desc: 'Mechanosensors. Touching two within 20 seconds snaps the trap.', x: 65, y: 50 },
+                    { id: 4, name: 'Midrib Hinge', desc: 'Rapidly changes cell turgor pressure to snap the lobes shut.', x: 50, y: 85 }
+                ],
+                mechanism: {
+                    type: 'linear',
+                    stages: [
+                        { title: 'Attraction', desc: 'Nectar secretions and bright red pigments lure the insect into the open lobes.', animState: 'stage1' },
+                        { title: 'Mechanical Trigger', desc: 'The insect brushes against two trigger hairs within 20 seconds, generating an action potential.', animState: 'stage2' },
+                        { title: 'Rapid Closure', desc: 'Osmotic pressure changes cause the lobes to snap shut in a fraction of a second.', animState: 'stage3' },
+                        { title: 'Digestion', desc: 'The trap seals completely, acting as a stomach. Digestive enzymes dissolve the soft tissues.', animState: 'stage4' },
+                        { title: 'Absorption', desc: 'Nutrient-rich fluids (mainly nitrogen and phosphorus) are absorbed into the plant.', animState: 'stage5' }
+                    ]
+                },
+                facts: [
+                    { icon: '⚡', title: 'Electrical Signals', text: 'Uses action potentials similar to human nerves to trigger closure.' },
+                    { icon: '⏱️', title: 'Speed', text: 'Can snap shut in 100 milliseconds.' },
+                    { icon: '🌱', title: 'Photosynthesis', text: 'They still use sunlight for energy; bugs are just their "vitamins".' }
+                ],
+                sim: {
+                    title: 'Soil Nitrogen vs Trap Size',
+                    desc: 'Observe how soil quality affects the carnivorous behavior. Plants only invest energy in traps when soil nitrogen is low.',
+                    unit: 'ppm', min: 0, max: 100, start: 10
+                }
+            },
+            parasitic: {
+                id: 'parasitic',
+                name: 'Parasitic Plants',
+                accent: '#f59e0b',
+                tag: 'Vampiric Vines',
+                description: 'Plants that derive some or all of their nutritional requirement from another living plant via modified roots called haustoria which penetrate the host.',
+                heroSvg: `
+                    <svg class="svg-art anim-float" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="hostGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#15803d"/>
+                                <stop offset="50%" stop-color="#4ade80"/>
+                                <stop offset="100%" stop-color="#166534"/>
+                            </linearGradient>
+                            <linearGradient id="dodderGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#fcd34d"/>
+                                <stop offset="100%" stop-color="#d97706"/>
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <!-- Host Plant Stem -->
+                        <rect x="80" y="20" width="40" height="160" rx="10" fill="url(#hostGrad)"/>
+                        
+                        <!-- Parasitic Vine (Dodder) wrapping around -->
+                        <path d="M70,50 C90,40 120,60 130,50" fill="none" stroke="url(#dodderGrad)" stroke-width="8" stroke-linecap="round" filter="url(#glow)"/>
+                        <path d="M70,50 C60,60 70,80 80,80" fill="none" stroke="url(#dodderGrad)" stroke-width="8" stroke-linecap="round" filter="url(#glow)"/>
+                        
+                        <path d="M130,90 C110,100 80,80 70,90" fill="none" stroke="url(#dodderGrad)" stroke-width="8" stroke-linecap="round" filter="url(#glow)"/>
+                        <path d="M130,90 C140,80 130,60 120,60" fill="none" stroke="url(#dodderGrad)" stroke-width="8" stroke-linecap="round" filter="url(#glow)"/>
+                        
+                        <path d="M70,130 C90,120 120,140 130,130" fill="none" stroke="url(#dodderGrad)" stroke-width="8" stroke-linecap="round" filter="url(#glow)"/>
+                        <path d="M70,130 C60,140 70,160 80,160" fill="none" stroke="url(#dodderGrad)" stroke-width="8" stroke-linecap="round" filter="url(#glow)"/>
+                        
+                        <!-- Haustoria (penetrating roots) zoom circle conceptually -->
+                        <circle cx="150" cy="120" r="40" fill="#0f172a" stroke="#f59e0b" stroke-width="2"/>
+                        <rect x="120" y="100" width="30" height="40" fill="url(#hostGrad)"/>
+                        <!-- Zoomed Haustoria -->
+                        <path d="M170,120 L140,120 L135,115 L135,125 Z" fill="url(#dodderGrad)"/>
+                        <path d="M180,110 Q160,100 170,120 Q160,140 180,130" fill="none" stroke="url(#dodderGrad)" stroke-width="6"/>
+                    </svg>
+                `,
+                components: [
+                    { id: 1, name: 'Host Vascular Tissue', desc: 'The phloem and xylem of the victim plant, carrying water and sugars.', x: 45, y: 25 },
+                    { id: 2, name: 'Parasitic Stem', desc: 'Lacks chlorophyll (yellow/orange), meaning it cannot photosynthesize.', x: 30, y: 55 },
+                    { id: 3, name: 'Haustorium', desc: 'Specialized root that penetrates host tissues to extract nutrients.', x: 75, y: 60 }
+                ],
+                mechanism: {
+                    type: 'cycle',
+                    stages: [
+                        { title: 'Chemotropism', desc: 'The parasite seedling sniffs out volatile chemicals emitted by a host plant and grows toward it.', animState: 'stage1' },
+                        { title: 'Attachment', desc: 'Vine coils around the host stem tightly, triggered by physical contact.', animState: 'stage2' },
+                        { title: 'Penetration', desc: 'Enzymes and mechanical pressure force haustoria through the host epidermis.', animState: 'stage3' },
+                        { title: 'Vascular Connection', desc: 'Haustoria link directly into the host xylem (water) and phloem (sugars).', animState: 'stage4' },
+                        { title: 'Resource Drain', desc: 'The parasite feeds continuously, growing rapidly while stunting the host.', animState: 'stage5' }
+                    ]
+                },
+                facts: [
+                    { icon: '👃', title: 'Plant Sniffing', text: 'Dodder vines literally "smell" tomato plants to find them.' },
+                    { icon: '👻', title: 'Ghost Plants', text: 'Holoparasites completely lack chlorophyll and leaves.' },
+                    { icon: '🦠', title: 'Vectoring', text: 'Can transmit plant viruses from one host to another via their connected vascular systems.' }
+                ],
+                sim: {
+                    title: 'Haustoria Depth vs Nutrient Steal',
+                    desc: 'Adjust penetration depth. Xylem provides water, Phloem provides sugar. Needs both to thrive.',
+                    unit: 'mm', min: 0, max: 10, start: 5
+                }
+            },
+            saprophytic: {
+                id: 'saprophytic',
+                name: 'Mycoheterotrophs',
+                accent: '#38bdf8',
+                tag: 'Fungal Thieves',
+                description: 'Often mislabeled as saprophytes, these pale plants lack chlorophyll and parasitize underground fungi (mycorrhizae) that are breaking down dead organic matter.',
+                heroSvg: `
+                    <svg class="svg-art anim-float" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="pipeGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="#bae6fd"/>
+                                <stop offset="100%" stop-color="#f0f9ff"/>
+                            </linearGradient>
+                            <filter id="ghostGlow">
+                                <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#38bdf8" flood-opacity="0.6"/>
+                            </filter>
+                        </defs>
+                        <!-- Ground / Organic Matter -->
+                        <path d="M10,160 Q100,140 190,160 L190,200 L10,200 Z" fill="#1e1b4b"/>
+                        <path d="M30,170 C50,160 70,175 90,165" fill="none" stroke="#78350f" stroke-width="4"/>
+                        <path d="M120,180 C140,170 160,185 180,175" fill="none" stroke="#78350f" stroke-width="4"/>
+                        
+                        <!-- Mycelial Network -->
+                        <path d="M90,170 L70,190 M90,170 L100,185 M100,185 L120,195 M100,185 L85,198" stroke="#bae6fd" stroke-width="1.5" stroke-dasharray="2 2" class="anim-pulse"/>
+                        
+                        <!-- Plant Stem & Flower (Indian Pipe) -->
+                        <path d="M90,170 Q100,80 80,40" fill="none" stroke="url(#pipeGrad)" stroke-width="8" stroke-linecap="round" filter="url(#ghostGlow)"/>
+                        
+                        <!-- Scales / Leaves -->
+                        <path d="M94,140 L105,130 L98,125 Z" fill="url(#pipeGrad)"/>
+                        <path d="M88,110 L75,100 L84,95 Z" fill="url(#pipeGrad)"/>
+                        <path d="M92,80 L105,70 L95,65 Z" fill="url(#pipeGrad)"/>
+                        
+                        <!-- Flower Head (Nodding) -->
+                        <path d="M80,40 C60,30 40,50 50,70 C60,80 70,75 80,60 Z" fill="url(#pipeGrad)" filter="url(#ghostGlow)"/>
+                        <!-- Petal Details -->
+                        <path d="M75,45 L55,60" stroke="#0284c7" stroke-width="1" opacity="0.5"/>
+                        <path d="M68,43 L52,55" stroke="#0284c7" stroke-width="1" opacity="0.5"/>
+                    </svg>
+                `,
+                components: [
+                    { id: 1, name: 'Ghostly Stem', desc: 'No chlorophyll exists here; the plant is entirely white/translucent.', x: 45, y: 55 },
+                    { id: 2, name: 'Nodding Flower', desc: 'Faces downward to protect pollen from rain in the dark forest understory.', x: 25, y: 35 },
+                    { id: 3, name: 'Fungal Mycelium', desc: 'Underground network of fungus breaking down dead leaves.', x: 45, y: 92 },
+                    { id: 4, name: 'Mycorrhizal Roots', desc: 'Plant roots trick the fungus, extracting sugars instead of sharing them.', x: 35, y: 85 }
+                ],
+                mechanism: {
+                    type: 'flow',
+                    stages: [
+                        { title: 'Leaf Litter Decay', desc: 'Trees shed leaves. Fungi in the soil secrete enzymes to break down this dead matter.', animState: 'stage1' },
+                        { title: 'Fungal Digestion', desc: 'Fungi absorb the sugars and nutrients from the decaying leaves into their mycelium.', animState: 'stage2' },
+                        { title: 'Root Connection', desc: 'The mycoheterotrophic plant roots tap into the fungal mycelial network.', animState: 'stage3' },
+                        { title: 'Nutrient Theft', desc: 'Instead of mutual exchange, the plant acts as a parasite on the fungus, draining its carbon.', animState: 'stage4' },
+                        { title: 'Above-ground Growth', desc: 'Using stolen energy, the plant rapidly shoots up a ghostly flower in deep shade.', animState: 'stage5' }
+                    ]
+                },
+                facts: [
+                    { icon: '🍄', title: 'The Tripartite', text: 'Energy flows from a living tree, to a fungus, and finally to this plant.' },
+                    { icon: '🌑', title: 'Total Darkness', text: 'Can complete their entire life cycle in pitch black conditions.' },
+                    { icon: '🧊', title: 'Fragility', text: 'Will turn black and melt rapidly if handled by human hands.' }
+                ],
+                sim: {
+                    title: 'Forest Canopy Light Level',
+                    desc: 'Notice how changing light kills normal plants, but the mycoheterotroph ignores it entirely.',
+                    unit: '%', min: 0, max: 100, start: 5
+                }
+            }
+        };
+
+        // --- CORE APPLICATION LOGIC ---
+
+        const App = {
+            currentType: 'insectivorous',
+            elements: {},
+            mechInterval: null,
+            currentMechStage: 0,
+            
+            init() {
+                this.cacheDOM();
+                this.bindEvents();
+                this.initCanvasBackground();
+                this.renderView(this.currentType);
+            },
+
+            cacheDOM() {
+                this.elements.appContainer = document.getElementById('app-container');
+                this.elements.navBtns = document.querySelectorAll('.type-btn');
+                this.elements.bgGlow = document.getElementById('bg-glow');
+            },
+
+            bindEvents() {
+                this.elements.navBtns.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        this.elements.navBtns.forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        this.switchType(e.target.dataset.type);
+                    });
+                });
+            },
+
+            switchType(type) {
+                if (this.currentType === type) return;
+                this.currentType = type;
+                
+                // Update Theme
+                document.documentElement.style.setProperty('--current-accent', APP_DATA[type].accent);
+                
+                // Reset State
+                clearInterval(this.mechInterval);
+                this.currentMechStage = 0;
+                
+                // Render new view
+                this.renderView(type);
+            },
+
+            renderView(type) {
+                const data = APP_DATA[type];
+                
+                // Build HTML Structure cleanly
+                const html = `
+                    <div class="view active" id="view-${type}">
+                        
+                        <!-- Hero Section -->
+                        <section class="hero-section glass-panel">
+                            <div>
+                                <span class="tag">${data.tag}</span>
+                                <h1>${data.name}</h1>
+                                <p style="font-size: 1.2rem; color: var(--text-main); opacity: 0.9;">${data.description}</p>
+                            </div>
+                            <div class="illustration-container">
+                                ${data.heroSvg}
+                            </div>
+                        </section>
+
+                        <!-- Components Section (Mandatory Marker Pattern) -->
+                        <section class="glass-panel">
+                            <h2>Structural Components</h2>
+                            <p>Explore the specialized anatomy that makes this anomaly possible.</p>
+                            
+                            <div class="components-grid">
+                                <div class="diagram-wrapper" id="components-diagram-${type}">
+                                    ${data.heroSvg.replace('anim-float', '')} <!-- Reusing art without float -->
+                                    ${this.generateMarkers(data.components)}
+                                </div>
+                                
+                                <div class="legend-list" id="legend-${type}">
+                                    ${this.generateLegend(data.components)}
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Working Mechanism (Mandatory Dedicated Section) -->
+                        <section class="glass-panel">
+                            <h2>Working Mechanism: ${data.mechanism.type.charAt(0).toUpperCase() + data.mechanism.type.slice(1)} Process</h2>
+                            <p>Step-by-step breakdown of how the biological mechanism executes.</p>
+                            
+                            <div class="mechanism-container">
+                                <div class="mechanism-visual" id="mech-visual-${type}">
+                                    ${this.generateMechanismVisual(type)}
+                                </div>
+                                
+                                <div class="mechanism-controls">
+                                    <div class="progress-bar" id="mech-progress-${type}">
+                                        <div class="progress-line">
+                                            <div class="progress-line-fill" id="mech-fill-${type}" style="width: 0%;"></div>
+                                        </div>
+                                        ${data.mechanism.stages.map((_, i) => `
+                                            <div class="step-dot" data-step="${i}">${i + 1}</div>
+                                        `).join('')}
+                                    </div>
+                                    
+                                    <div class="step-info">
+                                        <h4 id="mech-title-${type}">Stage 1: ${data.mechanism.stages[0].title}</h4>
+                                        <p id="mech-desc-${type}">${data.mechanism.stages[0].desc}</p>
+                                    </div>
+
+                                    <div class="control-buttons">
+                                        <button class="btn" id="btn-prev-${type}">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                                        </button>
+                                        <button class="btn btn-primary" id="btn-auto-${type}">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9v-18z"/></svg> Auto-Play
+                                        </button>
+                                        <button class="btn" id="btn-next-${type}">
+                                            Next <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Interactive Simulation -->
+                        <section class="glass-panel">
+                            <h2>Environment Simulation</h2>
+                            <div class="simulation-area">
+                                <div class="slider-container">
+                                    <div class="slider-header">
+                                        <span>${data.sim.title}</span>
+                                        <span class="slider-value" id="sim-val-text-${type}">${data.sim.start}${data.sim.unit}</span>
+                                    </div>
+                                    <input type="range" id="sim-slider-${type}" min="${data.sim.min}" max="${data.sim.max}" value="${data.sim.start}">
+                                    <p style="font-size: 0.9rem; margin-top: 10px;">${data.sim.desc}</p>
+                                </div>
+                                <div class="sim-visual" id="sim-render-${type}">
+                                    <!-- JS Driven visualization based on slider -->
+                                </div>
+                            </div>
+                        </section>
+
+                        <!-- Facts Grid -->
+                        <section class="glass-panel">
+                            <h2>Fascinating Facts</h2>
+                            <div class="facts-grid">
+                                ${data.facts.map(f => `
+                                    <div class="fact-card">
+                                        <div class="fact-icon">${f.icon}</div>
+                                        <h4 style="margin-bottom: 8px;">${f.title}</h4>
+                                        <p style="margin: 0; font-size: 0.95rem;">${f.text}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </section>
+
+                    </div>
+                `;
+                
+                this.elements.appContainer.innerHTML = html;
+                
+                // Post-render bindings
+                this.bindComponentInteractions(type);
+                this.bindMechanism(type);
+                this.bindSimulation(type);
+                
+                // Initial renders
+                this.updateMechanismUI(type, 0);
+                this.updateSimulationVisual(type, data.sim.start);
+            },
+
+            generateMarkers(components) {
+                return components.map(c => `
+                    <div class="marker" data-id="${c.id}" style="left: ${c.x}%; top: ${c.y}%;">
+                        ${c.id}
+                    </div>
+                `).join('');
+            },
+
+            generateLegend(components) {
+                return components.map(c => `
+                    <div class="legend-item" data-id="${c.id}">
+                        <div class="legend-num">${c.id}</div>
+                        <div class="legend-content">
+                            <h4>${c.name}</h4>
+                            <p>${c.desc}</p>
+                        </div>
+                    </div>
+                `).join('');
+            },
+
+            bindComponentInteractions(type) {
+                const markers = document.querySelectorAll(`#components-diagram-${type} .marker`);
+                const legends = document.querySelectorAll(`#legend-${type} .legend-item`);
+
+                const setActive = (id) => {
+                    markers.forEach(m => m.classList.toggle('active', m.dataset.id === id));
+                    legends.forEach(l => l.classList.toggle('active', l.dataset.id === id));
+                };
+
+                markers.forEach(m => {
+                    ['mouseenter', 'touchstart'].forEach(evt => 
+                        m.addEventListener(evt, () => setActive(m.dataset.id), {passive: true})
+                    );
+                });
+
+                legends.forEach(l => {
+                    ['mouseenter', 'touchstart'].forEach(evt => 
+                        l.addEventListener(evt, () => setActive(l.dataset.id), {passive: true})
+                    );
+                });
+            },
+
+            // --- Mechanism Animation Engine ---
+            
+            generateMechanismVisual(type) {
+                // Return a specific SVG framework based on type, classes handle states
+                if(type === 'insectivorous') {
+                    return `
+                        <svg id="anim-svg-${type}" viewBox="0 0 300 200" width="100%" height="100%">
+                            <style>
+                                #anim-svg-insectivorous .trap-jaw { transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform-origin: 150px 180px; }
+                                #anim-svg-insectivorous .bug { transition: all 1s ease; opacity: 0; }
+                                #anim-svg-insectivorous .juice { opacity: 0; transition: opacity 0.5s; fill: #ec4899; }
+                                
+                                /* States */
+                                .state-0 .bug { opacity: 1; transform: translate(50px, -50px) scale(1); }
+                                .state-1 .bug { opacity: 1; transform: translate(150px, 120px) scale(1); }
+                                .state-2 .trap-jaw-left { transform: rotate(35deg); }
+                                .state-2 .trap-jaw-right { transform: rotate(-35deg); }
+                                .state-2 .bug { opacity: 1; transform: translate(150px, 150px) scale(0.8); }
+                                .state-3 .trap-jaw-left { transform: rotate(50deg); }
+                                .state-3 .trap-jaw-right { transform: rotate(-50deg); }
+                                .state-3 .bug { opacity: 0; transform: translate(150px, 160px) scale(0); transition-delay: 0.2s; }
+                                .state-3 .juice { opacity: 1; animation: anim-float 2s infinite; }
+                                .state-4 .trap-jaw-left { transform: rotate(50deg); }
+                                .state-4 .trap-jaw-right { transform: rotate(-50deg); }
+                                .state-4 .juice { opacity: 0; transform: translateY(20px); transition: all 1s; }
+                            </style>
+                            <path d="M150,180 L150,200" stroke="#22c55e" stroke-width="10" />
+                            <!-- Jaws -->
+                            <g class="trap-jaw trap-jaw-left">
+                                <path d="M150,180 C100,180 80,100 110,80 C130,60 150,100 150,180 Z" fill="#166534"/>
+                                <path d="M148,175 C105,175 90,110 115,90 C130,75 145,110 148,175 Z" fill="#be123c"/>
+                                <!-- Spikes -->
+                                <path d="M110,80 L90,70 M95,100 L75,95 M90,125 L65,125" stroke="#dcfce7" stroke-width="3"/>
+                            </g>
+                            <g class="trap-jaw trap-jaw-right">
+                                <path d="M150,180 C200,180 220,100 190,80 C170,60 150,100 150,180 Z" fill="#166534"/>
+                                <path d="M152,175 C195,175 210,110 185,90 C170,75 155,110 152,175 Z" fill="#be123c"/>
+                                <!-- Spikes -->
+                                <path d="M190,80 L210,70 M205,100 L225,95 M210,125 L235,125" stroke="#dcfce7" stroke-width="3"/>
+                            </g>
+                            <!-- Bug -->
+                            <g class="bug">
+                                <circle cx="0" cy="0" r="5" fill="#fff"/>
+                                <path d="M0,0 Q-10,-10 0,-15 Q10,-10 0,0" fill="rgba(255,255,255,0.5)"/>
+                            </g>
+                            <!-- Nutrient Particles -->
+                            <circle class="juice" cx="140" cy="150" r="3" />
+                            <circle class="juice" cx="160" cy="140" r="4" />
+                            <circle class="juice" cx="150" cy="160" r="2.5" />
+                        </svg>
+                    `;
+                } else if(type === 'parasitic') {
+                    return `
+                        <svg id="anim-svg-${type}" viewBox="0 0 300 200" width="100%" height="100%">
+                            <style>
+                                #anim-svg-parasitic .vine { stroke-dasharray: 200; stroke-dashoffset: 200; transition: stroke-dashoffset 1s ease; }
+                                #anim-svg-parasitic .haustoria { opacity: 0; transform: scaleX(0); transform-origin: center; transition: all 0.5s ease; }
+                                #anim-svg-parasitic .flow { opacity: 0; stroke-dasharray: 5; animation: dash-flow 0.5s linear infinite; }
+                                
+                                .state-0 .vine { stroke-dashoffset: 150; }
+                                .state-1 .vine { stroke-dashoffset: 50; }
+                                .state-2 .vine { stroke-dashoffset: 0; }
+                                .state-2 .haustoria { opacity: 1; transform: scaleX(1); transition-delay: 0.5s; }
+                                .state-3 .vine { stroke-dashoffset: 0; }
+                                .state-3 .haustoria { opacity: 1; transform: scaleX(1); }
+                                .state-3 .flow { opacity: 1; stroke: #38bdf8; } /* Water */
+                                .state-4 .vine { stroke-dashoffset: 0; stroke-width: 12; transition: stroke-width 1s; }
+                                .state-4 .haustoria { opacity: 1; transform: scaleX(1); }
+                                .state-4 .flow { opacity: 1; stroke: #fcd34d; } /* Sugar */
+                            </style>
+                            <rect x="130" y="20" width="40" height="160" rx="10" fill="#15803d"/>
+                            <!-- Xylem/Phloem internal representation -->
+                            <line x1="140" y1="20" x2="140" y2="180" stroke="#38bdf8" stroke-width="4" opacity="0.5"/>
+                            <line x1="160" y1="20" x2="160" y2="180" stroke="#bef264" stroke-width="4" opacity="0.5"/>
+                            
+                            <!-- Vine -->
+                            <path class="vine" d="M100,200 Q120,150 170,160 Q190,130 130,120 Q100,90 170,80 Q190,50 130,40" fill="none" stroke="#f59e0b" stroke-width="8" stroke-linecap="round"/>
+                            
+                            <!-- Haustoria Pegs -->
+                            <path class="haustoria" d="M170,160 L140,160 M130,120 L160,120 M170,80 L140,80" stroke="#f59e0b" stroke-width="4"/>
+                            
+                            <!-- Nutrient Flow Arrows -->
+                            <path class="flow" d="M150,160 Q160,140 170,140" fill="none" stroke-width="3"/>
+                            <path class="flow" d="M150,120 Q140,100 130,100" fill="none" stroke-width="3"/>
+                            <path class="flow" d="M150,80 Q160,60 170,60" fill="none" stroke-width="3"/>
+                        </svg>
+                    `;
+                } else {
+                    // Saprophytic
+                    return `
+                        <svg id="anim-svg-${type}" viewBox="0 0 300 200" width="100%" height="100%">
+                            <style>
+                                #anim-svg-saprophytic .leaf { transition: all 1s; }
+                                #anim-svg-saprophytic .mycelium { opacity: 0; transition: opacity 1s; }
+                                #anim-svg-saprophytic .plant { transform-origin: 150px 180px; transform: scaleY(0); transition: transform 1.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+                                #anim-svg-saprophytic .energy { opacity: 0; }
+                                
+                                .state-0 .leaf { transform: translateY(0); }
+                                .state-1 .leaf { transform: translateY(20px); opacity: 0.5; fill: #78350f; }
+                                .state-1 .mycelium { opacity: 1; }
+                                .state-2 .leaf { opacity: 0.2; }
+                                .state-2 .mycelium { opacity: 1; filter: drop-shadow(0 0 5px #38bdf8); }
+                                .state-3 .mycelium { opacity: 1; filter: drop-shadow(0 0 8px #38bdf8); }
+                                .state-3 .energy { opacity: 1; animation: dash-flow 1s linear infinite; stroke-dasharray: 5; }
+                                .state-4 .mycelium { opacity: 1; }
+                                .state-4 .energy { opacity: 1; animation: dash-flow 0.5s linear infinite; }
+                                .state-4 .plant { transform: scaleY(1); }
+                            </style>
+                            <rect x="0" y="150" width="300" height="50" fill="#1e1b4b"/>
+                            
+                            <!-- Dead Leaf -->
+                            <path class="leaf" d="M200,140 C220,130 240,145 230,160 C210,165 190,150 200,140 Z" fill="#b45309"/>
+                            
+                            <!-- Mycelium -->
+                            <path class="mycelium" d="M150,170 Q200,165 220,155 M150,170 Q100,175 80,185 M150,170 Q170,190 200,190" stroke="#bae6fd" stroke-width="2" fill="none"/>
+                            
+                            <!-- Plant -->
+                            <g class="plant">
+                                <path d="M150,170 Q160,80 130,40" fill="none" stroke="#e0f2fe" stroke-width="12" stroke-linecap="round"/>
+                                <path d="M130,40 C100,30 80,60 100,80 C120,90 140,80 130,40 Z" fill="#e0f2fe"/>
+                            </g>
+                            
+                            <!-- Energy Flow -->
+                            <path class="energy" d="M210,160 Q180,165 150,170 M150,170 Q155,100 130,60" fill="none" stroke="#fcd34d" stroke-width="3"/>
+                        </svg>
+                    `;
+                }
+            },
+
+            bindMechanism(type) {
+                const btnPrev = document.getElementById(`btn-prev-${type}`);
+                const btnNext = document.getElementById(`btn-next-${type}`);
+                const btnAuto = document.getElementById(`btn-auto-${type}`);
+                const dots = document.querySelectorAll(`#mech-progress-${type} .step-dot`);
+
+                btnPrev.addEventListener('click', () => {
+                    this.stopAuto();
+                    if(this.currentMechStage > 0) this.updateMechanismUI(type, this.currentMechStage - 1);
+                });
+
+                btnNext.addEventListener('click', () => {
+                    this.stopAuto();
+                    const max = APP_DATA[type].mechanism.stages.length - 1;
+                    if(this.currentMechStage < max) this.updateMechanismUI(type, this.currentMechStage + 1);
+                });
+
+                btnAuto.addEventListener('click', () => {
+                    if(this.mechInterval) {
+                        this.stopAuto();
+                        btnAuto.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9v-18z"/></svg> Auto-Play';
+                    } else {
+                        btnAuto.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause';
+                        const max = APP_DATA[type].mechanism.stages.length - 1;
+                        if(this.currentMechStage === max) this.updateMechanismUI(type, 0);
+                        
+                        this.mechInterval = setInterval(() => {
+                            if(this.currentMechStage < max) {
+                                this.updateMechanismUI(type, this.currentMechStage + 1);
+                            } else {
+                                if(APP_DATA[type].mechanism.type === 'cycle') {
+                                    this.updateMechanismUI(type, 0);
+                                } else {
+                                    this.stopAuto();
+                                    btnAuto.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 3l14 9-14 9v-18z"/></svg> Auto-Play';
+                                }
+                            }
+                        }, 2500); // 2.5s per stage
+                    }
+                });
+
+                dots.forEach((dot, index) => {
+                    dot.addEventListener('click', () => {
+                        this.stopAuto();
+                        this.updateMechanismUI(type, index);
+                    });
+                });
+            },
+
+            stopAuto() {
+                clearInterval(this.mechInterval);
+                this.mechInterval = null;
+            },
+
+            updateMechanismUI(type, stageIndex) {
+                this.currentMechStage = stageIndex;
+                const data = APP_DATA[type].mechanism.stages;
+                const max = data.length - 1;
+                
+                // Update text
+                document.getElementById(`mech-title-${type}`).textContent = `Stage ${stageIndex + 1}: ${data[stageIndex].title}`;
+                document.getElementById(`mech-desc-${type}`).textContent = data[stageIndex].desc;
+                
+                // Update Progress Bar
+                const fillPercent = (stageIndex / max) * 100;
+                document.getElementById(`mech-fill-${type}`).style.width = `${fillPercent}%`;
+                
+                // Update Dots
+                const dots = document.querySelectorAll(`#mech-progress-${type} .step-dot`);
+                dots.forEach((dot, i) => {
+                    dot.classList.remove('active', 'completed');
+                    if(i < stageIndex) dot.classList.add('completed');
+                    if(i === stageIndex) dot.classList.add('active');
+                });
+
+                // Update Buttons
+                document.getElementById(`btn-prev-${type}`).disabled = (stageIndex === 0);
+                document.getElementById(`btn-next-${type}`).disabled = (stageIndex === max);
+
+                // Update Visual Classes
+                const svg = document.getElementById(`anim-svg-${type}`);
+                svg.className = `state-${stageIndex}`; // replace all classes with current state
+            },
+
+            // --- Interactive Simulation ---
+
+            bindSimulation(type) {
+                const slider = document.getElementById(`sim-slider-${type}`);
+                const valText = document.getElementById(`sim-val-text-${type}`);
+                
+                const update = (e) => {
+                    const val = e.target.value;
+                    valText.textContent = `${val}${APP_DATA[type].sim.unit}`;
+                    this.updateSimulationVisual(type, val);
+                };
+
+                slider.addEventListener('input', update);
+                // Also handle touch events on slider implicitly by using 'input'
+            },
+
+            updateSimulationVisual(type, value) {
+                const render = document.getElementById(`sim-render-${type}`);
+                value = parseInt(value);
+                
+                if(type === 'insectivorous') {
+                    // High nitrogen (value) = small flytraps, big leaves. Low nitrogen = massive flytraps.
+                    const trapScale = 0.5 + ((100 - value) / 100) * 1; 
+                    const leafOpacity = 0.5 + (value / 100) * 0.5;
+                    
+                    render.innerHTML = `
+                        <svg viewBox="0 0 200 200" width="100%" height="100%" style="transition: all 0.3s">
+                            <!-- Standard Leaf -->
+                            <path d="M50,200 Q20,120 100,50 Q180,120 150,200" fill="#15803d" opacity="${leafOpacity}" style="transition: all 0.3s"/>
+                            <!-- Trap -->
+                            <g transform="translate(100, 80) scale(${trapScale}) translate(-100, -80)" style="transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)">
+                                <path d="M100,80 C60,90 30,60 40,20 C60,0 90,30 100,70 Z" fill="#22c55e"/>
+                                <path d="M100,80 C140,90 170,60 160,20 C140,0 110,30 100,70 Z" fill="#22c55e"/>
+                                <path d="M96,72 C64,80 40,56 48,24 C64,8 88,32 96,64 Z" fill="#be123c"/>
+                                <path d="M104,72 C136,80 160,56 152,24 C136,8 112,32 104,64 Z" fill="#be123c"/>
+                            </g>
+                        </svg>
+                    `;
+                } else if(type === 'parasitic') {
+                    // Haustoria depth. 0-10. >5 taps into Phloem (growth).
+                    const depth = value * 6; // 0 to 60
+                    const isThriving = value > 5;
+                    const color = isThriving ? '#fcd34d' : '#92400e';
+                    const scale = isThriving ? 1.2 : 0.8;
+                    
+                    render.innerHTML = `
+                        <svg viewBox="0 0 200 200" width="100%" height="100%">
+                            <!-- Host Stem -->
+                            <rect x="60" y="20" width="80" height="160" fill="#15803d"/>
+                            <!-- Xylem (Water) -->
+                            <rect x="80" y="20" width="10" height="160" fill="#38bdf8" opacity="0.6"/>
+                            <!-- Phloem (Sugar) -->
+                            <rect x="110" y="20" width="10" height="160" fill="#bef264" opacity="0.6"/>
+                            
+                            <!-- Parasite body -->
+                            <circle cx="20" cy="100" r="30" fill="${color}" style="transition: all 0.5s" transform="scale(${scale})" transform-origin="20px 100px"/>
+                            
+                            <!-- Haustorium penetrating -->
+                            <rect x="40" y="95" width="${20 + depth}" height="10" fill="#f59e0b" style="transition: width 0.3s"/>
+                            <polygon points="${60+depth},90 ${70+depth},100 ${60+depth},110" fill="#f59e0b" style="transition: all 0.3s"/>
+                            
+                            <!-- Overlay Text -->
+                            <text x="100" y="195" fill="white" font-size="12" text-anchor="middle" font-family="monospace">
+                                ${isThriving ? 'Tapped Phloem! Rapid Growth.' : 'Only Water. Starving...'}
+                            </text>
+                        </svg>
+                    `;
+                } else {
+                    // Saprophytic: Light level doesn't affect it. Show a normal plant dying while saprophyte lives.
+                    const brightness = value / 100;
+                    const normalGreen = `rgba(34, 197, 94, ${brightness})`;
+                    const saproOpacity = 1; // Unaffected
+                    
+                    render.innerHTML = `
+                        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,${brightness * 0.2}); pointer-events: none; transition: background 0.3s;"></div>
+                        <svg viewBox="0 0 200 200" width="100%" height="100%">
+                            <rect x="0" y="170" width="200" height="30" fill="#1e1b4b"/>
+                            <!-- Normal Plant -->
+                            <path d="M50,170 Q60,100 50,50" stroke="${normalGreen}" stroke-width="6" fill="none" style="transition: stroke 0.3s"/>
+                            <path d="M50,100 C30,90 20,70 50,70 Z" fill="${normalGreen}" style="transition: fill 0.3s"/>
+                            <!-- Saprophyte -->
+                            <path d="M150,170 Q160,120 140,80" stroke="#e0f2fe" stroke-width="8" fill="none" opacity="${saproOpacity}"/>
+                            <circle cx="135" cy="80" r="10" fill="#bae6fd"/>
+                            
+                            <text x="50" y="30" fill="${brightness > 0.3 ? '#22c55e' : '#dc2626'}" font-size="12" text-anchor="middle" font-weight="bold">Autotroph</text>
+                            <text x="150" y="30" fill="#38bdf8" font-size="12" text-anchor="middle" font-weight="bold">Heterotroph</text>
+                        </svg>
+                    `;
+                }
+            },
+
+            // --- Canvas Ambient Background ---
+            
+            initCanvasBackground() {
+                const canvas = document.getElementById('ambient-canvas');
+                const ctx = canvas.getContext('2d');
+                let particles = [];
+                let width, height;
+
+                const resize = () => {
+                    const rect = canvas.getBoundingClientRect();
+                    const dpr = window.devicePixelRatio || 1;
+                    width = window.innerWidth;
+                    height = window.innerHeight;
+                    canvas.width = width * dpr;
+                    canvas.height = height * dpr;
+                    ctx.scale(dpr, dpr);
+                    canvas.style.width = `${width}px`;
+                    canvas.style.height = `${height}px`;
+                    initParticles();
+                };
+
+                const initParticles = () => {
+                    particles = [];
+                    const count = window.innerWidth < 768 ? 20 : 50; // Less on mobile
+                    for(let i = 0; i < count; i++) {
+                        particles.push({
+                            x: Math.random() * width,
+                            y: Math.random() * height,
+                            r: Math.random() * 2 + 0.5,
+                            vx: (Math.random() - 0.5) * 0.3,
+                            vy: -Math.random() * 0.5 - 0.1,
+                            op: Math.random() * 0.5 + 0.1
+                        });
+                    }
+                };
+
+                const render = () => {
+                    ctx.clearRect(0, 0, width, height);
+                    const rgb = this.hexToRgb(APP_DATA[this.currentType].accent);
+                    
+                    particles.forEach(p => {
+                        p.x += p.vx;
+                        p.y += p.vy;
+                        
+                        if(p.y < -10) p.y = height + 10;
+                        if(p.x < -10) p.x = width + 10;
+                        if(p.x > width + 10) p.x = -10;
+
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                        ctx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${p.op})`;
+                        ctx.fill();
+                    });
+                    
+                    requestAnimationFrame(render);
+                };
+
+                window.addEventListener('resize', resize);
+                window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+                
+                resize();
+                render();
+            },
+            
+            hexToRgb(hex) {
+                var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+                return result ? {
+                    r: parseInt(result[1], 16),
+                    g: parseInt(result[2], 16),
+                    b: parseInt(result[3], 16)
+                } : {r: 255, g: 255, b: 255};
+            }
+        };
+
+        // Boot
+        document.addEventListener('DOMContentLoaded', () => App.init());
+
+    </script>
+</body>
+</html>

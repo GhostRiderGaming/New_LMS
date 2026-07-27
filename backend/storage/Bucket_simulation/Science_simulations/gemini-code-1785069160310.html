@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Plant Cell Explorer</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Colors */
+            --bg-base: #070B14;
+            --bg-glass: rgba(16, 24, 40, 0.6);
+            --bg-glass-hover: rgba(26, 36, 56, 0.8);
+            --border-glass: rgba(255, 255, 255, 0.1);
+            
+            --text-main: #F8FAFC;
+            --text-muted: #94A3B8;
+            --text-accent: #38BDF8;
+
+            /* Organelle Colors */
+            --c-chloroplast: #22C55E;
+            --c-nucleus: #A855F7;
+            --c-vacuole: #0EA5E9;
+            --c-mito: #F97316;
+            --c-wall: #84CC16;
+            --c-golgi: #EC4899;
+            --c-er: #EAB308;
+
+            /* Typography */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --text-xs: clamp(0.75rem, 1vw, 0.875rem);
+            --text-sm: clamp(0.875rem, 1.2vw, 1rem);
+            --text-base: clamp(1rem, 1.5vw, 1.125rem);
+            --text-lg: clamp(1.25rem, 2vw, 1.5rem);
+            --text-xl: clamp(1.5rem, 3vw, 2.5rem);
+
+            /* Spacing & Layout */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --pad-section: clamp(16px, 3vw, 32px);
+            --pad-card: clamp(16px, 2vw, 24px);
+            
+            /* FX */
+            --shadow-glow: 0 0 20px rgba(56, 189, 248, 0.2);
+            --trans-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            background: radial-gradient(circle at 15% 50%, rgba(34, 197, 94, 0.05), transparent 40%),
+                        radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.05), transparent 40%);
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        /* ==========================================================================
+           LAYOUT & NAVIGATION
+           ========================================================================== */
+        .app-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: var(--pad-section);
+            display: flex;
+            flex-direction: column;
+            gap: var(--pad-section);
+            height: 100vh;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--pad-card);
+            flex-shrink: 0;
+        }
+
+        .title-group h1 {
+            font-size: var(--text-xl);
+            font-weight: 700;
+            background: linear-gradient(90deg, #4ADE80, #38BDF8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .title-group p {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 8px;
+            background: rgba(0,0,0,0.3);
+            padding: 6px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        
+        .nav-tabs::-webkit-scrollbar { display: none; }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px 16px;
+            border-radius: var(--radius-sm);
+            font-size: var(--text-sm);
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--trans-smooth);
+            white-space: nowrap;
+        }
+
+        .nav-btn:hover { color: var(--text-main); }
+        .nav-btn.active {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-main);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .section {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--pad-section);
+            overflow-y: auto;
+            padding-bottom: 40px;
+        }
+
+        .section.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        @media (min-width: 1024px) {
+            .section { grid-template-columns: 3fr 2fr; overflow-y: hidden;}
+            .section-full { grid-template-columns: 1fr; }
+        }
+
+        /* ==========================================================================
+           SECTION 1: EXPLORER (Components)
+           ========================================================================== */
+        .visual-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 40vh;
+            border-radius: var(--radius-lg);
+            background: radial-gradient(circle at center, rgba(34,197,94,0.1), transparent 70%);
+            border: 1px solid var(--border-glass);
+            overflow: hidden;
+        }
+
+        .svg-wrapper {
+            width: 100%;
+            height: 100%;
+            max-height: 80vh;
+            position: relative;
+        }
+
+        /* SVG Styling */
+        svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 10px 30px rgba(0,0,0,0.5)); }
+        .organelle { transition: var(--trans-smooth); cursor: pointer; transform-origin: center; }
+        .organelle:hover { filter: brightness(1.2); }
+        .organelle.dimmed { opacity: 0.3; filter: grayscale(50%); }
+        .organelle.highlight { filter: brightness(1.3) drop-shadow(0 0 15px currentColor); transform: scale(1.02); }
+
+        /* Markers overlay */
+        .marker {
+            position: absolute;
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            background: rgba(15, 23, 42, 0.8);
+            border: 2px solid;
+            color: white;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: bold;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: var(--trans-smooth);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+        .marker::before {
+            content: ''; position: absolute; top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%; border: 1px solid; opacity: 0; transition: var(--trans-smooth);
+        }
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: currentColor;
+            color: #000;
+        }
+        .marker:hover::before, .marker.active::before { opacity: 1; animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        /* Legend Sidebar */
+        .legend-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+            padding-right: 8px;
+        }
+
+        .legend-container::-webkit-scrollbar { width: 6px; }
+        .legend-container::-webkit-scrollbar-track { background: transparent; }
+        .legend-container::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--trans-smooth);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.2);
+            transform: translateX(4px);
+        }
+
+        .legend-item.active { background: var(--item-color-bg, rgba(255,255,255,0.1)); border-color: var(--item-color); }
+        .legend-badge {
+            width: 32px; height: 32px; flex-shrink: 0;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 14px;
+            background: rgba(0,0,0,0.5);
+            border: 2px solid var(--item-color);
+            color: var(--item-color);
+        }
+        .legend-item.active .legend-badge { background: var(--item-color); color: #000; }
+        
+        .legend-text { flex: 1; }
+        .legend-title { font-weight: 600; font-size: var(--text-base); color: #fff; }
+        .legend-desc { font-size: var(--text-xs); color: var(--text-muted); margin-top: 4px; }
+
+        /* ==========================================================================
+           SECTION 2: WORKING MECHANISM (Photosynthesis)
+           ========================================================================== */
+        .working-layout {
+            display: flex;
+            flex-direction: column;
+            gap: var(--pad-section);
+            height: 100%;
+        }
+
+        .working-visual {
+            flex: 1;
+            min-height: 300px;
+            border-radius: var(--radius-lg);
+            position: relative;
+            overflow: hidden;
+            background: #0A1929;
+            border: 1px solid var(--border-glass);
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        /* Chloroplast working diagram */
+        .stage-diagram { width: 100%; height: 100%; position: absolute; top: 0; left: 0; opacity: 0; transition: opacity 0.5s; }
+        .stage-diagram.active { opacity: 1; }
+
+        .particle { position: absolute; pointer-events: none; opacity: 0; font-weight: bold;}
+        
+        /* Specific Stage Animations */
+        @keyframes floatIn { 0% { transform: translateY(-50px); opacity:0;} 50% {opacity:1;} 100% { transform: translateY(20px); opacity:0;} }
+        @keyframes flowRight { 0% { transform: translateX(0); opacity:0;} 20%{opacity:1;} 80%{opacity:1;} 100% { transform: translateX(150px); opacity:0;} }
+        
+        .anim-sunlight { width: 4px; height: 40px; background: #FDE047; border-radius: 2px; box-shadow: 0 0 10px #FDE047; animation: floatDown 1s infinite linear; }
+        @keyframes floatDown { 0% { transform: translate(-20px, -50px) rotate(20deg); opacity: 0;} 50% {opacity:1;} 100% { transform: translate(20px, 50px) rotate(20deg); opacity: 0;} }
+
+        .working-controls {
+            padding: var(--pad-card);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            background: rgba(0,0,0,0.4);
+            border-radius: var(--radius-md);
+        }
+
+        .stage-info h3 { font-size: var(--text-lg); color: var(--c-chloroplast); margin-bottom: 8px;}
+        .stage-info p { font-size: var(--text-sm); color: var(--text-muted); }
+        .stage-io { display: flex; gap: 16px; margin-top: 12px; font-size: var(--text-xs); font-family: monospace; }
+        .io-badge { padding: 4px 8px; border-radius: 4px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); }
+        .io-in { color: #38BDF8; } .io-out { color: #4ADE80; }
+
+        .control-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: 0.3s; }
+        .dot.active { background: var(--c-chloroplast); box-shadow: 0 0 8px var(--c-chloroplast); transform: scale(1.2); }
+
+        .btn-group { display: flex; gap: 8px; }
+        .btn { 
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); 
+            color: white; padding: 8px 16px; border-radius: var(--radius-sm); 
+            cursor: pointer; transition: 0.2s; font-weight: 500;
+        }
+        .btn:hover { background: rgba(255,255,255,0.2); }
+        .btn-primary { background: rgba(34,197,94,0.2); border-color: var(--c-chloroplast); color: var(--c-chloroplast); }
+        .btn-primary:hover { background: rgba(34,197,94,0.4); }
+
+        /* ==========================================================================
+           SECTION 3: SIMULATION (Turgor Pressure)
+           ========================================================================== */
+        .sim-layout { display: grid; grid-template-columns: 1fr; gap: var(--pad-section); height: 100%;}
+        @media (min-width: 1024px) { .sim-layout { grid-template-columns: 1fr 300px; } }
+
+        .sim-viewport {
+            border-radius: var(--radius-lg);
+            background: #050A10;
+            display: flex; justify-content: center; align-items: center;
+            position: relative;
+            border: 1px solid var(--border-glass);
+            min-height: 400px;
+        }
+
+        .sim-controls {
+            display: flex; flex-direction: column; gap: 24px;
+        }
+        
+        .sim-card { padding: var(--pad-card); }
+        .sim-card h3 { font-size: var(--text-base); margin-bottom: 16px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px;}
+        
+        .slider-group { display: flex; flex-direction: column; gap: 8px; }
+        .slider-header { display: flex; justify-content: space-between; font-size: var(--text-sm); }
+        
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; height: 6px; border-radius: 3px;
+            background: rgba(255,255,255,0.1); outline: none; margin: 10px 0;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 20px; width: 20px; border-radius: 50%;
+            background: #38BDF8; cursor: pointer; box-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
+        }
+
+        /* Simulation CSS Graphics */
+        .sim-cell {
+            width: 60%; height: 60%; max-width: 300px; max-height: 400px;
+            position: relative; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .sim-wall {
+            position: absolute; inset: 0; border: 8px solid var(--c-wall); border-radius: 20px;
+            transition: all 0.5s;
+        }
+        .sim-membrane {
+            position: absolute; inset: 4px; border: 2px solid rgba(255,255,255,0.5); border-radius: 14px;
+            background: rgba(34,197,94,0.1); transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex; justify-content: center; align-items: center;
+        }
+        .sim-vacuole {
+            width: 80%; height: 70%; background: rgba(14, 165, 233, 0.4); border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+            border: 2px solid rgba(14, 165, 233, 0.8); box-shadow: inset 0 0 20px rgba(14, 165, 233, 0.5);
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: morph 8s ease-in-out infinite alternate;
+        }
+
+        @keyframes morph {
+            0% { border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; }
+            100% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+        }
+
+        .status-badge {
+            position: absolute; top: 20px; left: 20px; padding: 6px 12px; border-radius: 20px;
+            font-size: var(--text-xs); font-weight: bold; background: rgba(0,0,0,0.6); border: 1px solid;
+        }
+
+        /* ==========================================================================
+           SECTION 4: LEARN (Facts, Mistakes)
+           ========================================================================== */
+        .learn-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--pad-section);
+            align-content: start;
+        }
+        .info-card { padding: var(--pad-card); display: flex; flex-direction: column; gap: 12px; }
+        .info-card h3 { font-size: var(--text-base); display: flex; align-items: center; gap: 8px; }
+        .info-card p { font-size: var(--text-sm); color: var(--text-muted); }
+        .icon-fact { color: #FBBF24; }
+        .icon-myth { color: #EF4444; }
+        
+        .comparison-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: var(--text-sm); }
+        .comparison-table th, .comparison-table td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; }
+        .comparison-table th { color: #fff; font-weight: 600; }
+        .comparison-table tr td:first-child { color: var(--text-muted); }
+
+    </style>
+</head>
+<body>
+    <div class="ambient-bg"></div>
+
+    <div class="app-container">
+        <header class="glass-panel">
+            <div class="title-group">
+                <h1>Plant Cell Explorer</h1>
+                <p>Interactive biological simulation</p>
+            </div>
+            <nav class="nav-tabs">
+                <button class="nav-btn active" data-target="sec-components">Structure</button>
+                <button class="nav-btn" data-target="sec-working">Working Cycle</button>
+                <button class="nav-btn" data-target="sec-sim">Simulation</button>
+                <button class="nav-btn" data-target="sec-learn">Learn</button>
+            </nav>
+        </header>
+
+        <main class="main-content">
+            
+            <!-- SECTION 1: COMPONENTS -->
+            <section id="sec-components" class="section active">
+                <div class="visual-container glass-panel">
+                    <div class="svg-wrapper" id="svg-container">
+                        <!-- High-Quality SVG Plant Cell -->
+                        <svg viewBox="0 0 1000 800" preserveAspectRatio="xMidYMid meet" id="cell-svg">
+                            <defs>
+                                <!-- Filters -->
+                                <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feGaussianBlur stdDeviation="8" result="blur" />
+                                    <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                                </filter>
+                                <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+                                    <feDropShadow dx="0" dy="15" stdDeviation="15" flood-color="#000" flood-opacity="0.6"/>
+                                </filter>
+                                
+                                <!-- Gradients -->
+                                <linearGradient id="wall-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#4ADE80" />
+                                    <stop offset="100%" stop-color="#166534" />
+                                </linearGradient>
+                                <radialGradient id="cyto-grad" cx="50%" cy="50%" r="70%">
+                                    <stop offset="0%" stop-color="#1E3A8A" stop-opacity="0.2"/>
+                                    <stop offset="100%" stop-color="#0F172A" stop-opacity="0.8"/>
+                                </radialGradient>
+                                <radialGradient id="vacuole-grad" cx="40%" cy="40%" r="60%">
+                                    <stop offset="0%" stop-color="#38BDF8" stop-opacity="0.6"/>
+                                    <stop offset="100%" stop-color="#0284C7" stop-opacity="0.3"/>
+                                </radialGradient>
+                                <radialGradient id="nucleus-grad" cx="30%" cy="30%" r="70%">
+                                    <stop offset="0%" stop-color="#D8B4FE"/>
+                                    <stop offset="100%" stop-color="#7E22CE"/>
+                                </radialGradient>
+                                <linearGradient id="chloro-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#86EFAC"/>
+                                    <stop offset="100%" stop-color="#15803D"/>
+                                </linearGradient>
+                                <radialGradient id="mito-grad" cx="30%" cy="30%" r="70%">
+                                    <stop offset="0%" stop-color="#FDBA74"/>
+                                    <stop offset="100%" stop-color="#C2410C"/>
+                                </radialGradient>
+                            </defs>
+
+                            <g filter="url(#shadow)">
+                                <!-- Cell Wall -->
+                                <path id="svg-wall" class="organelle" fill="url(#cyto-grad)" stroke="url(#wall-grad)" stroke-width="24" stroke-linejoin="round"
+                                      d="M 300 50 L 700 100 L 900 400 L 750 750 L 250 700 L 100 400 Z" />
+                                
+                                <!-- Cell Membrane -->
+                                <path id="svg-membrane" class="organelle" fill="none" stroke="#A7F3D0" stroke-width="4" stroke-linejoin="round" stroke-dasharray="8 4"
+                                      d="M 305 65 L 690 112 L 880 400 L 740 730 L 260 685 L 115 400 Z" />
+
+                                <!-- Central Vacuole (Large, central) -->
+                                <path id="svg-vacuole" class="organelle" fill="url(#vacuole-grad)" stroke="#7DD3FC" stroke-width="3" filter="url(#glow)"
+                                      d="M 350 200 C 550 150, 750 250, 700 450 C 650 650, 400 650, 300 500 C 200 350, 250 220, 350 200 Z" />
+
+                                <!-- Nucleus -->
+                                <g id="svg-nucleus" class="organelle" transform="translate(250, 500)">
+                                    <circle cx="0" cy="0" r="100" fill="url(#nucleus-grad)" stroke="#E9D5FF" stroke-width="3" filter="url(#glow)"/>
+                                    <!-- Nucleolus -->
+                                    <circle cx="-15" cy="-15" r="30" fill="#4C1D95"/>
+                                    <!-- Pores -->
+                                    <circle cx="60" cy="-40" r="5" fill="#3B0764"/><circle cx="70" cy="20" r="5" fill="#3B0764"/>
+                                    <circle cx="-30" cy="80" r="5" fill="#3B0764"/><circle cx="-80" cy="-10" r="5" fill="#3B0764"/>
+                                </g>
+
+                                <!-- Endoplasmic Reticulum (Around Nucleus) -->
+                                <path id="svg-er" class="organelle" fill="none" stroke="var(--c-er)" stroke-width="12" stroke-linecap="round" filter="url(#glow)"
+                                      d="M 180 380 Q 200 350 240 370 T 300 350 T 350 390 M 130 450 Q 150 400 180 430 T 230 410 M 140 550 Q 130 600 170 610 T 200 650 T 250 640 M 350 580 Q 400 600 420 550 T 380 480" />
+                                <!-- Ribosomes on Rough ER -->
+                                <g fill="#FFF"><circle cx="200" cy="360" r="3"/><circle cx="220" cy="368" r="3"/><circle cx="280" cy="355" r="3"/><circle cx="160" cy="425" r="3"/><circle cx="180" cy="610" r="3"/></g>
+
+                                <!-- Chloroplasts -->
+                                <g id="svg-chloroplast" class="organelle">
+                                    <g transform="translate(650, 250) rotate(20)">
+                                        <ellipse cx="0" cy="0" rx="60" ry="35" fill="url(#chloro-grad)" stroke="#4ADE80" stroke-width="2" filter="url(#glow)"/>
+                                        <rect x="-40" y="-15" width="10" height="30" fill="#14532D" rx="2"/><rect x="-10" y="-15" width="10" height="30" fill="#14532D" rx="2"/><rect x="20" y="-15" width="10" height="30" fill="#14532D" rx="2"/>
+                                    </g>
+                                    <g transform="translate(750, 550) rotate(-40)">
+                                        <ellipse cx="0" cy="0" rx="50" ry="30" fill="url(#chloro-grad)" stroke="#4ADE80" stroke-width="2" />
+                                        <rect x="-30" y="-12" width="8" height="24" fill="#14532D" rx="2"/><rect x="-5" y="-12" width="8" height="24" fill="#14532D" rx="2"/><rect x="20" y="-12" width="8" height="24" fill="#14532D" rx="2"/>
+                                    </g>
+                                    <g transform="translate(300, 150) rotate(60)">
+                                        <ellipse cx="0" cy="0" rx="45" ry="25" fill="url(#chloro-grad)" stroke="#4ADE80" stroke-width="2" />
+                                        <rect x="-20" y="-10" width="6" height="20" fill="#14532D" rx="2"/><rect x="5" y="-10" width="6" height="20" fill="#14532D" rx="2"/>
+                                    </g>
+                                </g>
+
+                                <!-- Mitochondria -->
+                                <g id="svg-mito" class="organelle">
+                                    <g transform="translate(480, 150) rotate(-20)">
+                                        <ellipse cx="0" cy="0" rx="45" ry="25" fill="url(#mito-grad)" stroke="#FDBA74" stroke-width="2" filter="url(#glow)"/>
+                                        <path d="M -35 0 Q -20 -15 -10 0 Q 0 15 10 0 Q 20 -15 35 0" fill="none" stroke="#7C2D12" stroke-width="3" stroke-linecap="round"/>
+                                    </g>
+                                    <g transform="translate(180, 250) rotate(45)">
+                                        <ellipse cx="0" cy="0" rx="40" ry="20" fill="url(#mito-grad)" stroke="#FDBA74" stroke-width="2" />
+                                        <path d="M -30 0 Q -15 -12 -5 0 Q 5 12 15 0 Q 25 -12 30 0" fill="none" stroke="#7C2D12" stroke-width="3" stroke-linecap="round"/>
+                                    </g>
+                                    <g transform="translate(580, 650) rotate(-70)">
+                                        <ellipse cx="0" cy="0" rx="50" ry="25" fill="url(#mito-grad)" stroke="#FDBA74" stroke-width="2" />
+                                        <path d="M -35 0 Q -20 -15 -10 0 Q 0 15 10 0 Q 20 -15 35 0" fill="none" stroke="#7C2D12" stroke-width="3" stroke-linecap="round"/>
+                                    </g>
+                                </g>
+
+                                <!-- Golgi Apparatus -->
+                                <g id="svg-golgi" class="organelle" transform="translate(600, 380) rotate(15)">
+                                    <path d="M -40 -30 Q 0 -50 40 -30" fill="none" stroke="var(--c-golgi)" stroke-width="8" stroke-linecap="round" filter="url(#glow)"/>
+                                    <path d="M -50 -10 Q 0 -30 50 -10" fill="none" stroke="var(--c-golgi)" stroke-width="8" stroke-linecap="round"/>
+                                    <path d="M -45 10 Q 0 -10 45 10" fill="none" stroke="var(--c-golgi)" stroke-width="8" stroke-linecap="round"/>
+                                    <path d="M -30 30 Q 0 10 30 30" fill="none" stroke="var(--c-golgi)" stroke-width="8" stroke-linecap="round"/>
+                                    <!-- Vesicles -->
+                                    <circle cx="-60" cy="-10" r="5" fill="var(--c-golgi)"/><circle cx="65" cy="15" r="7" fill="var(--c-golgi)"/><circle cx="-40" cy="40" r="4" fill="var(--c-golgi)"/>
+                                </g>
+                            </g>
+                        </svg>
+                        
+                        <!-- Markers will be injected here via JS -->
+                        <div id="markers-layer"></div>
+                    </div>
+                </div>
+
+                <div class="legend-container glass-panel" id="legend-list">
+                    <!-- Legend Items injected via JS -->
+                </div>
+            </section>
+
+            <!-- SECTION 2: WORKING CYCLE -->
+            <section id="sec-working" class="section glass-panel working-layout section-full">
+                <div class="working-visual" id="work-canvas">
+                    <!-- Stage 1: Light Capture -->
+                    <svg class="stage-diagram active" id="stage-1" viewBox="0 0 800 400">
+                        <!-- Thylakoid stack -->
+                        <g transform="translate(400, 200)">
+                            <rect x="-80" y="-40" width="160" height="20" fill="#166534" rx="10" stroke="#4ADE80" stroke-width="2"/>
+                            <rect x="-80" y="-15" width="160" height="20" fill="#15803D" rx="10" stroke="#4ADE80" stroke-width="2"/>
+                            <rect x="-80" y="10" width="160" height="20" fill="#166534" rx="10" stroke="#4ADE80" stroke-width="2"/>
+                            <text x="-50" y="60" fill="#4ADE80" font-family="monospace">Grana (Thylakoids)</text>
+                        </g>
+                        <!-- Sunbeams animated via CSS -->
+                        <div id="sunlight-particles"></div>
+                    </svg>
+
+                    <!-- Stage 2: Water Splitting -->
+                    <svg class="stage-diagram" id="stage-2" viewBox="0 0 800 400">
+                        <g transform="translate(400, 200)">
+                            <rect x="-80" y="-15" width="160" height="30" fill="#15803D" rx="10" stroke="#4ADE80" stroke-width="2"/>
+                            <!-- Water entering -->
+                            <g id="h2o-enter">
+                                <circle cx="-150" cy="0" r="15" fill="#38BDF8"/>
+                                <text x="-160" y="5" fill="#000" font-size="12" font-weight="bold">H₂O</text>
+                                <path d="M -130 0 L -90 0" stroke="#fff" stroke-width="2" marker-end="url(#arrow)"/>
+                            </g>
+                            <!-- Splitting fx -->
+                            <circle cx="0" cy="0" r="20" fill="#FDE047" filter="blur(5px)" id="split-flash"/>
+                            <!-- Oxygen leaving -->
+                            <g id="o2-leave" opacity="0">
+                                <circle cx="150" cy="-50" r="15" fill="#EF4444"/>
+                                <text x="142" y="-45" fill="#fff" font-size="12" font-weight="bold">O₂</text>
+                                <path d="M 90 -20 L 130 -40" stroke="#fff" stroke-width="2" stroke-dasharray="4" marker-end="url(#arrow)"/>
+                            </g>
+                            <!-- Electrons moving -->
+                            <circle cx="30" cy="0" r="4" fill="#FDE047" id="e-move"/>
+                        </g>
+                    </svg>
+
+                    <!-- Stage 3: Energy Carriers -->
+                    <svg class="stage-diagram" id="stage-3" viewBox="0 0 800 400">
+                        <g transform="translate(200, 200)">
+                            <rect x="-60" y="-15" width="120" height="30" fill="#15803D" rx="10" stroke="#4ADE80" stroke-width="2"/>
+                            <text x="-40" y="40" fill="#4ADE80" font-size="12">Light Reactions</text>
+                        </g>
+                        <g transform="translate(600, 200)">
+                            <circle cx="0" cy="0" r="50" fill="none" stroke="#D946EF" stroke-width="4" stroke-dasharray="10 5"/>
+                            <text x="-35" y="65" fill="#D946EF" font-size="12">Calvin Cycle</text>
+                        </g>
+                        <!-- Carriers flowing -->
+                        <g id="carriers-flow">
+                            <rect x="300" y="170" width="40" height="20" fill="#FBBF24" rx="5"/><text x="305" y="184" font-size="10" fill="#000">ATP</text>
+                            <rect x="300" y="210" width="50" height="20" fill="#A78BFA" rx="5"/><text x="305" y="224" font-size="10" fill="#000">NADPH</text>
+                        </g>
+                    </svg>
+
+                    <!-- Stage 4: Calvin Cycle -->
+                    <svg class="stage-diagram" id="stage-4" viewBox="0 0 800 400">
+                        <g transform="translate(400, 200)">
+                            <circle cx="0" cy="0" r="70" fill="none" stroke="#D946EF" stroke-width="6" stroke-dasharray="20 10" id="cycle-wheel"/>
+                            <!-- CO2 in -->
+                            <g id="co2-enter">
+                                <circle cx="-120" cy="-100" r="15" fill="#94A3B8"/>
+                                <text x="-132" y="-95" fill="#000" font-size="12" font-weight="bold">CO₂</text>
+                                <path d="M -100 -80 L -50 -40" stroke="#fff" stroke-width="2" marker-end="url(#arrow)"/>
+                            </g>
+                            <!-- Glucose out -->
+                            <g id="glucose-out">
+                                <polygon points="0,90 20,120 -20,120" fill="#10B981"/>
+                                <rect x="-30" y="130" width="60" height="20" fill="#10B981" rx="4"/>
+                                <text x="-25" y="144" font-size="10" fill="#fff" font-weight="bold">Glucose</text>
+                            </g>
+                        </g>
+                    </svg>
+
+                    <!-- SVG Defs for working arrows -->
+                    <svg width="0" height="0"><defs><marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#fff"/></marker></defs></svg>
+                </div>
+
+                <div class="working-controls">
+                    <div class="stage-info">
+                        <h3 id="w-title">1. Light Absorption</h3>
+                        <p id="w-desc">Chlorophyll in the thylakoids absorbs photons from sunlight, exciting electrons.</p>
+                        <div class="stage-io" id="w-io">
+                            <span>IN: <span class="io-badge io-in">Light Energy</span></span>
+                            <span>OUT: <span class="io-badge io-out">Excited e-</span></span>
+                        </div>
+                    </div>
+
+                    <div class="control-bar">
+                        <div class="btn-group">
+                            <button class="btn" id="btn-prev">Prev</button>
+                            <button class="btn" id="btn-next">Next</button>
+                        </div>
+                        <div class="progress-dots" id="w-dots">
+                            <div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                        </div>
+                        <button class="btn btn-primary" id="btn-play">Auto-Play</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 3: SIMULATION -->
+            <section id="sec-sim" class="section glass-panel sim-layout">
+                <div class="sim-viewport">
+                    <!-- CSS based dynamic cell -->
+                    <div class="sim-cell" id="dyn-cell">
+                        <div class="sim-wall" id="dyn-wall"></div>
+                        <div class="sim-membrane" id="dyn-membrane">
+                            <div class="sim-vacuole" id="dyn-vacuole"></div>
+                        </div>
+                    </div>
+                    <div class="status-badge" id="sim-status" style="border-color: #38BDF8; color: #38BDF8;">Turgid (Healthy)</div>
+                </div>
+
+                <div class="sim-controls glass-panel">
+                    <div class="sim-card">
+                        <h3>Environment Controls</h3>
+                        <div class="slider-group">
+                            <div class="slider-header">
+                                <span>Water Availability</span>
+                                <span id="val-water">100%</span>
+                            </div>
+                            <input type="range" id="sim-water" min="0" max="100" value="100">
+                            <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Affects central vacuole size and turgor pressure against the cell wall.</p>
+                        </div>
+                        
+                        <div class="slider-group" style="margin-top: 24px;">
+                            <div class="slider-header">
+                                <span>Light Intensity</span>
+                                <span id="val-light">Medium</span>
+                            </div>
+                            <input type="range" id="sim-light" min="0" max="100" value="50">
+                            <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Controls the rate of chloroplast movement (cyclosis) and photosynthesis.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 4: LEARN -->
+            <section id="sec-learn" class="section glass-panel section-full">
+                <div class="learn-grid">
+                    <div class="glass-panel info-card">
+                        <h3><span class="icon-fact">★</span> Fascinating Facts</h3>
+                        <p><strong>Endosymbiotic Theory:</strong> Chloroplasts and mitochondria have their own DNA and double membranes. Scientists believe they were once free-living bacteria swallowed by an early cell millions of years ago!</p>
+                        <p><strong>Cytoplasmic Streaming:</strong> The cytoplasm isn't static. It constantly flows in a circular motion (cyclosis) to transport nutrients and position chloroplasts for optimal light absorption.</p>
+                    </div>
+
+                    <div class="glass-panel info-card">
+                        <h3><span class="icon-myth">✖</span> Common Mistakes</h3>
+                        <p><strong>Mistake:</strong> "Plants only photosynthesize and don't respire."<br>
+                        <strong>Correction:</strong> Plants have mitochondria too! They photosynthesize (make food) during the day, but they respire (burn food for energy) 24/7, just like animals.</p>
+                        <p><strong>Mistake:</strong> "The cell wall controls what goes in and out."<br>
+                        <strong>Correction:</strong> The cell wall provides rigid structure. The thin, flexible <em>cell membrane</em> just inside it acts as the actual gatekeeper.</p>
+                    </div>
+
+                    <div class="glass-panel info-card" style="grid-column: 1 / -1;">
+                        <h3>Quick Revision: Plant vs Animal Cell</h3>
+                        <table class="comparison-table">
+                            <thead>
+                                <tr><th>Feature</th><th>Plant Cell</th><th>Animal Cell</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Cell Wall</td><td>Present (Cellulose)</td><td>Absent</td></tr>
+                                <tr><td>Chloroplasts</td><td>Present</td><td>Absent</td></tr>
+                                <tr><td>Vacuole</td><td>One large central vacuole</td><td>Small, temporary ones (if any)</td></tr>
+                                <tr><td>Shape</td><td>Fixed, rectangular/polygonal</td><td>Flexible, varied shapes</td></tr>
+                                <tr><td>Centrioles</td><td>Usually absent</td><td>Present (helps in division)</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           DATA STRUCTURES
+           ========================================================================== */
+        const organelles = [
+            { id: 'wall', x: 50, y: 15, name: 'Cell Wall', desc: 'Rigid outer layer made of cellulose. Provides structural support and protection.', color: 'var(--c-wall)', svgId: 'svg-wall' },
+            { id: 'membrane', x: 80, y: 10, name: 'Cell Membrane', desc: 'Semi-permeable barrier inside the wall regulating what enters/exits.', color: '#A7F3D0', svgId: 'svg-membrane' },
+            { id: 'vacuole', x: 50, y: 50, name: 'Central Vacuole', desc: 'Stores water and waste. Maintains turgor pressure to keep the plant upright.', color: 'var(--c-vacuole)', svgId: 'svg-vacuole' },
+            { id: 'nucleus', x: 25, y: 62, name: 'Nucleus', desc: 'The control center. Contains DNA and coordinates cell activities.', color: 'var(--c-nucleus)', svgId: 'svg-nucleus' },
+            { id: 'chloroplast', x: 65, y: 31, name: 'Chloroplast', desc: 'Site of photosynthesis. Contains green chlorophyll to capture sunlight.', color: 'var(--c-chloroplast)', svgId: 'svg-chloroplast' },
+            { id: 'mito', x: 48, y: 18, name: 'Mitochondrion', desc: 'Powerhouse of the cell. Generates ATP energy through cellular respiration.', color: 'var(--c-mito)', svgId: 'svg-mito' },
+            { id: 'golgi', x: 60, y: 47, name: 'Golgi Apparatus', desc: 'Modifies, sorts, and packages proteins for transport out of the cell.', color: 'var(--c-golgi)', svgId: 'svg-golgi' },
+            { id: 'er', x: 18, y: 48, name: 'Endoplasmic Reticulum', desc: 'Network of membranes. Rough ER (with ribosomes) makes proteins; Smooth ER makes lipids.', color: 'var(--c-er)', svgId: 'svg-er' }
+        ];
+
+        const stages = [
+            { title: '1. Light Absorption', desc: 'Chlorophyll in the thylakoids absorbs photons from sunlight, exciting electrons.', in: ['Light Energy'], out: ['Excited e-'] },
+            { title: '2. Water Splitting', desc: 'Light energy splits H₂O molecules. Oxygen is released as waste, and electrons enter the transport chain.', in: ['H₂O', 'Light'], out: ['O₂', 'e-', 'H+'] },
+            { title: '3. Energy Transfer', desc: 'Excited electrons flow through a membrane chain, pumping protons to create ATP and NADPH energy carriers.', in: ['ADP', 'NADP+'], out: ['ATP', 'NADPH'] },
+            { title: '4. Calvin Cycle', desc: 'In the stroma, ATP and NADPH power the conversion of CO₂ into glucose (sugar) through a series of reactions.', in: ['CO₂', 'ATP', 'NADPH'], out: ['Glucose'] }
+        ];
+
+        /* ==========================================================================
+           UI INITIALIZATION & TAB LOGIC
+           ========================================================================== */
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // Update buttons
+                document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                
+                // Update sections
+                const targetId = e.target.getAttribute('data-target');
+                document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+                document.getElementById(targetId).classList.add('active');
+
+                // Handle resize/redraw if specific section requires it (e.g. canvas)
+            });
+        });
+
+        /* ==========================================================================
+           SECTION 1: EXPLORER LOGIC
+           ========================================================================== */
+        const markersLayer = document.getElementById('markers-layer');
+        const legendList = document.getElementById('legend-list');
+        const allSvgPaths = document.querySelectorAll('.organelle');
+
+        function initExplorer() {
+            organelles.forEach((org, index) => {
+                const num = index + 1;
+                
+                // Create Marker
+                const marker = document.createElement('div');
+                marker.className = 'marker';
+                marker.style.left = `${org.x}%`;
+                marker.style.top = `${org.y}%`;
+                marker.style.borderColor = org.color;
+                marker.innerText = num;
+                marker.dataset.id = org.id;
+                
+                // Create Legend Item
+                const legendItem = document.createElement('div');
+                legendItem.className = 'legend-item';
+                legendItem.style.setProperty('--item-color', org.color);
+                legendItem.style.setProperty('--item-color-bg', org.color.replace(')', ', 0.15)').replace('var(--', 'rgba(')); // Rough fallback, css vars handle it better below
+                if(org.color.startsWith('var')) {
+                     legendItem.style.setProperty('--item-color-bg', `color-mix(in srgb, ${org.color} 15%, transparent)`);
+                }
+
+                legendItem.dataset.id = org.id;
+                legendItem.innerHTML = `
+                    <div class="legend-badge">${num}</div>
+                    <div class="legend-text">
+                        <div class="legend-title">${org.name}</div>
+                        <div class="legend-desc">${org.desc}</div>
+                    </div>
+                `;
+
+                // Interactions
+                const handleFocus = () => activateOrganelle(org.id);
+                marker.addEventListener('mouseenter', handleFocus);
+                legendItem.addEventListener('mouseenter', handleFocus);
+                marker.addEventListener('click', handleFocus);
+                legendItem.addEventListener('click', handleFocus);
+
+                markersLayer.appendChild(marker);
+                legendList.appendChild(legendItem);
+            });
+        }
+
+        function activateOrganelle(id) {
+            // Reset all
+            document.querySelectorAll('.marker').forEach(m => m.classList.remove('active'));
+            document.querySelectorAll('.legend-item').forEach(l => l.classList.remove('active'));
+            allSvgPaths.forEach(path => {
+                path.classList.remove('highlight');
+                path.classList.add('dimmed');
+            });
+
+            // Activate specific
+            const orgData = organelles.find(o => o.id === id);
+            if(!orgData) return;
+
+            const activeMarker = document.querySelector(`.marker[data-id="${id}"]`);
+            const activeLegend = document.querySelector(`.legend-item[data-id="${id}"]`);
+            const activeSvg = document.getElementById(orgData.svgId);
+
+            if(activeMarker) activeMarker.classList.add('active');
+            if(activeLegend) {
+                activeLegend.classList.add('active');
+                activeLegend.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+            if(activeSvg) {
+                activeSvg.classList.remove('dimmed');
+                activeSvg.classList.add('highlight');
+                
+                // Keep parent groups lit if child is selected
+                if(activeSvg.parentElement && activeSvg.parentElement.tagName === 'g' && activeSvg.parentElement.id !== 'cell-svg') {
+                     activeSvg.parentElement.classList.remove('dimmed');
+                }
+            }
+        }
+
+        // Reset on background click/leave
+        document.getElementById('cell-svg').addEventListener('click', (e) => {
+            if(e.target.tagName === 'svg') {
+                document.querySelectorAll('.marker, .legend-item').forEach(el => el.classList.remove('active'));
+                allSvgPaths.forEach(path => {
+                    path.classList.remove('dimmed');
+                    path.classList.remove('highlight');
+                });
+            }
+        });
+
+        initExplorer();
+
+        /* ==========================================================================
+           SECTION 2: WORKING CYCLE LOGIC
+           ========================================================================== */
+        let currentStage = 0;
+        let isPlaying = false;
+        let playInterval;
+        const totalStages = stages.length;
+
+        const wTitle = document.getElementById('w-title');
+        const wDesc = document.getElementById('w-desc');
+        const wIo = document.getElementById('w-io');
+        const dots = document.querySelectorAll('#w-dots .dot');
+        const diagrams = document.querySelectorAll('.stage-diagram');
+        const btnPlay = document.getElementById('btn-play');
+
+        function updateStage(index) {
+            currentStage = (index + totalStages) % totalStages; // wrap around
+            const stage = stages[currentStage];
+
+            // Update Text
+            wTitle.innerText = stage.title;
+            wDesc.innerText = stage.desc;
+            wIo.innerHTML = `
+                <span>IN: ${stage.in.map(i => `<span class="io-badge io-in">${i}</span>`).join(' ')}</span>
+                <span>OUT: ${stage.out.map(i => `<span class="io-badge io-out">${i}</span>`).join(' ')}</span>
+            `;
+
+            // Update UI
+            dots.forEach((dot, i) => dot.classList.toggle('active', i === currentStage));
+            diagrams.forEach((diag, i) => diag.classList.toggle('active', i === currentStage));
+
+            // Trigger specific animations based on stage
+            triggerStageAnimations(currentStage);
+        }
+
+        function triggerStageAnimations(stageIdx) {
+            // Reset custom CSS animations by forcing reflow
+            if(stageIdx === 0) {
+                createSunbeams();
+            } else if (stageIdx === 1) {
+                // Water split anim
+                const o2 = document.getElementById('o2-leave');
+                o2.style.transition = 'none'; o2.style.opacity = '0'; o2.style.transform = 'translateY(20px)';
+                setTimeout(() => { o2.style.transition = 'all 1s'; o2.style.opacity = '1'; o2.style.transform = 'translateY(0)'; }, 500);
+            } else if (stageIdx === 2) {
+                // Flow anim
+                const flow = document.getElementById('carriers-flow');
+                flow.style.animation = 'none'; void flow.offsetWidth; flow.style.animation = 'flowRight 2s infinite linear';
+            } else if (stageIdx === 3) {
+                 const wheel = document.getElementById('cycle-wheel');
+                 wheel.animate([{transform: 'rotate(0deg)'}, {transform: 'rotate(360deg)'}], {duration: 4000, iterations: Infinity});
+            }
+        }
+
+        function createSunbeams() {
+            const container = document.getElementById('sunlight-particles');
+            container.innerHTML = '';
+            for(let i=0; i<5; i++) {
+                const beam = document.createElement('div');
+                beam.className = 'particle anim-sunlight';
+                beam.style.left = `${350 + Math.random()*100}px`;
+                beam.style.top = `${100 + Math.random()*50}px`;
+                beam.style.animationDelay = `${Math.random()*1}s`;
+                container.appendChild(beam);
+            }
+        }
+
+        document.getElementById('btn-next').addEventListener('click', () => { stopAutoPlay(); updateStage(currentStage + 1); });
+        document.getElementById('btn-prev').addEventListener('click', () => { stopAutoPlay(); updateStage(currentStage - 1); });
+        
+        btnPlay.addEventListener('click', () => {
+            if(isPlaying) { stopAutoPlay(); } 
+            else { 
+                isPlaying = true; 
+                btnPlay.innerText = 'Pause'; 
+                btnPlay.style.background = 'rgba(239, 68, 68, 0.2)';
+                btnPlay.style.borderColor = '#EF4444';
+                btnPlay.style.color = '#EF4444';
+                playInterval = setInterval(() => updateStage(currentStage + 1), 3000);
+            }
+        });
+
+        function stopAutoPlay() {
+            isPlaying = false;
+            clearInterval(playInterval);
+            btnPlay.innerText = 'Auto-Play';
+            btnPlay.style.background = 'rgba(34,197,94,0.2)';
+            btnPlay.style.borderColor = 'var(--c-chloroplast)';
+            btnPlay.style.color = 'var(--c-chloroplast)';
+        }
+
+        updateStage(0);
+
+        /* ==========================================================================
+           SECTION 3: SIMULATION LOGIC
+           ========================================================================== */
+        const waterSlider = document.getElementById('sim-water');
+        const lightSlider = document.getElementById('sim-light');
+        const dynCell = document.getElementById('dyn-cell');
+        const dynMembrane = document.getElementById('dyn-membrane');
+        const dynVacuole = document.getElementById('dyn-vacuole');
+        const simStatus = document.getElementById('sim-status');
+
+        function updateSimulation() {
+            const waterVal = parseInt(waterSlider.value);
+            const lightVal = parseInt(lightSlider.value);
+
+            document.getElementById('val-water').innerText = waterVal + '%';
+            
+            // Text for light
+            let lightText = 'Medium';
+            if(lightVal < 30) lightText = 'Low';
+            else if(lightVal > 70) lightText = 'High';
+            document.getElementById('val-light').innerText = lightText;
+
+            // Water physics (Plasmolysis)
+            if (waterVal > 70) {
+                // Turgid
+                dynMembrane.style.inset = '4px';
+                dynMembrane.style.borderRadius = '14px';
+                dynVacuole.style.width = '80%';
+                dynVacuole.style.height = '70%';
+                simStatus.innerText = 'Turgid (Healthy)';
+                simStatus.style.borderColor = '#38BDF8'; simStatus.style.color = '#38BDF8';
+            } else if (waterVal > 30) {
+                // Flaccid
+                dynMembrane.style.inset = '12px';
+                dynMembrane.style.borderRadius = '20px';
+                dynVacuole.style.width = '60%';
+                dynVacuole.style.height = '50%';
+                simStatus.innerText = 'Flaccid (Wilting)';
+                simStatus.style.borderColor = '#FBBF24'; simStatus.style.color = '#FBBF24';
+            } else {
+                // Plasmolyzed
+                dynMembrane.style.inset = '25px';
+                dynMembrane.style.borderRadius = '40px';
+                dynVacuole.style.width = '40%';
+                dynVacuole.style.height = '35%';
+                simStatus.innerText = 'Plasmolyzed (Dying)';
+                simStatus.style.borderColor = '#EF4444'; simStatus.style.color = '#EF4444';
+            }
+
+            // Light physics (Cyclosis / Morph speed)
+            const animSpeed = 10 - (lightVal / 100 * 8); // 2s (fast) to 10s (slow)
+            dynVacuole.style.animationDuration = `${animSpeed}s`;
+        }
+
+        waterSlider.addEventListener('input', updateSimulation);
+        lightSlider.addEventListener('input', updateSimulation);
+        
+        // Handle Touch events explicitly for sliders to ensure responsiveness on mobile
+        [waterSlider, lightSlider].forEach(slider => {
+            slider.addEventListener('touchmove', (e) => {
+                // Allow default range slider behavior, but trigger update
+                updateSimulation();
+            }, {passive: true});
+        });
+
+        updateSimulation();
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Friction Dynamics: Static, Sliding, Rolling</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & GLOBAL RESET
+           ========================================================================== */
+        :root {
+            --bg-color: #050510;
+            --bg-gradient: radial-gradient(circle at 50% 0%, #1a1a3a 0%, #050510 70%);
+            
+            --glass-bg: rgba(25, 25, 45, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --color-static: #ff2a5f;    /* Vivid Pink/Red */
+            --color-sliding: #ffb800;   /* Amber */
+            --color-rolling: #00e5ff;   /* Cyan */
+            --color-applied: #00ff88;   /* Green */
+            --color-normal: #b388ff;    /* Purple */
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            --font-main: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            
+            --border-radius: 24px;
+            --transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background: var(--bg-color);
+            background-image: var(--bg-gradient);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Fluid Typography */
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(2rem, 3.5vw, 3rem); font-weight: 700; margin-bottom: 1.5rem; }
+        h3 { font-size: clamp(1.25rem, 2vw, 1.75rem); font-weight: 600; margin-bottom: 1rem; }
+        p { font-size: clamp(1rem, 1.1vw, 1.125rem); color: var(--text-muted); }
+
+        /* ==========================================================================
+           UTILITIES & GLASSMORPHISM
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 5vw;
+        }
+
+        section {
+            padding: 8vh 0;
+            position: relative;
+        }
+
+        .gradient-text {
+            background: linear-gradient(135deg, #fff, #888);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .flex-row { display: flex; flex-wrap: wrap; gap: 2rem; }
+        .flex-col { display: flex; flex-direction: column; gap: 1.5rem; }
+        
+        .w-50 { flex: 1 1 calc(50% - 1rem); min-width: 300px; }
+        .w-100 { flex: 1 1 100%; }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .ambient-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            z-index: -1;
+            opacity: 0.5;
+            animation: floatOrb 10s infinite alternate ease-in-out;
+        }
+
+        @keyframes floatOrb {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(50px, -50px) scale(1.2); }
+        }
+
+        .hero-tags {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .tag {
+            padding: 0.5rem 1.5rem;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            border: 1px solid var(--glass-border);
+        }
+
+        /* ==========================================================================
+           COMPONENTS (MICROSCOPIC VIEW) & LEGEND SYSTEM
+           ========================================================================== */
+        .diagram-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .diagram-container {
+                flex-direction: row;
+                align-items: stretch;
+            }
+            .diagram-visual { flex: 2; }
+            .diagram-legend { flex: 1; }
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: 400px;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            background: #0a0a1a;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Marker System */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--glass-bg);
+            border: 2px solid;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 0 0 15px currentColor;
+            transition: var(--transition);
+            z-index: 10;
+        }
+
+        .marker::before {
+            content: '';
+            position: absolute;
+            top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%;
+            border: 1px solid currentColor;
+            opacity: 0.5;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            height: 100%;
+            justify-content: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--glass-border);
+            transform: translateX(10px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+            border: 2px solid;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .legend-content h4 {
+            font-size: 1.1rem;
+            margin-bottom: 0.25rem;
+            color: #fff;
+        }
+        .legend-content p {
+            font-size: 0.9rem;
+            margin: 0;
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (STAGE-BY-STAGE)
+           ========================================================================== */
+        .mechanism-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .mechanism-grid {
+                grid-template-columns: 2fr 1fr;
+            }
+        }
+
+        .mech-visual {
+            height: 450px;
+            border-radius: var(--border-radius);
+            position: relative;
+        }
+
+        .mech-controls {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2rem;
+        }
+
+        .stage-indicator {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stage-dot {
+            height: 6px;
+            flex: 1;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            transition: var(--transition);
+        }
+
+        .stage-dot.active {
+            background: var(--color-sliding);
+            box-shadow: 0 0 10px var(--color-sliding);
+        }
+
+        .stage-info {
+            flex-grow: 1;
+        }
+
+        .stage-tag {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 1rem;
+            letter-spacing: 1px;
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+        }
+
+        button {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            background: rgba(255,255,255,0.1);
+            transform: translateY(-2px);
+        }
+
+        button.primary {
+            background: var(--color-sliding);
+            color: #000;
+            border-color: transparent;
+        }
+        button.primary:hover {
+            background: #ffe066;
+            box-shadow: 0 0 15px rgba(255, 184, 0, 0.4);
+        }
+
+        /* ==========================================================================
+           SIMULATION (INTERACTIVE)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .sim-layout { grid-template-columns: 3fr 1fr; }
+        }
+
+        .sim-view {
+            height: 500px;
+            border-radius: var(--border-radius);
+            position: relative;
+        }
+
+        .sim-panel {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+
+        .select-surface {
+            width: 100%;
+            padding: 0.75rem;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            color: #fff;
+            border-radius: 8px;
+            font-family: inherit;
+            outline: none;
+        }
+
+        .telemetry {
+            background: rgba(0,0,0,0.4);
+            padding: 1rem;
+            border-radius: 12px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        .tel-val { color: var(--color-sliding); font-weight: bold; }
+        
+        .graph-container {
+            width: 100%;
+            height: 150px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            margin-top: 1rem;
+            position: relative;
+        }
+
+        /* ==========================================================================
+           CARDS & MISC
+           ========================================================================== */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .info-card {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            transition: var(--transition);
+        }
+        .info-card:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.3); }
+        .info-card h3 { display: flex; align-items: center; gap: 0.75rem; margin: 0; }
+        .icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+
+    </style>
+</head>
+<body>
+
+    <!-- HERO -->
+    <section class="hero">
+        <div class="ambient-orb" style="background: var(--color-static); width: 400px; height: 400px; top: -100px; left: -100px;"></div>
+        <div class="ambient-orb" style="background: var(--color-rolling); width: 300px; height: 300px; bottom: 10%; right: 5%;"></div>
+        
+        <div class="container" style="max-width: 800px; z-index: 1;">
+            <h1 class="gradient-text">The Physics of Resistance</h1>
+            <p style="font-size: clamp(1.2rem, 1.5vw, 1.5rem); margin-top: 1.5rem; color: #cbd5e1;">
+                Discover the invisible forces that govern motion. From the microscopic interlocking of surfaces to the smooth efficiency of a wheel.
+            </p>
+            <div class="hero-tags">
+                <span class="tag" style="color: var(--color-static); border-color: var(--color-static);">Static</span>
+                <span class="tag" style="color: var(--color-sliding); border-color: var(--color-sliding);">Sliding</span>
+                <span class="tag" style="color: var(--color-rolling); border-color: var(--color-rolling);">Rolling</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- MICROSCOPIC OVERVIEW -->
+    <section id="microscopic" class="container">
+        <h2>The Microscopic Reality</h2>
+        <p style="margin-bottom: 2rem; max-width: 800px;">
+            Even the smoothest looking surfaces are rough on a microscopic level. Friction originates from the interaction, interlocking, and breaking of these microscopic peaks and valleys (asperities).
+        </p>
+
+        <div class="diagram-container glass-panel p-0" style="padding: 1.5rem;">
+            <div class="diagram-visual">
+                <div class="canvas-wrapper" id="micro-wrapper">
+                    <canvas id="microCanvas"></canvas>
+                    <!-- Markers will be injected via JS to ensure exact placement -->
+                </div>
+            </div>
+            
+            <div class="diagram-legend">
+                <div class="legend-list" id="micro-legend">
+                    <div class="legend-item" data-target="1">
+                        <div class="legend-badge" style="color: var(--color-normal); border-color: var(--color-normal);">1</div>
+                        <div class="legend-content">
+                            <h4>Upper Surface (Object)</h4>
+                            <p>Microscopic asperities pressing downward due to weight.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="2">
+                        <div class="legend-badge" style="color: #fff; border-color: #fff;">2</div>
+                        <div class="legend-content">
+                            <h4>Lower Surface (Floor)</h4>
+                            <p>Stationary substrate with opposing irregularities.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="3">
+                        <div class="legend-badge" style="color: var(--color-static); border-color: var(--color-static);">3</div>
+                        <div class="legend-content">
+                            <h4>Interlocking Points</h4>
+                            <p>Cold welds and mechanical locking that create Static Friction.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="4">
+                        <div class="legend-badge" style="color: var(--color-applied); border-color: var(--color-applied);">4</div>
+                        <div class="legend-content">
+                            <h4>Shear Stress</h4>
+                            <p>Force required to fracture these bonds for sliding to begin.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING MECHANISM (STAGE BY STAGE) -->
+    <section id="working" class="container">
+        <h2>Mechanism of Motion</h2>
+        <p style="margin-bottom: 2rem; max-width: 800px;">
+            Watch how the forces evolve as we apply increasing force to an object, eventually breaking it free and finally adding wheels.
+        </p>
+
+        <div class="glass-panel mechanism-grid">
+            <div class="mech-visual" id="mech-wrapper">
+                <canvas id="mechCanvas"></canvas>
+            </div>
+            
+            <div class="mech-controls">
+                <div>
+                    <div class="stage-indicator" id="stage-dots">
+                        <div class="stage-dot active"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                    </div>
+
+                    <div class="stage-info">
+                        <span class="stage-tag" id="stage-tag" style="background: rgba(255, 42, 95, 0.2); color: var(--color-static);">Stage 1: Equilibrium</span>
+                        <h3 id="stage-title">Static Interlocking</h3>
+                        <p id="stage-desc">Small applied force is perfectly balanced by static friction. The microscopic bonds are stressed but hold tight. Net force is zero. Velocity is zero.</p>
+                    </div>
+                </div>
+
+                <div class="controls-row">
+                    <button id="btn-prev">◄ Prev</button>
+                    <button id="btn-next" class="primary">Next Stage ►</button>
+                    <button id="btn-auto" style="margin-left: auto;">Auto-Play</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION -->
+    <section id="simulation" class="container">
+        <h2>Physics Laboratory</h2>
+        <p style="margin-bottom: 2rem; max-width: 800px;">
+            Experiment with mass, applied force, and surface materials. Observe the classic friction force curve generated in real-time.
+        </p>
+
+        <div class="glass-panel sim-layout p-0">
+            <div class="sim-view" id="sim-wrapper">
+                <canvas id="simCanvas"></canvas>
+            </div>
+            
+            <div class="sim-panel">
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Mass (kg)</span>
+                        <span id="val-mass">50</span>
+                    </div>
+                    <input type="range" id="slider-mass" min="10" max="100" value="50">
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Applied Force (N)</span>
+                        <span id="val-force">0</span>
+                    </div>
+                    <input type="range" id="slider-force" min="0" max="500" value="0">
+                </div>
+
+                <div class="control-group" style="margin-top: 1rem;">
+                    <span style="font-size: 0.9rem; font-weight:600; margin-bottom: 0.5rem;">Surface Material</span>
+                    <select class="select-surface" id="select-surface">
+                        <option value="wood">Wood on Wood (μs: 0.5, μk: 0.3)</option>
+                        <option value="rubber">Rubber on Concrete (μs: 1.0, μk: 0.8)</option>
+                        <option value="ice">Steel on Ice (μs: 0.1, μk: 0.05)</option>
+                    </select>
+                </div>
+
+                <div class="control-group" style="margin-top: 0.5rem;">
+                    <span style="font-size: 0.9rem; font-weight:600; margin-bottom: 0.5rem;">Object Type</span>
+                    <select class="select-surface" id="select-type">
+                        <option value="box">Solid Block (Sliding)</option>
+                        <option value="wheel">Cylinder (Rolling, μr ≈ 0.02)</option>
+                    </select>
+                </div>
+
+                <div class="telemetry">
+                    <div>F_applied:</div><div class="tel-val" id="tel-app">0.0 N</div>
+                    <div>F_friction:</div><div class="tel-val" id="tel-fric" style="color: var(--color-static);">0.0 N</div>
+                    <div>Accel (a):</div><div class="tel-val" id="tel-acc">0.0 m/s²</div>
+                    <div>Velocity (v):</div><div class="tel-val" id="tel-vel">0.0 m/s</div>
+                </div>
+
+                <div>
+                    <span style="font-size: 0.8rem; color: #888;">Friction vs Applied Force Graph</span>
+                    <div class="graph-container">
+                        <canvas id="graphCanvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FACTS & COMPARISON -->
+    <section class="container">
+        <h2 style="text-align: center;">Applications & Insights</h2>
+        
+        <div class="grid-3" style="margin-top: 3rem;">
+            <div class="glass-panel info-card">
+                <h3>
+                    <div class="icon" style="background: rgba(255, 42, 95, 0.2); color: var(--color-static);">!</div>
+                    Anti-Lock Brakes (ABS)
+                </h3>
+                <p>
+                    ABS keeps car tires from locking during hard braking. Why? Because <b>Static Friction</b> (tires gripping the road without slipping) is always greater than <b>Kinetic Friction</b> (tires skidding). ABS pulses the brakes to maintain static friction, drastically reducing stopping distance.
+                </p>
+            </div>
+            
+            <div class="glass-panel info-card">
+                <h3>
+                    <div class="icon" style="background: rgba(0, 229, 255, 0.2); color: var(--color-rolling);">⚙</div>
+                    Ball Bearings
+                </h3>
+                <p>
+                    Machinery would melt without them. By replacing sliding contact (shaft in a hole) with rolling contact (steel balls), engineers reduce friction by a factor of 10 to 100. This is the core principle behind almost every spinning machine on Earth.
+                </p>
+            </div>
+
+            <div class="glass-panel info-card">
+                <h3>
+                    <div class="icon" style="background: rgba(255, 184, 0, 0.2); color: var(--color-sliding);">🔥</div>
+                    Heat Generation
+                </h3>
+                <p>
+                    Kinetic friction converts mechanical energy directly into thermal energy. This is how striking a match works, how meteors burn up in the atmosphere, and why brakes get dangerously hot. Energy is never lost, just transformed.
+                </p>
+            </div>
+        </div>
+    </section>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        /**
+         * Canvas setup utility handling high-DPI displays
+         */
+        function setupCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            const wrapper = canvas.parentElement;
+
+            function resize() {
+                const rect = wrapper.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
+                return { w: rect.width, h: rect.height };
+            }
+            
+            const dims = resize();
+            window.addEventListener('resize', resize);
+            return { canvas, ctx, getDims: () => ({ w: wrapper.getBoundingClientRect().width, h: wrapper.getBoundingClientRect().height }) };
+        }
+
+        // Colors definition to match CSS
+        const Colors = {
+            static: '#ff2a5f',
+            sliding: '#ffb800',
+            rolling: '#00e5ff',
+            applied: '#00ff88',
+            normal: '#b388ff',
+            bg: '#0a0a1a'
+        };
+
+        /* ==========================================================================
+           1. MICROSCOPIC VIEW ANIMATION
+           ========================================================================== */
+        const micro = setupCanvas('microCanvas');
+        let microTime = 0;
+
+        // Generate jagged surface points
+        const surfacePoints = [];
+        const numPoints = 40;
+        for(let i=0; i<=numPoints; i++) {
+            surfacePoints.push({
+                x: i / numPoints,
+                y: (Math.sin(i * 0.8) * Math.cos(i * 1.5) + Math.random() * 0.5) * 0.5 // Normalize -0.5 to 0.5 roughly
+            });
+        }
+
+        // Add Markers to DOM
+        const microWrapper = document.getElementById('micro-wrapper');
+        const markers = [
+            { id: 1, x: 0.3, y: 0.3, color: Colors.normal },
+            { id: 2, x: 0.7, y: 0.7, color: '#fff' },
+            { id: 3, x: 0.5, y: 0.5, color: Colors.static },
+            { id: 4, x: 0.8, y: 0.4, color: Colors.applied }
+        ];
+
+        markers.forEach(m => {
+            const el = document.createElement('div');
+            el.className = 'marker';
+            el.textContent = m.id;
+            el.style.left = `${m.x * 100}%`;
+            el.style.top = `${m.y * 100}%`;
+            el.style.color = m.color;
+            el.dataset.id = m.id;
+            
+            // Interaction
+            el.addEventListener('mouseenter', () => activateLegend(m.id));
+            el.addEventListener('mouseleave', () => activateLegend(null));
+            
+            microWrapper.appendChild(el);
+        });
+
+        // Legend Interaction
+        const legendItems = document.querySelectorAll('.legend-item');
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => {
+                const id = item.dataset.target;
+                activateLegend(id);
+                // Highlight marker visually
+                document.querySelector(`.marker[data-id="${id}"]`).style.transform = 'translate(-50%, -50%) scale(1.2)';
+            });
+            item.addEventListener('mouseleave', () => {
+                activateLegend(null);
+                document.querySelector(`.marker[data-id="${item.dataset.target}"]`).style.transform = 'translate(-50%, -50%) scale(1)';
+            });
+        });
+
+        function activateLegend(id) {
+            legendItems.forEach(i => i.classList.remove('active'));
+            if(id) {
+                const item = document.querySelector(`.legend-item[data-target="${id}"]`);
+                if(item) item.classList.add('active');
+            }
+        }
+
+        function drawMicroscopic() {
+            const { ctx, getDims } = micro;
+            const { w, h } = getDims();
+            ctx.clearRect(0, 0, w, h);
+
+            microTime += 0.02;
+            const yCenter = h / 2;
+            const amplitude = h * 0.15;
+            
+            // Animation variables (slight lateral movement to simulate trying to move)
+            const offsetX = Math.sin(microTime * 0.5) * 10;
+            const compression = 1 - Math.max(0, Math.sin(microTime)*0.1);
+
+            // Draw Lower Surface (Floor)
+            ctx.beginPath();
+            ctx.moveTo(0, h);
+            for(let i=0; i<=numPoints; i++) {
+                const px = surfacePoints[i].x * w;
+                const py = yCenter + surfacePoints[i].y * amplitude;
+                ctx.lineTo(px, py + 5); // Slight gap
+            }
+            ctx.lineTo(w, h);
+            ctx.fillStyle = '#1e1e38';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw Upper Surface (Object)
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            for(let i=0; i<=numPoints; i++) {
+                const px = surfacePoints[i].x * w + offsetX;
+                // Deform slightly based on collision
+                let py = yCenter + surfacePoints[i].y * amplitude;
+                py = py * compression; 
+                ctx.lineTo(px, py - 5);
+            }
+            ctx.lineTo(w, 0);
+            
+            const gradient = ctx.createLinearGradient(0, 0, 0, yCenter);
+            gradient.addColorStop(0, 'rgba(179, 136, 255, 0.8)');
+            gradient.addColorStop(1, 'rgba(179, 136, 255, 0.2)');
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            
+            ctx.strokeStyle = Colors.normal;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            // Highlight interaction points (where they get close)
+            for(let i=1; i<numPoints-1; i++) {
+                const upX = surfacePoints[i].x * w + offsetX;
+                const upY = (yCenter + surfacePoints[i].y * amplitude) * compression - 5;
+                const lowY = yCenter + surfacePoints[i].y * amplitude + 5;
+                
+                if(Math.abs(upY - lowY) < 15) {
+                    ctx.beginPath();
+                    ctx.arc(upX, (upY+lowY)/2, 6, 0, Math.PI*2);
+                    ctx.fillStyle = `rgba(255, 42, 95, ${0.5 + Math.sin(microTime*5)*0.5})`; // Pulse static color
+                    ctx.fill();
+                }
+            }
+
+            requestAnimationFrame(drawMicroscopic);
+        }
+        drawMicroscopic();
+
+
+        /* ==========================================================================
+           2. WORKING MECHANISM (STAGE BY STAGE)
+           ========================================================================== */
+        const mech = setupCanvas('mechCanvas');
+        let mechStage = 0; // 0, 1, 2, 3
+        let mechAnimTime = 0;
+        let isAutoPlay = false;
+
+        const stages = [
+            {
+                title: "Static Equilibrium",
+                tag: "Stage 1: Force < fs(max)",
+                color: Colors.static,
+                desc: "Small push applied. Microscopic asperities interlock tightly. Static friction vector exactly matches applied force vector. Net force = 0. Object does not move."
+            },
+            {
+                title: "Impending Motion",
+                tag: "Stage 2: Force = fs(max)",
+                color: Colors.sliding, // Transition color
+                desc: "Push increases to the absolute limit of the microscopic bonds. This is Maximum Static Friction. The bonds are stretching, ready to break."
+            },
+            {
+                title: "Kinetic Sliding",
+                tag: "Stage 3: Force > fk",
+                color: Colors.sliding,
+                desc: "Bonds fracture! The object begins to slide. Friction drops instantly to Kinetic Friction, which is constant and lower than max static. Object accelerates."
+            },
+            {
+                title: "Rolling Advantage",
+                tag: "Stage 4: Rolling",
+                color: Colors.rolling,
+                desc: "Wheels added. Instead of scraping asperities across each other, the wheel peels away from the surface. Deformation causes tiny resistance. Friction is virtually negligible."
+            }
+        ];
+
+        // UI Elements
+        const stageTitle = document.getElementById('stage-title');
+        const stageDesc = document.getElementById('stage-desc');
+        const stageTag = document.getElementById('stage-tag');
+        const stageDots = document.querySelectorAll('.stage-dot');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnAuto = document.getElementById('btn-auto');
+
+        function updateStageUI() {
+            const s = stages[mechStage];
+            stageTitle.textContent = s.title;
+            stageDesc.textContent = s.desc;
+            stageTag.textContent = s.tag;
+            stageTag.style.color = s.color;
+            stageTag.style.background = s.color + '33'; // 20% opacity hex
+            
+            stageDots.forEach((dot, idx) => {
+                dot.className = 'stage-dot';
+                if(idx === mechStage) {
+                    dot.classList.add('active');
+                    dot.style.background = s.color;
+                    dot.style.boxShadow = `0 0 10px ${s.color}`;
+                }
+            });
+
+            btnPrev.disabled = (mechStage === 0);
+            btnNext.textContent = (mechStage === 3) ? "Reset ►" : "Next Stage ►";
+            
+            btnPrev.style.opacity = (mechStage === 0) ? "0.3" : "1";
+        }
+
+        btnPrev.addEventListener('click', () => { if(mechStage > 0) { mechStage--; updateStageUI(); mechAnimTime=0;} });
+        btnNext.addEventListener('click', () => { 
+            mechStage = (mechStage + 1) % 4; 
+            updateStageUI(); 
+            mechAnimTime=0;
+        });
+        btnAuto.addEventListener('click', () => {
+            isAutoPlay = !isAutoPlay;
+            btnAuto.style.background = isAutoPlay ? 'rgba(255,255,255,0.2)' : '';
+        });
+
+        // Utility: Draw Arrow
+        function drawArrow(ctx, fromX, fromY, toX, toY, color, width=4) {
+            const headlen = 15;
+            const angle = Math.atan2(toY - fromY, toX - fromX);
+            ctx.beginPath();
+            ctx.moveTo(fromX, fromY);
+            ctx.lineTo(toX, toY);
+            ctx.lineTo(toX - headlen * Math.cos(angle - Math.PI / 6), toY - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.moveTo(toX, toY);
+            ctx.lineTo(toX - headlen * Math.cos(angle + Math.PI / 6), toY - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+        }
+
+        // Particles for sliding
+        let sparks = [];
+        function createSpark(x, y) {
+            sparks.push({
+                x, y,
+                vx: -2 - Math.random()*3,
+                vy: -1 - Math.random()*2,
+                life: 1,
+                decay: 0.05 + Math.random()*0.05
+            });
+        }
+
+        let blockX = 0; // Relative position
+
+        function drawMechanism() {
+            const { ctx, getDims } = mech;
+            const { w, h } = getDims();
+            ctx.clearRect(0, 0, w, h);
+
+            mechAnimTime += 1/60;
+
+            if(isAutoPlay && mechAnimTime > 4) { // Auto advance every 4 seconds
+                mechStage = (mechStage + 1) % 4;
+                updateStageUI();
+                mechAnimTime = 0;
+            }
+
+            const groundY = h * 0.7;
+            const bw = 120;
+            const bh = 80;
+            const centerX = w / 2;
+
+            // Draw Ground
+            ctx.fillStyle = '#1e1e38';
+            ctx.fillRect(0, groundY, w, h-groundY);
+            ctx.beginPath();
+            ctx.moveTo(0, groundY);
+            ctx.lineTo(w, groundY);
+            ctx.strokeStyle = '#334';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+
+            let currentX = centerX - bw/2;
+            let forceAppLength = 0;
+            let forceFricLength = 0;
+            let isMoving = false;
+            let isRolling = false;
+            let fricColor = Colors.static;
+
+            // State Logic
+            if(mechStage === 0) {
+                // Static
+                blockX = 0;
+                forceAppLength = 60 * Math.sin(Math.min(mechAnimTime, 1) * Math.PI/2); // Grow to 60
+                forceFricLength = forceAppLength;
+            } 
+            else if (mechStage === 1) {
+                // Max Static
+                blockX = 0;
+                forceAppLength = 100;
+                forceFricLength = 100;
+                // Shake slightly
+                currentX += Math.sin(mechAnimTime * 40) * 1.5;
+                fricColor = Colors.static;
+                ctx.shadowColor = Colors.static;
+                ctx.shadowBlur = 10 * Math.sin(mechAnimTime*10);
+            }
+            else if (mechStage === 2) {
+                // Sliding
+                isMoving = true;
+                blockX += 3;
+                if(blockX > w/2 + bw) blockX = -w/2 - bw; // Wrap around
+                forceAppLength = 100;
+                forceFricLength = 60; // Drops
+                fricColor = Colors.sliding;
+                
+                // Spawn sparks
+                if(Math.random() < 0.3) createSpark(currentX + blockX, groundY);
+                if(Math.random() < 0.3) createSpark(currentX + blockX + bw, groundY);
+            }
+            else if (mechStage === 3) {
+                // Rolling
+                isMoving = true;
+                isRolling = true;
+                blockX += 5; // Moves faster
+                if(blockX > w/2 + bw) blockX = -w/2 - bw;
+                forceAppLength = 100;
+                forceFricLength = 15; // Tiny
+                fricColor = Colors.rolling;
+            }
+
+            ctx.shadowBlur = 0; // Reset shadow
+
+            const drawX = currentX + blockX;
+            const drawY = groundY - bh - (isRolling ? 15 : 0); // Lift slightly if rolling
+
+            // Draw Block/Cart
+            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+            ctx.lineWidth = 2;
+            
+            // Draw object
+            ctx.fillRect(drawX, drawY, bw, bh);
+            ctx.strokeRect(drawX, drawY, bw, bh);
+            
+            // Internal shading/details
+            ctx.fillStyle = 'rgba(255,255,255,0.05)';
+            ctx.fillRect(drawX+5, drawY+5, bw-10, bh-10);
+
+            if(isRolling) {
+                // Draw Wheels
+                const r = 20;
+                ctx.fillStyle = '#333';
+                ctx.strokeStyle = Colors.rolling;
+                ctx.lineWidth = 3;
+                
+                // Wheel 1
+                const wx1 = drawX + 30;
+                const wy1 = groundY - r;
+                ctx.beginPath(); ctx.arc(wx1, wy1, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                // Wheel 1 spokes (rotate)
+                const angle = blockX / r; // v = w*r -> w = v/r
+                ctx.beginPath();
+                ctx.moveTo(wx1 - r*Math.cos(angle), wy1 - r*Math.sin(angle));
+                ctx.lineTo(wx1 + r*Math.cos(angle), wy1 + r*Math.sin(angle));
+                ctx.moveTo(wx1 - r*Math.cos(angle+Math.PI/2), wy1 - r*Math.sin(angle+Math.PI/2));
+                ctx.lineTo(wx1 + r*Math.cos(angle+Math.PI/2), wy1 + r*Math.sin(angle+Math.PI/2));
+                ctx.strokeStyle = '#aaa'; ctx.lineWidth=2; ctx.stroke();
+
+                // Wheel 2
+                const wx2 = drawX + bw - 30;
+                ctx.beginPath(); ctx.arc(wx2, wy1, r, 0, Math.PI*2); ctx.fill(); ctx.strokeStyle=Colors.rolling; ctx.lineWidth=3; ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(wx2 - r*Math.cos(angle), wy1 - r*Math.sin(angle));
+                ctx.lineTo(wx2 + r*Math.cos(angle), wy1 + r*Math.sin(angle));
+                ctx.moveTo(wx2 - r*Math.cos(angle+Math.PI/2), wy1 - r*Math.sin(angle+Math.PI/2));
+                ctx.lineTo(wx2 + r*Math.cos(angle+Math.PI/2), wy1 + r*Math.sin(angle+Math.PI/2));
+                ctx.strokeStyle = '#aaa'; ctx.lineWidth=2; ctx.stroke();
+            }
+
+            // Draw Forces (Vectors)
+            const centerY = drawY + bh/2;
+            
+            // Gravity & Normal (Subtle)
+            drawArrow(ctx, drawX + bw/2, centerY, drawX + bw/2, centerY + 50, 'rgba(255,255,255,0.2)', 2); // W
+            drawArrow(ctx, drawX + bw/2, centerY, drawX + bw/2, centerY - 50, 'rgba(179,136,255,0.4)', 2); // N
+
+            // Applied Force (Green)
+            if(forceAppLength > 0) {
+                drawArrow(ctx, drawX, centerY, drawX + forceAppLength, centerY, Colors.applied, 4);
+                ctx.fillStyle = Colors.applied;
+                ctx.fillText("P", drawX + forceAppLength + 5, centerY - 10);
+            }
+
+            // Friction Force (Red/Yellow/Cyan)
+            if(forceFricLength > 0) {
+                const fY = groundY - (isRolling ? 20 : 2); // Base of block/wheel
+                drawArrow(ctx, drawX + bw/2, fY, drawX + bw/2 - forceFricLength, fY, fricColor, 4);
+                ctx.fillStyle = fricColor;
+                ctx.fillText("f", drawX + bw/2 - forceFricLength - 15, fY - 10);
+            }
+
+            // Update & Draw Sparks
+            for(let i=sparks.length-1; i>=0; i--) {
+                let s = sparks[i];
+                s.x += s.vx;
+                s.y += s.vy;
+                s.life -= s.decay;
+                if(s.life <= 0) { sparks.splice(i, 1); continue; }
+                
+                ctx.fillStyle = `rgba(255, 184, 0, ${s.life})`;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, 2, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            requestAnimationFrame(drawMechanism);
+        }
+        updateStageUI();
+        drawMechanism();
+
+
+        /* ==========================================================================
+           3. INTERACTIVE PHYSICS SIMULATION
+           ========================================================================== */
+        const sim = setupCanvas('simCanvas');
+        const graph = setupCanvas('graphCanvas');
+        
+        // Physics Engine State
+        const P = {
+            m: 50,      // Mass (kg)
+            g: 9.81,    // Gravity (m/s2)
+            muS: 0.5,   // Static coeff
+            muK: 0.3,   // Kinetic coeff
+            muR: 0.02,  // Rolling coeff
+            fApp: 0,    // Applied Force (N)
+            fFric: 0,   // Friction Force (N)
+            a: 0,       // Acceleration
+            v: 0,       // Velocity
+            x: 0,       // Position
+            type: 'box' // 'box' or 'wheel'
+        };
+
+        // Graph data history
+        const graphData = []; 
+        let maxGraphForce = 600;
+
+        // UI Binding
+        const slMass = document.getElementById('slider-mass');
+        const slForce = document.getElementById('slider-force');
+        const selSurf = document.getElementById('select-surface');
+        const selType = document.getElementById('select-type');
+        const valMass = document.getElementById('val-mass');
+        const valForce = document.getElementById('val-force');
+
+        // Telemetry
+        const tApp = document.getElementById('tel-app');
+        const tFric = document.getElementById('tel-fric');
+        const tAcc = document.getElementById('tel-acc');
+        const tVel = document.getElementById('tel-vel');
+
+        slMass.addEventListener('input', (e) => { P.m = parseFloat(e.target.value); valMass.textContent = P.m; resetSim(); });
+        slForce.addEventListener('input', (e) => { P.fApp = parseFloat(e.target.value); valForce.textContent = P.fApp; });
+        
+        selSurf.addEventListener('change', (e) => {
+            if(e.target.value === 'wood') { P.muS = 0.5; P.muK = 0.3; }
+            else if(e.target.value === 'rubber') { P.muS = 1.0; P.muK = 0.8; }
+            else if(e.target.value === 'ice') { P.muS = 0.1; P.muK = 0.05; }
+            resetSim();
+        });
+
+        selType.addEventListener('change', (e) => {
+            P.type = e.target.value;
+            resetSim();
+        });
+
+        function resetSim() {
+            P.v = 0; P.a = 0; P.x = 0;
+            graphData.length = 0; // Clear graph
+        }
+
+        function updatePhysics(dt) {
+            const normal = P.m * P.g;
+            const maxStatic = P.muS * normal;
+            const kinetic = P.muK * normal;
+            const rolling = P.muR * normal;
+
+            let currentFricLimit = 0;
+
+            if (P.type === 'wheel') {
+                // Rolling simulation (simplified)
+                currentFricLimit = rolling;
+                
+                if (P.fApp > currentFricLimit) {
+                    P.fFric = currentFricLimit;
+                    P.a = (P.fApp - P.fFric) / P.m;
+                } else {
+                    P.fFric = P.fApp;
+                    P.a = 0;
+                    P.v = 0;
+                }
+            } else {
+                // Sliding simulation
+                if (Math.abs(P.v) < 0.01) { 
+                    // Stationary
+                    if (P.fApp > maxStatic) {
+                        // Breakaway
+                        P.fFric = kinetic;
+                        P.a = (P.fApp - P.fFric) / P.m;
+                    } else {
+                        // Holding static
+                        P.fFric = P.fApp;
+                        P.a = 0;
+                        P.v = 0;
+                    }
+                } else {
+                    // Moving
+                    P.fFric = kinetic;
+                    P.a = (P.fApp - P.fFric) / P.m;
+                }
+            }
+
+            // Integrator
+            P.v += P.a * dt;
+            P.x += P.v * dt;
+
+            // Update Telemetry UI
+            tApp.textContent = `${P.fApp.toFixed(1)} N`;
+            tFric.textContent = `${P.fFric.toFixed(1)} N`;
+            tAcc.textContent = `${P.a.toFixed(2)} m/s²`;
+            tVel.textContent = `${P.v.toFixed(2)} m/s`;
+
+            // Color coding based on state
+            if(P.type === 'wheel') tFric.style.color = Colors.rolling;
+            else if(P.v > 0) tFric.style.color = Colors.sliding;
+            else tFric.style.color = Colors.static;
+
+            // Record graph data (plot F_app vs F_fric dynamically based on current sliders)
+            // To make a good graph, we sweep F_app from 0 to 500 virtually for the current mass/surface
+            generateGraphData();
+        }
+
+        function generateGraphData() {
+            graphData.length = 0;
+            const normal = P.m * P.g;
+            const maxStatic = P.muS * normal;
+            const kinetic = P.muK * normal;
+            const rolling = P.muR * normal;
+
+            for(let f=0; f<=500; f+=10) {
+                let fric = 0;
+                if(P.type === 'wheel') {
+                    fric = (f > rolling) ? rolling : f;
+                } else {
+                    fric = (f <= maxStatic) ? f : kinetic;
+                }
+                graphData.push({ fApp: f, fFric: fric });
+            }
+        }
+
+        let lastTime = 0;
+        function simLoop(timestamp) {
+            if(!lastTime) lastTime = timestamp;
+            const dt = Math.min((timestamp - lastTime) / 1000, 0.05); // Cap dt
+            lastTime = timestamp;
+
+            updatePhysics(dt);
+
+            // 1. Draw Simulation View
+            const { ctx, getDims } = sim;
+            const { w, h } = getDims();
+            ctx.clearRect(0, 0, w, h);
+
+            const groundY = h - 100;
+            
+            // Draw surface based on selection
+            let surfColor = '#222';
+            if(selSurf.value === 'wood') surfColor = '#4a3018'; // Brownish
+            if(selSurf.value === 'ice') surfColor = '#cceeff'; // Light blue
+            if(selSurf.value === 'rubber') surfColor = '#555'; // Grey
+            
+            ctx.fillStyle = surfColor;
+            ctx.fillRect(0, groundY, w, h-groundY);
+            
+            // Draw grid lines on ground to show motion
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1;
+            const gridOffset = -(P.x * 50) % 50; // Visual scaling
+            for(let i=0; i<w; i+=50) {
+                ctx.beginPath();
+                ctx.moveTo(i + gridOffset, groundY);
+                ctx.lineTo(i + gridOffset, h);
+                ctx.stroke();
+            }
+
+            // Draw Object (always centered, background moves to simulate camera tracking)
+            const objW = 100;
+            const objH = Math.max(50, P.m); // Visual size based on mass (50 to 100)
+            const objX = w/2 - objW/2;
+            const objY = groundY - objH;
+
+            ctx.fillStyle = 'rgba(255,255,255,0.1)';
+            ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+            ctx.lineWidth = 2;
+
+            if(P.type === 'box') {
+                ctx.fillRect(objX, objY, objW, objH);
+                ctx.strokeRect(objX, objY, objW, objH);
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.fillText(`Mass: ${P.m}kg`, objX + 10, objY + objH/2);
+            } else {
+                // Wheel
+                const r = objH/2;
+                const wx = objX + objW/2;
+                const wy = groundY - r;
+                ctx.beginPath(); ctx.arc(wx, wy, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+                
+                // Rotation
+                const angle = P.x; // Simplified rotation based on distance
+                ctx.beginPath();
+                ctx.moveTo(wx - r*Math.cos(angle), wy - r*Math.sin(angle));
+                ctx.lineTo(wx + r*Math.cos(angle), wy + r*Math.sin(angle));
+                ctx.moveTo(wx - r*Math.cos(angle+Math.PI/2), wy - r*Math.sin(angle+Math.PI/2));
+                ctx.lineTo(wx + r*Math.cos(angle+Math.PI/2), wy + r*Math.sin(angle+Math.PI/2));
+                ctx.stroke();
+            }
+
+            // Draw Force Vectors on Object
+            const cy = groundY - objH/2;
+            const cx = w/2;
+            const scale = 0.5; // Pixels per Newton
+
+            // Applied Force
+            if(P.fApp > 0) {
+                drawArrow(ctx, cx, cy, cx + P.fApp * scale, cy, Colors.applied, 4);
+            }
+            
+            // Friction Force
+            if(P.fFric > 0) {
+                let color = P.type === 'wheel' ? Colors.rolling : (P.v > 0 ? Colors.sliding : Colors.static);
+                drawArrow(ctx, cx, groundY - 5, cx - P.fFric * scale, groundY - 5, color, 4);
+            }
+
+            // 2. Draw Graph
+            const gCtx = graph.ctx;
+            const gDims = graph.getDims();
+            gCtx.clearRect(0, 0, gDims.w, gDims.h);
+            
+            // Graph axes
+            const pad = 20;
+            const gw = gDims.w - pad*2;
+            const gh = gDims.h - pad*2;
+            
+            gCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+            gCtx.lineWidth = 1;
+            gCtx.beginPath();
+            gCtx.moveTo(pad, pad); gCtx.lineTo(pad, pad+gh); gCtx.lineTo(pad+gw, pad+gh);
+            gCtx.stroke();
+
+            // Labels
+            gCtx.fillStyle = 'rgba(255,255,255,0.5)';
+            gCtx.font = '10px sans-serif';
+            gCtx.fillText("F_fric", 0, pad - 5);
+            gCtx.fillText("F_app", pad + gw - 15, pad + gh + 15);
+
+            // Plot curve
+            if(graphData.length > 0) {
+                gCtx.beginPath();
+                let first = true;
+                const maxF = 500;
+                
+                for(let d of graphData) {
+                    const px = pad + (d.fApp / maxF) * gw;
+                    // Max Y is determined by max possible static friction (mass 100 * mu 1.0 * 9.8 = ~1000)
+                    // Let's fix Y scale to 500 for consistency
+                    const py = pad + gh - (d.fFric / 500) * gh;
+                    
+                    if(first) { gCtx.moveTo(px, py); first = false; }
+                    else gCtx.lineTo(px, py);
+                }
+                
+                // Color graph based on mode
+                gCtx.strokeStyle = P.type === 'wheel' ? Colors.rolling : Colors.static;
+                gCtx.lineWidth = 2;
+                gCtx.stroke();
+
+                // Draw Current State Point
+                const curPx = pad + (P.fApp / maxF) * gw;
+                const curPy = pad + gh - (P.fFric / 500) * gh;
+                gCtx.beginPath();
+                gCtx.arc(curPx, curPy, 4, 0, Math.PI*2);
+                gCtx.fillStyle = '#fff';
+                gCtx.fill();
+                gCtx.shadowBlur = 10;
+                gCtx.shadowColor = '#fff';
+                gCtx.fill(); // re-fill for glow
+                gCtx.shadowBlur = 0;
+            }
+
+            requestAnimationFrame(simLoop);
+        }
+        
+        generateGraphData(); // Initial generation
+        simLoop(performance.now());
+
+    </script>
+</body>
+</html>

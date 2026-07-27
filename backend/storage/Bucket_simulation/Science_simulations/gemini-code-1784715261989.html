@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Satellite Orbit Simulator | Premium Interactive Space Physics</title>
+    <style>
+        /* ==========================================================================
+           ROOT VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-deep: #05070a;
+            --bg-panel: rgba(18, 22, 31, 0.65);
+            --bg-panel-hover: rgba(28, 34, 48, 0.8);
+            
+            --accent-primary: #00e5ff; /* Cyan for velocity/tech */
+            --accent-secondary: #ff3366; /* Pink/Red for gravity/force */
+            --accent-tertiary: #a64dff; /* Purple for orbit path */
+            --earth-glow: rgba(0, 162, 255, 0.4);
+            
+            --text-main: #f0f4f8;
+            --text-muted: #8b9bb4;
+            --text-dark: #0a0d14;
+            
+            /* Glassmorphism */
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+            --glass-blur: blur(20px);
+            
+            /* Typography */
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            
+            /* Fluid Spacing & Sizes */
+            --space-xs: clamp(0.5rem, 1vw, 0.75rem);
+            --space-sm: clamp(0.75rem, 1.5vw, 1rem);
+            --space-md: clamp(1rem, 2vw, 1.5rem);
+            --space-lg: clamp(1.5rem, 3vw, 2.5rem);
+            --space-xl: clamp(2.5rem, 5vw, 4rem);
+            
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-full: 9999px;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Ambient Animated Background */
+        #starfield-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -2;
+            background: radial-gradient(circle at 50% 50%, #0a0e17 0%, var(--bg-deep) 100%);
+        }
+
+        .ambient-glow {
+            position: fixed;
+            width: 60vw;
+            height: 60vw;
+            background: radial-gradient(circle, rgba(0,229,255,0.03) 0%, rgba(0,0,0,0) 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: -1;
+            pointer-events: none;
+            border-radius: 50%;
+            animation: pulseGlow 10s infinite alternate;
+        }
+
+        @keyframes pulseGlow {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+            100% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+        }
+
+        /* ==========================================================================
+           TYPOGRAPHY & LAYOUT
+           ========================================================================== */
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: var(--space-sm); background: linear-gradient(135deg, #fff 0%, #a0b0c0 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.8rem, 3.5vw, 3rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: var(--space-md); color: #fff; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; margin-bottom: var(--space-sm); color: #fff; }
+        p { font-size: clamp(1rem, 1.2vw, 1.1rem); color: var(--text-muted); margin-bottom: var(--space-md); }
+        strong { color: var(--text-main); font-weight: 600; }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--space-md);
+        }
+
+        section {
+            padding: var(--space-xl) 0;
+            position: relative;
+        }
+
+        /* Glassmorphism Classes */
+        .glass {
+            background: var(--bg-panel);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+        }
+
+        .glass-card {
+            padding: var(--space-lg);
+            transition: var(--transition-smooth);
+        }
+
+        .glass-card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateY(-2px);
+        }
+
+        /* Layout Grids */
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: var(--space-lg); }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--space-lg); }
+
+        /* ==========================================================================
+           HEADER / INTRO
+           ========================================================================== */
+        .hero-section {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding-top: var(--space-xl);
+            position: relative;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            z-index: 10;
+        }
+
+        .tagline {
+            display: inline-block;
+            padding: 6px 16px;
+            background: rgba(0, 229, 255, 0.1);
+            border: 1px solid rgba(0, 229, 255, 0.3);
+            border-radius: var(--radius-full);
+            color: var(--accent-primary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: var(--space-md);
+        }
+
+        /* ==========================================================================
+           COMPONENTS SECTION (MANDATORY MARKER SYSTEM)
+           ========================================================================== */
+        .components-layout {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-lg);
+        }
+        
+        @media (min-width: 1024px) {
+            .components-layout {
+                flex-direction: row;
+                align-items: center;
+            }
+        }
+
+        .components-visual {
+            flex: 1.5;
+            position: relative;
+            min-height: 350px; /* Mobile minimum */
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: radial-gradient(circle at center, #1a2233 0%, #0a0e17 100%);
+            border: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        @media (min-width: 1024px) {
+            .components-visual { min-height: 500px; }
+        }
+
+        /* Marker CSS */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+            color: #fff;
+            cursor: pointer;
+            z-index: 5;
+            transition: var(--transition-smooth);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+
+        .marker::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            box-shadow: 0 0 15px currentColor;
+            opacity: 0.5;
+            animation: pulseMarker 2s infinite;
+        }
+
+        @keyframes pulseMarker {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .marker.active {
+            transform: scale(1.2);
+            background: #fff;
+            color: var(--bg-deep);
+        }
+
+        /* Hardcoded positions for static SVG */
+        .marker-1 { top: 50%; left: 50%; transform: translate(-50%, -50%); border-color: #4da6ff; color: #4da6ff; }
+        .marker-2 { top: 20%; left: 75%; border-color: #fff; }
+        .marker-3 { top: 12%; left: 82%; border-color: var(--accent-primary); color: var(--accent-primary); }
+        .marker-4 { top: 35%; left: 62%; border-color: var(--accent-secondary); color: var(--accent-secondary); }
+        .marker-5 { top: 80%; left: 80%; border-color: var(--accent-tertiary); color: var(--accent-tertiary); }
+
+        .components-legend {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateX(4px);
+        }
+
+        .legend-number {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .legend-content h4 {
+            color: #fff;
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+        }
+
+        .legend-content p {
+            margin: 0;
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        /* ==========================================================================
+           WORKING PROCESS (MANDATORY MECHANISM)
+           ========================================================================== */
+        .mechanism-container {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            gap: var(--space-md);
+            min-height: 600px;
+        }
+
+        .mechanism-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .stage-title-area h3 { margin: 0; color: var(--accent-primary); }
+        .stage-caption { font-size: 1rem; color: #fff; margin-top: 4px; }
+
+        .mechanism-visual {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            min-height: 400px;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: #000;
+        }
+
+        .mechanism-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-smooth);
+        }
+
+        .dot.active {
+            background: var(--accent-primary);
+            box-shadow: 0 0 10px var(--accent-primary);
+            transform: scale(1.2);
+        }
+
+        .control-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition-smooth);
+        }
+
+        .control-btn:hover {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.05);
+        }
+
+        .control-btn.primary {
+            background: rgba(0, 229, 255, 0.2);
+            border-color: var(--accent-primary);
+            color: var(--accent-primary);
+        }
+
+        /* ==========================================================================
+           MAIN SIMULATOR UI
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-md);
+        }
+
+        @media (min-width: 1024px) {
+            .sim-layout {
+                grid-template-columns: 1fr 320px;
+            }
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 60vh;
+            min-height: 400px;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, #0c121e 0%, #030406 100%);
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        #main-sim-canvas, #working-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .sim-overlay-data {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .data-badge {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 6px 12px;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+            color: var(--accent-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .control-value {
+            font-family: var(--font-mono);
+            color: var(--accent-primary);
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(255,255,255,0.8);
+            cursor: pointer;
+            margin-top: -8px;
+            border: 2px solid var(--accent-primary);
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+        
+        input[type=range]:focus { outline: none; }
+
+        .telemetry-panel {
+            background: rgba(0,0,0,0.4);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin-top: auto;
+        }
+
+        .telemetry-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 0.85rem;
+        }
+        
+        .orbit-status {
+            margin-top: 1rem;
+            padding: 0.5rem;
+            text-align: center;
+            border-radius: var(--radius-sm);
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9rem;
+        }
+
+        .status-stable { background: rgba(0, 255, 136, 0.1); color: #00ff88; border: 1px solid #00ff88; }
+        .status-crash { background: rgba(255, 51, 102, 0.1); color: #ff3366; border: 1px solid #ff3366; }
+        .status-escape { background: rgba(166, 77, 255, 0.1); color: #a64dff; border: 1px solid #a64dff; }
+
+        /* ==========================================================================
+           INFO CARDS (Facts, Mistakes, Apps)
+           ========================================================================== */
+        .icon-box {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1rem;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .card-fact .icon-box { color: #00e5ff; }
+        .card-mistake .icon-box { color: #ff3366; }
+        .card-app .icon-box { color: #a64dff; }
+
+        .card-mistake h4 { color: #ff3366; margin-bottom: 4px;}
+        .card-mistake .correction { color: #00ff88; font-weight: 500; font-size: 0.95rem; margin-top: 8px; display: flex; align-items: flex-start; gap: 6px;}
+
+    </style>
+</head>
+<body>
+
+    <!-- Animated Canvas Background -->
+    <canvas id="starfield-bg"></canvas>
+    <div class="ambient-glow"></div>
+
+    <!-- 1. INTRODUCTION -->
+    <section class="hero-section">
+        <div class="container hero-content">
+            <div class="tagline">Interactive Physics Simulator</div>
+            <h1>Orbital Mechanics</h1>
+            <p style="font-size: clamp(1.1rem, 1.5vw, 1.3rem); color: var(--text-main); margin-bottom: 2rem;">
+                Discover the delicate balance between velocity and gravity that keeps thousands of satellites falling endlessly around our planet.
+            </p>
+            <p>Scroll to explore the physics, components, and interact with the simulation.</p>
+        </div>
+    </section>
+
+    <!-- 2 & 3. OVERVIEW & COMPONENTS -->
+    <section class="container">
+        <div class="glass glass-card">
+            <h2>Anatomy of an Orbit</h2>
+            <p>An orbit is not a place devoid of gravity. It is a trajectory where an object moves forward so fast that as it falls towards the Earth, the Earth curves away beneath it. It is an act of perpetual freefall.</p>
+            
+            <div class="components-layout" style="margin-top: var(--space-lg);">
+                <!-- Visual Container -->
+                <div class="components-visual" id="diagram-container">
+                    <!-- Static SVG Illustration (Premium Quality) -->
+                    <svg width="100%" height="100%" viewBox="0 0 500 400" style="position: absolute; top:0; left:0;">
+                        <defs>
+                            <radialGradient id="earthGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#3b7bc2"/>
+                                <stop offset="70%" stop-color="#153c6b"/>
+                                <stop offset="100%" stop-color="#051224"/>
+                            </radialGradient>
+                            <radialGradient id="atmosGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="85%" stop-color="rgba(0, 162, 255, 0)"/>
+                                <stop offset="95%" stop-color="rgba(0, 162, 255, 0.4)"/>
+                                <stop offset="100%" stop-color="rgba(0, 162, 255, 0)"/>
+                            </radialGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        
+                        <!-- Orbit Path -->
+                        <ellipse cx="250" cy="200" rx="180" ry="120" fill="none" stroke="rgba(166, 77, 255, 0.4)" stroke-width="2" stroke-dasharray="6,6"/>
+                        
+                        <!-- Earth -->
+                        <circle cx="250" cy="200" r="70" fill="url(#earthGrad)"/>
+                        <!-- Continents Outline -->
+                        <path d="M 220 150 Q 240 140 260 160 T 280 180 T 240 210 Q 220 200 210 180 Z" fill="rgba(60, 180, 100, 0.3)"/>
+                        <!-- Atmosphere -->
+                        <circle cx="250" cy="200" r="85" fill="url(#atmosGrad)"/>
+                        
+                        <!-- Satellite -->
+                        <g transform="translate(390, 110) rotate(-35)">
+                            <rect x="-15" y="-5" width="30" height="10" fill="#a0b0c0" rx="2"/>
+                            <!-- Solar Panels -->
+                            <rect x="-35" y="-12" width="20" height="24" fill="#1a3b5c" stroke="#4da6ff" stroke-width="1"/>
+                            <rect x="15" y="-12" width="20" height="24" fill="#1a3b5c" stroke="#4da6ff" stroke-width="1"/>
+                            <!-- Dish -->
+                            <path d="M -5 -10 Q 0 -15 5 -10" fill="none" stroke="#fff" stroke-width="1.5"/>
+                            <circle cx="0" cy="-12" r="1.5" fill="#ff3366"/>
+                        </g>
+
+                        <!-- Vectors -->
+                        <!-- Velocity Vector (Forward) -->
+                        <g transform="translate(390, 110)">
+                            <line x1="0" y1="0" x2="30" y2="-45" stroke="#00e5ff" stroke-width="3" filter="url(#glow)"/>
+                            <polygon points="30,-45 22,-40 28,-32" fill="#00e5ff"/>
+                        </g>
+                        <!-- Gravity Vector (Inward) -->
+                        <g transform="translate(390, 110)">
+                            <line x1="0" y1="0" x2="-80" y2="50" stroke="#ff3366" stroke-width="3" filter="url(#glow)"/>
+                            <polygon points="-80,50 -70,48 -75,40" fill="#ff3366"/>
+                        </g>
+                    </svg>
+
+                    <!-- Mandatory Interactive Markers -->
+                    <div class="marker marker-1" data-target="item-1" style="border-color:#4da6ff; color:#4da6ff;">1</div>
+                    <div class="marker marker-2" data-target="item-2" style="border-color:#fff;">2</div>
+                    <div class="marker marker-3" data-target="item-3" style="border-color:#00e5ff; color:#00e5ff;">3</div>
+                    <div class="marker marker-4" data-target="item-4" style="border-color:#ff3366; color:#ff3366;">4</div>
+                    <div class="marker marker-5" data-target="item-5" style="border-color:#a64dff; color:#a64dff;">5</div>
+                </div>
+
+                <!-- Mandatory Normal-Flow Legend -->
+                <div class="components-legend">
+                    <div class="legend-item" id="item-1" onmouseenter="highlightMarker(1)" onmouseleave="unhighlightMarker(1)">
+                        <div class="legend-number" style="color:#4da6ff; border-color:#4da6ff;">1</div>
+                        <div class="legend-content">
+                            <h4>Gravitational Source</h4>
+                            <p>The central massive body (Earth). Its gravity pulls everything towards its center.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="legend-item" id="item-2" onmouseenter="highlightMarker(2)" onmouseleave="unhighlightMarker(2)">
+                        <div class="legend-number" style="color:#fff; border-color:#fff;">2</div>
+                        <div class="legend-content">
+                            <h4>Payload (Satellite)</h4>
+                            <p>The object in motion. In orbital physics, its mass is irrelevant to the shape of the orbit.</p>
+                        </div>
+                    </div>
+
+                    <div class="legend-item" id="item-3" onmouseenter="highlightMarker(3)" onmouseleave="unhighlightMarker(3)">
+                        <div class="legend-number" style="color:#00e5ff; border-color:#00e5ff;">3</div>
+                        <div class="legend-content">
+                            <h4>Tangential Velocity</h4>
+                            <p>Forward momentum. Must be precise to prevent falling back or escaping into space.</p>
+                        </div>
+                    </div>
+
+                    <div class="legend-item" id="item-4" onmouseenter="highlightMarker(4)" onmouseleave="unhighlightMarker(4)">
+                        <div class="legend-number" style="color:#ff3366; border-color:#ff3366;">4</div>
+                        <div class="legend-content">
+                            <h4>Centripetal Force</h4>
+                            <p>Gravity constantly pulling the satellite inward, bending its straight path into a curve.</p>
+                        </div>
+                    </div>
+
+                    <div class="legend-item" id="item-5" onmouseenter="highlightMarker(5)" onmouseleave="unhighlightMarker(5)">
+                        <div class="legend-number" style="color:#a64dff; border-color:#a64dff;">5</div>
+                        <div class="legend-content">
+                            <h4>Resultant Orbit</h4>
+                            <p>The continuous path formed by combining forward velocity and inward gravitational pull.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. WORKING PROCESS (Newton's Cannonball) -->
+    <section class="container">
+        <h2>How to Achieve Orbit</h2>
+        <p>To understand orbits, we use Isaac Newton's famous "Cannonball on a Mountain" thought experiment. It demonstrates how horizontal speed translates to orbital flight.</p>
+        
+        <div class="glass glass-card mechanism-container">
+            <div class="mechanism-header">
+                <div class="stage-title-area">
+                    <h3 id="stage-title">Stage 1: Low Velocity (Sub-orbital)</h3>
+                    <div class="stage-caption" id="stage-caption">The cannonball is fired slowly. Gravity pulls it down quickly, causing it to crash.</div>
+                </div>
+                <div class="input-output-icons" id="stage-icons">
+                    <!-- Dynamic icons injected via JS -->
+                </div>
+            </div>
+
+            <div class="mechanism-visual">
+                <canvas id="working-canvas"></canvas>
+            </div>
+
+            <div class="mechanism-controls">
+                <button class="control-btn" onclick="workingEngine.prevStage()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                </button>
+                
+                <div class="progress-dots" id="stage-dots">
+                    <div class="dot active"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+
+                <div style="display:flex; gap: 8px;">
+                    <button class="control-btn primary" id="auto-play-btn" onclick="workingEngine.toggleAutoPlay()">
+                        Auto-Play
+                    </button>
+                    <button class="control-btn" onclick="workingEngine.nextStage()">
+                        Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 5. INTERACTIVE SIMULATION -->
+    <section class="container" style="margin-top: var(--space-xl);">
+        <h2>Interactive Sandbox</h2>
+        <p>Take control. Adjust the altitude and velocity of the satellite to see how the orbit responds in real-time. Notice how higher orbits require <em>less</em> velocity to maintain.</p>
+        
+        <div class="glass glass-card sim-layout">
+            <!-- Sandbox Canvas -->
+            <div class="canvas-container" id="sim-canvas-wrapper">
+                <canvas id="main-sim-canvas"></canvas>
+                
+                <div class="sim-overlay-data">
+                    <div class="data-badge"><span style="color:var(--text-muted)">ALT:</span> <span id="tele-alt">400</span> km</div>
+                    <div class="data-badge"><span style="color:var(--text-muted)">VEL:</span> <span id="tele-vel">7.67</span> km/s</div>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="sim-controls">
+                <h3>Parameters</h3>
+                
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Orbital Altitude</span>
+                        <span class="control-value" id="val-alt">400 km</span>
+                    </div>
+                    <input type="range" id="slider-alt" min="200" max="35000" step="100" value="400">
+                    <small style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px;">Distance from Earth's surface. LEO to GEO.</small>
+                </div>
+
+                <div class="control-group" style="margin-top: 1rem;">
+                    <div class="control-header">
+                        <span>Tangential Velocity</span>
+                        <span class="control-value" id="val-vel">7.67 km/s</span>
+                    </div>
+                    <input type="range" id="slider-vel" min="2" max="12" step="0.01" value="7.67">
+                    <small style="color: var(--text-muted); font-size: 0.8rem; margin-top: 4px;">Speed injected parallel to the surface.</small>
+                </div>
+
+                <div style="display:flex; gap:8px; margin-top: 1rem;">
+                    <button class="control-btn primary" style="flex:1; justify-content:center;" onclick="simEngine.setCircular()">Auto-Circularize</button>
+                    <button class="control-btn" onclick="simEngine.reset()">Reset</button>
+                </div>
+
+                <div class="telemetry-panel">
+                    <h4 style="color:#fff; margin-bottom: 8px; font-size: 0.9rem;">Physics Telemetry</h4>
+                    <div class="telemetry-row">
+                        <span style="color:var(--text-muted)">Gravity (g)</span>
+                        <span id="tele-g" style="color:var(--accent-secondary); font-family:monospace;">8.68 m/s²</span>
+                    </div>
+                    <div class="telemetry-row">
+                        <span style="color:var(--text-muted)">Orbital Period</span>
+                        <span id="tele-period" style="font-family:monospace;">92.5 min</span>
+                    </div>
+                    <div class="telemetry-row">
+                        <span style="color:var(--text-muted)">Eccentricity</span>
+                        <span id="tele-ecc" style="font-family:monospace;">0.00</span>
+                    </div>
+                    
+                    <div class="orbit-status status-stable" id="orbit-status">
+                        Stable Orbit
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 6, 7, 8. FACTS, MISTAKES, APPS -->
+    <section class="container">
+        <div class="grid-3">
+            <!-- Applications -->
+            <div class="glass glass-card card-app">
+                <div class="icon-box">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </div>
+                <h3>Applications</h3>
+                <p><strong>LEO (Low Earth Orbit):</strong> 400-2000km. Fast orbital periods (~90 mins). Used for ISS, Hubble, and Starlink internet.</p>
+                <p><strong>GEO (Geostationary):</strong> 35,786km. Orbital period matches Earth's rotation (24 hrs), appearing fixed in the sky. Perfect for weather and TV satellites.</p>
+            </div>
+
+            <!-- Mistakes -->
+            <div class="glass glass-card card-mistake">
+                <div class="icon-box">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                </div>
+                <h3>Common Misconceptions</h3>
+                <h4>"There is zero gravity in space"</h4>
+                <p>False. At the ISS altitude (400km), gravity is still ~90% as strong as on the surface. Astronauts float because they are in continuous freefall, not because gravity disappeared.</p>
+                
+                <h4 style="margin-top:1rem;">"Heavier satellites fall faster"</h4>
+                <div class="correction">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0; margin-top:2px;"><polyline points="20 6 9 17 4 12"/></svg>
+                    <span>In a vacuum, mass does not affect orbital trajectory. A feather and a space station require the exact same velocity to maintain the same orbit.</span>
+                </div>
+            </div>
+
+            <!-- Facts -->
+            <div class="glass glass-card card-fact">
+                <div class="icon-box">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <h3>Fascinating Facts</h3>
+                <p>The International Space Station (ISS) travels at <strong>28,000 km/h</strong> (17,500 mph). At this speed, it orbits the Earth once every 92 minutes, meaning astronauts experience 16 sunrises and sunsets every single day.</p>
+                <p>If you drove a car at highway speeds straight up, it would take nearly 6 months to reach Geostationary orbit.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- SCRIPTS -->
+    <script>
+        /* ==========================================================================
+           UTILITIES & MATH
+           ========================================================================== */
+        const G = 6.67430e-11; // Gravitational constant
+        const M_EARTH = 5.972e24; // Mass of Earth (kg)
+        const R_EARTH = 6371; // Radius of Earth (km)
+        const MU = 398600.4418; // Standard gravitational parameter (km^3/s^2) - smoother for sim
+
+        // Responsive Canvas Setup
+        function setupCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.parentElement.getBoundingClientRect();
+            
+            // Handle high-DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            
+            return { canvas, ctx, width: rect.width, height: rect.height };
+        }
+
+        // Draw premium Earth function (reusable)
+        function drawEarth(ctx, x, y, radius) {
+            // Outer Glow
+            let glow = ctx.createRadialGradient(x, y, radius, x, y, radius * 1.5);
+            glow.addColorStop(0, 'rgba(0, 162, 255, 0.4)');
+            glow.addColorStop(1, 'rgba(0, 162, 255, 0)');
+            ctx.fillStyle = glow;
+            ctx.beginPath(); ctx.arc(x, y, radius * 1.5, 0, Math.PI * 2); ctx.fill();
+
+            // Main Sphere
+            let fill = ctx.createRadialGradient(x - radius*0.3, y - radius*0.3, 0, x, y, radius);
+            fill.addColorStop(0, '#4da6ff');
+            fill.addColorStop(0.5, '#153c6b');
+            fill.addColorStop(1, '#051224');
+            
+            ctx.fillStyle = fill;
+            ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
+
+            // Atmosphere Rim
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
+
+        function drawVector(ctx, startX, startY, endX, endY, color) {
+            const headlen = 10;
+            const dx = endX - startX;
+            const dy = endY - startY;
+            const angle = Math.atan2(dy, dx);
+            
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(endX, endY);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            
+            // Add glow to vectors
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 10;
+            ctx.stroke();
+            
+            // Draw head
+            ctx.beginPath();
+            ctx.moveTo(endX, endY);
+            ctx.lineTo(endX - headlen * Math.cos(angle - Math.PI / 6), endY - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.lineTo(endX - headlen * Math.cos(angle + Math.PI / 6), endY - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.lineTo(endX, endY);
+            ctx.fillStyle = color;
+            ctx.fill();
+            
+            // Reset shadow
+            ctx.shadowBlur = 0;
+        }
+
+        /* ==========================================================================
+           MARKER & LEGEND INTERACTION (COMPONENTS SECTION)
+           ========================================================================== */
+        function highlightMarker(id) {
+            document.querySelectorAll('.marker, .legend-item').forEach(el => el.classList.remove('active'));
+            document.querySelector(`.marker-${id}`).classList.add('active');
+            document.getElementById(`item-${id}`).classList.add('active');
+        }
+
+        function unhighlightMarker(id) {
+            document.querySelector(`.marker-${id}`).classList.remove('active');
+            document.getElementById(`item-${id}`).classList.remove('active');
+        }
+
+        // Add event listeners to markers for touch support
+        document.querySelectorAll('.marker').forEach((marker, index) => {
+            const id = index + 1;
+            marker.addEventListener('mouseenter', () => highlightMarker(id));
+            marker.addEventListener('mouseleave', () => unhighlightMarker(id));
+            marker.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // Prevent scroll on tap
+                highlightMarker(id);
+            });
+        });
+
+        /* ==========================================================================
+           BACKGROUND STARFIELD
+           ========================================================================== */
+        const bgCanvas = document.getElementById('starfield-bg');
+        const bgCtx = bgCanvas.getContext('2d');
+        let stars = [];
+
+        function resizeBg() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+            stars = [];
+            for(let i = 0; i < 200; i++) {
+                stars.push({
+                    x: Math.random() * bgCanvas.width,
+                    y: Math.random() * bgCanvas.height,
+                    s: Math.random() * 1.5,
+                    a: Math.random()
+                });
+            }
+        }
+        window.addEventListener('resize', resizeBg);
+        resizeBg();
+
+        function animateBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            stars.forEach(star => {
+                bgCtx.fillStyle = `rgba(255, 255, 255, ${star.a})`;
+                bgCtx.beginPath();
+                bgCtx.arc(star.x, star.y, star.s, 0, Math.PI*2);
+                bgCtx.fill();
+                star.y -= 0.1 * star.s;
+                star.a += (Math.random() - 0.5) * 0.1;
+                if(star.a > 1) star.a = 1;
+                if(star.a < 0.1) star.a = 0.1;
+                if(star.y < 0) star.y = bgCanvas.height;
+            });
+            requestAnimationFrame(animateBg);
+        }
+        animateBg();
+
+        /* ==========================================================================
+           WORKING PROCESS ENGINE (NEWTON'S CANNON)
+           ========================================================================== */
+        const workingEngine = (function() {
+            let env;
+            let currentStage = 0;
+            let isAutoPlaying = false;
+            let animationReq;
+            
+            // Physics state for cannonball
+            let projectile = { active: false, x: 0, y: 0, vx: 0, vy: 0, path: [] };
+            
+            const stages = [
+                {
+                    title: "Stage 1: Low Velocity",
+                    caption: "Fired too slowly. Gravity easily overpowers forward momentum. Projectile hits the ground.",
+                    speed: 2, // abstract speed unit for visual
+                    status: 'crash',
+                    icons: '<span style="color:var(--accent-primary)">Vel ↘</span> <span style="color:var(--accent-secondary)">Grav ↓↓</span>'
+                },
+                {
+                    title: "Stage 2: Medium Velocity",
+                    caption: "Faster, traveling further. The curvature of Earth begins to delay the impact.",
+                    speed: 4.5,
+                    status: 'crash',
+                    icons: '<span style="color:var(--accent-primary)">Vel →</span> <span style="color:var(--accent-secondary)">Grav ↓</span>'
+                },
+                {
+                    title: "Stage 3: Orbital Velocity",
+                    caption: "Perfect balance. The projectile falls at the exact rate the Earth curves away beneath it.",
+                    speed: 6.8, // Magic number for visual circular orbit in this scale
+                    status: 'orbit',
+                    icons: '<span style="color:var(--accent-primary)">Vel →</span> = <span style="color:var(--accent-secondary)">Grav ↓</span>'
+                },
+                {
+                    title: "Stage 4: Escape Velocity",
+                    caption: "Fired too fast. Forward momentum overcomes gravity entirely. It escapes Earth's influence.",
+                    speed: 10,
+                    status: 'escape',
+                    icons: '<span style="color:var(--accent-primary)">Vel ↑↑</span> > <span style="color:var(--accent-secondary)">Grav ↓</span>'
+                }
+            ];
+
+            function init() {
+                env = setupCanvas('working-canvas');
+                window.addEventListener('resize', () => { env = setupCanvas('working-canvas'); draw(); });
+                loadStage(0);
+                loop();
+            }
+
+            function loadStage(index) {
+                currentStage = index;
+                const stage = stages[index];
+                
+                // Update UI
+                document.getElementById('stage-title').innerText = stage.title;
+                document.getElementById('stage-caption').innerText = stage.caption;
+                document.getElementById('stage-icons').innerHTML = stage.icons;
+                
+                // Update Dots
+                document.querySelectorAll('#stage-dots .dot').forEach((d, i) => {
+                    d.classList.toggle('active', i === index);
+                });
+
+                fireProjectile(stage.speed);
+            }
+
+            function fireProjectile(speed) {
+                // Setup mountain top position
+                const earthX = env.width / 2;
+                const earthY = env.height / 2 + 50; // Shift down slightly
+                const earthR = 80;
+                const mountainH = 20;
+                
+                projectile = {
+                    active: true,
+                    x: earthX,
+                    y: earthY - earthR - mountainH, // Top of mountain
+                    vx: speed, // Fire to the right
+                    vy: 0,
+                    path: [],
+                    earthX, earthY, earthR,
+                    status: stages[currentStage].status
+                };
+            }
+
+            function updatePhysics() {
+                if (!projectile.active) return;
+
+                const p = projectile;
+                const simG = 1200; // Fake gravity constant for visuals
+                
+                // Store path
+                if (p.path.length === 0 || Math.abs(p.x - p.path[p.path.length-1].x) > 2) {
+                    p.path.push({x: p.x, y: p.y});
+                }
+                // Limit path length to prevent memory leak on orbit
+                if(p.path.length > 300) p.path.shift();
+
+                // Calculate gravity vector
+                let dx = p.earthX - p.x;
+                let dy = p.earthY - p.y;
+                let distSq = dx*dx + dy*dy;
+                let dist = Math.sqrt(distSq);
+                
+                // Apply gravity
+                let force = simG / distSq;
+                p.vx += force * (dx / dist);
+                p.vy += force * (dy / dist);
+                
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // Collision Detection
+                if (dist <= p.earthR) {
+                    p.active = false;
+                    createExplosion(p.x, p.y);
+                    if(isAutoPlaying) setTimeout(() => nextStage(), 1500);
+                }
+                
+                // Escape detection
+                if (dist > env.width && p.status === 'escape') {
+                     if(isAutoPlaying) setTimeout(() => nextStage(), 1000);
+                     p.active = false; // Stop updating
+                }
+                
+                // Orbit detection (if it completes a lap approx)
+                if (p.status === 'orbit' && p.x < p.earthX && p.path.length > 150) {
+                     if(isAutoPlaying) {
+                         p.active = false; // pause briefly
+                         setTimeout(() => nextStage(), 2000);
+                     }
+                }
+            }
+
+            // Simple particle explosion for crashes
+            let particles = [];
+            function createExplosion(x, y) {
+                for(let i=0; i<15; i++) {
+                    particles.push({
+                        x: x, y: y,
+                        vx: (Math.random()-0.5)*4,
+                        vy: (Math.random()-0.5)*4,
+                        life: 1
+                    });
+                }
+            }
+
+            function draw() {
+                env.ctx.clearRect(0, 0, env.width, env.height);
+                
+                const p = projectile;
+                
+                // Draw Earth
+                drawEarth(env.ctx, p.earthX, p.earthY, p.earthR);
+                
+                // Draw Mountain
+                env.ctx.fillStyle = '#667788';
+                env.ctx.beginPath();
+                env.ctx.moveTo(p.earthX - 10, p.earthY - p.earthR);
+                env.ctx.lineTo(p.earthX, p.earthY - p.earthR - 20); // Peak
+                env.ctx.lineTo(p.earthX + 10, p.earthY - p.earthR);
+                env.ctx.fill();
+
+                // Draw Path
+                if (p.path.length > 1) {
+                    env.ctx.beginPath();
+                    env.ctx.moveTo(p.path[0].x, p.path[0].y);
+                    for(let i=1; i<p.path.length; i++) {
+                        env.ctx.lineTo(p.path[i].x, p.path[i].y);
+                    }
+                    env.ctx.strokeStyle = 'rgba(166, 77, 255, 0.5)';
+                    env.ctx.lineWidth = 2;
+                    env.ctx.stroke();
+                }
+
+                // Draw Projectile
+                if (p.active) {
+                    env.ctx.fillStyle = '#fff';
+                    env.ctx.beginPath();
+                    env.ctx.arc(p.x, p.y, 4, 0, Math.PI*2);
+                    env.ctx.fill();
+                    env.ctx.shadowBlur = 10;
+                    env.ctx.shadowColor = '#fff';
+                    env.ctx.fill();
+                    env.ctx.shadowBlur = 0;
+                    
+                    // Vectors
+                    drawVector(env.ctx, p.x, p.y, p.x + p.vx*10, p.y + p.vy*10, 'var(--accent-primary)'); // Velocity
+                    let dx = p.earthX - p.x;
+                    let dy = p.earthY - p.y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    drawVector(env.ctx, p.x, p.y, p.x + (dx/dist)*30, p.y + (dy/dist)*30, 'var(--accent-secondary)'); // Gravity
+                }
+
+                // Draw Particles
+                for(let i=particles.length-1; i>=0; i--) {
+                    let pt = particles[i];
+                    env.ctx.fillStyle = `rgba(255, 100, 50, ${pt.life})`;
+                    env.ctx.beginPath();
+                    env.ctx.arc(pt.x, pt.y, 2, 0, Math.PI*2);
+                    env.ctx.fill();
+                    pt.x += pt.vx; pt.y += pt.vy;
+                    pt.life -= 0.05;
+                    if(pt.life <= 0) particles.splice(i, 1);
+                }
+            }
+
+            function loop() {
+                updatePhysics();
+                draw();
+                animationReq = requestAnimationFrame(loop);
+            }
+
+            function nextStage() {
+                let next = (currentStage + 1) % stages.length;
+                loadStage(next);
+            }
+
+            function prevStage() {
+                let prev = (currentStage - 1 + stages.length) % stages.length;
+                loadStage(prev);
+                if(isAutoPlaying) toggleAutoPlay(); // Stop auto if manual override
+            }
+
+            function toggleAutoPlay() {
+                isAutoPlaying = !isAutoPlaying;
+                const btn = document.getElementById('auto-play-btn');
+                if (isAutoPlaying) {
+                    btn.classList.add('primary');
+                    btn.innerText = "Stop Auto";
+                    // If currently stopped/crashed, restart stage to trigger loop
+                    if(!projectile.active) loadStage(currentStage);
+                } else {
+                    btn.classList.remove('primary');
+                    btn.innerText = "Auto-Play";
+                }
+            }
+
+            return { init, nextStage, prevStage, toggleAutoPlay };
+        })();
+
+
+        /* ==========================================================================
+           MAIN INTERACTIVE SIMULATOR (KEPLERIAN/NEWTONIAN)
+           ========================================================================== */
+        const simEngine = (function() {
+            let env;
+            let state = {
+                alt: 400, // km
+                vel: 7.67, // km/s
+                x: 0, y: 0, vx: 0, vy: 0,
+                path: [],
+                status: 'stable',
+                timeScale: 20 // simulation speed multiplier
+            };
+            
+            // Visual scale mapping: km to pixels
+            // Earth R = 6371km. Let's make it 60px on screen.
+            // Scale = 60 / 6371 ~= 0.0094
+            let VISUAL_SCALE = 0.006; 
+            
+            // DOM Elements
+            const slAlt = document.getElementById('slider-alt');
+            const slVel = document.getElementById('slider-vel');
+            const vAlt = document.getElementById('val-alt');
+            const vVel = document.getElementById('val-vel');
+            const tAlt = document.getElementById('tele-alt');
+            const tVel = document.getElementById('tele-vel');
+            const statusEl = document.getElementById('orbit-status');
+
+            function init() {
+                env = setupCanvas('main-sim-canvas');
+                window.addEventListener('resize', handleResize);
+                
+                // Bind UI
+                slAlt.addEventListener('input', (e) => { 
+                    updateUIValue(vAlt, e.target.value, 'km'); 
+                    updateFromSliders(); 
+                });
+                slVel.addEventListener('input', (e) => { 
+                    updateUIValue(vVel, parseFloat(e.target.value).toFixed(2), 'km/s'); 
+                    updateFromSliders(); 
+                });
+
+                // Set initial state physically
+                setCircular(400);
+                loop();
+            }
+
+            function handleResize() {
+                env = setupCanvas('main-sim-canvas');
+                // Adjust visual scale based on screen size so GEO fits
+                VISUAL_SCALE = Math.min(env.width, env.height) / (2 * (R_EARTH + 35000)) * 0.9;
+                state.path = []; // clear path on resize
+            }
+
+            function updateUIValue(el, val, unit) {
+                el.innerText = `${val} ${unit}`;
+            }
+
+            // Calculate orbital velocity for circular orbit
+            function getCircularVelocity(altitude) {
+                const r = R_EARTH + altitude;
+                return Math.sqrt(MU / r); // km/s
+            }
+
+            // Triggered by Auto-Circularize button
+            function setCircular(alt = null) {
+                if (alt === null) alt = parseFloat(slAlt.value);
+                const v = getCircularVelocity(alt);
+                
+                // Update sliders
+                slAlt.value = alt;
+                slVel.value = v.toFixed(2);
+                updateUIValue(vAlt, alt, 'km');
+                updateUIValue(vVel, v.toFixed(2), 'km/s');
+                
+                applyPhysicsState(alt, v);
+            }
+
+            function reset() {
+                setCircular(400);
+            }
+
+            function updateFromSliders() {
+                applyPhysicsState(parseFloat(slAlt.value), parseFloat(slVel.value));
+            }
+
+            function applyPhysicsState(alt, vel) {
+                state.alt = alt;
+                state.vel = vel;
+                
+                // Convert to simulation coordinates
+                const r = R_EARTH + alt; // distance from center (km)
+                
+                // Start position: top of Earth
+                state.x = 0;
+                state.y = -r;
+                
+                // Start velocity: moving right (tangential)
+                state.vx = vel;
+                state.vy = 0;
+                
+                state.path = []; // Reset visual trail
+                state.status = 'stable';
+                updateStatusUI();
+                
+                // Adjust scale if going to high altitude (GEO)
+                if (alt > 20000) {
+                     VISUAL_SCALE = Math.min(env.width, env.height) / (2 * (R_EARTH + 40000)) * 0.9;
+                } else {
+                     VISUAL_SCALE = Math.min(env.width, env.height) / (2 * (R_EARTH + 10000)) * 0.8;
+                }
+            }
+
+            function updatePhysics() {
+                if (state.status === 'crash' || state.status === 'escape') return;
+
+                // Simple Euler integration (good enough for visual sim, Verlet is better but overkill here)
+                const dt = 1; // logical time step (seconds)
+                const steps = state.timeScale; // run multiple steps per frame to speed up visuals
+
+                for(let i=0; i<steps; i++) {
+                    const rSq = state.x*state.x + state.y*state.y;
+                    const r = Math.sqrt(rSq);
+                    
+                    // Gravity force calculation (acceleration)
+                    // a = MU / r^2
+                    const a = MU / rSq;
+                    
+                    // Decompose acceleration into x, y
+                    const ax = -a * (state.x / r);
+                    const ay = -a * (state.y / r);
+                    
+                    // Update velocity
+                    state.vx += ax * dt;
+                    state.vy += ay * dt;
+                    
+                    // Update position
+                    state.x += state.vx * dt;
+                    state.y += state.vy * dt;
+
+                    // Telemetry updates (only need to calculate once per frame, not every step)
+                    if (i === steps - 1) {
+                        const currentAlt = r - R_EARTH;
+                        const currentVel = Math.sqrt(state.vx*state.vx + state.vy*state.vy);
+                        
+                        tAlt.innerText = Math.round(currentAlt);
+                        tVel.innerText = currentVel.toFixed(2);
+                        
+                        // Calculate local gravity: g = G*M / r^2 (convert to m/s^2)
+                        // Using standard g0 * (Re/r)^2
+                        const localG = 9.80665 * Math.pow(R_EARTH/r, 2);
+                        document.getElementById('tele-g').innerText = `${localG.toFixed(2)} m/s²`;
+                        
+                        // Orbital Period T = 2pi * sqrt(a^3 / mu) - Approximation using current r
+                        // Vis-viva equation to find semi-major axis 'a'
+                        // v^2 = GM (2/r - 1/a) => 1/a = 2/r - v^2/MU => a = 1 / (2/r - v^2/MU)
+                        const sma_inv = (2/r) - (currentVel*currentVel / MU);
+                        if (sma_inv > 0) {
+                            const sma = 1 / sma_inv;
+                            const periodSecs = 2 * Math.PI * Math.sqrt(Math.pow(sma, 3) / MU);
+                            const periodMins = periodSecs / 60;
+                            
+                            if (periodMins > 60*24) {
+                                document.getElementById('tele-period').innerText = `${(periodMins/60/24).toFixed(1)} days`;
+                            } else if (periodMins > 60) {
+                                document.getElementById('tele-period').innerText = `${(periodMins/60).toFixed(1)} hrs`;
+                            } else {
+                                document.getElementById('tele-period').innerText = `${Math.round(periodMins)} min`;
+                            }
+                            
+                            // Approx Eccentricity e = sqrt(1 - (r_p/a)) .. too complex for simple UI, let's fake it visually based on vel ratio
+                            const vCirc = getCircularVelocity(currentAlt);
+                            const eApprox = Math.abs((currentVel / vCirc) - 1);
+                            document.getElementById('tele-ecc').innerText = eApprox.toFixed(2);
+                            
+                        } else {
+                            document.getElementById('tele-period').innerText = `∞ (Escape)`;
+                            document.getElementById('tele-ecc').innerText = `> 1.0`;
+                        }
+
+                        // State checks
+                        if (currentAlt <= 0) {
+                            state.status = 'crash';
+                            updateStatusUI();
+                        } else if (sma_inv <= 0) {
+                            state.status = 'escape';
+                            updateStatusUI();
+                        }
+                        
+                        // Path drawing logic
+                        if (state.path.length === 0 || i%5 === 0) {
+                            state.path.push({x: state.x, y: state.y});
+                            if (state.path.length > 500) state.path.shift(); // keep trail manageable
+                        }
+                    }
+                }
+            }
+
+            function updateStatusUI() {
+                statusEl.className = 'orbit-status';
+                if (state.status === 'crash') {
+                    statusEl.classList.add('status-crash');
+                    statusEl.innerText = "CRASH DETECTED";
+                } else if (state.status === 'escape') {
+                    statusEl.classList.add('status-escape');
+                    statusEl.innerText = "ESCAPE TRAJECTORY";
+                } else {
+                    statusEl.classList.add('status-stable');
+                    statusEl.innerText = "STABLE ORBIT";
+                }
+            }
+
+            function draw() {
+                env.ctx.clearRect(0, 0, env.width, env.height);
+                
+                const cx = env.width / 2;
+                const cy = env.height / 2;
+                
+                // Draw Grid (subtle)
+                env.ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+                env.ctx.lineWidth = 1;
+                env.ctx.beginPath();
+                env.ctx.moveTo(0, cy); env.ctx.lineTo(env.width, cy);
+                env.ctx.moveTo(cx, 0); env.ctx.lineTo(cx, env.height);
+                env.ctx.stroke();
+
+                // Draw Earth
+                drawEarth(env.ctx, cx, cy, R_EARTH * VISUAL_SCALE);
+                
+                // Screen coordinates for satellite
+                const sx = cx + (state.x * VISUAL_SCALE);
+                const sy = cy + (state.y * VISUAL_SCALE);
+
+                // Draw Path Trail
+                if (state.path.length > 1) {
+                    env.ctx.beginPath();
+                    env.ctx.moveTo(cx + state.path[0].x * VISUAL_SCALE, cy + state.path[0].y * VISUAL_SCALE);
+                    for(let i=1; i<state.path.length; i++) {
+                        env.ctx.lineTo(cx + state.path[i].x * VISUAL_SCALE, cy + state.path[i].y * VISUAL_SCALE);
+                    }
+                    env.ctx.strokeStyle = 'rgba(166, 77, 255, 0.6)';
+                    env.ctx.lineWidth = 2;
+                    env.ctx.stroke();
+                }
+
+                if (state.status !== 'crash') {
+                    // Draw Satellite (glow + dot)
+                    env.ctx.beginPath();
+                    env.ctx.arc(sx, sy, 4, 0, Math.PI*2);
+                    env.ctx.fillStyle = '#fff';
+                    env.ctx.shadowBlur = 15;
+                    env.ctx.shadowColor = '#00e5ff';
+                    env.ctx.fill();
+                    env.ctx.shadowBlur = 0;
+                    
+                    // Velocity Vector (normalized for visual consistency)
+                    const vMag = Math.sqrt(state.vx*state.vx + state.vy*state.vy);
+                    const vNormX = state.vx / vMag;
+                    const vNormY = state.vy / vMag;
+                    const vLen = 30 + (vMag * 2); // scale visual length slightly with speed
+                    drawVector(env.ctx, sx, sy, sx + vNormX*vLen, sy + vNormY*vLen, 'var(--accent-primary)');
+
+                    // Gravity Vector (always points to center)
+                    const dx = cx - sx;
+                    const dy = cy - sy;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    drawVector(env.ctx, sx, sy, sx + (dx/dist)*25, sy + (dy/dist)*25, 'var(--accent-secondary)');
+                } else {
+                    // Draw crash explosion
+                    env.ctx.beginPath();
+                    env.ctx.arc(sx, sy, 10, 0, Math.PI*2);
+                    env.ctx.fillStyle = 'rgba(255, 50, 50, 0.8)';
+                    env.ctx.fill();
+                    env.ctx.shadowBlur = 20;
+                    env.ctx.shadowColor = 'red';
+                    env.ctx.fill();
+                    env.ctx.shadowBlur = 0;
+                }
+            }
+
+            function loop() {
+                updatePhysics();
+                draw();
+                requestAnimationFrame(loop);
+            }
+
+            return { init, setCircular, reset };
+        })();
+
+        // Boot Application
+        window.addEventListener('load', () => {
+            workingEngine.init();
+            simEngine.init();
+        });
+
+    </script>
+</body>
+</html>

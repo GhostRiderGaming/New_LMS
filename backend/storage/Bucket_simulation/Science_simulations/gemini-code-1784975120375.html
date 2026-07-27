@@ -1,0 +1,1600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Resistance Calculator & Physics Visualizer</title>
+    <style>
+        /* ==========================================================================
+           GLOBAL VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-base: #050508;
+            --bg-glass: rgba(20, 22, 30, 0.6);
+            --bg-glass-hover: rgba(30, 34, 45, 0.8);
+            --text-main: #f0f2f5;
+            --text-muted: #94a3b8;
+            
+            --accent-primary: #0ea5e9;
+            --accent-glow: rgba(14, 165, 233, 0.4);
+            --accent-amber: #f59e0b;
+            --accent-amber-glow: rgba(245, 158, 11, 0.4);
+            --accent-green: #10b981;
+            
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --border-highlight: rgba(255, 255, 255, 0.2);
+            
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-xl: 32px;
+            
+            --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-mono: "SF Mono", "Roboto Mono", Menlo, monospace;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            --transition-fast: all 0.2s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(14, 165, 233, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(245, 158, 11, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2rem, 5vw, 4rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 600; letter-spacing: -0.01em; margin-bottom: 1rem; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 500; color: var(--text-main); }
+        p { font-size: clamp(0.95rem, 1.5vw, 1.1rem); color: var(--text-muted); }
+        
+        .gradient-text {
+            background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .accent-text { color: var(--accent-primary); }
+        .mono { font-family: var(--font-mono); }
+
+        /* Layout & Utilities */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 4vw, 40px);
+        }
+
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+
+        .flex-col { display: flex; flex-direction: column; }
+        .flex-row { display: flex; flex-direction: row; }
+        .align-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .justify-center { justify-content: center; }
+        .gap-sm { gap: 0.5rem; }
+        .gap-md { gap: 1rem; }
+        .gap-lg { gap: 2rem; }
+
+        section { margin-bottom: clamp(60px, 10vw, 120px); }
+        
+        .section-header { text-align: center; margin-bottom: clamp(30px, 5vw, 60px); }
+        
+        /* Canvas Background */
+        #bg-canvas {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.5;
+        }
+
+        /* ==========================================================================
+           1. HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(14, 165, 233, 0.1);
+            border: 1px solid rgba(14, 165, 233, 0.2);
+            color: var(--accent-primary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 2rem;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        /* ==========================================================================
+           2. CONCEPT VISUALIZATION (CANVAS)
+           ========================================================================== */
+        .concept-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+        @media (min-width: 1024px) { .concept-grid { grid-template-columns: 2fr 1fr; } }
+        
+        .simulation-container {
+            position: relative;
+            width: 100%;
+            height: clamp(300px, 50vh, 500px);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: #0a0a0f;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+        #physics-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        .sim-controls {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 2rem;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+        
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: var(--text-main);
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 0 15px var(--accent-glow);
+            border: 2px solid var(--bg-base);
+            transition: var(--transition-fast);
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.1); }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: var(--border-glass);
+            border-radius: 2px;
+        }
+        #res-slider::-webkit-slider-thumb { box-shadow: 0 0 15px var(--accent-amber-glow); }
+
+        /* ==========================================================================
+           3. ANATOMY (MANDATORY LABELS PATTERN)
+           ========================================================================== */
+        .anatomy-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            align-items: center;
+        }
+        @media (min-width: 1024px) { .anatomy-grid { grid-template-columns: 3fr 2fr; } }
+        
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 280px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.03) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+        }
+
+        /* Pure CSS 3D Resistor Illustration */
+        .resistor-art {
+            position: relative;
+            width: 80%;
+            max-width: 400px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
+        }
+        .art-lead {
+            flex: 1;
+            height: 8px;
+            background: linear-gradient(to bottom, #71717a 0%, #d4d4d8 30%, #71717a 70%, #3f3f46 100%);
+            box-shadow: inset 0 1px 2px rgba(255,255,255,0.5), inset 0 -1px 2px rgba(0,0,0,0.5);
+            border-radius: 4px;
+        }
+        .art-body {
+            position: relative;
+            width: 60%;
+            height: 100%;
+            background: linear-gradient(to bottom, #e5e5e5 0%, #ffffff 20%, #d4d4d8 50%, #737373 100%);
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-evenly;
+            padding: 0 5%;
+            overflow: hidden;
+            box-shadow: 
+                inset 5px 0 15px rgba(0,0,0,0.2),
+                inset -5px 0 15px rgba(0,0,0,0.2);
+        }
+        .art-ceramic { /* Underlying layer */
+            position: absolute;
+            inset: 0;
+            background: url('data:image/svg+xml;utf8,<svg width="4" height="4" xmlns="http://www.w3.org/2000/svg"><rect width="4" height="4" fill="none"/><circle cx="2" cy="2" r="1" fill="rgba(0,0,0,0.05)"/></svg>');
+            z-index: 1;
+        }
+        .art-band {
+            width: 10%;
+            height: 100%;
+            position: relative;
+            z-index: 2;
+        }
+        /* Color specific art bands */
+        .ab-1 { background: linear-gradient(to bottom, #ef4444, #991b1b, #450a0a); }
+        .ab-2 { background: linear-gradient(to bottom, #22c55e, #166534, #052e16); }
+        .ab-3 { background: linear-gradient(to bottom, #eab308, #854d0e, #422006); }
+        .ab-4 { margin-left: 10%; background: linear-gradient(to bottom, #d4d4d8, #71717a, #27272a); } /* Silver */
+
+        .art-shading {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to bottom, rgba(255,255,255,0.4) 0%, transparent 20%, rgba(0,0,0,0.4) 80%, rgba(0,0,0,0.7) 100%);
+            z-index: 3;
+            pointer-events: none;
+        }
+
+        /* Circular Markers for Illustration */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--bg-glass);
+            border: 2px solid rgba(255,255,255,0.8);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #fff;
+            cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            transition: var(--transition-smooth);
+        }
+        .marker::before {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.4);
+            animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        .marker.active {
+            background: var(--accent-primary);
+            border-color: #fff;
+            transform: scale(1.15);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+        
+        /* Specific Marker Positions */
+        #m1 { top: 50%; left: 15%; transform: translate(-50%, -50%); }
+        #m2 { top: 10%; left: 45%; transform: translate(-50%, -50%); }
+        #m3 { top: 50%; left: 70%; transform: translate(-50%, -50%); }
+        #m4 { top: 85%; left: 55%; transform: translate(-50%, -50%); }
+        .marker.active#m1 { transform: translate(-50%, -50%) scale(1.15); } /* fix transform override */
+        .marker.active#m2 { transform: translate(-50%, -50%) scale(1.15); }
+        .marker.active#m3 { transform: translate(-50%, -50%) scale(1.15); }
+        .marker.active#m4 { transform: translate(-50%, -50%) scale(1.15); }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(14, 165, 233, 0.08);
+            border-color: rgba(14, 165, 233, 0.2);
+            transform: translateX(4px);
+        }
+        .legend-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            flex-shrink: 0;
+            transition: var(--transition-fast);
+        }
+        .legend-item.active .legend-num {
+            background: var(--accent-primary);
+            color: #fff;
+        }
+        .legend-text h4 { font-size: 1rem; color: var(--text-main); margin-bottom: 2px; }
+        .legend-text p { font-size: 0.85rem; color: var(--text-muted); margin: 0; }
+
+        /* ==========================================================================
+           4. INTERACTIVE CALCULATOR (MAIN TOOL)
+           ========================================================================== */
+        .calc-wrapper {
+            background: linear-gradient(180deg, rgba(20,22,30,0.8) 0%, rgba(10,12,18,0.95) 100%);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-xl);
+            padding: clamp(20px, 4vw, 48px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+        }
+
+        .calc-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 3rem;
+            gap: 1rem;
+        }
+
+        .mode-toggle {
+            display: flex;
+            background: rgba(0,0,0,0.3);
+            border-radius: 30px;
+            padding: 4px;
+            border: 1px solid var(--border-glass);
+        }
+        .mode-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px 24px;
+            border-radius: 26px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition-fast);
+        }
+        .mode-btn.active {
+            background: var(--text-main);
+            color: var(--bg-base);
+            box-shadow: 0 2px 10px rgba(255,255,255,0.2);
+        }
+
+        .result-display {
+            text-align: right;
+        }
+        .result-value {
+            font-family: var(--font-mono);
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 700;
+            color: var(--accent-amber);
+            line-height: 1;
+            text-shadow: 0 0 20px var(--accent-amber-glow);
+            letter-spacing: -0.02em;
+        }
+        .result-range {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            font-family: var(--font-mono);
+        }
+
+        /* Interactive Resistor Visual */
+        .resistor-display-area {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: clamp(120px, 15vw, 180px);
+            margin-bottom: 3rem;
+            position: relative;
+        }
+        
+        .dyn-resistor {
+            width: 100%;
+            max-width: 600px;
+            height: clamp(60px, 8vw, 90px);
+            display: flex;
+            align-items: center;
+            position: relative;
+        }
+        .dyn-lead {
+            flex: 1;
+            height: 12%;
+            background: linear-gradient(0deg, #52525b 0%, #e4e4e7 50%, #52525b 100%);
+            border-radius: 4px;
+            box-shadow: 0 5px 10px rgba(0,0,0,0.3);
+        }
+        .dyn-body {
+            position: relative;
+            width: 70%;
+            height: 100%;
+            /* Base ceramic color */
+            background: linear-gradient(180deg, #d2b48c 0%, #f5deb3 30%, #d2b48c 70%, #8b4513 100%);
+            border-radius: clamp(12px, 2vw, 24px);
+            display: flex;
+            justify-content: space-between;
+            padding: 0 8%;
+            box-shadow: 
+                inset 0 10px 20px rgba(255,255,255,0.4),
+                inset 0 -10px 20px rgba(0,0,0,0.5),
+                0 15px 30px rgba(0,0,0,0.4);
+            overflow: hidden;
+        }
+        .dyn-band {
+            width: 12%;
+            height: 100%;
+            background-color: transparent; /* Set via JS */
+            position: relative;
+            z-index: 2;
+            transition: background-color 0.3s ease;
+        }
+        .dyn-band.band-space {
+            margin-left: auto; /* Push tolerance band to right */
+        }
+        /* 3D shading overlay for bands */
+        .dyn-band::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.4) 0%, transparent 20%, rgba(0,0,0,0.3) 70%, rgba(0,0,0,0.7) 100%);
+            pointer-events: none;
+        }
+
+        /* Color Selectors */
+        .selectors-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+        .selector-group {
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .selector-label {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+            display: flex;
+            justify-content: space-between;
+        }
+        .color-options {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .color-btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 8px 12px;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            color: var(--text-main);
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-align: left;
+            transition: var(--transition-fast);
+        }
+        .color-btn:hover { background: rgba(255,255,255,0.05); }
+        .color-btn.selected {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.2);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+        }
+        .color-swatch {
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.2);
+            flex-shrink: 0;
+        }
+        .color-val {
+            margin-left: auto;
+            color: var(--text-muted);
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+        }
+
+        /* ==========================================================================
+           5. WORKING PROCESS (MANDATORY SEQUENCE)
+           ========================================================================== */
+        .working-section {
+            position: relative;
+            border-top: 1px solid var(--border-glass);
+            border-bottom: 1px solid var(--border-glass);
+            background: linear-gradient(90deg, rgba(14,165,233,0.02) 0%, rgba(20,22,30,0.4) 50%, rgba(14,165,233,0.02) 100%);
+            padding: clamp(40px, 8vw, 80px) 0;
+        }
+
+        .process-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .stage-display {
+            width: 100%;
+            min-height: 250px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        /* Mini diagram for stages */
+        .stage-visual {
+            width: 240px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+        .sv-lead { flex: 1; height: 6px; background: #71717a; border-radius: 3px; }
+        .sv-body {
+            width: 160px; height: 100%; background: #d2b48c; border-radius: 8px;
+            display: flex; justify-content: space-evenly; padding: 0 10px;
+        }
+        .sv-band {
+            width: 12px; height: 100%; background: #333; opacity: 0.3; transition: all 0.5s ease;
+        }
+        .sv-band.sv-gap { margin-left: auto; }
+        
+        /* Particle animation elements for stages */
+        .stage-particles {
+            position: absolute;
+            top: -20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            opacity: 0;
+            transform: translateY(-10px);
+            transition: all 0.5s ease;
+        }
+        .stage-particles.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .particle-val {
+            background: var(--accent-primary);
+            color: #fff;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-family: var(--font-mono);
+            font-weight: bold;
+            font-size: 1.2rem;
+            box-shadow: 0 4px 15px var(--accent-glow);
+            margin-bottom: 8px;
+        }
+        .down-arrow {
+            width: 2px;
+            height: 20px;
+            background: linear-gradient(to bottom, var(--accent-primary), transparent);
+        }
+
+        .stage-info {
+            height: 80px;
+        }
+        .stage-title {
+            color: var(--accent-primary);
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+        .stage-desc {
+            color: var(--text-main);
+            font-size: 1.1rem;
+        }
+
+        /* Controls */
+        .process-controls {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            background: rgba(0,0,0,0.4);
+            padding: 12px 24px;
+            border-radius: 30px;
+            border: 1px solid var(--border-glass);
+        }
+        .ctrl-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            transition: var(--transition-fast);
+        }
+        .ctrl-btn:hover { background: rgba(255,255,255,0.1); }
+        .ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        
+        .play-btn {
+            background: var(--text-main);
+            color: var(--bg-base);
+        }
+        .play-btn:hover {
+            transform: scale(1.05);
+            background: #fff;
+            box-shadow: 0 0 15px rgba(255,255,255,0.3);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-fast);
+        }
+        .dot.active {
+            background: var(--accent-primary);
+            box-shadow: 0 0 10px var(--accent-glow);
+            transform: scale(1.3);
+        }
+
+        /* ==========================================================================
+           6. EXTRAS (CARDS)
+           ========================================================================== */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+        .info-card {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            transition: var(--transition-smooth);
+        }
+        .info-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--border-highlight);
+            background: var(--bg-glass-hover);
+        }
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(14, 165, 233, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent-primary);
+        }
+        .card-icon svg { width: 24px; height: 24px; }
+
+        /* ==========================================================================
+           MEDIA QUERIES
+           ========================================================================== */
+        @media (max-width: 768px) {
+            .container { padding: 16px; }
+            section { margin-bottom: 60px; }
+            .glass-panel { padding: 16px; border-radius: var(--radius-md); }
+            
+            /* Reduce blur on mobile for performance */
+            .glass-panel { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+            
+            .calc-wrapper { padding: 20px; }
+            .selectors-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+            
+            .process-controls { width: 100%; justify-content: space-between; }
+            .stage-visual { transform: scale(0.8); }
+        }
+        @media (max-width: 480px) {
+            .selectors-grid { grid-template-columns: 1fr; }
+            .calc-header { flex-direction: column; align-items: flex-start; }
+            .result-display { text-align: left; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background Canvas -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        <!-- HERO -->
+        <section class="hero">
+            <div class="flex-col align-center">
+                <div class="hero-badge">Interactive Physics Simulation</div>
+                <h1>Decoding <span class="gradient-text">Resistance</span></h1>
+                <p style="max-width: 600px; margin-top: 1.5rem;">
+                    Discover how color bands define the properties of resistors. Explore the physics of current restriction and master the color code calculation through interactive visualizations.
+                </p>
+            </div>
+        </section>
+
+        <!-- CONCEPT VISUALIZATION -->
+        <section>
+            <div class="section-header">
+                <h2>What is Resistance?</h2>
+                <p>Observe how atomic structures oppose the flow of electrons.</p>
+            </div>
+            
+            <div class="glass-panel concept-grid">
+                <div class="simulation-container">
+                    <canvas id="physics-canvas"></canvas>
+                </div>
+                <div class="sim-controls">
+                    <div>
+                        <h3>Ohm's Law in Action</h3>
+                        <p style="margin-top: 0.5rem; font-size: 0.95rem;">
+                            Resistance ($\Omega$) acts as a bottleneck. As you increase resistance, collisions between electrons and the atomic lattice increase, reducing current flow and generating heat.
+                        </p>
+                    </div>
+                    
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span>Resistance</span>
+                            <span id="res-val-display" class="mono">100 Ω</span>
+                        </div>
+                        <input type="range" id="res-slider" min="10" max="1000" value="100">
+                    </div>
+                    
+                    <div class="control-group">
+                        <div class="control-label">
+                            <span>Voltage (Push)</span>
+                            <span id="vol-val-display" class="mono">5 V</span>
+                        </div>
+                        <input type="range" id="vol-slider" min="1" max="12" value="5">
+                    </div>
+
+                    <div style="padding: 1rem; background: rgba(0,0,0,0.3); border-radius: 8px; border-left: 3px solid var(--accent-primary);">
+                        <div class="control-label">
+                            <span style="color: var(--text-muted);">Resulting Current:</span>
+                            <span id="cur-val-display" class="mono" style="color: #fff; font-weight: bold;">50.0 mA</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ANATOMY (LABELS PATTERN) -->
+        <section>
+            <div class="section-header">
+                <h2>Anatomy of a Resistor</h2>
+                <p>Inside a standard through-hole carbon film resistor.</p>
+            </div>
+            
+            <div class="glass-panel anatomy-grid">
+                <div class="illustration-container">
+                    <div class="resistor-art">
+                        <div class="art-lead"></div>
+                        <div class="art-body">
+                            <div class="art-ceramic"></div>
+                            <div class="art-band ab-1"></div>
+                            <div class="art-band ab-2"></div>
+                            <div class="art-band ab-3"></div>
+                            <div class="art-band ab-4"></div>
+                            <div class="art-shading"></div>
+                        </div>
+                        <div class="art-lead"></div>
+                        
+                        <!-- Markers -->
+                        <div class="marker" id="m1" data-target="l1">1</div>
+                        <div class="marker" id="m2" data-target="l2">2</div>
+                        <div class="marker" id="m3" data-target="l3">3</div>
+                        <div class="marker" id="m4" data-target="l4">4</div>
+                    </div>
+                </div>
+                
+                <div style="padding: 1rem;">
+                    <div class="legend-list">
+                        <div class="legend-item" id="l1" data-target="m1">
+                            <div class="legend-num">1</div>
+                            <div class="legend-text">
+                                <h4>Connecting Leads</h4>
+                                <p>Tinned copper wires for circuit connection.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="l2" data-target="m2">
+                            <div class="legend-num">2</div>
+                            <div class="legend-text">
+                                <h4>Ceramic Core</h4>
+                                <p>Insulating rod that provides structural support.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="l3" data-target="m3">
+                            <div class="legend-num">3</div>
+                            <div class="legend-text">
+                                <h4>Carbon Film (Helical Cut)</h4>
+                                <p>Resistive material cut in a spiral to define precise resistance.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="l4" data-target="m4">
+                            <div class="legend-num">4</div>
+                            <div class="legend-text">
+                                <h4>Color Bands & Coating</h4>
+                                <p>Epoxy protection and painted code indicating values.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- MAIN CALCULATOR -->
+        <section id="calculator">
+            <div class="section-header">
+                <h2>Resistance Calculator</h2>
+                <p>Translate color bands into precise ohmic values instantly.</p>
+            </div>
+            
+            <div class="calc-wrapper">
+                <div class="calc-header">
+                    <div class="mode-toggle">
+                        <button class="mode-btn active" data-mode="4">4-Band</button>
+                        <button class="mode-btn" data-mode="5">5-Band</button>
+                    </div>
+                    
+                    <div class="result-display">
+                        <div class="result-value" id="calc-result">10 kΩ</div>
+                        <div class="result-range" id="calc-tolerance">Tolerance: ±5% (9.5 kΩ - 10.5 kΩ)</div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Visual -->
+                <div class="resistor-display-area">
+                    <div class="dyn-resistor" id="dyn-resistor">
+                        <div class="dyn-lead"></div>
+                        <div class="dyn-body">
+                            <div class="dyn-band" id="db-1"></div>
+                            <div class="dyn-band" id="db-2"></div>
+                            <div class="dyn-band" id="db-3" style="display: none;"></div>
+                            <div class="dyn-band" id="db-mult"></div>
+                            <div class="dyn-band band-space" id="db-tol"></div>
+                        </div>
+                        <div class="dyn-lead"></div>
+                    </div>
+                </div>
+
+                <!-- Selectors -->
+                <div class="selectors-grid" id="selectors-container">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING PROCESS -->
+        <section class="working-section">
+            <div class="container">
+                <div class="section-header">
+                    <h2>How It Works</h2>
+                    <p>The step-by-step logic of reading a resistor code.</p>
+                </div>
+                
+                <div class="glass-panel process-container" style="padding: 2rem;">
+                    
+                    <div class="stage-display">
+                        <div class="stage-visual" id="proc-visual">
+                            <div class="sv-lead"></div>
+                            <div class="sv-body">
+                                <div class="sv-band pb-1" style="background:#8B4513;"></div> <!-- Brown -->
+                                <div class="sv-band pb-2" style="background:#000000;"></div> <!-- Black -->
+                                <div class="sv-band pb-3" style="background:#FF0000;"></div> <!-- Red -->
+                                <div class="sv-band pb-4 sv-gap" style="background:#FFD700;"></div> <!-- Gold -->
+                            </div>
+                            <div class="sv-lead"></div>
+                            
+                            <!-- Dynamic Particle Indicator -->
+                            <div class="stage-particles" id="proc-particle">
+                                <div class="particle-val" id="proc-val-display">1</div>
+                                <div class="down-arrow"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="stage-info">
+                            <div class="stage-title" id="proc-title">Stage 1: Orientation</div>
+                            <div class="stage-desc" id="proc-desc">Find the gold or silver band indicating tolerance and place it on the right side.</div>
+                        </div>
+                    </div>
+
+                    <div class="process-controls">
+                        <button class="ctrl-btn" id="btn-prev">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        
+                        <div class="progress-dots" id="proc-dots">
+                            <div class="dot active"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+                        
+                        <button class="ctrl-btn" id="btn-next">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                        
+                        <div style="width: 1px; height: 24px; background: var(--border-glass); margin: 0 10px;"></div>
+                        
+                        <button class="ctrl-btn play-btn" id="btn-play">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- EXTRAS -->
+        <section>
+            <div class="section-header">
+                <h2>Knowledge Base</h2>
+            </div>
+            
+            <div class="grid-3">
+                <div class="glass-panel info-card">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    </div>
+                    <h3>Applications</h3>
+                    <p>Resistors are used to drop voltage, limit current for LEDs, bias transistors, and act as pull-up/pull-down elements in digital logic circuits.</p>
+                </div>
+                
+                <div class="glass-panel info-card">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    </div>
+                    <h3>Did You Know?</h3>
+                    <p>The color sequence (Black to White) follows the visible light spectrum for the middle colors (Red, Orange, Yellow, Green, Blue, Violet) mapping to numbers 2-7.</p>
+                </div>
+                
+                <div class="glass-panel info-card">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    </div>
+                    <h3>Common Mistake</h3>
+                    <p>Reading from the wrong end. Always start reading from the side where bands are closer together. The gap separates the multiplier from the tolerance band.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        // --- 1. Ambient Background Particles ---
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let bgParticles = [];
+
+        function resizeBgCanvas() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+        }
+
+        class BgParticle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * bgCanvas.width;
+                this.y = Math.random() * bgCanvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > bgCanvas.width || this.y < 0 || this.y > bgCanvas.height) {
+                    this.reset();
+                }
+            }
+            draw() {
+                bgCtx.fillStyle = `rgba(14, 165, 233, ${this.opacity})`;
+                bgCtx.beginPath();
+                bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                bgCtx.fill();
+            }
+        }
+
+        function initBg() {
+            window.addEventListener('resize', resizeBgCanvas);
+            resizeBgCanvas();
+            for (let i = 0; i < 50; i++) bgParticles.push(new BgParticle());
+            animateBg();
+        }
+
+        function animateBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgParticles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(animateBg);
+        }
+        initBg();
+
+        // --- 2. Physics Simulation (Electron Flow) ---
+        const physCanvas = document.getElementById('physics-canvas');
+        const physCtx = physCanvas.getContext('2d');
+        const resSlider = document.getElementById('res-slider');
+        const volSlider = document.getElementById('vol-slider');
+        const curDisplay = document.getElementById('cur-val-display');
+        const resDisplay = document.getElementById('res-val-display');
+        const volDisplay = document.getElementById('vol-val-display');
+
+        let electrons = [];
+        let atoms = [];
+        let simWidth, simHeight;
+
+        function resizePhysCanvas() {
+            const rect = physCanvas.parentElement.getBoundingClientRect();
+            // Handle retina displays
+            const dpr = window.devicePixelRatio || 1;
+            physCanvas.width = rect.width * dpr;
+            physCanvas.height = rect.height * dpr;
+            physCtx.scale(dpr, dpr);
+            simWidth = rect.width;
+            simHeight = rect.height;
+            initAtoms(); // Recreate lattice based on new size
+        }
+
+        function initAtoms() {
+            atoms = [];
+            const rows = 5;
+            const cols = 10;
+            const spacingX = simWidth / cols;
+            const spacingY = simHeight / rows;
+            for (let i = 0; i < cols; i++) {
+                for (let j = 0; j < rows; j++) {
+                    // Offset alternate rows for lattice look
+                    const offsetX = (j % 2 === 0) ? 0 : spacingX / 2;
+                    atoms.push({
+                        x: i * spacingX + offsetX + spacingX/2,
+                        y: j * spacingY + spacingY/2,
+                        baseRadius: Math.min(spacingX, spacingY) * 0.2
+                    });
+                }
+            }
+        }
+
+        class Electron {
+            constructor() {
+                this.x = 0;
+                this.y = Math.random() * simHeight;
+                this.vx = 0;
+                this.vy = 0;
+                this.radius = 3;
+                this.active = false;
+            }
+            spawn() {
+                this.x = -10;
+                this.y = Math.random() * simHeight;
+                this.vx = (parseFloat(volSlider.value) * 0.5) + (Math.random() * 0.5);
+                this.vy = 0;
+                this.active = true;
+            }
+            update(resistance, voltage) {
+                if (!this.active) return;
+                
+                // Base speed determined by voltage
+                const targetVx = voltage;
+                
+                // Accelerate
+                this.vx += (targetVx - this.vx) * 0.1;
+                
+                // Move
+                this.x += this.vx;
+                this.y += this.vy;
+                
+                // Damping on Y axis
+                this.vy *= 0.9;
+
+                // Collision with atoms (Probability based on resistance)
+                // Resistance slider 10 to 1000
+                const scatterProb = (resistance / 1000) * 0.3; // max 30% chance per frame near atom
+                
+                atoms.forEach(atom => {
+                    const dx = this.x - atom.x;
+                    const dy = this.y - atom.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < atom.baseRadius * 2) {
+                        if (Math.random() < scatterProb) {
+                            // Scatter
+                            this.vx = -this.vx * 0.5; // bounce back slightly
+                            this.vy = (Math.random() - 0.5) * voltage * 2;
+                            // Visual heat effect on atom
+                            atom.heat = 1.0;
+                        }
+                    }
+                });
+
+                if (this.x > simWidth + 10) this.active = false;
+                if (this.y < 0) { this.y = 0; this.vy *= -1; }
+                if (this.y > simHeight) { this.y = simHeight; this.vy *= -1; }
+            }
+            draw() {
+                if (!this.active) return;
+                physCtx.fillStyle = '#0ea5e9';
+                physCtx.shadowBlur = 10;
+                physCtx.shadowColor = '#0ea5e9';
+                physCtx.beginPath();
+                physCtx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                physCtx.fill();
+                physCtx.shadowBlur = 0;
+            }
+        }
+
+        // Init electrons pool
+        for (let i=0; i<100; i++) electrons.push(new Electron());
+
+        function animatePhysics() {
+            physCtx.clearRect(0, 0, simWidth, simHeight);
+            
+            const R = parseFloat(resSlider.value);
+            const V = parseFloat(volSlider.value);
+            const I = (V / R) * 1000; // simplified mA calculation
+            
+            // Spawn logic based on Current
+            const spawnRate = Math.min(I / 10, 5); // cap at 5 per frame
+            if (Math.random() < spawnRate) {
+                const inactive = electrons.find(e => !e.active);
+                if (inactive) inactive.spawn();
+            }
+
+            // Draw Atoms
+            // Resistance affects atom size/vibration visually
+            const vibration = (R / 1000) * 2;
+            
+            atoms.forEach(atom => {
+                if (atom.heat > 0) atom.heat -= 0.05;
+                else atom.heat = 0;
+                
+                const vx = (Math.random() - 0.5) * vibration;
+                const vy = (Math.random() - 0.5) * vibration;
+                
+                // Color based on heat (collisions)
+                const r = 100 + (atom.heat * 155);
+                const g = 100 - (atom.heat * 50);
+                const b = 100 - (atom.heat * 100);
+                
+                physCtx.fillStyle = `rgb(${r},${g},${b})`;
+                physCtx.beginPath();
+                physCtx.arc(atom.x + vx, atom.y + vy, atom.baseRadius, 0, Math.PI * 2);
+                physCtx.fill();
+            });
+
+            // Update & Draw Electrons
+            electrons.forEach(e => {
+                e.update(R, V);
+                e.draw();
+            });
+
+            requestAnimationFrame(animatePhysics);
+        }
+
+        // Physics listeners
+        window.addEventListener('resize', resizePhysCanvas);
+        // orientationchange is critical for mobile rotation
+        window.addEventListener('orientationchange', () => setTimeout(resizePhysCanvas, 100));
+        
+        function updatePhysDisplays() {
+            const R = parseFloat(resSlider.value);
+            const V = parseFloat(volSlider.value);
+            const I = (V / R) * 1000;
+            resDisplay.innerText = `${R} Ω`;
+            volDisplay.innerText = `${V} V`;
+            curDisplay.innerText = `${I.toFixed(1)} mA`;
+        }
+
+        resSlider.addEventListener('input', updatePhysDisplays);
+        volSlider.addEventListener('input', updatePhysDisplays);
+        
+        // Initial setup
+        setTimeout(() => {
+            resizePhysCanvas();
+            updatePhysDisplays();
+            animatePhysics();
+        }, 100);
+
+        // --- 3. Anatomy Labels Logic ---
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function setActiveAnatomy(id) {
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            if (id) {
+                document.getElementById(id).classList.add('active');
+                document.querySelector(`[data-target="${id}"]`).classList.add('active');
+            }
+        }
+
+        markers.forEach(m => {
+            m.addEventListener('mouseenter', () => setActiveAnatomy(m.id));
+            m.addEventListener('click', () => setActiveAnatomy(m.id));
+            m.addEventListener('touchstart', (e) => { e.preventDefault(); setActiveAnatomy(m.id); }, {passive: false});
+        });
+        
+        legendItems.forEach(l => {
+            l.addEventListener('mouseenter', () => setActiveAnatomy(l.dataset.target));
+            l.addEventListener('click', () => setActiveAnatomy(l.dataset.target));
+        });
+
+        // --- 4. Resistance Calculator Logic ---
+        const colorData = {
+            black:  { hex: '#1c1c1c', val: 0, mult: 1, label: 'Black' },
+            brown:  { hex: '#8B4513', val: 1, mult: 10, tol: 1, label: 'Brown' },
+            red:    { hex: '#ef4444', val: 2, mult: 100, tol: 2, label: 'Red' },
+            orange: { hex: '#f97316', val: 3, mult: 1000, label: 'Orange' },
+            yellow: { hex: '#eab308', val: 4, mult: 10000, label: 'Yellow' },
+            green:  { hex: '#22c55e', val: 5, mult: 100000, tol: 0.5, label: 'Green' },
+            blue:   { hex: '#3b82f6', val: 6, mult: 1000000, tol: 0.25, label: 'Blue' },
+            violet: { hex: '#a855f7', val: 7, mult: 10000000, tol: 0.1, label: 'Violet' },
+            gray:   { hex: '#71717a', val: 8, mult: 100000000, tol: 0.05, label: 'Gray' },
+            white:  { hex: '#f4f4f5', val: 9, mult: 1000000000, label: 'White' },
+            gold:   { hex: '#ffd700', mult: 0.1, tol: 5, label: 'Gold', isMetallic: true },
+            silver: { hex: '#d4d4d8', mult: 0.01, tol: 10, label: 'Silver', isMetallic: true }
+        };
+
+        const config = {
+            4: {
+                bands: [
+                    { id: 'b1', name: '1st Digit', types: ['digit'] },
+                    { id: 'b2', name: '2nd Digit', types: ['digit'] },
+                    { id: 'mult', name: 'Multiplier', types: ['mult'] },
+                    { id: 'tol', name: 'Tolerance', types: ['tol'] }
+                ],
+                defaults: ['brown', 'black', 'red', 'gold']
+            },
+            5: {
+                bands: [
+                    { id: 'b1', name: '1st Digit', types: ['digit'] },
+                    { id: 'b2', name: '2nd Digit', types: ['digit'] },
+                    { id: 'b3', name: '3rd Digit', types: ['digit'] },
+                    { id: 'mult', name: 'Multiplier', types: ['mult'] },
+                    { id: 'tol', name: 'Tolerance', types: ['tol'] }
+                ],
+                defaults: ['brown', 'black', 'black', 'brown', 'brown']
+            }
+        };
+
+        let currentMode = 4;
+        let selectedColors = [...config[4].defaults];
+
+        const container = document.getElementById('selectors-container');
+        const db3 = document.getElementById('db-3');
+        const dbTol = document.getElementById('db-tol');
+
+        // Allow colors per type
+        const typeFilter = {
+            'digit': ['black','brown','red','orange','yellow','green','blue','violet','gray','white'],
+            'mult': ['black','brown','red','orange','yellow','green','blue','violet','gray','white','gold','silver'],
+            'tol': ['brown','red','green','blue','violet','gray','gold','silver']
+        };
+
+        function formatValue(ohms) {
+            if (ohms >= 1e6) return +(ohms / 1e6).toFixed(2) + ' MΩ';
+            if (ohms >= 1e3) return +(ohms / 1e3).toFixed(2) + ' kΩ';
+            if (ohms < 1) return +(ohms).toFixed(2) + ' Ω';
+            return +(ohms).toFixed(1) + ' Ω';
+        }
+
+        function getBandCss(colorKey) {
+            const c = colorData[colorKey];
+            if (c.isMetallic) {
+                if (colorKey === 'gold') return 'linear-gradient(180deg, #fef08a 0%, #eab308 50%, #a16207 100%)';
+                if (colorKey === 'silver') return 'linear-gradient(180deg, #f4f4f5 0%, #a1a1aa 50%, #3f3f46 100%)';
+            }
+            return c.hex;
+        }
+
+        function buildSelectors() {
+            container.innerHTML = '';
+            const spec = config[currentMode];
+            
+            spec.bands.forEach((band, index) => {
+                const group = document.createElement('div');
+                group.className = 'selector-group';
+                
+                const label = document.createElement('div');
+                label.className = 'selector-label';
+                label.innerHTML = `<span>Band ${index+1}</span><span>${band.name}</span>`;
+                group.appendChild(label);
+                
+                const optionsDiv = document.createElement('div');
+                optionsDiv.className = 'color-options';
+                
+                typeFilter[band.types[0]].forEach(colorKey => {
+                    // Specific rule: 1st digit cannot be black (usually)
+                    if (index === 0 && colorKey === 'black') return;
+
+                    const btn = document.createElement('button');
+                    btn.className = `color-btn ${selectedColors[index] === colorKey ? 'selected' : ''}`;
+                    btn.onclick = () => {
+                        selectedColors[index] = colorKey;
+                        updateCalculator();
+                        buildSelectors(); // Re-render to update selected state
+                    };
+                    
+                    const data = colorData[colorKey];
+                    let valText = '';
+                    if (band.types[0] === 'digit') valText = data.val;
+                    else if (band.types[0] === 'mult') valText = `x${data.mult}`;
+                    else if (band.types[0] === 'tol') valText = `±${data.tol}%`;
+
+                    btn.innerHTML = `
+                        <div class="color-swatch" style="background: ${getBandCss(colorKey)}"></div>
+                        <span>${data.label}</span>
+                        <span class="color-val">${valText}</span>
+                    `;
+                    optionsDiv.appendChild(btn);
+                });
+                
+                group.appendChild(optionsDiv);
+                container.appendChild(group);
+            });
+        }
+
+        function updateCalculator() {
+            // Update Visual
+            document.getElementById('db-1').style.background = getBandCss(selectedColors[0]);
+            document.getElementById('db-2').style.background = getBandCss(selectedColors[1]);
+            
+            if (currentMode === 5) {
+                db3.style.display = 'block';
+                db3.style.background = getBandCss(selectedColors[2]);
+                document.getElementById('db-mult').style.background = getBandCss(selectedColors[3]);
+                dbTol.style.background = getBandCss(selectedColors[4]);
+            } else {
+                db3.style.display = 'none';
+                document.getElementById('db-mult').style.background = getBandCss(selectedColors[2]);
+                dbTol.style.background = getBandCss(selectedColors[3]);
+            }
+
+            // Calculate Math
+            let val = 0;
+            let mult = 1;
+            let tol = 0;
+
+            if (currentMode === 4) {
+                const d1 = colorData[selectedColors[0]].val;
+                const d2 = colorData[selectedColors[1]].val;
+                mult = colorData[selectedColors[2]].mult;
+                tol = colorData[selectedColors[3]].tol;
+                val = (d1 * 10) + d2;
+            } else {
+                const d1 = colorData[selectedColors[0]].val;
+                const d2 = colorData[selectedColors[1]].val;
+                const d3 = colorData[selectedColors[2]].val;
+                mult = colorData[selectedColors[3]].mult;
+                tol = colorData[selectedColors[4]].tol;
+                val = (d1 * 100) + (d2 * 10) + d3;
+            }
+
+            const ohms = val * mult;
+            const minStr = formatValue(ohms * (1 - tol/100));
+            const maxStr = formatValue(ohms * (1 + tol/100));
+
+            document.getElementById('calc-result').innerText = formatValue(ohms);
+            document.getElementById('calc-tolerance').innerText = `Tolerance: ±${tol}% (${minStr} - ${maxStr})`;
+        }
+
+        // Mode Toggles
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                currentMode = parseInt(e.target.dataset.mode);
+                selectedColors = [...config[currentMode].defaults];
+                buildSelectors();
+                updateCalculator();
+            });
+        });
+
+        // Init
+        buildSelectors();
+        updateCalculator();
+
+        // --- 5. Working Process (Sequence) ---
+        const processStages = [
+            {
+                title: "Stage 1: Orientation",
+                desc: "Find the gap. The band furthest from others (usually Gold/Silver) is the Tolerance band. Place it on the right.",
+                hl: 3, // index of band to highlight (0-3)
+                val: "?"
+            },
+            {
+                title: "Stage 2: First Digit",
+                desc: "Read the first band on the left. Brown maps to the number 1.",
+                hl: 0,
+                val: "1"
+            },
+            {
+                title: "Stage 3: Second Digit",
+                desc: "Read the second band. Black maps to the number 0. We now have '10'.",
+                hl: 1,
+                val: "10"
+            },
+            {
+                title: "Stage 4: Multiplier",
+                desc: "The third band tells you how many zeros to add. Red means x100. So, 10 x 100 = 1,000 Ω (1 kΩ).",
+                hl: 2,
+                val: "x100"
+            },
+            {
+                title: "Stage 5: Final Value & Tolerance",
+                desc: "The final Gold band indicates a ±5% manufacturing tolerance. Final result: 1 kΩ ±5%.",
+                hl: 3,
+                val: "1 kΩ"
+            }
+        ];
+
+        let currentStage = 0;
+        let isPlaying = false;
+        let playInterval;
+
+        const elTitle = document.getElementById('proc-title');
+        const elDesc = document.getElementById('proc-desc');
+        const elBands = document.querySelectorAll('.sv-band');
+        const elDots = document.querySelectorAll('#proc-dots .dot');
+        const elParticle = document.getElementById('proc-particle');
+        const elParticleVal = document.getElementById('proc-val-display');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnPlay = document.getElementById('btn-play');
+
+        function updateStage(index) {
+            currentStage = index;
+            const stage = processStages[currentStage];
+            
+            // Text update
+            elTitle.innerText = stage.title;
+            elDesc.innerText = stage.desc;
+            
+            // UI Dots
+            elDots.forEach((d, i) => {
+                d.classList.toggle('active', i === currentStage);
+            });
+
+            // Band Highlights
+            elBands.forEach((b, i) => {
+                b.style.opacity = (i === stage.hl) ? '1' : '0.2';
+                b.style.boxShadow = (i === stage.hl) ? '0 0 15px rgba(255,255,255,0.8)' : 'none';
+            });
+
+            // Particle Position & Value
+            elParticleVal.innerText = stage.val;
+            
+            // Calculate position of the active band relative to container
+            const activeBand = elBands[stage.hl];
+            const bandRect = activeBand.getBoundingClientRect();
+            const containerRect = activeBand.parentElement.getBoundingClientRect();
+            // Center of band relative to parent
+            const leftPos = activeBand.offsetLeft + (activeBand.offsetWidth / 2);
+            
+            elParticle.style.left = `calc(${leftPos}px - 20px)`; // 20px is roughly half particle width
+            
+            // Animate entry
+            elParticle.classList.remove('active');
+            void elParticle.offsetWidth; // trigger reflow
+            elParticle.classList.add('active');
+
+            // Button states
+            btnPrev.disabled = currentStage === 0;
+            btnNext.disabled = currentStage === processStages.length - 1 && !isPlaying;
+        }
+
+        function nextStage() {
+            if (currentStage < processStages.length - 1) {
+                updateStage(currentStage + 1);
+            } else if (isPlaying) {
+                updateStage(0); // loop if playing
+            }
+        }
+
+        function prevStage() {
+            if (currentStage > 0) updateStage(currentStage - 1);
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                btnPlay.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>'; // Pause icon
+                btnPlay.style.background = 'var(--accent-amber)';
+                if (currentStage === processStages.length - 1) updateStage(0); // restart if at end
+                playInterval = setInterval(nextStage, 3000);
+            } else {
+                btnPlay.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'; // Play icon
+                btnPlay.style.background = 'var(--text-main)';
+                clearInterval(playInterval);
+            }
+        }
+
+        btnNext.addEventListener('click', () => { if(isPlaying) togglePlay(); nextStage(); });
+        btnPrev.addEventListener('click', () => { if(isPlaying) togglePlay(); prevStage(); });
+        btnPlay.addEventListener('click', togglePlay);
+
+        // Init first stage
+        setTimeout(() => updateStage(0), 500); // slight delay to allow layout to settle for position calc
+
+    </script>
+</body>
+</html>

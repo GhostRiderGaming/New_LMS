@@ -26,6 +26,7 @@ interface BellaStore {
   pendingExplanation: PendingExplanation | null
   isExplaining: boolean
   stopSpeakingRequested: boolean
+  language: string
 
   // Actions
   show: () => void
@@ -35,6 +36,7 @@ interface BellaStore {
   setEmotionalState: (state: EmotionState) => void
   setLastJobContext: (ctx: string | null) => void
   setAppearance: (path: string) => void
+  setLanguage: (lang: string) => void
   triggerExplanation: (explanation: PendingExplanation) => void
   clearExplanation: () => void
   setIsExplaining: (v: boolean) => void
@@ -52,21 +54,20 @@ export const useBellaStore = create<BellaStore>((set) => ({
   pendingExplanation: null,
   isExplaining: false,
   stopSpeakingRequested: false,
+  language: 'indian-english',
 
   show: () => set({ isVisible: true }),
   hide: () => set({ isVisible: false }),
   toggleMinimize: () => set((s) => ({ isMinimized: !s.isMinimized })),
   addMessage: (msg) =>
     set((s) => ({
-      messages: [
-        ...s.messages,
-        { ...msg, id: crypto.randomUUID(), timestamp: new Date() },
-      ],
+      messages: [...s.messages, { id: Math.random().toString(), timestamp: new Date(), ...msg }],
     })),
-  setEmotionalState: (emotionalState) => set({ emotionalState }),
-  setLastJobContext: (lastJobContext) => set({ lastJobContext }),
-  setAppearance: (appearance) => set({ appearance }),
-  triggerExplanation: (pendingExplanation) => set({ pendingExplanation }),
+  setEmotionalState: (s) => set({ emotionalState: s }),
+  setLastJobContext: (c) => set({ lastJobContext: c }),
+  setAppearance: (path) => set({ appearance: path }),
+  setLanguage: (lang) => set({ language: lang }),
+  triggerExplanation: (explanation) => set({ pendingExplanation: explanation }),
   clearExplanation: () => set({ pendingExplanation: null }),
   setIsExplaining: (isExplaining) => set({ isExplaining }),
   requestStopSpeaking: () => set({ stopSpeakingRequested: true }),

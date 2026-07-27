@@ -1,0 +1,1098 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Heating & Cooling Curves - Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           ROOT VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-base: #0f172a;
+            --bg-surface: rgba(30, 41, 59, 0.7);
+            --bg-glass: rgba(15, 23, 42, 0.6);
+            --border-glass: rgba(255, 255, 255, 0.1);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            --accent-cold: #38bdf8;
+            --accent-warm: #fb923c;
+            --accent-hot: #ef4444;
+            --accent-latent: #a855f7;
+            --accent-glow: rgba(56, 189, 248, 0.5);
+
+            /* Typography */
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --step-0: clamp(0.875rem, 0.8vw + 0.7rem, 1rem);
+            --step-1: clamp(1rem, 1.2vw + 0.8rem, 1.25rem);
+            --step-2: clamp(1.25rem, 1.8vw + 1rem, 1.75rem);
+            --step-3: clamp(1.5rem, 2.5vw + 1.2rem, 2.25rem);
+            --step-4: clamp(2rem, 4vw + 1.5rem, 3.5rem);
+
+            /* Spacing */
+            --space-xs: clamp(0.5rem, 1vw, 0.75rem);
+            --space-sm: clamp(1rem, 2vw, 1.5rem);
+            --space-md: clamp(1.5rem, 3vw, 2.5rem);
+            --space-lg: clamp(2rem, 5vw, 4rem);
+            --space-xl: clamp(3rem, 8vw, 6rem);
+
+            /* Radii & Effects */
+            --radius-md: 12px;
+            --radius-lg: 24px;
+            --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --blur-glass: blur(12px);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            background: 
+                radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(239, 68, 68, 0.08) 0%, transparent 50%);
+            animation: pulse-bg 15s ease-in-out infinite alternate;
+        }
+
+        @keyframes pulse-bg {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.1); }
+        }
+
+        /* ==========================================================================
+           LAYOUT & COMPONENTS
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--space-sm);
+        }
+
+        section {
+            padding: var(--space-xl) 0;
+            position: relative;
+        }
+
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: var(--blur-glass);
+            -webkit-backdrop-filter: var(--blur-glass);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-glass);
+            padding: var(--space-md);
+        }
+
+        /* Typography */
+        h1, h2, h3 { line-height: 1.2; font-weight: 700; }
+        h1 { font-size: var(--step-4); margin-bottom: var(--space-sm); background: linear-gradient(90deg, var(--accent-cold), var(--accent-warm), var(--accent-hot)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--step-3); margin-bottom: var(--space-md); }
+        h3 { font-size: var(--step-2); margin-bottom: var(--space-xs); color: var(--accent-cold); }
+        p { font-size: var(--step-0); color: var(--text-muted); margin-bottom: var(--space-sm); }
+        .highlight { color: var(--text-main); font-weight: 600; }
+
+        /* Grids */
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr)); gap: var(--space-md); }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: var(--space-md); }
+
+        /* Buttons */
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--border-glass);
+            color: var(--text-main);
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: var(--step-0);
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        .btn.primary { background: var(--accent-latent); border-color: var(--accent-latent); box-shadow: 0 0 15px rgba(168, 85, 247, 0.4); }
+
+        /* ==========================================================================
+           SPECIFIC SECTIONS
+           ========================================================================== */
+
+        /* 1. Intro */
+        #intro { text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh; }
+        .hero-graphic { width: 100%; max-width: 600px; height: 200px; margin: var(--space-lg) 0; position: relative; }
+        
+        /* 2. Components (Marker System) */
+        .component-layout {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-lg);
+        }
+        @media (min-width: 1024px) {
+            .component-layout { flex-direction: row; align-items: center; }
+        }
+        
+        .diagram-container {
+            position: relative;
+            flex: 1;
+            min-height: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-lg);
+            padding: var(--space-md);
+        }
+        
+        .diagram-svg { width: 100%; max-width: 400px; height: auto; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); }
+        
+        .marker {
+            position: absolute;
+            width: 28px; height: 28px;
+            background: var(--accent-latent);
+            border: 2px solid white;
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-weight: bold; font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--accent-latent);
+            transition: transform 0.3s, box-shadow 0.3s;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        .marker:hover, .marker.active { transform: translate(-50%, -50%) scale(1.2); box-shadow: 0 0 25px var(--accent-latent); }
+
+        .legend-list { flex: 1; display: flex; flex-direction: column; gap: var(--space-sm); }
+        .legend-item {
+            display: flex; align-items: flex-start; gap: var(--space-sm);
+            padding: var(--space-sm);
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .legend-item:hover, .legend-item.active { background: rgba(255,255,255,0.08); border-color: var(--border-glass); transform: translateX(5px); }
+        .legend-num {
+            background: var(--accent-latent); width: 24px; height: 24px; border-radius: 50%;
+            display: flex; justify-content: center; align-items: center; font-size: 12px; font-weight: bold; flex-shrink: 0;
+        }
+
+        /* 3. Working Process */
+        .working-container { display: flex; flex-direction: column; gap: var(--space-md); }
+        @media (min-width: 1024px) { .working-container { flex-direction: row; } }
+        
+        .working-visual { flex: 3; background: rgba(0,0,0,0.2); border-radius: var(--radius-md); padding: var(--space-sm); position: relative; min-height: 350px; }
+        .working-controls { flex: 2; display: flex; flex-direction: column; justify-content: space-between; }
+        
+        .curve-svg { width: 100%; height: 100%; min-height: 300px; overflow: visible; }
+        .axis { stroke: var(--text-muted); stroke-width: 2; stroke-linecap: round; }
+        .grid-line { stroke: rgba(255,255,255,0.05); stroke-width: 1; stroke-dasharray: 4; }
+        .curve-path-base { fill: none; stroke: rgba(255,255,255,0.1); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+        .curve-path-active { fill: none; stroke: var(--accent-latent); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 8px var(--accent-latent)); transition: stroke-dashoffset 0.5s ease-out; }
+        
+        .stage-point { fill: var(--bg-base); stroke: var(--accent-latent); stroke-width: 3; r: 6; transition: all 0.3s; opacity: 0.3; }
+        .stage-point.active { r: 10; fill: var(--accent-latent); opacity: 1; filter: drop-shadow(0 0 10px white); }
+
+        .stage-info { margin-bottom: var(--space-md); min-height: 120px; }
+        .stage-badge { display: inline-block; padding: 4px 12px; background: rgba(255,255,255,0.1); border-radius: 20px; font-size: 12px; margin-bottom: 8px; color: var(--accent-cold); letter-spacing: 1px; text-transform: uppercase; }
+        
+        .controls-row { display: flex; gap: 10px; align-items: center; margin-top: auto; }
+        .progress-dots { display: flex; gap: 6px; margin: 0 auto; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: 0.3s; }
+        .dot.active { background: var(--accent-latent); transform: scale(1.3); box-shadow: 0 0 8px var(--accent-latent); }
+
+        /* 4. Interactive Simulation (The Core) */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-template-rows: auto auto auto auto;
+            gap: var(--space-sm);
+            height: auto;
+        }
+        @media (min-width: 1024px) {
+            .sim-grid {
+                grid-template-columns: 3fr 2fr;
+                grid-template-rows: 1fr 1fr auto;
+                height: 600px;
+            }
+            .sim-graph { grid-column: 1 / 2; grid-row: 1 / 3; }
+            .sim-macro { grid-column: 2 / 3; grid-row: 1 / 2; }
+            .sim-micro { grid-column: 2 / 3; grid-row: 2 / 3; }
+            .sim-controls { grid-column: 1 / 3; grid-row: 3 / 4; }
+        }
+
+        .sim-panel {
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        .sim-panel-title { position: absolute; top: 10px; left: 15px; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; z-index: 10; background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px;}
+
+        /* Canvas Containers */
+        #macro-canvas, #micro-canvas { width: 100%; height: 100%; min-height: 200px; }
+        
+        /* Slider Control */
+        .sim-controls { padding: var(--space-sm); display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.4); border-radius: var(--radius-md); }
+        .slider-container { display: flex; align-items: center; gap: 15px; width: 100%; }
+        .energy-slider {
+            -webkit-appearance: none;
+            width: 100%; height: 8px;
+            border-radius: 4px;
+            background: linear-gradient(90deg, var(--accent-cold) 0%, var(--accent-latent) 30%, var(--accent-latent) 45%, var(--accent-warm) 55%, var(--accent-hot) 70%, var(--accent-hot) 100%);
+            outline: none; transition: 0.2s;
+        }
+        .energy-slider::-webkit-slider-thumb {
+            -webkit-appearance: none; appearance: none;
+            width: 24px; height: 24px; border-radius: 50%;
+            background: #fff; cursor: pointer;
+            box-shadow: 0 0 10px rgba(255,255,255,0.8);
+            border: 3px solid var(--bg-base);
+        }
+        .slider-labels { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); }
+
+        /* Data Readouts */
+        .readouts { display: flex; justify-content: space-around; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 10px;}
+        .readout { text-align: center; }
+        .readout-val { font-size: 24px; font-weight: bold; font-family: monospace; }
+        .readout-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; }
+
+        /* Graph SVG in Sim */
+        #sim-graph-svg { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+        .sim-dot { fill: white; filter: drop-shadow(0 0 8px white); transition: r 0.2s; }
+
+        /* Info Cards */
+        .info-card { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+        .info-icon { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; justify-content: center; align-items: center; font-size: 20px; }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+
+    </style>
+</head>
+<body>
+
+    <div class="ambient-bg"></div>
+
+    <div class="container">
+        
+        <!-- ==========================================
+             1. INTRODUCTION
+             ========================================== -->
+        <section id="intro">
+            <h1>Heating & Cooling Curves</h1>
+            <p style="font-size: var(--step-1); max-width: 800px;">
+                Discover what happens at a molecular level when matter absorbs or loses heat energy. 
+                Why does temperature sometimes <span class="highlight">stop changing</span> even when you keep adding heat?
+            </p>
+            
+            <div class="hero-graphic">
+                <!-- Abstract curve animation using SVG -->
+                <svg viewBox="0 0 600 200" width="100%" height="100%">
+                    <defs>
+                        <linearGradient id="lineGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="var(--accent-cold)" />
+                            <stop offset="30%" stop-color="var(--accent-latent)" />
+                            <stop offset="50%" stop-color="var(--accent-warm)" />
+                            <stop offset="70%" stop-color="var(--accent-latent)" />
+                            <stop offset="100%" stop-color="var(--accent-hot)" />
+                        </linearGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <!-- Abstract representation of the curve -->
+                    <path d="M 50 150 L 150 100 L 300 100 L 450 30 L 550 30" 
+                          fill="none" stroke="url(#lineGrad)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"
+                          filter="url(#glow)" stroke-dasharray="700" stroke-dashoffset="700">
+                        <animate attributeName="stroke-dashoffset" values="700;0;700" dur="6s" repeatCount="indefinite" ease="ease-in-out"/>
+                    </path>
+                    <circle cx="50" cy="150" r="6" fill="white"><animate attributeName="cx" values="50;150;300;450;550" dur="3s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1"/><animate attributeName="cy" values="150;100;100;30;30" dur="3s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1; 0.4 0 0.2 1"/></circle>
+                </svg>
+            </div>
+            <a href="#simulation" class="btn primary" style="margin-top: 20px;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                Launch Simulation
+            </a>
+        </section>
+
+        <!-- ==========================================
+             2. OVERVIEW & CONCEPT
+             ========================================== -->
+        <section id="overview" class="glass-panel">
+            <h2>The Core Concept</h2>
+            <div class="grid-2">
+                <div>
+                    <h3>Sensible Heat (Temperature Changes)</h3>
+                    <p>When you heat a substance, usually its particles move faster, increasing their kinetic energy. This is recorded as a <span class="highlight">rise in temperature</span> on a thermometer. The curve slopes upwards.</p>
+                </div>
+                <div>
+                    <h3>Latent Heat (Phase Changes)</h3>
+                    <p>At specific temperatures (Melting and Boiling points), added heat doesn't make particles move faster. Instead, energy is used to <span class="highlight">break the bonds</span> holding them together. The temperature remains <span class="highlight">constant</span>, creating flat lines on the graph.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             3. MAIN COMPONENTS
+             ========================================== -->
+        <section id="components">
+            <h2>Experimental Setup</h2>
+            <p>To generate a heating curve, we continuously add thermal energy to a substance in a controlled environment and record its temperature over time.</p>
+            
+            <div class="glass-panel component-layout">
+                <!-- Visual Left -->
+                <div class="diagram-container">
+                    <svg class="diagram-svg" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="glassGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.1)" />
+                                <stop offset="50%" stop-color="rgba(255,255,255,0.3)" />
+                                <stop offset="100%" stop-color="rgba(255,255,255,0.05)" />
+                            </linearGradient>
+                            <linearGradient id="waterGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="rgba(56, 189, 248, 0.4)" />
+                                <stop offset="100%" stop-color="rgba(56, 189, 248, 0.8)" />
+                            </linearGradient>
+                            <radialGradient id="flameGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#fff" />
+                                <stop offset="40%" stop-color="#fb923c" />
+                                <stop offset="100%" stop-color="rgba(239,68,68,0)" />
+                            </radialGradient>
+                        </defs>
+                        
+                        <!-- Stand -->
+                        <rect x="50" y="340" width="200" height="15" fill="#334155" rx="4"/>
+                        <rect x="140" y="355" width="20" height="30" fill="#475569" />
+                        <rect x="100" y="385" width="100" height="10" fill="#334155" rx="2"/>
+
+                        <!-- Flame / Heat Source -->
+                        <path d="M 150 280 Q 130 320 150 340 Q 170 320 150 280" fill="url(#flameGrad)">
+                            <animate attributeName="d" values="M 150 280 Q 130 320 150 340 Q 170 320 150 280; M 150 270 Q 125 320 150 340 Q 175 320 150 270; M 150 280 Q 130 320 150 340 Q 170 320 150 280" dur="0.5s" repeatCount="indefinite" />
+                        </path>
+
+                        <!-- Beaker Liquid/Ice -->
+                        <path d="M 90 200 L 90 280 A 10 10 0 0 0 100 290 L 200 290 A 10 10 0 0 0 210 280 L 210 200 Z" fill="url(#waterGrad)" />
+                        <!-- Ice Cubes -->
+                        <rect x="110" y="250" width="30" height="30" fill="rgba(255,255,255,0.7)" rx="3" transform="rotate(15 125 265)" />
+                        <rect x="150" y="240" width="35" height="35" fill="rgba(255,255,255,0.6)" rx="3" transform="rotate(-10 167 257)" />
+
+                        <!-- Beaker Glass -->
+                        <path d="M 80 100 L 80 280 A 20 20 0 0 0 100 300 L 200 300 A 20 20 0 0 0 220 280 L 220 100" fill="none" stroke="url(#glassGrad)" stroke-width="4" stroke-linecap="round" />
+                        <line x1="70" y1="100" x2="230" y2="100" stroke="url(#glassGrad)" stroke-width="4" stroke-linecap="round"/>
+
+                        <!-- Thermometer -->
+                        <rect x="145" y="40" width="10" height="230" fill="rgba(255,255,255,0.8)" rx="5" />
+                        <circle cx="150" cy="270" r="12" fill="#ef4444" />
+                        <rect x="148" y="150" width="4" height="120" fill="#ef4444" />
+                        <!-- Tick marks -->
+                        <line x1="155" y1="80" x2="160" y2="80" stroke="#000" stroke-width="1"/>
+                        <line x1="155" y1="120" x2="160" y2="120" stroke="#000" stroke-width="1"/>
+                        <line x1="155" y1="160" x2="160" y2="160" stroke="#000" stroke-width="1"/>
+                        <line x1="155" y1="200" x2="160" y2="200" stroke="#000" stroke-width="1"/>
+                        <line x1="155" y1="240" x2="160" y2="240" stroke="#000" stroke-width="1"/>
+                    </svg>
+
+                    <!-- Absolutely Positioned Markers based on percentages relative to container -->
+                    <div class="marker" style="top: 80%; left: 50%;" data-target="item-1">1</div>
+                    <div class="marker" style="top: 60%; left: 35%;" data-target="item-2">2</div>
+                    <div class="marker" style="top: 25%; left: 50%;" data-target="item-3">3</div>
+                    <div class="marker" style="top: 40%; left: 75%;" data-target="item-4">4</div>
+                </div>
+
+                <!-- Legend Right -->
+                <div class="legend-list">
+                    <div class="legend-item" id="item-1">
+                        <div class="legend-num">1</div>
+                        <div>
+                            <strong>Heat Source (Bunsen Burner)</strong>
+                            <p style="font-size: 12px; margin:0;">Provides a continuous, steady supply of thermal energy into the system.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-2">
+                        <div class="legend-num">2</div>
+                        <div>
+                            <strong>Sample Substance (H₂O)</strong>
+                            <p style="font-size: 12px; margin:0;">The matter being observed, starting as solid ice, absorbing heat to change phases.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-3">
+                        <div class="legend-num">3</div>
+                        <div>
+                            <strong>Thermometer</strong>
+                            <p style="font-size: 12px; margin:0;">Measures the average kinetic energy (temperature) of the particles.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-4">
+                        <div class="legend-num">4</div>
+                        <div>
+                            <strong>Glass Beaker</strong>
+                            <p style="font-size: 12px; margin:0;">Contains the substance. In ideal simulations, we assume no heat escapes the glass.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             4. WORKING PROCESS (Step-by-Step)
+             ========================================== -->
+        <section id="working">
+            <h2>How the Curve is Formed</h2>
+            <p>Let's track a block of ice at -20°C as constant heat is applied until it becomes steam.</p>
+
+            <div class="glass-panel working-container">
+                
+                <div class="working-visual">
+                    <svg class="curve-svg" viewBox="0 0 500 300" preserveAspectRatio="xMidYMid meet">
+                        <!-- Axes -->
+                        <line x1="40" y1="260" x2="480" y2="260" class="axis" /> <!-- Time/Energy -->
+                        <line x1="40" y1="260" x2="40" y2="20" class="axis" />  <!-- Temp -->
+                        
+                        <!-- Labels -->
+                        <text x="260" y="290" fill="var(--text-muted)" font-size="12" text-anchor="middle">Heat Energy Added &rarr;</text>
+                        <text x="15" y="140" fill="var(--text-muted)" font-size="12" transform="rotate(-90 15 140)" text-anchor="middle">Temperature (°C) &rarr;</text>
+                        
+                        <!-- Grid lines -->
+                        <line x1="40" y1="200" x2="480" y2="200" class="grid-line" /> <!-- 0 C -->
+                        <text x="10" y="204" fill="var(--text-muted)" font-size="10">0°</text>
+                        <line x1="40" y1="70" x2="480" y2="70" class="grid-line" /> <!-- 100 C -->
+                        <text x="5" y="74" fill="var(--text-muted)" font-size="10">100°</text>
+
+                        <!-- The Full Base Curve -->
+                        <path id="wp-base-path" d="M 40 240 L 100 200 L 220 200 L 320 70 L 440 70 L 480 30" class="curve-path-base" />
+                        
+                        <!-- The Animated Active Segment (updated via JS) -->
+                        <path id="wp-active-path" d="" class="curve-path-active" />
+                        
+                        <!-- Points -->
+                        <circle cx="40" cy="240" class="stage-point" id="pt-0" />
+                        <circle cx="100" cy="200" class="stage-point" id="pt-1" />
+                        <circle cx="220" cy="200" class="stage-point" id="pt-2" />
+                        <circle cx="320" cy="70" class="stage-point" id="pt-3" />
+                        <circle cx="440" cy="70" class="stage-point" id="pt-4" />
+                        <circle cx="480" cy="30" class="stage-point" id="pt-5" />
+                    </svg>
+                </div>
+
+                <div class="working-controls">
+                    <div class="stage-info">
+                        <span class="stage-badge" id="wp-badge">Phase 1</span>
+                        <h3 id="wp-title">Heating the Solid</h3>
+                        <p id="wp-desc">Heat energy makes the solid particles vibrate faster. Temperature rises steadily.</p>
+                        <p style="font-size: 12px; color: var(--accent-latent);"><strong id="wp-state">Input: Ice at -20°C &rarr; Output: Ice at 0°C</strong></p>
+                    </div>
+
+                    <div class="controls-row">
+                        <button class="btn" id="btn-prev">&larr; Prev</button>
+                        <div class="progress-dots" id="wp-dots">
+                            <!-- Populated by JS -->
+                        </div>
+                        <button class="btn" id="btn-next">Next &rarr;</button>
+                    </div>
+                    <button class="btn primary" id="btn-auto" style="margin-top: 15px; width: 100%;">Play Full Sequence</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             5. INTERACTIVE SIMULATION
+             ========================================== -->
+        <section id="simulation">
+            <h2>Interactive Simulator</h2>
+            <p>Drag the slider to add continuous heat. Observe the graph, the physical state, and the molecular behavior simultaneously.</p>
+
+            <div class="sim-panel sim-grid">
+                
+                <!-- 5.1 Controls (Slider) -->
+                <div class="sim-controls">
+                    <div class="readouts">
+                        <div class="readout">
+                            <div class="readout-label">Time / Heat Added</div>
+                            <div class="readout-val" id="sim-heat-val">0</div>
+                        </div>
+                        <div class="readout">
+                            <div class="readout-label">Temperature</div>
+                            <div class="readout-val" id="sim-temp-val" style="color: var(--accent-cold);">-20°C</div>
+                        </div>
+                        <div class="readout">
+                            <div class="readout-label">State</div>
+                            <div class="readout-val" id="sim-state-val">Solid</div>
+                        </div>
+                    </div>
+                    <div class="slider-container">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cold)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        <input type="range" min="0" max="1000" value="0" class="energy-slider" id="sim-slider">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-hot)" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <div class="slider-labels">
+                        <span>Start</span>
+                        <span>Adding Heat Energy &rarr;</span>
+                        <span>End</span>
+                    </div>
+                </div>
+
+                <!-- 5.2 The Graph -->
+                <div class="sim-panel sim-graph">
+                    <div class="sim-panel-title">Data Log (Graph)</div>
+                    <svg id="sim-graph-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                        <!-- Grid -->
+                        <line x1="0" y1="20" x2="100" y2="20" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/> <!-- 100C -->
+                        <line x1="0" y1="70" x2="100" y2="70" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/> <!-- 0C -->
+                        
+                        <!-- Base Path -->
+                        <path id="sim-path-bg" d="M 0 90 L 20 70 L 40 70 L 60 20 L 80 20 L 100 0" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2" stroke-linejoin="round"/>
+                        
+                        <!-- Active Path (Masked by JS rect) -->
+                        <clipPath id="sim-clip">
+                            <rect id="sim-clip-rect" x="0" y="0" width="0" height="100" />
+                        </clipPath>
+                        <path d="M 0 90 L 20 70 L 40 70 L 60 20 L 80 20 L 100 0" fill="none" stroke="url(#lineGrad)" stroke-width="2.5" stroke-linejoin="round" clip-path="url(#sim-clip)"/>
+                        
+                        <!-- Current Position Dot -->
+                        <circle id="sim-dot" cx="0" cy="90" r="2" class="sim-dot" />
+                    </svg>
+                </div>
+
+                <!-- 5.3 Macroscopic View (Beaker) -->
+                <div class="sim-panel sim-macro">
+                    <div class="sim-panel-title">Macroscopic (Visible)</div>
+                    <canvas id="macro-canvas"></canvas>
+                </div>
+
+                <!-- 5.4 Microscopic View (Particles) -->
+                <div class="sim-panel sim-micro">
+                    <div class="sim-panel-title">Microscopic (Molecular)</div>
+                    <canvas id="micro-canvas"></canvas>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ==========================================
+             6. APPLICATIONS & FACTS
+             ========================================== -->
+        <section id="applications">
+            <div class="grid-2">
+                
+                <div class="glass-panel info-card">
+                    <div class="info-icon" style="color: var(--accent-hot);">🌋</div>
+                    <h3>Real-world: Metallurgy</h3>
+                    <p>Blacksmiths and foundries rely on cooling curves. By controlling how fast a molten metal cools (and tracking the flat latent heat sections), they determine the crystalline structure of the metal, making steel either flexible or incredibly hard.</p>
+                </div>
+
+                <div class="glass-panel info-card">
+                    <div class="info-icon" style="color: var(--accent-cold);">☁️</div>
+                    <h3>Real-world: Meteorology</h3>
+                    <p>When water vapor in the atmosphere condenses into liquid rain, it releases a massive amount of latent heat. This sudden release of energy is what powers enormous storm systems and hurricanes.</p>
+                </div>
+
+                <div class="glass-panel info-card">
+                    <div class="info-icon" style="color: var(--accent-latent);">💡</div>
+                    <h3>Interesting Fact</h3>
+                    <p>It takes almost <strong>6 times more energy</strong> to boil water at 100°C into steam than it does to heat that same water from 0°C to 100°C. That's why the boiling plateau on a curve is much longer than the melting plateau.</p>
+                </div>
+
+                <div class="glass-panel info-card" style="border-color: rgba(239, 68, 68, 0.4);">
+                    <div class="info-icon" style="color: #ef4444;">⚠️</div>
+                    <h3>Common Mistake</h3>
+                    <p>Thinking that heat and temperature are the same thing. <strong>Heat</strong> is the total energy transferred. <strong>Temperature</strong> is just the average speed of the particles. During phase changes, heat goes IN, but temperature does NOT change.</p>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ==========================================
+             7. REVISION
+             ========================================== -->
+        <section id="revision" style="padding-bottom: var(--space-xl);">
+            <div class="glass-panel" style="text-align: center;">
+                <h2>Quick Revision</h2>
+                <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; margin-top: 20px;">
+                    <span class="stage-badge" style="background: rgba(56,189,248,0.2);">Diagonal Line = Temp changing, Phase stable (Q=mcΔT)</span>
+                    <span class="stage-badge" style="background: rgba(168,85,247,0.2);">Flat Line = Temp stable, Phase changing (Q=mL)</span>
+                    <span class="stage-badge" style="background: rgba(251,146,60,0.2);">Melting Point = Solid &harr; Liquid</span>
+                    <span class="stage-badge" style="background: rgba(239,68,68,0.2);">Boiling Point = Liquid &harr; Gas</span>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 1. COMPONENT MARKERS LOGIC ---
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function activatePair(targetId) {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                
+                const m = document.querySelector(`.marker[data-target="${targetId}"]`);
+                const l = document.getElementById(targetId);
+                
+                if (m) m.classList.add('active');
+                if (l) l.classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => activatePair(marker.dataset.target));
+                marker.addEventListener('click', () => activatePair(marker.dataset.target));
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => activatePair(item.id));
+                item.addEventListener('click', () => activatePair(item.id));
+            });
+
+
+            // --- 2. WORKING PROCESS LOGIC ---
+            const wpStages = [
+                {
+                    title: "Heating Solid",
+                    desc: "Thermal energy increases kinetic energy. Particles vibrate faster in fixed positions. Temperature rises.",
+                    state: "Ice (-20°C to 0°C)",
+                    pathSeg: "M 40 240 L 100 200",
+                    pts: [0,1]
+                },
+                {
+                    title: "Melting (Phase Change)",
+                    desc: "Temperature stops rising! Added energy breaks the rigid bonds holding the crystal lattice together. Latent heat of fusion.",
+                    state: "Ice &rarr; Water (0°C)",
+                    pathSeg: "M 100 200 L 220 200",
+                    pts: [1,2]
+                },
+                {
+                    title: "Heating Liquid",
+                    desc: "Bonds are broken. Particles slide past each other. Added energy increases speed again, so temperature rises.",
+                    state: "Water (0°C to 100°C)",
+                    pathSeg: "M 220 200 L 320 70",
+                    pts: [2,3]
+                },
+                {
+                    title: "Boiling (Phase Change)",
+                    desc: "Temperature halts again. Energy is used to completely overcome intermolecular forces, tearing particles apart into a gas.",
+                    state: "Water &rarr; Steam (100°C)",
+                    pathSeg: "M 320 70 L 440 70",
+                    pts: [3,4]
+                },
+                {
+                    title: "Heating Gas",
+                    desc: "Particles are completely free. Adding more heat increases their velocity dramatically. Temperature rises steeply.",
+                    state: "Steam (>100°C)",
+                    pathSeg: "M 440 70 L 480 30",
+                    pts: [4,5]
+                }
+            ];
+
+            let currentWpStage = 0;
+            let wpInterval = null;
+            
+            const wpTitle = document.getElementById('wp-title');
+            const wpDesc = document.getElementById('wp-desc');
+            const wpState = document.getElementById('wp-state');
+            const wpBadge = document.getElementById('wp-badge');
+            const wpPath = document.getElementById('wp-active-path');
+            const wpDotsContainer = document.getElementById('wp-dots');
+            
+            // Init dots
+            wpStages.forEach((_, i) => {
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                wpDotsContainer.appendChild(dot);
+            });
+            const wpDots = document.querySelectorAll('#wp-dots .dot');
+
+            function updateWpStage(stageIndex) {
+                if (stageIndex < 0) stageIndex = wpStages.length - 1;
+                if (stageIndex >= wpStages.length) stageIndex = 0;
+                currentWpStage = stageIndex;
+                const data = wpStages[currentWpStage];
+
+                wpTitle.textContent = data.title;
+                wpDesc.textContent = data.desc;
+                wpState.innerHTML = data.state;
+                wpBadge.textContent = `Stage ${currentWpStage + 1} of 5`;
+
+                // Build cumulative path for visual flow
+                let pathD = wpStages[0].pathSeg;
+                for(let i=1; i<=currentWpStage; i++){
+                    // remove 'M x y' from subsequent segments to make continuous line
+                    pathD += " " + wpStages[i].pathSeg.replace(/M \d+ \d+ /, ''); 
+                }
+                
+                wpPath.setAttribute('d', pathD);
+                
+                // Animate path drawing
+                const length = wpPath.getTotalLength();
+                wpPath.style.strokeDasharray = length;
+                wpPath.style.strokeDashoffset = length;
+                wpPath.getBoundingClientRect(); // trigger reflow
+                wpPath.style.strokeDashoffset = 0;
+
+                // Points & Dots
+                document.querySelectorAll('.stage-point').forEach((pt, i) => {
+                    pt.classList.toggle('active', i <= data.pts[1]);
+                });
+                wpDots.forEach((dot, i) => dot.classList.toggle('active', i === currentWpStage));
+            }
+
+            document.getElementById('btn-prev').addEventListener('click', () => { clearInterval(wpInterval); updateWpStage(currentWpStage - 1); });
+            document.getElementById('btn-next').addEventListener('click', () => { clearInterval(wpInterval); updateWpStage(currentWpStage + 1); });
+            document.getElementById('btn-auto').addEventListener('click', () => {
+                clearInterval(wpInterval);
+                updateWpStage(0);
+                wpInterval = setInterval(() => {
+                    if (currentWpStage === wpStages.length - 1) {
+                        clearInterval(wpInterval);
+                    } else {
+                        updateWpStage(currentWpStage + 1);
+                    }
+                }, 2500);
+            });
+
+            updateWpStage(0);
+
+
+            // --- 3. INTERACTIVE SIMULATION ENGINE ---
+            const slider = document.getElementById('sim-slider');
+            const valHeat = document.getElementById('sim-heat-val');
+            const valTemp = document.getElementById('sim-temp-val');
+            const valState = document.getElementById('sim-state-val');
+            
+            const graphClip = document.getElementById('sim-clip-rect');
+            const graphDot = document.getElementById('sim-dot');
+            
+            // Curve math logic map: Slider (0-1000) -> X(0-100), Y(100-0), Temp, State
+            // Key Points (Slider, Temp): (0,-20), (200,0), (400,0), (600,100), (800,100), (1000, 140)
+            function calculateSimState(s) {
+                let temp, phase, x, y, color;
+                x = s / 10; // 0 to 100% width
+
+                if (s <= 200) { // Heating Solid
+                    temp = -20 + (s / 200) * 20;
+                    phase = "Solid";
+                    y = 90 - (s/200)*20; // 90 to 70
+                    color = "var(--accent-cold)";
+                } else if (s <= 400) { // Melting
+                    temp = 0;
+                    phase = "Melting";
+                    y = 70;
+                    color = "var(--accent-latent)";
+                } else if (s <= 600) { // Heating Liquid
+                    temp = 0 + ((s-400) / 200) * 100;
+                    phase = "Liquid";
+                    y = 70 - ((s-400)/200)*50; // 70 to 20
+                    color = "var(--accent-warm)";
+                } else if (s <= 800) { // Boiling
+                    temp = 100;
+                    phase = "Boiling";
+                    y = 20;
+                    color = "var(--accent-latent)";
+                } else { // Heating Gas
+                    temp = 100 + ((s-800) / 200) * 40;
+                    phase = "Gas";
+                    y = 20 - ((s-800)/200)*20; // 20 to 0
+                    color = "var(--accent-hot)";
+                }
+
+                return { temp, phase, x, y, color };
+            }
+
+            // Canvas Setup Utility
+            function setupCanvas(id) {
+                const cvs = document.getElementById(id);
+                const ctx = cvs.getContext('2d');
+                
+                function resize() {
+                    const rect = cvs.parentElement.getBoundingClientRect();
+                    // Handle high DPI displays
+                    const dpr = window.devicePixelRatio || 1;
+                    cvs.width = rect.width * dpr;
+                    cvs.height = rect.height * dpr;
+                    ctx.scale(dpr, dpr);
+                    cvs.style.width = `${rect.width}px`;
+                    cvs.style.height = `${rect.height}px`;
+                    return { w: rect.width, h: rect.height };
+                }
+                
+                const dims = resize();
+                window.addEventListener('resize', resize);
+                window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+                
+                return { cvs, ctx, getDims: () => ({ w: cvs.clientWidth, h: cvs.clientHeight }) };
+            }
+
+            const micro = setupCanvas('micro-canvas');
+            const macro = setupCanvas('macro-canvas');
+
+            // --- Microscopic Particle System ---
+            const particles = [];
+            const numParticles = 64; // perfect square for lattice
+            const cols = 8;
+            
+            class Particle {
+                constructor(i) {
+                    this.id = i;
+                    this.radius = 4;
+                    // Lattice positions (target)
+                    this.tx = 0; 
+                    this.ty = 0;
+                    // Current positions
+                    this.x = 0;
+                    this.y = 0;
+                    this.vx = (Math.random() - 0.5) * 2;
+                    this.vy = (Math.random() - 0.5) * 2;
+                    this.mass = 1;
+                }
+                
+                updateTarget(w, h) {
+                    const spacing = Math.min(w, h) / (cols + 2);
+                    const offsetX = (w - (cols - 1) * spacing) / 2;
+                    const offsetY = h - (cols * spacing) - 10; // align to bottom
+                    
+                    const row = Math.floor(this.id / cols);
+                    const col = this.id % cols;
+                    
+                    this.tx = offsetX + col * spacing;
+                    this.ty = offsetY + row * spacing;
+                }
+            }
+
+            for(let i=0; i<numParticles; i++) particles.push(new Particle(i));
+
+            // --- Macro System state ---
+            let bubbles = [];
+            for(let i=0; i<20; i++) bubbles.push({ x: Math.random(), y: Math.random(), s: Math.random(), v: Math.random() });
+
+            // --- Main Render Loop ---
+            function render() {
+                const s = parseFloat(slider.value);
+                const state = calculateSimState(s);
+
+                // Update UI Readouts
+                valHeat.textContent = Math.round(s);
+                valTemp.textContent = `${Math.round(state.temp)}°C`;
+                valTemp.style.color = state.color;
+                valState.textContent = state.phase;
+
+                // Update Graph SVG
+                graphClip.setAttribute('width', state.x);
+                graphDot.setAttribute('cx', state.x);
+                graphDot.setAttribute('cy', state.y);
+                graphDot.style.fill = state.color;
+
+                // --- Draw Microscopic ---
+                const mCtx = micro.ctx;
+                const mDims = micro.getDims();
+                mCtx.clearRect(0, 0, mDims.w, mDims.h);
+                
+                // Map slider 0-1000 to phase ratios
+                const solidRatio = Math.max(0, 1 - (s / 300)); // Lattice strength
+                const kineticEnergy = Math.max(0.5, (s / 1000) * 15);
+                const gravity = 0.5 * Math.max(0, 1 - (s/700)); // lose gravity when boiling
+
+                particles.forEach(p => {
+                    p.updateTarget(mDims.w, mDims.h);
+
+                    if (solidRatio > 0.1) {
+                        // Spring force to lattice
+                        const dx = p.tx - p.x;
+                        const dy = p.ty - p.y;
+                        p.vx += dx * 0.05 * solidRatio;
+                        p.vy += dy * 0.05 * solidRatio;
+                        // Damping
+                        p.vx *= 0.8;
+                        p.vy *= 0.8;
+                        // Jitter based on temp
+                        p.x += (Math.random()-0.5) * kineticEnergy * 0.5;
+                        p.y += (Math.random()-0.5) * kineticEnergy * 0.5;
+                    } else {
+                        // Liquid / Gas fluid motion
+                        p.vy += gravity; // Gravity
+                        
+                        // Add heat velocity
+                        if(Math.random() < 0.1) {
+                            p.vx += (Math.random()-0.5) * kineticEnergy * 0.2;
+                            p.vy += (Math.random()-0.5) * kineticEnergy * 0.2;
+                        }
+                        
+                        // Boiling upward force
+                        if (s > 600) p.vy -= 1.5; 
+
+                        // Friction
+                        p.vx *= 0.98;
+                        p.vy *= 0.98;
+                    }
+
+                    p.x += p.vx;
+                    p.y += p.vy;
+
+                    // Bounds
+                    if(p.x < p.radius) { p.x = p.radius; p.vx *= -1; }
+                    if(p.x > mDims.w - p.radius) { p.x = mDims.w - p.radius; p.vx *= -1; }
+                    if(p.y < p.radius) { p.y = p.radius; p.vy *= -1; }
+                    
+                    // Open top if gas, closed if liquid
+                    if (s < 700) {
+                        if(p.y > mDims.h - p.radius) { p.y = mDims.h - p.radius; p.vy *= -0.5; }
+                    } else {
+                        // Wrap around for gas to look infinite
+                        if(p.y < -20) p.y = mDims.h + 20;
+                        if(p.y > mDims.h + 20) p.y = -20;
+                    }
+
+                    // Draw Particle
+                    mCtx.beginPath();
+                    mCtx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
+                    mCtx.fillStyle = state.color;
+                    mCtx.fill();
+                    
+                    // Glow
+                    mCtx.shadowBlur = 8;
+                    mCtx.shadowColor = state.color;
+                });
+                mCtx.shadowBlur = 0;
+
+
+                // --- Draw Macroscopic ---
+                const macCtx = macro.ctx;
+                const macDims = macro.getDims();
+                macCtx.clearRect(0, 0, macDims.w, macDims.h);
+
+                const cx = macDims.w / 2;
+                const cy = macDims.h / 2;
+                const beakerW = 80;
+                const beakerH = 120;
+                const bLeft = cx - beakerW/2;
+                const bBottom = cy + beakerH/2 + 20;
+
+                // Heat source visually
+                const heatIntensity = s / 1000;
+                if (heatIntensity > 0) {
+                    const grad = macCtx.createRadialGradient(cx, bBottom + 10, 0, cx, bBottom + 10, 40 * heatIntensity);
+                    grad.addColorStop(0, `rgba(239, 68, 68, ${0.8 * heatIntensity})`);
+                    grad.addColorStop(1, 'rgba(239, 68, 68, 0)');
+                    macCtx.fillStyle = grad;
+                    macCtx.fillRect(cx - 50, bBottom, 100, 50);
+                }
+
+                // Liquid fill
+                const liqLvl = s > 800 ? Math.max(0, 1 - (s-800)/200) : 1; // Evaporates
+                const liqH = beakerH * 0.7 * liqLvl;
+                
+                if (liqH > 0) {
+                    macCtx.fillStyle = `rgba(56, 189, 248, ${0.4 + (s/2000)})`; // gets bluer/clearer
+                    macCtx.beginPath();
+                    macCtx.roundRect(bLeft+2, bBottom - liqH, beakerW-4, liqH, [0, 0, 8, 8]);
+                    macCtx.fill();
+                }
+
+                // Ice Cubes
+                const iceOpacity = Math.max(0, 1 - (s/300));
+                if (iceOpacity > 0) {
+                    macCtx.fillStyle = `rgba(255, 255, 255, ${iceOpacity * 0.8})`;
+                    macCtx.save();
+                    macCtx.translate(cx - 15, bBottom - 30);
+                    macCtx.rotate(0.2);
+                    macCtx.fillRect(-15, -15, 30, 30);
+                    macCtx.restore();
+                    
+                    macCtx.save();
+                    macCtx.translate(cx + 15, bBottom - 20);
+                    macCtx.rotate(-0.3);
+                    macCtx.fillRect(-12, -12, 24, 24);
+                    macCtx.restore();
+                }
+
+                // Bubbles (Boiling)
+                if (s > 400 && liqH > 0) {
+                    const bubbleIntensity = (s - 400) / 400; // 0 to 1
+                    macCtx.fillStyle = 'rgba(255,255,255,0.6)';
+                    bubbles.forEach(b => {
+                        b.y -= (b.v * 2 + bubbleIntensity * 3); // move up
+                        if (b.y < bBottom - liqH) { b.y = bBottom; b.x = Math.random(); } // reset
+                        
+                        if (bubbleIntensity > 0.1) {
+                            macCtx.beginPath();
+                            macCtx.arc(bLeft + 5 + b.x * (beakerW-10), b.y, b.s * 3 + 1, 0, Math.PI*2);
+                            macCtx.fill();
+                        }
+                    });
+                }
+
+                // Steam (Gas)
+                const steamOpacity = Math.max(0, Math.min(1, (s - 600) / 200));
+                if (steamOpacity > 0) {
+                    macCtx.fillStyle = `rgba(200, 200, 255, ${steamOpacity * 0.1})`;
+                    for(let i=0; i<3; i++) {
+                        const sy = bBottom - beakerH - (Date.now()/20 + i*30) % 100;
+                        const sx = cx + Math.sin(Date.now()/500 + i) * 20;
+                        macCtx.beginPath();
+                        macCtx.arc(sx, sy, 20 + i*5, 0, Math.PI*2);
+                        macCtx.fill();
+                    }
+                }
+
+                // Beaker Glass
+                macCtx.strokeStyle = 'rgba(255,255,255,0.4)';
+                macCtx.lineWidth = 3;
+                macCtx.beginPath();
+                macCtx.moveTo(bLeft, bBottom - beakerH);
+                macCtx.lineTo(bLeft, bBottom - 10);
+                macCtx.arcTo(bLeft, bBottom, bLeft+10, bBottom, 10);
+                macCtx.lineTo(bLeft + beakerW - 10, bBottom);
+                macCtx.arcTo(bLeft+beakerW, bBottom, bLeft+beakerW, bBottom-10, 10);
+                macCtx.lineTo(bLeft+beakerW, bBottom - beakerH);
+                macCtx.stroke();
+
+
+                requestAnimationFrame(render);
+            }
+
+            // Init Lattice positions immediately
+            const mDims = micro.getDims();
+            particles.forEach(p => { p.updateTarget(mDims.w, mDims.h); p.x = p.tx; p.y = p.ty; });
+            
+            // Start Loop
+            render();
+
+        });
+    </script>
+</body>
+</html>

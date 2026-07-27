@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Thermal Expansion Simulator</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & BASE SETUP
+           ========================================================================== */
+        :root {
+            /* Palette */
+            --bg-base: #07090f;
+            --glass-bg: rgba(18, 22, 36, 0.55);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-accent: #38bdf8;
+            
+            --heat-color: #ff5722;
+            --heat-glow: rgba(255, 87, 34, 0.6);
+            --cold-color: #0ea5e9;
+            --cold-glow: rgba(14, 165, 233, 0.6);
+            --neutral-color: #10b981;
+            
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            /* Fluid Typography */
+            --fs-xs: clamp(0.75rem, 1vw, 0.875rem);
+            --fs-sm: clamp(0.875rem, 1.2vw, 1rem);
+            --fs-base: clamp(1rem, 1.5vw, 1.125rem);
+            --fs-lg: clamp(1.25rem, 2vw, 1.5rem);
+            --fs-xl: clamp(1.5rem, 3vw, 2.25rem);
+            --fs-xxl: clamp(2rem, 5vw, 3.5rem);
+            
+            /* Metrics */
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --spacing-section: clamp(40px, 8vw, 80px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(255, 87, 34, 0.04) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(14, 165, 233, 0.04) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        /* ==========================================================================
+           2. LAYOUT & GLASSMORPHISM
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 4vw, 48px);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-section);
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+            padding: clamp(20px, 4vw, 40px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        @media (max-width: 767px) {
+            .glass-panel {
+                backdrop-filter: blur(6px);
+                -webkit-backdrop-filter: blur(6px);
+            }
+        }
+
+        .section-header {
+            margin-bottom: clamp(20px, 3vw, 32px);
+        }
+
+        .section-title {
+            font-size: var(--fs-xl);
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(90deg, #fff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .section-subtitle {
+            font-size: var(--fs-sm);
+            color: var(--text-muted);
+            max-width: 800px;
+        }
+
+        /* ==========================================================================
+           3. HERO SECTION
+           ========================================================================== */
+        .hero {
+            text-align: center;
+            padding-top: clamp(20px, 5vw, 60px);
+        }
+
+        .hero h1 {
+            font-size: var(--fs-xxl);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 16px;
+            letter-spacing: -1px;
+        }
+
+        .gradient-heat {
+            background: linear-gradient(135deg, #ff8a00, #ff5252);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 40px rgba(255, 82, 82, 0.3);
+        }
+
+        /* ==========================================================================
+           4. DIAGRAM & LEGEND (Strict Rules Applied)
+           ========================================================================== */
+        .diagram-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .diagram-container {
+                grid-template-columns: 2fr 1fr;
+                align-items: center;
+            }
+        }
+
+        .diagram-visual {
+            width: 100%;
+            min-height: 280px;
+            background: radial-gradient(ellipse at center, rgba(30,40,60,0.6) 0%, transparent 80%);
+            border-radius: var(--radius-md);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .diagram-visual svg {
+            width: 100%;
+            height: 100%;
+            max-height: 450px;
+            filter: drop-shadow(0 15px 25px rgba(0,0,0,0.5));
+        }
+
+        /* SVG Markers */
+        .marker {
+            cursor: pointer;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-origin: center;
+        }
+        
+        .marker circle {
+            fill: var(--bg-base);
+            stroke-width: 2.5;
+            transition: all 0.3s ease;
+        }
+        
+        .marker text {
+            fill: #fff;
+            font-family: var(--font-sans);
+            font-weight: 700;
+            font-size: 14px;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+
+        .marker[data-color="heat"] circle { stroke: var(--heat-color); }
+        .marker[data-color="cold"] circle { stroke: var(--cold-color); }
+        .marker[data-color="neutral"] circle { stroke: var(--neutral-color); }
+
+        .marker:hover, .marker.active { transform: scale(1.2); }
+        
+        .marker[data-color="heat"].active circle { fill: var(--heat-color); box-shadow: 0 0 20px var(--heat-glow); filter: drop-shadow(0 0 8px var(--heat-color)); }
+        .marker[data-color="cold"].active circle { fill: var(--cold-color); box-shadow: 0 0 20px var(--cold-glow); filter: drop-shadow(0 0 8px var(--cold-color)); }
+        .marker[data-color="neutral"].active circle { fill: var(--neutral-color); filter: drop-shadow(0 0 8px var(--neutral-color)); }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateX(4px);
+        }
+
+        .legend-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: var(--fs-sm);
+            flex-shrink: 0;
+            border: 2px solid;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item[data-color="heat"] .legend-badge { border-color: var(--heat-color); color: var(--heat-color); }
+        .legend-item[data-color="cold"] .legend-badge { border-color: var(--cold-color); color: var(--cold-color); }
+        .legend-item[data-color="neutral"] .legend-badge { border-color: var(--neutral-color); color: var(--neutral-color); }
+
+        .legend-item.active[data-color="heat"] .legend-badge { background: var(--heat-color); color: #fff; box-shadow: 0 0 15px var(--heat-glow); }
+        .legend-item.active[data-color="cold"] .legend-badge { background: var(--cold-color); color: #fff; box-shadow: 0 0 15px var(--cold-glow); }
+        .legend-item.active[data-color="neutral"] .legend-badge { background: var(--neutral-color); color: #fff; }
+
+        .legend-content h4 { font-size: var(--fs-base); margin-bottom: 4px; color: #fff; }
+        .legend-content p { font-size: var(--fs-sm); color: var(--text-muted); line-height: 1.4; }
+
+        /* ==========================================================================
+           5. WORKING MECHANISM (Stages & Canvas)
+           ========================================================================== */
+        .mechanism-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .mechanism-grid { grid-template-columns: 320px 1fr; }
+        }
+
+        .mech-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .stage-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .stage-item {
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            background: rgba(255, 255, 255, 0.02);
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stage-num {
+            font-size: var(--fs-xs);
+            font-weight: 700;
+            color: var(--text-muted);
+            background: rgba(255, 255, 255, 0.05);
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .stage-title { font-size: var(--fs-sm); font-weight: 500; color: var(--text-muted); transition: all 0.3s; }
+
+        .stage-item:hover { background: rgba(255, 255, 255, 0.05); }
+
+        .stage-item.active {
+            background: rgba(255, 87, 34, 0.1);
+            border-left-color: var(--heat-color);
+        }
+
+        .stage-item.active .stage-num {
+            background: var(--heat-color);
+            color: #fff;
+            box-shadow: 0 0 10px var(--heat-glow);
+        }
+
+        .stage-item.active .stage-title { color: #fff; }
+
+        .playback-controls {
+            display: flex;
+            gap: 12px;
+            margin-top: auto;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            padding: 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-family: var(--font-sans);
+            font-size: var(--fs-sm);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .btn:hover { background: rgba(255, 255, 255, 0.1); }
+        .btn:active { transform: scale(0.96); }
+        .btn-icon { flex: 0 0 48px; }
+        .btn-main { flex: 1; }
+        .btn-main.active {
+            background: var(--heat-color);
+            border-color: var(--heat-color);
+            box-shadow: 0 0 15px var(--heat-glow);
+        }
+
+        .mech-visual {
+            width: 100%;
+            min-height: 350px;
+            background: #04060a;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        #mechCanvas { width: 100%; height: 100%; flex: 1; }
+
+        .mech-caption {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            right: 16px;
+            background: rgba(10, 15, 25, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: var(--fs-sm);
+            text-align: center;
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+
+        /* ==========================================================================
+           6. INTERACTIVE SIMULATION (Macro)
+           ========================================================================== */
+        .sim-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .sim-visual {
+            width: 100%;
+            height: 280px;
+            background: linear-gradient(180deg, #0d1220 0%, #05070c 100%);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        #simCanvas { width: 100%; height: 100%; }
+
+        .sim-controls {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            background: rgba(0,0,0,0.2);
+            padding: 24px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.03);
+        }
+
+        @media (min-width: 768px) {
+            .sim-controls { grid-template-columns: 1fr 1fr 1.5fr; }
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-label {
+            font-size: var(--fs-xs);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        select, input[type="range"] {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff;
+            padding: 12px;
+            border-radius: 8px;
+            font-family: var(--font-sans);
+            font-size: var(--fs-sm);
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        select:focus { border-color: var(--text-accent); }
+        select option { background: #121624; color: #fff; }
+
+        /* Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            height: 6px;
+            padding: 0;
+            background: rgba(255,255,255,0.1);
+            border: none;
+            margin: 12px 0;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            border: 2px solid var(--heat-color);
+            transition: transform 0.1s;
+        }
+        
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.1); }
+
+        .data-panel {
+            background: rgba(14, 165, 233, 0.05);
+            border: 1px solid rgba(14, 165, 233, 0.2);
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--fs-sm);
+            font-family: monospace;
+            padding: 4px 0;
+        }
+        
+        .data-highlight { color: var(--heat-color); font-weight: 700; }
+        .data-total { font-weight: 700; color: #fff; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 8px; margin-top: 4px; }
+
+        /* ==========================================================================
+           7. APPLICATIONS & FACTS (Cards)
+           ========================================================================== */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .info-card {
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.4), rgba(15, 23, 42, 0.6));
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .info-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+            border-color: rgba(255,255,255,0.15);
+        }
+
+        .card-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .card-icon svg { width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;}
+        
+        .card-app .card-icon { color: var(--text-accent); background: rgba(14, 165, 233, 0.15); }
+        .card-fact .card-icon { color: #f59e0b; background: rgba(245, 158, 11, 0.15); }
+        .card-mistake .card-icon { color: var(--heat-color); background: rgba(255, 87, 34, 0.15); }
+
+        .info-card h3 { font-size: var(--fs-base); margin-bottom: 12px; color: #fff; }
+        .info-card p { font-size: var(--fs-sm); color: var(--text-muted); flex: 1; }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- HERO -->
+    <header class="hero">
+        <h1>Thermal <span class="gradient-heat">Expansion</span></h1>
+        <p class="section-subtitle" style="margin: 0 auto; font-size: var(--fs-base);">
+            When matter absorbs heat, its particles vibrate vigorously and push each other apart. This microscopic kinetic activity results in macroscopic expansion of volume, area, or length.
+        </p>
+    </header>
+
+    <!-- 1. COMPONENT DIAGRAM -->
+    <section class="glass-panel">
+        <div class="section-header">
+            <h2 class="section-title">The Bimetallic Strip</h2>
+            <p class="section-subtitle">A classic engineering application. Two different metals are fused together. Because they expand at different rates when heated, the entire structure is forced to curve.</p>
+        </div>
+
+        <div class="diagram-container">
+            <!-- Visual Element -->
+            <div class="diagram-visual">
+                <svg viewBox="0 0 600 350" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                        <!-- Materials -->
+                        <linearGradient id="brassGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#fcd34d" />
+                            <stop offset="50%" stop-color="#f59e0b" />
+                            <stop offset="100%" stop-color="#b45309" />
+                        </linearGradient>
+                        <linearGradient id="steelGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#cbd5e1" />
+                            <stop offset="50%" stop-color="#64748b" />
+                            <stop offset="100%" stop-color="#334155" />
+                        </linearGradient>
+                        <radialGradient id="heatSource" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="rgba(255, 87, 34, 0.8)" />
+                            <stop offset="40%" stop-color="rgba(255, 87, 34, 0.4)" />
+                            <stop offset="100%" stop-color="rgba(255, 87, 34, 0)" />
+                        </radialGradient>
+                        <filter id="shadow">
+                            <feDropShadow dx="0" dy="8" stdDeviation="6" flood-opacity="0.6"/>
+                        </filter>
+                    </defs>
+
+                    <!-- Wall Mount -->
+                    <rect x="40" y="80" width="40" height="180" fill="#1e293b" rx="6" filter="url(#shadow)" />
+                    <!-- Screws -->
+                    <circle cx="60" cy="110" r="5" fill="#475569" />
+                    <circle cx="60" cy="170" r="5" fill="#475569" />
+                    <circle cx="60" cy="230" r="5" fill="#475569" />
+
+                    <!-- Bimetallic Strip Assembly -->
+                    <!-- Bending animation via SVG path morphing -->
+                    <g transform="translate(80, 160)" filter="url(#shadow)">
+                        <!-- Ghost outline of original straight position -->
+                        <path d="M 0 0 L 380 0" stroke="rgba(255,255,255,0.15)" stroke-width="2" stroke-dasharray="6,6" fill="none" />
+                        <text x="390" y="5" fill="rgba(255,255,255,0.3)" font-size="12" font-family="sans-serif">Cold State</text>
+                        
+                        <!-- Brass Layer (Top) -->
+                        <path d="M 0 -12 Q 190 -12, 360 45 L 360 57 Q 190 0, 0 0 Z" fill="url(#brassGrad)" />
+                        
+                        <!-- Steel Layer (Bottom) -->
+                        <path d="M 0 0 Q 190 0, 360 57 L 360 69 Q 190 12, 0 12 Z" fill="url(#steelGrad)" />
+                        
+                        <!-- Deflection Arrow -->
+                        <path d="M 380 15 Q 395 35, 375 60" fill="none" stroke="var(--heat-color)" stroke-width="2" stroke-dasharray="4,4" />
+                        <polygon points="375,60 385,55 375,50" fill="var(--heat-color)" transform="rotate(30, 375, 60)" />
+                    </g>
+
+                    <!-- Heat Source / Flame -->
+                    <circle cx="270" cy="280" r="70" fill="url(#heatSource)" />
+                    <path d="M 250 310 Q 270 230, 290 310 Z" fill="#ff5722" opacity="0.9">
+                        <animate attributeName="d" values="M 250 310 Q 270 230, 290 310 Z; M 255 310 Q 270 240, 285 310 Z; M 250 310 Q 270 230, 290 310 Z" dur="1.2s" repeatCount="indefinite"/>
+                    </path>
+                    <path d="M 260 310 Q 270 250, 280 310 Z" fill="#fcd34d" opacity="0.9">
+                        <animate attributeName="d" values="M 260 310 Q 270 250, 280 310 Z; M 263 310 Q 270 260, 277 310 Z; M 260 310 Q 270 250, 280 310 Z" dur="0.9s" repeatCount="indefinite"/>
+                    </path>
+
+                    <!-- Interactive Markers -->
+                    <g class="marker" data-target="leg-brass" data-color="heat" transform="translate(230, 130)">
+                        <circle cx="0" cy="0" r="15" />
+                        <text x="0" y="1">1</text>
+                    </g>
+                    
+                    <g class="marker" data-target="leg-steel" data-color="cold" transform="translate(230, 185)">
+                        <circle cx="0" cy="0" r="15" />
+                        <text x="0" y="1">2</text>
+                    </g>
+                    
+                    <g class="marker" data-target="leg-heat" data-color="heat" transform="translate(270, 260)">
+                        <circle cx="0" cy="0" r="15" />
+                        <text x="0" y="1">3</text>
+                    </g>
+
+                    <g class="marker" data-target="leg-deflection" data-color="neutral" transform="translate(420, 210)">
+                        <circle cx="0" cy="0" r="15" />
+                        <text x="0" y="1">4</text>
+                    </g>
+                </svg>
+            </div>
+
+            <!-- Legend List -->
+            <div class="legend-list">
+                <div class="legend-item" id="leg-brass" data-color="heat">
+                    <div class="legend-badge">1</div>
+                    <div class="legend-content">
+                        <h4>Brass Layer (High Expansion)</h4>
+                        <p>Possesses a higher expansion coefficient ($\alpha$). Upon heating, its atomic lattice expands significantly.</p>
+                    </div>
+                </div>
+                
+                <div class="legend-item" id="leg-steel" data-color="cold">
+                    <div class="legend-badge">2</div>
+                    <div class="legend-content">
+                        <h4>Steel Layer (Low Expansion)</h4>
+                        <p>Possesses a lower coefficient. It resists elongation, acting as an anchor against the brass layer.</p>
+                    </div>
+                </div>
+
+                <div class="legend-item" id="leg-heat" data-color="heat">
+                    <div class="legend-badge">3</div>
+                    <div class="legend-content">
+                        <h4>Thermal Energy Source</h4>
+                        <p>Transfers heat into the strip, increasing the kinetic energy and vibration of the metallic atoms.</p>
+                    </div>
+                </div>
+
+                <div class="legend-item" id="leg-deflection" data-color="neutral">
+                    <div class="legend-badge">4</div>
+                    <div class="legend-content">
+                        <h4>Mechanical Deflection</h4>
+                        <p>Because the layers are bonded, the uneven expansion forces the entire strip to curve towards the steel side.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 2. WORKING MECHANISM (Microscopic Animation) -->
+    <section class="glass-panel">
+        <div class="section-header">
+            <h2 class="section-title">Microscopic Mechanism</h2>
+            <p class="section-subtitle">A stage-by-stage molecular view of how thermal energy translates into physical expansion.</p>
+        </div>
+
+        <div class="mechanism-grid">
+            <!-- Stages & Controls -->
+            <div class="mech-controls">
+                <div class="stage-list">
+                    <div class="stage-item active" data-stage="0">
+                        <div class="stage-num">1</div>
+                        <div class="stage-title">Cold State (Equilibrium)</div>
+                    </div>
+                    <div class="stage-item" data-stage="1">
+                        <div class="stage-num">2</div>
+                        <div class="stage-title">Energy Transfer</div>
+                    </div>
+                    <div class="stage-item" data-stage="2">
+                        <div class="stage-num">3</div>
+                        <div class="stage-title">Kinetic Vibration</div>
+                    </div>
+                    <div class="stage-item" data-stage="3">
+                        <div class="stage-num">4</div>
+                        <div class="stage-title">Lattice Expansion</div>
+                    </div>
+                </div>
+
+                <div class="playback-controls">
+                    <button class="btn btn-icon" id="btn-prev" aria-label="Previous Stage">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                    </button>
+                    <button class="btn btn-main" id="btn-play">Auto-Play</button>
+                    <button class="btn btn-icon" id="btn-next" aria-label="Next Stage">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Visual Canvas -->
+            <div class="mech-visual" id="mech-container">
+                <canvas id="mechCanvas"></canvas>
+                <div class="mech-caption" id="mech-caption">
+                    At absolute zero or low temperatures, atoms are densely packed in a crystalline lattice with minimal vibration.
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 3. INTERACTIVE LAB SIMULATION (Macro) -->
+    <section class="glass-panel">
+        <div class="section-header">
+            <h2 class="section-title">Linear Expansion Laboratory</h2>
+            <p class="section-subtitle">Formula: $\Delta L = \alpha \cdot L_0 \cdot \Delta T$. Interact with the controls to observe how different materials expand under identical temperature changes. (Expansion is visually exaggerated for educational clarity).</p>
+        </div>
+
+        <div class="sim-container">
+            <!-- Visual -->
+            <div class="sim-visual" id="sim-container-box">
+                <canvas id="simCanvas"></canvas>
+            </div>
+
+            <!-- Controls -->
+            <div class="sim-controls">
+                <div class="control-group">
+                    <label class="control-label">Material ($\alpha$)</label>
+                    <select id="sim-material">
+                        <option value="aluminum">Aluminum ($\alpha = 24 \times 10^{-6}$ /°C)</option>
+                        <option value="copper">Copper ($\alpha = 17 \times 10^{-6}$ /°C)</option>
+                        <option value="steel">Steel ($\alpha = 12 \times 10^{-6}$ /°C)</option>
+                        <option value="glass">Pyrex Glass ($\alpha = 3 \times 10^{-6}$ /°C)</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label">Heat Source ($\Delta T$)</label>
+                    <input type="range" id="sim-temp" min="0" max="1000" value="0">
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted);">
+                        <span>0 °C</span>
+                        <span id="temp-display">0 °C</span>
+                        <span>1000 °C</span>
+                    </div>
+                </div>
+
+                <div class="data-panel">
+                    <div class="data-row">
+                        <span>Original Length ($L_0$):</span>
+                        <span>10.000 m</span>
+                    </div>
+                    <div class="data-row">
+                        <span>Expansion ($\Delta L$):</span>
+                        <span class="data-highlight" id="data-delta">+ 0.000 m</span>
+                    </div>
+                    <div class="data-row data-total">
+                        <span>Final Length:</span>
+                        <span id="data-total">10.000 m</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 4. APPLICATIONS & FACTS -->
+    <section class="cards-grid">
+        <div class="info-card card-app">
+            <div class="card-icon">
+                <svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" stroke-dasharray="4 4"/><path d="M4 12h16M12 4v16"/></svg>
+            </div>
+            <h3>Expansion Joints</h3>
+            <p>Bridges, railway tracks, and pipelines are built with engineered gaps. Without these interlocking metal teeth, summer heat would cause the structures to expand, buckle, and suffer catastrophic failure.</p>
+        </div>
+
+        <div class="info-card card-fact">
+            <div class="card-icon">
+                <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+            <h3>Anomalous Expansion of Water</h3>
+            <p>Unlike most substances, water <i>contracts</i> when heated from 0°C to 4°C. This unique property makes ice less dense than water, ensuring lakes freeze from the top down, allowing aquatic life to survive winters.</p>
+        </div>
+
+        <div class="info-card card-mistake">
+            <div class="card-icon">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            </div>
+            <h3>Common Misconception</h3>
+            <p>Many assume the atoms themselves swell up and get larger when heated. <b>This is false.</b> The size of individual atoms remains constant; it is the <i>average distance between them</i> that increases.</p>
+        </div>
+    </section>
+
+</div>
+
+<!-- ==========================================================================
+     JAVASCRIPT LOGIC
+     ========================================================================== -->
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        
+        /* ----------------------------------------------------------------------
+           MODULE 1: DIAGRAM & LEGEND INTERACTION
+           ---------------------------------------------------------------------- */
+        const markers = document.querySelectorAll('.marker');
+        const legends = document.querySelectorAll('.legend-item');
+
+        const clearActiveStates = () => {
+            markers.forEach(m => m.classList.remove('active'));
+            legends.forEach(l => l.classList.remove('active'));
+        };
+
+        const setActiveState = (id) => {
+            clearActiveStates();
+            const legend = document.getElementById(id);
+            const marker = document.querySelector(`.marker[data-target="${id}"]`);
+            if (legend) legend.classList.add('active');
+            if (marker) marker.classList.add('active');
+        };
+
+        // Bind events to markers
+        markers.forEach(marker => {
+            const handleInteract = (e) => {
+                if(e.type === 'touchstart') e.preventDefault();
+                setActiveState(marker.dataset.target);
+            };
+            marker.addEventListener('mouseenter', handleInteract);
+            marker.addEventListener('touchstart', handleInteract, {passive: false});
+        });
+
+        // Bind events to legends
+        legends.forEach(legend => {
+            legend.addEventListener('mouseenter', () => setActiveState(legend.id));
+        });
+
+
+        /* ----------------------------------------------------------------------
+           MODULE 2: MICROSCOPIC MECHANISM (CANVAS)
+           ---------------------------------------------------------------------- */
+        const mechState = {
+            stage: 0,
+            playInterval: null,
+            animating: true,
+            // Physics / Visual state
+            scale: 1.0,
+            targetScale: 1.0,
+            vibration: 0,
+            targetVibration: 0,
+            heatAlpha: 0,
+            targetHeatAlpha: 0
+        };
+
+        const stageCaptions = [
+            "At low temperatures, atoms are densely packed in a lattice with minimal vibration.",
+            "Thermal energy is applied to the material. Heat waves penetrate the crystalline structure.",
+            "Atoms absorb energy, increasing their kinetic energy and vibrating vigorously.",
+            "The violent vibration forces atoms further apart. The entire lattice pushes outward, causing macroscopic expansion."
+        ];
+
+        const mCanvas = document.getElementById('mechCanvas');
+        const mCtx = mCanvas.getContext('2d');
+        const mContainer = document.getElementById('mech-container');
+
+        // Lattice setup
+        const cols = 8;
+        const rows = 5;
+        const baseSpacing = 45;
+        const atoms = [];
+
+        for (let i = 0; i < cols; i++) {
+            for (let j = 0; j < rows; j++) {
+                atoms.push({ c: i, r: j, vx: 0, vy: 0 });
+            }
+        }
+
+        const resizeMechCanvas = () => {
+            const rect = mContainer.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            mCanvas.width = rect.width * dpr;
+            mCanvas.height = rect.height * dpr;
+            mCtx.scale(dpr, dpr);
+            mCanvas.style.width = `${rect.width}px`;
+            mCanvas.style.height = `${rect.height}px`;
+        };
+
+        window.addEventListener('resize', resizeMechCanvas);
+        resizeMechCanvas();
+
+        const drawMechFrame = () => {
+            const w = mCanvas.width / (window.devicePixelRatio || 1);
+            const h = mCanvas.height / (window.devicePixelRatio || 1);
+            
+            mCtx.clearRect(0, 0, w, h);
+
+            // Interpolate state variables smoothly
+            mechState.scale += (mechState.targetScale - mechState.scale) * 0.05;
+            mechState.vibration += (mechState.targetVibration - mechState.vibration) * 0.1;
+            mechState.heatAlpha += (mechState.targetHeatAlpha - mechState.heatAlpha) * 0.05;
+
+            // Draw Background Heat glow
+            if (mechState.heatAlpha > 0.01) {
+                const grad = mCtx.createRadialGradient(w/2, h + 50, 0, w/2, h + 50, h);
+                grad.addColorStop(0, `rgba(255, 87, 34, ${mechState.heatAlpha * 0.5})`);
+                grad.addColorStop(1, 'transparent');
+                mCtx.fillStyle = grad;
+                mCtx.fillRect(0, 0, w, h);
+                
+                // Rising heat particles
+                mCtx.fillStyle = `rgba(255, 150, 50, ${mechState.heatAlpha * 0.6})`;
+                const time = Date.now() * 0.002;
+                for(let i=0; i<15; i++) {
+                    const px = w/2 + Math.sin(time + i) * 150;
+                    const py = h - ((time * 30 + i * 40) % h);
+                    mCtx.beginPath();
+                    mCtx.arc(px, py, Math.random()*2+1, 0, Math.PI*2);
+                    mCtx.fill();
+                }
+            }
+
+            // Calculate Lattice centering
+            const latticeW = (cols - 1) * baseSpacing * mechState.scale;
+            const latticeH = (rows - 1) * baseSpacing * mechState.scale;
+            const offsetX = (w - latticeW) / 2;
+            const offsetY = (h - latticeH) / 2;
+
+            mCtx.save();
+            mCtx.translate(offsetX, offsetY);
+
+            // Calculate current vibration offsets
+            atoms.forEach(a => {
+                a.vx = (Math.random() - 0.5) * mechState.vibration;
+                a.vy = (Math.random() - 0.5) * mechState.vibration;
+            });
+
+            // Draw bonds (springs)
+            mCtx.strokeStyle = `rgba(255, 255, 255, ${0.15 + mechState.heatAlpha * 0.2})`;
+            mCtx.lineWidth = 1.5;
+            
+            for (let i = 0; i < atoms.length; i++) {
+                const a1 = atoms[i];
+                const x1 = a1.c * baseSpacing * mechState.scale + a1.vx;
+                const y1 = a1.r * baseSpacing * mechState.scale + a1.vy;
+
+                // Right neighbor
+                if (a1.c < cols - 1) {
+                    const a2 = atoms.find(a => a.c === a1.c + 1 && a.r === a1.r);
+                    if (a2) {
+                        const x2 = a2.c * baseSpacing * mechState.scale + a2.vx;
+                        const y2 = a2.r * baseSpacing * mechState.scale + a2.vy;
+                        mCtx.beginPath(); mCtx.moveTo(x1, y1); mCtx.lineTo(x2, y2); mCtx.stroke();
+                    }
+                }
+                // Bottom neighbor
+                if (a1.r < rows - 1) {
+                    const a2 = atoms.find(a => a.c === a1.c && a.r === a1.r + 1);
+                    if (a2) {
+                        const x2 = a2.c * baseSpacing * mechState.scale + a2.vx;
+                        const y2 = a2.r * baseSpacing * mechState.scale + a2.vy;
+                        mCtx.beginPath(); mCtx.moveTo(x1, y1); mCtx.lineTo(x2, y2); mCtx.stroke();
+                    }
+                }
+            }
+
+            // Draw atoms
+            atoms.forEach(a => {
+                const x = a.c * baseSpacing * mechState.scale + a.vx;
+                const y = a.r * baseSpacing * mechState.scale + a.vy;
+                
+                const r = 10;
+                
+                // Color mapping based on heat
+                const atomGrad = mCtx.createRadialGradient(x-3, y-3, 1, x, y, r);
+                if (mechState.heatAlpha > 0.3) {
+                    atomGrad.addColorStop(0, '#fff');
+                    atomGrad.addColorStop(0.3, '#ff8a00');
+                    atomGrad.addColorStop(1, '#ff5722');
+                } else {
+                    atomGrad.addColorStop(0, '#fff');
+                    atomGrad.addColorStop(0.3, '#38bdf8');
+                    atomGrad.addColorStop(1, '#0284c7');
+                }
+
+                mCtx.beginPath();
+                mCtx.arc(x, y, r, 0, Math.PI * 2);
+                mCtx.fillStyle = atomGrad;
+                mCtx.fill();
+                
+                // Glow
+                if (mechState.heatAlpha > 0.1) {
+                    mCtx.shadowBlur = 12 * mechState.heatAlpha;
+                    mCtx.shadowColor = '#ff5722';
+                    mCtx.fill();
+                    mCtx.shadowBlur = 0;
+                }
+            });
+
+            mCtx.restore();
+            requestAnimationFrame(drawMechFrame);
+        };
+        drawMechFrame(); // Start loop
+
+        // Controls
+        const setMechStage = (stage) => {
+            mechState.stage = stage;
+            
+            // Physical targets based on stage
+            if (stage === 0) { mechState.targetScale = 1.0; mechState.targetVibration = 0.5; mechState.targetHeatAlpha = 0; }
+            if (stage === 1) { mechState.targetScale = 1.0; mechState.targetVibration = 1.5; mechState.targetHeatAlpha = 1; }
+            if (stage === 2) { mechState.targetScale = 1.05; mechState.targetVibration = 6.0; mechState.targetHeatAlpha = 1; }
+            if (stage === 3) { mechState.targetScale = 1.4; mechState.targetVibration = 8.0; mechState.targetHeatAlpha = 1; }
+
+            // UI Updates
+            document.querySelectorAll('.stage-item').forEach(el => el.classList.remove('active'));
+            document.querySelector(`.stage-item[data-stage="${stage}"]`).classList.add('active');
+            
+            const caption = document.getElementById('mech-caption');
+            caption.style.opacity = 0;
+            caption.style.transform = 'translateY(10px)';
+            setTimeout(() => {
+                caption.innerText = stageCaptions[stage];
+                caption.style.opacity = 1;
+                caption.style.transform = 'translateY(0)';
+            }, 300);
+        };
+
+        const stopAutoPlay = () => {
+            clearInterval(mechState.playInterval);
+            mechState.playInterval = null;
+            document.getElementById('btn-play').classList.remove('active');
+            document.getElementById('btn-play').innerText = 'Auto-Play';
+        };
+
+        document.querySelectorAll('.stage-item').forEach(item => {
+            item.addEventListener('click', () => {
+                stopAutoPlay();
+                setMechStage(parseInt(item.dataset.stage));
+            });
+        });
+
+        document.getElementById('btn-prev').addEventListener('click', () => {
+            stopAutoPlay();
+            setMechStage((mechState.stage - 1 + 4) % 4);
+        });
+
+        document.getElementById('btn-next').addEventListener('click', () => {
+            stopAutoPlay();
+            setMechStage((mechState.stage + 1) % 4);
+        });
+
+        document.getElementById('btn-play').addEventListener('click', (e) => {
+            if (mechState.playInterval) {
+                stopAutoPlay();
+            } else {
+                e.target.classList.add('active');
+                e.target.innerText = 'Pause';
+                setMechStage((mechState.stage + 1) % 4);
+                mechState.playInterval = setInterval(() => {
+                    setMechStage((mechState.stage + 1) % 4);
+                }, 3500);
+            }
+        });
+
+
+        /* ----------------------------------------------------------------------
+           MODULE 3: MACRO SIMULATION (Canvas + Inputs)
+           ---------------------------------------------------------------------- */
+        const sCanvas = document.getElementById('simCanvas');
+        const sCtx = sCanvas.getContext('2d');
+        const sContainer = document.getElementById('sim-container-box');
+
+        const simMats = {
+            aluminum: { alpha: 24e-6, color: '#e2e8f0' },
+            copper:   { alpha: 17e-6, color: '#f59e0b' },
+            steel:    { alpha: 12e-6, color: '#94a3b8' },
+            glass:    { alpha: 3e-6,  color: '#bae6fd' }
+        };
+
+        let simState = {
+            baseL: 10, // meters
+            visualW: 200, // pixels base width
+            temp: 0,
+            mat: 'aluminum'
+        };
+
+        const resizeSimCanvas = () => {
+            const rect = sContainer.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            sCanvas.width = rect.width * dpr;
+            sCanvas.height = rect.height * dpr;
+            sCtx.scale(dpr, dpr);
+            sCanvas.style.width = `${rect.width}px`;
+            sCanvas.style.height = `${rect.height}px`;
+            
+            // Make rod base width responsive
+            simState.visualW = rect.width * 0.45;
+        };
+
+        window.addEventListener('resize', resizeSimCanvas);
+        resizeSimCanvas();
+
+        const drawSimFrame = () => {
+            const w = sCanvas.width / (window.devicePixelRatio || 1);
+            const h = sCanvas.height / (window.devicePixelRatio || 1);
+            
+            sCtx.clearRect(0, 0, w, h);
+
+            const matInfo = simMats[simState.mat];
+            const deltaL = matInfo.alpha * simState.baseL * simState.temp; // Scientific
+            
+            // Visual Exaggeration for screen (Expansion * huge multiplier)
+            // DeltaL max for Alum at 1000C is 0.24m (2.4%). Visual expansion should be obvious.
+            const visualExpansion = matInfo.alpha * simState.visualW * simState.temp * 100;
+            const currentW = simState.visualW + visualExpansion;
+
+            const startX = w * 0.15;
+            const rodY = h / 2 - 25;
+            const rodH = 50;
+
+            // 1. Draw Fixed Wall (Anchor on left)
+            sCtx.fillStyle = '#1e293b';
+            sCtx.fillRect(startX - 30, rodY - 30, 30, rodH + 60);
+            sCtx.strokeStyle = '#334155';
+            sCtx.lineWidth = 2;
+            for(let i=0; i<6; i++) {
+                sCtx.beginPath();
+                sCtx.moveTo(startX - 30, rodY - 20 + (i*18));
+                sCtx.lineTo(startX, rodY - 20 + (i*18));
+                sCtx.stroke();
+            }
+
+            // 2. Draw Ruler / Grid
+            const rulerY = rodY + rodH + 30;
+            sCtx.strokeStyle = 'rgba(255,255,255,0.15)';
+            sCtx.lineWidth = 1;
+            sCtx.beginPath();
+            sCtx.moveTo(startX, rulerY);
+            sCtx.lineTo(w * 0.9, rulerY);
+            sCtx.stroke();
+
+            for(let x = 0; x <= simState.visualW * 1.8; x += simState.visualW/10) {
+                sCtx.beginPath();
+                sCtx.moveTo(startX + x, rulerY);
+                sCtx.lineTo(startX + x, rulerY + (x % (simState.visualW/2) < 1 ? 12 : 6));
+                sCtx.stroke();
+            }
+            sCtx.fillStyle = 'rgba(255,255,255,0.5)';
+            sCtx.font = '12px sans-serif';
+            sCtx.fillText('L₀', startX + simState.visualW - 8, rulerY + 25);
+
+            // 3. Draw Main Rod
+            const grad = sCtx.createLinearGradient(startX, 0, startX + currentW, 0);
+            grad.addColorStop(0, '#cbd5e1');
+            grad.addColorStop(0.5, matInfo.color);
+            grad.addColorStop(1, '#0f172a');
+
+            sCtx.fillStyle = grad;
+            
+            // Base Rod
+            sCtx.fillRect(startX, rodY, simState.visualW, rodH);
+            
+            // Expanded portion (highlighted red)
+            if (visualExpansion > 0.5) {
+                sCtx.fillStyle = 'rgba(255, 87, 34, 0.7)';
+                sCtx.fillRect(startX + simState.visualW, rodY, visualExpansion, rodH);
+                
+                // Delta L Dimension Line
+                sCtx.strokeStyle = '#ff5722';
+                sCtx.lineWidth = 1.5;
+                sCtx.beginPath();
+                sCtx.moveTo(startX + simState.visualW, rodY - 10);
+                sCtx.lineTo(startX + currentW, rodY - 10);
+                sCtx.moveTo(startX + simState.visualW, rodY - 15);
+                sCtx.lineTo(startX + simState.visualW, rodY - 5);
+                sCtx.moveTo(startX + currentW, rodY - 15);
+                sCtx.lineTo(startX + currentW, rodY - 5);
+                sCtx.stroke();
+                
+                sCtx.fillStyle = '#ff5722';
+                sCtx.font = 'bold 12px sans-serif';
+                sCtx.fillText('ΔL', startX + simState.visualW + (visualExpansion/2) - 10, rodY - 20);
+                
+                // Glow effect based on temp
+                sCtx.shadowBlur = 15 * (simState.temp / 1000);
+                sCtx.shadowColor = '#ff5722';
+                sCtx.fillRect(startX + simState.visualW, rodY, visualExpansion, rodH);
+                sCtx.shadowBlur = 0;
+            }
+
+            // 4. Heat Particles below rod
+            if (simState.temp > 0) {
+                sCtx.fillStyle = 'rgba(255, 87, 34, 0.4)';
+                const pCount = Math.floor((simState.temp / 1000) * 40);
+                const time = Date.now() * 0.05;
+                for(let i=0; i<pCount; i++) {
+                    const px = startX + 20 + Math.random() * (currentW - 20);
+                    const py = rodY + rodH + Math.random() * 20;
+                    sCtx.beginPath();
+                    sCtx.arc(px, py - (time + i*15) % 25, Math.random()*2+1, 0, Math.PI*2);
+                    sCtx.fill();
+                }
+            }
+
+            requestAnimationFrame(drawSimFrame);
+        };
+        drawSimFrame(); // Start loop
+
+        // Inputs
+        const inputTemp = document.getElementById('sim-temp');
+        const selMat = document.getElementById('sim-material');
+        const dispTemp = document.getElementById('temp-display');
+        const dispDelta = document.getElementById('data-delta');
+        const dispTotal = document.getElementById('data-total');
+
+        const updateSim = () => {
+            simState.temp = parseInt(inputTemp.value);
+            simState.mat = selMat.value;
+            
+            dispTemp.innerText = `${simState.temp} °C`;
+            
+            const alpha = simMats[simState.mat].alpha;
+            const deltaL = alpha * simState.baseL * simState.temp;
+            const finalL = simState.baseL + deltaL;
+            
+            dispDelta.innerText = `+ ${deltaL.toFixed(4)} m`;
+            dispTotal.innerText = `${finalL.toFixed(4)} m`;
+            
+            // Slider color progress
+            const pct = (simState.temp / 1000) * 100;
+            inputTemp.style.background = `linear-gradient(90deg, var(--heat-color) ${pct}%, rgba(255,255,255,0.1) ${pct}%)`;
+        };
+
+        inputTemp.addEventListener('input', updateSim);
+        selMat.addEventListener('change', updateSim);
+        
+        // Init
+        updateSim();
+    });
+</script>
+</body>
+</html>

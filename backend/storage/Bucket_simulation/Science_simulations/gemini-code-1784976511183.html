@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Thermal Power Plant Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Color Palette - Premium Dark/Neon Theme */
+            --bg-base: #030712;
+            --bg-surface: rgba(17, 24, 39, 0.6);
+            --bg-surface-light: rgba(31, 41, 55, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            
+            --accent-cyan: #06b6d4;
+            --accent-cyan-glow: rgba(6, 182, 212, 0.5);
+            --accent-orange: #f97316;
+            --accent-orange-glow: rgba(249, 115, 22, 0.5);
+            --accent-yellow: #eab308;
+            --accent-yellow-glow: rgba(234, 179, 8, 0.5);
+            --accent-blue: #3b82f6;
+            --accent-blue-glow: rgba(59, 130, 246, 0.5);
+            --accent-purple: #8b5cf6;
+            
+            /* Typography */
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --step--1: clamp(0.83rem, 0.78rem + 0.27vw, 0.94rem);
+            --step-0: clamp(1.00rem, 0.91rem + 0.43vw, 1.13rem);
+            --step-1: clamp(1.20rem, 1.07rem + 0.63vw, 1.35rem);
+            --step-2: clamp(1.44rem, 1.26rem + 0.89vw, 1.62rem);
+            --step-3: clamp(1.73rem, 1.48rem + 1.24vw, 1.94rem);
+            --step-4: clamp(2.07rem, 1.73rem + 1.70vw, 2.33rem);
+            --step-5: clamp(2.49rem, 2.03rem + 2.31vw, 2.80rem);
+            
+            /* Spacing */
+            --spacing-sm: clamp(0.5rem, 1vw, 1rem);
+            --spacing-md: clamp(1rem, 2vw, 1.5rem);
+            --spacing-lg: clamp(1.5rem, 3vw, 2.5rem);
+            
+            /* UI */
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            --radius-xl: 32px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Canvas Background */
+        #ambient-canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Layout */
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-lg) var(--spacing-md);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-lg);
+        }
+
+        /* Typography */
+        h1 { font-size: var(--step-5); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; background: linear-gradient(to right, #fff, #9ca3af); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--step-3); font-weight: 700; color: var(--text-main); margin-bottom: var(--spacing-md); }
+        h3 { font-size: var(--step-1); font-weight: 600; color: var(--accent-cyan); margin-bottom: 0.5rem; }
+        p { font-size: var(--step-0); color: var(--text-muted); margin-bottom: 1rem; }
+        
+        /* Glassmorphism Classes */
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+            padding: var(--spacing-lg);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        @media (max-width: 768px) {
+            .glass-panel { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: var(--spacing-md); } /* Performance on mobile */
+        }
+
+        .glass-panel.interactive:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 40px rgba(6, 182, 212, 0.1);
+            border-color: rgba(6, 182, 212, 0.3);
+        }
+
+        /* Grid Layouts */
+        .grid-2 { display: grid; grid-template-columns: 1fr; gap: var(--spacing-lg); }
+        .grid-3 { display: grid; grid-template-columns: 1fr; gap: var(--spacing-md); }
+        @media (min-width: 768px) {
+            .grid-2 { grid-template-columns: repeat(2, 1fr); }
+            .grid-3 { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            .grid-3 { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        /* ==========================================================================
+           MAIN DIAGRAM & MANDATORY LABELING SYSTEM
+           ========================================================================== */
+        .diagram-section {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            position: relative;
+        }
+        @media (min-width: 1024px) {
+            .diagram-section { flex-direction: row; align-items: flex-start; }
+        }
+
+        .svg-container {
+            flex: 1 1 70%;
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: radial-gradient(circle at center, rgba(31, 41, 55, 0.5) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--spacing-sm);
+        }
+
+        svg#main-plant-diagram {
+            width: 100%;
+            height: 100%;
+            max-height: 70vh;
+            filter: drop-shadow(0 0 20px rgba(0,0,0,0.5));
+            transition: all 0.5s ease;
+        }
+
+        /* SVG Styles & Animations */
+        .svg-metallic { fill: url(#metallicGrad); }
+        .svg-pipe-steam { stroke: url(#steamGrad); stroke-width: 6; stroke-linecap: round; fill: none; }
+        .svg-pipe-water { stroke: url(#waterGrad); stroke-width: 6; stroke-linecap: round; fill: none; }
+        
+        .flow-anim {
+            stroke-dasharray: 10 10;
+            animation: flow 2s linear infinite;
+        }
+        .flow-anim.steam { stroke: #f97316; filter: drop-shadow(0 0 5px #f97316); }
+        .flow-anim.water { stroke: #06b6d4; filter: drop-shadow(0 0 5px #06b6d4); animation-direction: reverse; }
+        
+        @keyframes flow { to { stroke-dashoffset: -20; } }
+
+        .rotor { transform-origin: 650px 300px; }
+        .rotor.spinning { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .fire-anim { transform-origin: 200px 480px; animation: flicker 0.1s infinite alternate; }
+        @keyframes flicker { 0% { transform: scaleY(1) scaleX(1); opacity: 0.9; } 100% { transform: scaleY(1.1) scaleX(0.95); opacity: 1; } }
+
+        .steam-cloud { animation: drift 4s ease-in-out infinite alternate; transform-origin: center; }
+        @keyframes drift { 0% { transform: translateY(0) scale(1); opacity: 0.5; } 100% { transform: translateY(-20px) scale(1.1); opacity: 0.8; } }
+
+        .electric-spark {
+            stroke-dasharray: 20 100;
+            animation: sparkFlow 1s linear infinite;
+            stroke: #eab308; stroke-width: 3; fill: none;
+            filter: drop-shadow(0 0 8px #eab308);
+        }
+        @keyframes sparkFlow { 0% { stroke-dashoffset: 120; } 100% { stroke-dashoffset: 0; } }
+
+        /* Dimming for Focus Mode (Working Section) */
+        svg#main-plant-diagram.focus-mode > g { opacity: 0.2; transition: opacity 0.5s ease; filter: grayscale(1); }
+        svg#main-plant-diagram.focus-mode > g.active-stage { opacity: 1; filter: grayscale(0) drop-shadow(0 0 15px rgba(255,255,255,0.2)); }
+        svg#main-plant-diagram.focus-mode > .marker-group { opacity: 0 !important; pointer-events: none; } /* Hide markers during process */
+
+        /* Markers on SVG */
+        .marker {
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .marker-circle {
+            fill: rgba(17, 24, 39, 0.9);
+            stroke: var(--accent-cyan);
+            stroke-width: 2;
+        }
+        .marker-text {
+            fill: #fff;
+            font-family: var(--font-main);
+            font-weight: bold;
+            font-size: 16px;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+        .marker:hover .marker-circle, .marker.active .marker-circle {
+            fill: var(--accent-cyan);
+            stroke: #fff;
+            filter: drop-shadow(0 0 10px var(--accent-cyan));
+            transform: scale(1.1);
+            transform-origin: center;
+        }
+        .marker:hover .marker-text, .marker.active .marker-text { fill: #000; }
+
+        /* Legend Sidebar/Bottom */
+        .legend-container {
+            flex: 1 1 30%;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            min-width: 250px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(6, 182, 212, 0.1);
+            border-color: var(--accent-cyan);
+            transform: translateX(5px);
+        }
+        .legend-num {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 28px;
+            height: 28px;
+            background: var(--accent-cyan);
+            color: #000;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+        }
+        .legend-text { display: flex; flex-direction: column; }
+        .legend-title { font-weight: 600; color: #fff; font-size: var(--step--1); }
+        .legend-desc { font-size: 0.75rem; color: var(--text-muted); line-height: 1.2; }
+
+
+        /* ==========================================================================
+           WORKING PROCESS SECTION (MANDATORY STRUCTURE)
+           ========================================================================== */
+        .process-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+            border-top: 1px solid var(--glass-border);
+            padding-top: var(--spacing-lg);
+            margin-top: var(--spacing-lg);
+        }
+        .process-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .process-stage-card {
+            background: linear-gradient(135deg, rgba(31, 41, 55, 0.8), rgba(17, 24, 39, 0.9));
+            border: 1px solid var(--glass-border);
+            border-left: 4px solid var(--accent-orange);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            min-height: 120px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stage-title { font-size: var(--step-1); font-weight: bold; color: #fff; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .stage-title span { background: var(--accent-orange); color: #000; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; }
+        .stage-desc { font-size: var(--step-0); color: var(--text-muted); }
+        .stage-io { display: flex; gap: 1rem; margin-top: 0.5rem; font-size: 0.85rem; }
+        .io-badge { display: flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 6px; }
+        .io-in { color: var(--accent-cyan); }
+        .io-out { color: var(--accent-orange); }
+
+        .process-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(0,0,0,0.3);
+            padding: 8px;
+            border-radius: 50px;
+            border: 1px solid var(--glass-border);
+        }
+        .ctrl-btn {
+            background: none;
+            border: none;
+            color: var(--text-main);
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
+            transition: all 0.2s;
+        }
+        .ctrl-btn:hover:not(:disabled) { background: rgba(255,255,255,0.1); }
+        .ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .ctrl-btn svg { width: 20px; height: 20px; fill: currentColor; }
+        .ctrl-btn.play-active { color: var(--accent-cyan); background: rgba(6, 182, 212, 0.1); }
+        
+        .progress-dots { display: flex; gap: 8px; margin: 0 10px; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: all 0.3s; }
+        .dot.active { background: var(--accent-orange); transform: scale(1.3); box-shadow: 0 0 8px var(--accent-orange-glow); }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--spacing-md);
+        }
+        @media (min-width: 768px) { .sim-grid { grid-template-columns: 300px 1fr; } }
+        
+        .control-panel { display: flex; flex-direction: column; gap: 1.5rem; }
+        
+        .slider-group { display: flex; flex-direction: column; gap: 0.5rem; }
+        .slider-header { display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: 600;}
+        
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px; width: 24px;
+            border-radius: 50%;
+            background: var(--accent-orange);
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 0 10px var(--accent-orange-glow);
+            border: 2px solid #fff;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        .metrics-panel {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        @media (min-width: 1024px) { .metrics-panel { grid-template-columns: repeat(4, 1fr); } }
+        
+        .metric-card {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .metric-value { font-size: var(--step-2); font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
+        .metric-label { font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .metric-unit { font-size: 1rem; color: var(--accent-cyan); font-weight: normal; margin-left: 4px; }
+        
+        /* Metric ring background */
+        .metric-card::before {
+            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+            background: conic-gradient(transparent, rgba(255,255,255,0.05), transparent 30%);
+            animation: rotateBg 4s linear infinite;
+            z-index: 0; pointer-events: none;
+        }
+        .metric-card > * { position: relative; z-index: 1; }
+        @keyframes rotateBg { 100% { transform: rotate(360deg); } }
+
+        /* ==========================================================================
+           INFO CARDS (Facts, Applications)
+           ========================================================================== */
+        .icon-box {
+            width: 48px; height: 48px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            display: flex; justify-content: center; align-items: center;
+            margin-bottom: 1rem;
+            border: 1px solid var(--glass-border);
+        }
+        .icon-box svg { width: 24px; height: 24px; fill: var(--accent-cyan); }
+
+        /* Badge for revision */
+        .badge {
+            display: inline-block; padding: 4px 10px; border-radius: 20px;
+            font-size: 0.8rem; font-weight: bold; background: rgba(234, 179, 8, 0.2);
+            color: var(--accent-yellow); border: 1px solid rgba(234, 179, 8, 0.5);
+            margin-bottom: 0.5rem;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Canvas Background -->
+    <canvas id="ambient-canvas"></canvas>
+
+    <div class="app-container">
+        
+        <!-- Header -->
+        <header style="text-align: center; margin-bottom: 2rem; margin-top: 1rem;">
+            <div class="badge" style="background: rgba(6, 182, 212, 0.1); color: var(--accent-cyan); border-color: var(--accent-cyan);">Premium Interactive Simulation</div>
+            <h1>Thermal Power Plant</h1>
+            <p style="max-width: 600px; margin: 1rem auto 0; font-size: var(--step-1);">Converting the chemical energy of fossil fuels into electrical energy through the Rankine Cycle.</p>
+        </header>
+
+        <!-- Main Diagram & Components Section -->
+        <section class="glass-panel" id="overview">
+            <h2>Plant Architecture</h2>
+            <p>Explore the anatomy of a thermal power station. Hover or tap markers to identify components.</p>
+            
+            <div class="diagram-section">
+                <!-- SVG Container -->
+                <div class="svg-container">
+                    <svg id="main-plant-diagram" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="metallicGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#4b5563" />
+                                <stop offset="50%" stop-color="#9ca3af" />
+                                <stop offset="100%" stop-color="#374151" />
+                            </linearGradient>
+                            <linearGradient id="pipeGradHorz" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#6b7280" />
+                                <stop offset="50%" stop-color="#d1d5db" />
+                                <stop offset="100%" stop-color="#4b5563" />
+                            </linearGradient>
+                            <linearGradient id="pipeGradVert" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#6b7280" />
+                                <stop offset="50%" stop-color="#d1d5db" />
+                                <stop offset="100%" stop-color="#4b5563" />
+                            </linearGradient>
+                            <radialGradient id="fireGrad" cx="50%" cy="100%" r="100%">
+                                <stop offset="0%" stop-color="#fbbf24" />
+                                <stop offset="30%" stop-color="#ea580c" />
+                                <stop offset="80%" stop-color="#991b1b" />
+                                <stop offset="100%" stop-color="#450a0a" />
+                            </radialGradient>
+                            <linearGradient id="waterGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#0891b2" />
+                                <stop offset="100%" stop-color="#06b6d4" />
+                            </linearGradient>
+                            <linearGradient id="steamGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#dc2626" />
+                                <stop offset="100%" stop-color="#f97316" />
+                            </linearGradient>
+                            <linearGradient id="coolTowerGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#374151" />
+                                <stop offset="20%" stop-color="#6b7280" />
+                                <stop offset="80%" stop-color="#4b5563" />
+                                <stop offset="100%" stop-color="#1f2937" />
+                            </linearGradient>
+
+                            <!-- Component Filters -->
+                            <filter id="glowCyan"><feGaussianBlur stdDeviation="3" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                            <filter id="glowOrange"><feGaussianBlur stdDeviation="5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                            <filter id="shadow"><feDropShadow dx="2" dy="5" stdDeviation="5" flood-opacity="0.5"/></filter>
+                        </defs>
+
+                        <!-- Background Grid/Floor -->
+                        <path d="M 50 550 L 950 550" stroke="rgba(255,255,255,0.1)" stroke-width="2" />
+                        <path d="M 50 500 L 950 500" stroke="rgba(255,255,255,0.05)" stroke-width="1" />
+
+                        <!-- STAGE 6: Cooling Tower -->
+                        <g id="grp-cooling" filter="url(#shadow)">
+                            <!-- Base structure -->
+                            <path d="M 750 550 C 780 400, 780 300, 800 150 L 900 150 C 920 300, 920 400, 950 550 Z" fill="url(#coolTowerGrad)" />
+                            <!-- Rim -->
+                            <ellipse cx="850" cy="150" rx="50" ry="15" fill="#4b5563" stroke="#1f2937" stroke-width="2"/>
+                            <!-- Steam coming out -->
+                            <g class="steam-cloud">
+                                <circle cx="830" cy="120" r="30" fill="rgba(255,255,255,0.4)" filter="blur(8px)"/>
+                                <circle cx="870" cy="100" r="40" fill="rgba(255,255,255,0.3)" filter="blur(10px)"/>
+                                <circle cx="840" cy="70" r="45" fill="rgba(255,255,255,0.2)" filter="blur(12px)"/>
+                            </g>
+                            <!-- Cold water pipe return -->
+                            <path d="M 780 500 L 680 500 L 680 450" class="svg-pipe-water" />
+                            <path d="M 780 500 L 680 500 L 680 450" class="flow-anim water" stroke-width="3" fill="none"/>
+                            <!-- Hot water pipe to tower -->
+                            <path d="M 680 420 L 780 420 L 780 400" stroke="#ef4444" stroke-width="6" stroke-linecap="round" fill="none" />
+                        </g>
+
+                        <!-- STAGE 1 & 2: Boiler / Furnace -->
+                        <g id="grp-boiler" filter="url(#shadow)">
+                            <!-- Ash hopper -->
+                            <polygon points="100,550 200,550 170,480 130,480" fill="#1f2937"/>
+                            <!-- Main Boiler Structure -->
+                            <rect x="100" y="100" width="150" height="380" rx="10" fill="url(#metallicGrad)" stroke="#111827" stroke-width="3"/>
+                            <!-- Chimney -->
+                            <rect x="150" y="20" width="40" height="80" fill="url(#metallicGrad)"/>
+                            <!-- Furnace interior (cutaway) -->
+                            <rect x="120" y="250" width="110" height="200" rx="5" fill="#111827" />
+                            <!-- Fire -->
+                            <path id="boiler-fire" d="M 120 450 Q 140 380, 150 420 T 175 350 T 200 420 Q 210 380, 230 450 Z" fill="url(#fireGrad)" class="fire-anim" filter="url(#glowOrange)"/>
+                            <!-- Boiler Tubes (Water turning to Steam) -->
+                            <path d="M 130 150 L 130 430 Q 130 440, 140 440 L 210 440 Q 220 440, 220 430 L 220 150" stroke="#0891b2" stroke-width="8" fill="none"/>
+                            <path d="M 130 150 L 130 430 Q 130 440, 140 440 L 210 440 Q 220 440, 220 430 L 220 150" stroke="url(#steamGrad)" stroke-width="8" fill="none" style="clip-path: polygon(0 0, 100% 0, 100% 70%, 0 70%);"/>
+                            
+                            <!-- Coal feed conveyor -->
+                            <path d="M 20 300 L 110 250" stroke="#374151" stroke-width="15" stroke-linecap="round"/>
+                            <!-- Coal particles (static representation) -->
+                            <circle cx="80" cy="265" r="4" fill="#000"/><circle cx="95" cy="255" r="4" fill="#000"/><circle cx="65" cy="275" r="4" fill="#000"/>
+                        </g>
+
+                        <!-- STAGE 5: Condenser -->
+                        <g id="grp-condenser" filter="url(#shadow)">
+                            <!-- Box -->
+                            <rect x="580" y="380" width="120" height="100" rx="10" fill="url(#metallicGrad)" stroke="#111827" stroke-width="2"/>
+                            <rect x="590" y="390" width="100" height="80" rx="5" fill="#111827" />
+                            <!-- Cooling tubes inside -->
+                            <path d="M 590 400 L 690 400 M 590 420 L 690 420 M 590 440 L 690 440 M 590 460 L 690 460" stroke="#0891b2" stroke-width="6" stroke-linecap="round"/>
+                            <!-- Droplets -->
+                            <circle cx="610" cy="405" r="2" fill="#06b6d4"/><circle cx="640" cy="425" r="2" fill="#06b6d4"/><circle cx="670" cy="445" r="2" fill="#06b6d4"/>
+                        </g>
+
+                        <!-- PIPING SYSTEM -->
+                        <g id="grp-pipes">
+                            <!-- High Pressure Steam Pipe (Boiler to Turbine) -->
+                            <path d="M 220 120 L 300 120 L 300 180 L 580 180 L 580 230" class="svg-pipe-steam" />
+                            <!-- Steam Flow Animation -->
+                            <path d="M 220 120 L 300 120 L 300 180 L 580 180 L 580 230" class="flow-anim steam" stroke-width="2" />
+                            
+                            <!-- Low Pressure Steam (Turbine to Condenser) -->
+                            <path d="M 640 330 L 640 380" stroke="#fb923c" stroke-width="15" fill="none" opacity="0.8"/>
+                            
+                            <!-- Water Feed Pipe (Condenser to Boiler) -->
+                            <path d="M 640 480 L 640 520 L 280 520 L 280 150 L 250 150" class="svg-pipe-water" />
+                            <!-- Feed Pump -->
+                            <circle cx="450" cy="520" r="15" fill="url(#metallicGrad)" stroke="#111827" stroke-width="2"/>
+                            <!-- Water Flow Animation -->
+                            <path d="M 640 480 L 640 520 L 280 520 L 280 150 L 250 150" class="flow-anim water" stroke-width="2" />
+                        </g>
+
+                        <!-- STAGE 3: Steam Turbine -->
+                        <g id="grp-turbine" filter="url(#shadow)">
+                            <!-- Base -->
+                            <path d="M 570 330 L 730 330 L 710 370 L 590 370 Z" fill="#374151"/>
+                            <!-- Casing (Trapezoidal to show expansion) -->
+                            <path d="M 560 230 L 740 210 L 740 330 L 560 330 Z" fill="url(#pipeGradVert)" stroke="#111827" stroke-width="2"/>
+                            <!-- Cutaway to see blades -->
+                            <path d="M 580 240 L 720 225 L 720 320 L 580 320 Z" fill="#111827" />
+                            
+                            <!-- Turbine Shaft -->
+                            <rect x="550" y="270" width="200" height="10" fill="#9ca3af" />
+                            
+                            <!-- Rotor & Blades (Animated) -->
+                            <g id="turbine-rotor" class="rotor spinning">
+                                <!-- Stages of blades (getting larger) -->
+                                <ellipse cx="600" cy="275" rx="5" ry="30" fill="url(#metallicGrad)" stroke="#111827" stroke-width="1"/>
+                                <ellipse cx="630" cy="275" rx="6" ry="35" fill="url(#metallicGrad)" stroke="#111827" stroke-width="1"/>
+                                <ellipse cx="660" cy="275" rx="7" ry="40" fill="url(#metallicGrad)" stroke="#111827" stroke-width="1"/>
+                                <ellipse cx="690" cy="275" rx="8" ry="45" fill="url(#metallicGrad)" stroke="#111827" stroke-width="1"/>
+                            </g>
+                        </g>
+
+                        <!-- STAGE 4: Generator -->
+                        <g id="grp-generator" filter="url(#shadow)">
+                            <!-- Base -->
+                            <rect x="760" y="300" width="80" height="30" fill="#374151" />
+                            <!-- Shaft connecting Turbine to Generator -->
+                            <rect x="740" y="270" width="30" height="10" fill="#9ca3af" />
+                            <!-- Generator Body -->
+                            <rect x="770" y="220" width="60" height="110" rx="10" fill="url(#pipeGradHorz)" stroke="#111827" stroke-width="2"/>
+                            <!-- Cooling ribs -->
+                            <rect x="780" y="230" width="5" height="90" fill="#374151"/>
+                            <rect x="795" y="230" width="5" height="90" fill="#374151"/>
+                            <rect x="810" y="230" width="5" height="90" fill="#374151"/>
+                            
+                            <!-- Electricity output -->
+                            <path d="M 800 220 L 800 150 L 950 150" class="electric-spark" />
+                        </g>
+
+                        <!-- MARKERS (Placed explicitly on components) -->
+                        <g class="marker-group">
+                            <g class="marker" data-target="item-1" transform="translate(170, 350)">
+                                <circle class="marker-circle" cx="0" cy="0" r="14"/>
+                                <text class="marker-text" x="0" y="0">1</text>
+                            </g>
+                            <g class="marker" data-target="item-2" transform="translate(175, 120)">
+                                <circle class="marker-circle" cx="0" cy="0" r="14"/>
+                                <text class="marker-text" x="0" y="0">2</text>
+                            </g>
+                            <g class="marker" data-target="item-3" transform="translate(650, 200)">
+                                <circle class="marker-circle" cx="0" cy="0" r="14"/>
+                                <text class="marker-text" x="0" y="0">3</text>
+                            </g>
+                            <g class="marker" data-target="item-4" transform="translate(800, 200)">
+                                <circle class="marker-circle" cx="0" cy="0" r="14"/>
+                                <text class="marker-text" x="0" y="0">4</text>
+                            </g>
+                            <g class="marker" data-target="item-5" transform="translate(640, 430)">
+                                <circle class="marker-circle" cx="0" cy="0" r="14"/>
+                                <text class="marker-text" x="0" y="0">5</text>
+                            </g>
+                            <g class="marker" data-target="item-6" transform="translate(850, 400)">
+                                <circle class="marker-circle" cx="0" cy="0" r="14"/>
+                                <text class="marker-text" x="0" y="0">6</text>
+                            </g>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Legend Sidebar -->
+                <div class="legend-container">
+                    <div class="legend-item" id="item-1" data-target="grp-boiler">
+                        <div class="legend-num">1</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Furnace</span>
+                            <span class="legend-desc">Burns pulverized coal to generate intense heat.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-2" data-target="grp-boiler">
+                        <div class="legend-num">2</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Boiler Tubes</span>
+                            <span class="legend-desc">Heat turns pure water into high-pressure steam.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-3" data-target="grp-turbine">
+                        <div class="legend-num">3</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Steam Turbine</span>
+                            <span class="legend-desc">Steam expands, spinning the multi-stage rotor blades.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-4" data-target="grp-generator">
+                        <div class="legend-num">4</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Generator</span>
+                            <span class="legend-desc">Spinning magnets induce electricity in copper coils.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-5" data-target="grp-condenser">
+                        <div class="legend-num">5</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Condenser</span>
+                            <span class="legend-desc">Cold water pipes cool exhaust steam back to liquid.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-6" data-target="grp-cooling">
+                        <div class="legend-num">6</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Cooling Tower</span>
+                            <span class="legend-desc">Releases waste heat to the atmosphere via evaporation.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MANDATORY WORKING PROCESS SECTION -->
+            <div class="process-container">
+                <div class="process-header">
+                    <div>
+                        <h3>Mechanism: Rankine Cycle</h3>
+                        <p style="margin-bottom: 0;">A continuous closed-loop thermodynamic cycle.</p>
+                    </div>
+                    
+                    <!-- Controls -->
+                    <div class="process-controls">
+                        <button class="ctrl-btn" id="btn-prev" disabled aria-label="Previous Stage">
+                            <svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+                        </button>
+                        <button class="ctrl-btn" id="btn-play" aria-label="Auto Play">
+                            <svg viewBox="0 0 24 24" id="icon-play"><path d="M8 5v14l11-7z"/></svg>
+                            <svg viewBox="0 0 24 24" id="icon-pause" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                        </button>
+                        <button class="ctrl-btn" id="btn-next" aria-label="Next Stage">
+                            <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div style="display: flex; justify-content: center; margin: 1rem 0;">
+                    <div class="progress-dots" id="process-dots">
+                        <!-- Dots injected by JS -->
+                    </div>
+                </div>
+
+                <!-- Dynamic Content Card -->
+                <div class="process-stage-card" id="stage-card">
+                    <div class="stage-title"><span id="stg-num">Stage 1</span> <span id="stg-title" style="background:transparent; padding:0;">Combustion</span></div>
+                    <div class="stage-desc" id="stg-desc">Chemical energy in coal is released as intense thermal energy in the furnace.</div>
+                    <div class="stage-io">
+                        <div class="io-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="io-in"><circle cx="12" cy="12" r="8"/></svg> <span id="stg-in">Coal & Air</span></div>
+                        <span>→</span>
+                        <div class="io-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="io-out"><path d="M12 2L1 21h22L12 2z"/></svg> <span id="stg-out">Heat Energy</span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Simulation Section -->
+        <section class="glass-panel interactive">
+            <h2>Plant Control Room</h2>
+            <p>Adjust the fuel intake to observe the systemic effects on pressure, turbine RPM, and electrical output.</p>
+            
+            <div class="sim-grid">
+                <!-- Controls -->
+                <div class="control-panel">
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Coal Feed Rate</span>
+                            <span id="val-coal" style="color: var(--accent-orange);">50%</span>
+                        </div>
+                        <input type="range" id="slider-coal" min="10" max="100" value="50">
+                        <small style="color: var(--text-muted); font-size: 0.75rem;">Controls furnace temperature and steam production.</small>
+                    </div>
+                    
+                    <div class="slider-group" style="margin-top: 1rem;">
+                        <div class="slider-header">
+                            <span>Grid Load Demand</span>
+                            <span id="val-load" style="color: var(--accent-cyan);">Medium</span>
+                        </div>
+                        <input type="range" id="slider-load" min="1" max="3" value="2" step="1">
+                        <small style="color: var(--text-muted); font-size: 0.75rem;">Higher demand increases generator resistance.</small>
+                    </div>
+                </div>
+
+                <!-- Metrics -->
+                <div class="metrics-panel">
+                    <div class="metric-card">
+                        <div class="metric-label">Furnace Temp</div>
+                        <div class="metric-value"><span id="met-temp">1200</span><span class="metric-unit">°C</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Steam Pressure</div>
+                        <div class="metric-value"><span id="met-press">150</span><span class="metric-unit">bar</span></div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-label">Turbine Speed</div>
+                        <div class="metric-value"><span id="met-rpm">3000</span><span class="metric-unit">RPM</span></div>
+                    </div>
+                    <div class="metric-card" style="border-color: var(--accent-yellow); box-shadow: 0 0 20px rgba(234, 179, 8, 0.1);">
+                        <div class="metric-label" style="color: var(--accent-yellow);">Power Output</div>
+                        <div class="metric-value" style="color: var(--accent-yellow);"><span id="met-power">500</span><span class="metric-unit">MW</span></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Information Grid -->
+        <div class="grid-2">
+            <section class="glass-panel">
+                <div class="icon-box">
+                    <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                </div>
+                <h3>Energy Transformation</h3>
+                <p>A thermal power plant does not "create" energy; it transforms it through four distinct stages:</p>
+                <ol style="margin-left: 1.5rem; color: var(--text-muted); font-size: var(--step-0);">
+                    <li><strong>Chemical</strong> (Stored in coal bonds)</li>
+                    <li><strong>Thermal</strong> (Heat in high-pressure steam)</li>
+                    <li><strong>Mechanical</strong> (Kinetic energy of spinning turbine)</li>
+                    <li><strong>Electrical</strong> (Electromagnetic induction in generator)</li>
+                </ol>
+            </section>
+            
+            <section class="glass-panel">
+                <div class="icon-box" style="background: rgba(249, 115, 22, 0.1);">
+                    <svg viewBox="0 0 24 24" style="fill: var(--accent-orange);"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+                </div>
+                <h3>Thermodynamic Limits</h3>
+                <p>Due to the <strong>Second Law of Thermodynamics</strong>, no thermal plant is 100% efficient. </p>
+                <p style="margin-bottom: 0;">Modern plants peak around <strong>40-45% efficiency</strong>. Over half the energy generated is inevitably lost as low-grade heat, mostly expelled through the cooling tower. This is a fundamental law of physics, not just an engineering flaw.</p>
+            </section>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            /* ==========================================================================
+               1. AMBIENT CANVAS BACKGROUND
+               ========================================================================== */
+            const canvas = document.getElementById('ambient-canvas');
+            const ctx = canvas.getContext('2d');
+            let particles = [];
+            
+            function resizeCanvas() {
+                const pixelRatio = window.devicePixelRatio || 1;
+                canvas.width = window.innerWidth * pixelRatio;
+                canvas.height = window.innerHeight * pixelRatio;
+                ctx.scale(pixelRatio, pixelRatio);
+                canvas.style.width = `${window.innerWidth}px`;
+                canvas.style.height = `${window.innerHeight}px`;
+            }
+
+            class Particle {
+                constructor() {
+                    this.reset();
+                    this.y = Math.random() * window.innerHeight; // initial random spread
+                }
+                reset() {
+                    this.x = Math.random() * window.innerWidth;
+                    this.y = window.innerHeight + 10;
+                    this.size = Math.random() * 2 + 0.5;
+                    this.speed = Math.random() * 0.5 + 0.1;
+                    this.opacity = Math.random() * 0.5 + 0.1;
+                }
+                update() {
+                    this.y -= this.speed;
+                    if (this.y < -10) this.reset();
+                }
+                draw() {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(6, 182, 212, ${this.opacity})`; // Cyan tint
+                    ctx.fill();
+                }
+            }
+
+            function initCanvas() {
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
+                for(let i=0; i<50; i++) particles.push(new Particle());
+                animateCanvas();
+            }
+
+            function animateCanvas() {
+                ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+                particles.forEach(p => { p.update(); p.draw(); });
+                requestAnimationFrame(animateCanvas);
+            }
+            initCanvas();
+
+
+            /* ==========================================================================
+               2. LABELING SYSTEM (Marker <-> Legend Sync)
+               ========================================================================== */
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+            
+            function highlight(id) {
+                // Remove active classes
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                
+                // Add to matching pair
+                const marker = document.querySelector(`.marker[data-target="${id}"]`);
+                const legend = document.getElementById(id);
+                if(marker) marker.classList.add('active');
+                if(legend) legend.classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => highlight(marker.dataset.target));
+                // Touch support
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); highlight(marker.dataset.target); });
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => highlight(item.id));
+                item.addEventListener('touchstart', (e) => { highlight(item.id); }, {passive: true});
+            });
+
+            // Clear highlight on mouse leave diagram area
+            document.querySelector('.diagram-section').addEventListener('mouseleave', () => {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+            });
+
+
+            /* ==========================================================================
+               3. WORKING PROCESS LOGIC (Mandatory Feature)
+               ========================================================================== */
+            const stages = [
+                {
+                    title: "Combustion",
+                    desc: "Pulverized coal is burned in the furnace, releasing chemical energy as intense heat.",
+                    in: "Coal & Air", out: "Heat Energy",
+                    targetId: "grp-boiler"
+                },
+                {
+                    title: "Boiling",
+                    desc: "Heat transfers to water tubes, converting liquid water into high-pressure, high-temperature steam.",
+                    in: "Water + Heat", out: "HP Steam",
+                    targetId: "grp-boiler"
+                },
+                {
+                    title: "Expansion",
+                    desc: "High-pressure steam forces its way through the turbine, spinning the blades at high velocity.",
+                    in: "HP Steam", out: "Mechanical Energy",
+                    targetId: "grp-turbine"
+                },
+                {
+                    title: "Generation",
+                    desc: "The spinning turbine shaft rotates magnets inside copper coils, inducing an electrical current.",
+                    in: "Mechanical Energy", out: "Electricity",
+                    targetId: "grp-generator"
+                },
+                {
+                    title: "Condensation",
+                    desc: "Spent, low-pressure steam enters the condenser where it is cooled back into liquid water by cold pipes.",
+                    in: "LP Steam", out: "Liquid Water",
+                    targetId: "grp-condenser"
+                },
+                {
+                    title: "Heat Rejection",
+                    desc: "Warm cooling water is pumped to the cooling tower, where excess heat evaporates into the atmosphere.",
+                    in: "Warm Water", out: "Waste Heat",
+                    targetId: "grp-cooling"
+                }
+            ];
+
+            let currentStage = 0;
+            let isAutoPlaying = false;
+            let playInterval;
+
+            const DOM = {
+                svg: document.getElementById('main-plant-diagram'),
+                title: document.getElementById('stg-title'),
+                num: document.getElementById('stg-num'),
+                desc: document.getElementById('stg-desc'),
+                in: document.getElementById('stg-in'),
+                out: document.getElementById('stg-out'),
+                prev: document.getElementById('btn-prev'),
+                next: document.getElementById('btn-next'),
+                play: document.getElementById('btn-play'),
+                iconPlay: document.getElementById('icon-play'),
+                iconPause: document.getElementById('icon-pause'),
+                dotsContainer: document.getElementById('process-dots')
+            };
+
+            // Setup dots
+            stages.forEach((_, i) => {
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                if(i === 0) dot.classList.add('active');
+                DOM.dotsContainer.appendChild(dot);
+            });
+            const dots = document.querySelectorAll('.dot');
+
+            function updateStage(index) {
+                // Handle bounds
+                currentStage = index;
+                if(currentStage < 0) currentStage = stages.length - 1; // loop
+                if(currentStage >= stages.length) currentStage = 0;    // loop
+
+                const data = stages[currentStage];
+
+                // Update Text (Fade out/in effect)
+                const card = document.getElementById('stage-card');
+                card.style.opacity = 0;
+                setTimeout(() => {
+                    DOM.num.innerText = `Stage ${currentStage + 1}`;
+                    DOM.title.innerText = data.title;
+                    DOM.desc.innerText = data.desc;
+                    DOM.in.innerText = data.in;
+                    DOM.out.innerText = data.out;
+                    card.style.opacity = 1;
+                }, 200);
+
+                // Update Dots
+                dots.forEach((d, i) => d.classList.toggle('active', i === currentStage));
+
+                // Update SVG Highlighting
+                DOM.svg.classList.add('focus-mode'); // Dim everything
+                // Remove active from all groups
+                document.querySelectorAll('#main-plant-diagram > g').forEach(g => g.classList.remove('active-stage'));
+                // Add active to target and piping
+                const targetEl = document.getElementById(data.targetId);
+                const pipesEl = document.getElementById('grp-pipes');
+                if(targetEl) targetEl.classList.add('active-stage');
+                if(pipesEl) pipesEl.classList.add('active-stage'); // Keep pipes visible
+
+                // Update buttons
+                DOM.prev.disabled = false;
+                DOM.next.disabled = false;
+            }
+
+            function togglePlay() {
+                isAutoPlaying = !isAutoPlaying;
+                DOM.play.classList.toggle('play-active', isAutoPlaying);
+                DOM.iconPlay.style.display = isAutoPlaying ? 'none' : 'block';
+                DOM.iconPause.style.display = isAutoPlaying ? 'block' : 'none';
+
+                if (isAutoPlaying) {
+                    DOM.svg.classList.add('focus-mode');
+                    playInterval = setInterval(() => { updateStage(currentStage + 1); }, 3500);
+                } else {
+                    clearInterval(playInterval);
+                    DOM.svg.classList.remove('focus-mode'); // Return to normal view
+                }
+            }
+
+            DOM.prev.addEventListener('click', () => { clearInterval(playInterval); if(isAutoPlaying) togglePlay(); updateStage(currentStage - 1); });
+            DOM.next.addEventListener('click', () => { clearInterval(playInterval); if(isAutoPlaying) togglePlay(); updateStage(currentStage + 1); });
+            DOM.play.addEventListener('click', togglePlay);
+
+
+            /* ==========================================================================
+               4. INTERACTIVE SIMULATION PHYSICS & BINDINGS
+               ========================================================================== */
+            const sim = {
+                coal: document.getElementById('slider-coal'),
+                load: document.getElementById('slider-load'),
+                valCoal: document.getElementById('val-coal'),
+                valLoad: document.getElementById('val-load'),
+                metTemp: document.getElementById('met-temp'),
+                metPress: document.getElementById('met-press'),
+                metRpm: document.getElementById('met-rpm'),
+                metPower: document.getElementById('met-power'),
+                
+                // SVG elements to animate based on state
+                fire: document.getElementById('boiler-fire'),
+                turbineRotor: document.getElementById('turbine-rotor'),
+                steamFlow: document.querySelector('.flow-anim.steam'),
+                waterFlow: document.querySelector('.flow-anim.water')
+            };
+
+            function mapRange(value, inMin, inMax, outMin, outMax) {
+                return (value - inMin) * (outMax - outMin) / (inMax - inMin) + outMin;
+            }
+
+            function updateSimulation() {
+                const coalInput = parseInt(sim.coal.value); // 10 to 100
+                const loadInput = parseInt(sim.load.value); // 1, 2, 3 (Low, Med, High)
+
+                // Update labels
+                sim.valCoal.innerText = `${coalInput}%`;
+                const loadLabels = ["Low", "Medium", "High"];
+                sim.valLoad.innerText = loadLabels[loadInput - 1];
+
+                // Calculate Metrics based on pseudo-physics
+                // Temp: Base + (coal * factor). Adds a slight random flicker.
+                let targetTemp = 400 + (coalInput * 8); 
+                let actualTemp = targetTemp + (Math.random() * 10 - 5); 
+                
+                // Pressure: Dependent on temp.
+                let targetPress = mapRange(targetTemp, 480, 1200, 50, 180);
+                
+                // RPM: Depends on pressure vs load resistance.
+                let loadResistance = mapRange(loadInput, 1, 3, 0.8, 1.2);
+                let targetRpm = (targetPress * 20) / loadResistance;
+                targetRpm = Math.min(Math.max(targetRpm, 0), 3600); // limit 0-3600
+
+                // Power Output (MW): Product of RPM, Pressure, and efficiency factor
+                let power = (targetRpm / 3000) * (targetPress / 150) * 500;
+                if(coalInput < 15) power = 0; // Boiler off threshold
+
+                // Update DOM text (with slight smoothing for numbers)
+                sim.metTemp.innerText = Math.round(actualTemp);
+                sim.metPress.innerText = Math.round(targetPress);
+                sim.metRpm.innerText = Math.round(targetRpm);
+                sim.metPower.innerText = Math.round(power);
+
+                // Update Visuals based on physical state
+                // 1. Fire intensity (Scale Y and Opacity)
+                const fireScale = mapRange(coalInput, 10, 100, 0.4, 1.2);
+                sim.fire.style.transform = `scaleY(${fireScale}) scaleX(${fireScale * 0.9})`;
+                sim.fire.style.opacity = mapRange(coalInput, 10, 100, 0.3, 1);
+
+                // 2. Turbine Rotation Speed
+                if (targetRpm > 100) {
+                    const duration = mapRange(targetRpm, 100, 3600, 4, 0.3); // faster rpm = lower ms
+                    sim.turbineRotor.style.animationDuration = `${duration}s`;
+                    sim.turbineRotor.style.animationPlayState = 'running';
+                } else {
+                    sim.turbineRotor.style.animationPlayState = 'paused';
+                }
+
+                // 3. Flow Speeds (Pipes)
+                const flowDur = mapRange(targetPress, 50, 180, 3, 0.8);
+                sim.steamFlow.style.animationDuration = `${flowDur}s`;
+                sim.waterFlow.style.animationDuration = `${flowDur * 1.5}s`;
+
+                requestAnimationFrame(updateSimulation);
+            }
+
+            // Start simulation loop
+            updateSimulation();
+
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nitrogen Fixation Cycle | Premium Simulation</title>
+    <style>
+        /* ==========================================================================
+           RESET & CORE VARIABLES
+           ========================================================================== */
+        :root {
+            --bg-dark: #050914;
+            --bg-soil: #120d16;
+            --glass-bg: rgba(25, 30, 50, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            
+            /* Thematic Colors */
+            --clr-nitrogen: #00d2ff;
+            --clr-ammonia: #ff9a44;
+            --clr-nitrate: #ed4264;
+            --clr-plant: #00ff87;
+            --clr-bacteria: #b3ffab;
+            --clr-lightning: #f6d365;
+
+            --shadow-glow: 0 0 20px rgba(0, 210, 255, 0.2);
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            
+            --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: var(--font-body);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 210, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(0, 255, 135, 0.03) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: var(--font-display);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        /* ==========================================================================
+           UTILITIES & GLASSMORPHISM
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 3vw, 32px);
+        }
+
+        .section-title {
+            font-size: clamp(1.5rem, 3vw, 2.5rem);
+            margin-bottom: clamp(16px, 2vw, 24px);
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ==========================================================================
+           LAYOUT: HERO & INTRODUCTION
+           ========================================================================== */
+        header {
+            padding: clamp(40px, 8vh, 80px) 0 clamp(20px, 4vh, 40px);
+            text-align: center;
+            position: relative;
+        }
+
+        .title-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 30px;
+            background: rgba(0, 210, 255, 0.1);
+            border: 1px solid rgba(0, 210, 255, 0.2);
+            color: var(--clr-nitrogen);
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: clamp(2.5rem, 6vw, 4.5rem);
+            line-height: 1.1;
+            margin-bottom: 24px;
+            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 40px rgba(165, 180, 252, 0.2);
+        }
+
+        .hero-desc {
+            max-width: 700px;
+            margin: 0 auto;
+            font-size: clamp(1rem, 1.5vw, 1.25rem);
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           VISUALIZATION STAGE (SVG + CANVAS + LABELS)
+           ========================================================================== */
+        .stage-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        @media (min-width: 1024px) {
+            .stage-grid {
+                grid-template-columns: 2fr 1fr; /* Illustration vs Legends/Controls */
+                align-items: start;
+            }
+        }
+
+        .panel-column {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: clamp(350px, 60vh, 700px);
+            border-radius: 24px;
+            overflow: hidden;
+            background: linear-gradient(180deg, #050914 0%, #0d1222 45%, #161118 45.5%, #0a070c 100%);
+            border: 1px solid var(--glass-border);
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.5);
+        }
+
+        /* Canvas Overlay for Particles */
+        #particle-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 2;
+            pointer-events: none; /* Let clicks pass to SVG/Markers */
+        }
+
+        /* Base SVG Styling */
+        #main-svg {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        /* SVG Element Styles & Animations */
+        .svg-glow { filter: drop-shadow(0 0 12px currentColor); }
+        .svg-pulse { animation: pulse 3s infinite alternate ease-in-out; }
+        
+        @keyframes pulse {
+            0% { filter: drop-shadow(0 0 5px currentColor); opacity: 0.8; }
+            100% { filter: drop-shadow(0 0 20px currentColor); opacity: 1; }
+        }
+
+        .svg-cloud { opacity: 0.4; animation: floatCloud 20s infinite linear; }
+        @keyframes floatCloud {
+            0% { transform: translateX(-5%); }
+            50% { transform: translateX(5%); }
+            100% { transform: translateX(-5%); }
+        }
+
+        /* Component Group Opacities for State Management */
+        .comp-group { transition: opacity 0.5s ease, filter 0.5s ease; }
+        .comp-group.dimmed { opacity: 0.2; filter: grayscale(50%); }
+        .comp-group.active { opacity: 1; filter: drop-shadow(0 0 15px currentColor); }
+
+        /* --- Strict Labeling System (Markers) --- */
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: clamp(12px, 1.5vw, 16px);
+            color: #000;
+            cursor: pointer;
+            z-index: 10;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px currentColor;
+            border: 2px solid rgba(255,255,255,0.8);
+            transition: var(--transition-smooth);
+        }
+
+        .marker:hover, .marker.highlighted {
+            transform: translate(-50%, -50%) scale(1.3);
+            box-shadow: 0 0 25px currentColor, inset 0 0 10px rgba(255,255,255,0.5);
+            z-index: 11;
+        }
+
+        /* Marker Positions (Percentages for fluidity) */
+        #m1 { top: 20%; left: 30%; background: var(--clr-nitrogen); color: #000; }
+        #m2 { top: 40%; left: 70%; background: var(--clr-plant); color: #000;}
+        #m3 { top: 65%; left: 45%; background: var(--clr-bacteria); color: #000;}
+        #m4 { top: 80%; left: 25%; background: var(--clr-ammonia); color: #000;}
+        #m5 { top: 75%; left: 75%; background: var(--clr-nitrate); color: #fff;}
+        #m6 { top: 15%; left: 80%; background: var(--clr-lightning); color: #000;}
+
+        /* --- Legend Panel (Strictly Separate) --- */
+        .legend-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 24px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 12px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover, .legend-item.highlighted {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px; height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            flex-shrink: 0;
+            box-shadow: 0 0 10px currentColor;
+        }
+        
+        /* Map Legend Badges to Colors */
+        .legend-item[data-target="m1"] .legend-badge { background: var(--clr-nitrogen); color: #000; }
+        .legend-item[data-target="m2"] .legend-badge { background: var(--clr-plant); color: #000; }
+        .legend-item[data-target="m3"] .legend-badge { background: var(--clr-bacteria); color: #000; }
+        .legend-item[data-target="m4"] .legend-badge { background: var(--clr-ammonia); color: #000; }
+        .legend-item[data-target="m5"] .legend-badge { background: var(--clr-nitrate); color: #fff; }
+        .legend-item[data-target="m6"] .legend-badge { background: var(--clr-lightning); color: #000; }
+
+        .legend-content h4 {
+            font-size: 1rem;
+            margin-bottom: 4px;
+            color: #fff;
+        }
+
+        .legend-content p {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* ==========================================================================
+           WORKING PROCESS (THE CYCLE CONTROLS)
+           ========================================================================== */
+        .cycle-controller {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .cycle-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .cycle-badge {
+            background: rgba(58, 237, 143, 0.1);
+            color: var(--clr-plant);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            border: 1px solid rgba(58, 237, 143, 0.3);
+        }
+
+        .stage-info {
+            min-height: 100px;
+        }
+
+        .stage-title {
+            font-size: 1.4rem;
+            color: #fff;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stage-particles {
+            display: flex;
+            gap: 8px;
+        }
+
+        .particle-icon {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .stage-desc {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-top: auto;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: rgba(255,255,255,0.15);
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: rgba(0, 210, 255, 0.2);
+            border-color: rgba(0, 210, 255, 0.4);
+            color: var(--clr-nitrogen);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            background: rgba(0, 210, 255, 0.3);
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+        }
+
+        .progress-bar {
+            flex-grow: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            position: relative;
+            overflow: hidden;
+            margin: 0 16px;
+            display: none; /* Hide on small mobile, show dots instead */
+        }
+        
+        .progress-fill {
+            position: absolute;
+            top: 0; left: 0;
+            height: 100%;
+            background: var(--clr-nitrogen);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            flex-grow: 1;
+        }
+
+        .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .dot.active {
+            background: var(--clr-nitrogen);
+            box-shadow: 0 0 8px var(--clr-nitrogen);
+            transform: scale(1.3);
+        }
+
+        @media (min-width: 768px) {
+            .progress-bar { display: block; }
+            .progress-dots { display: none; }
+        }
+
+        /* ==========================================================================
+           SIMULATION (INTERACTIVE)
+           ========================================================================== */
+        .simulation-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            margin-top: 40px;
+        }
+
+        @media (min-width: 768px) {
+            .simulation-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        .sim-control-group {
+            margin-bottom: 24px;
+        }
+
+        .sim-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: #fff;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: var(--clr-nitrogen);
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px var(--clr-nitrogen);
+        }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+
+        .sim-readout {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 150px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 16px;
+            border: 1px inset rgba(255,255,255,0.05);
+            flex-direction: column;
+        }
+
+        .sim-value {
+            font-size: 3rem;
+            font-family: var(--font-display);
+            font-weight: 700;
+            color: var(--clr-plant);
+            text-shadow: 0 0 20px rgba(0, 255, 135, 0.4);
+            line-height: 1;
+        }
+
+        /* ==========================================================================
+           INFO CARDS GRID
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-top: 40px;
+        }
+
+        .info-card {
+            padding: 24px;
+            border-top: 4px solid transparent;
+        }
+        
+        .info-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .info-card p, .info-card ul {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .info-card ul { padding-left: 20px; margin-top: 10px; }
+        .info-card li { margin-bottom: 6px; }
+
+        .card-fact { border-color: var(--clr-nitrogen); }
+        .card-fact h3 { color: var(--clr-nitrogen); }
+        
+        .card-mistake { border-color: var(--clr-nitrate); }
+        .card-mistake h3 { color: var(--clr-nitrate); }
+        
+        .card-app { border-color: var(--clr-plant); }
+        .card-app h3 { color: var(--clr-plant); }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- HERO SECTION -->
+    <header>
+        <div class="title-badge">Biogeochemical Simulation</div>
+        <h1>The Nitrogen Cycle</h1>
+        <p class="hero-desc">Discover how inert atmospheric gas transforms into the building blocks of life through an invisible, microscopic engine beneath our feet.</p>
+    </header>
+
+    <!-- MAIN VISUALIZATION STAGE -->
+    <div class="stage-grid">
+        
+        <!-- THE ILLUSTRATION -->
+        <div class="illustration-container" id="visual-stage">
+            <!-- Canvas for Dynamic Flowing Particles -->
+            <canvas id="particle-canvas"></canvas>
+
+            <!-- Base SVG Illustration -->
+            <!-- Using preserveAspectRatio="xMidYMid slice" to act like object-fit: cover -->
+            <svg id="main-svg" viewBox="0 0 1000 800" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+                <!-- Defs for Gradients and Filters -->
+                <defs>
+                    <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#050914"/>
+                        <stop offset="100%" stop-color="#1a2035"/>
+                    </linearGradient>
+                    <linearGradient id="soilGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="#161118"/>
+                        <stop offset="100%" stop-color="#0a070c"/>
+                    </linearGradient>
+                    <radialGradient id="noduleGlow" cx="50%" cy="50%" r="50%">
+                        <stop offset="0%" stop-color="#3aed8f" stop-opacity="0.8"/>
+                        <stop offset="100%" stop-color="#120d16" stop-opacity="0"/>
+                    </radialGradient>
+                    <filter id="glow">
+                        <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                        <feMerge>
+                            <feMergeNode in="coloredBlur"/>
+                            <feMergeNode in="SourceGraphic"/>
+                        </feMerge>
+                    </filter>
+                </defs>
+
+                <!-- Backgrounds -->
+                <rect class="comp-group grp-sky" x="0" y="0" width="1000" height="450" fill="url(#skyGrad)"/>
+                <rect class="comp-group grp-soil" x="0" y="450" width="1000" height="350" fill="url(#soilGrad)"/>
+                <!-- Ground Line -->
+                <path class="comp-group grp-soil" d="M0,450 Q250,440 500,450 T1000,450" fill="none" stroke="#2a324a" stroke-width="4"/>
+
+                <!-- Atmosphere Elements (Grp-Air) -->
+                <g class="comp-group grp-air">
+                    <!-- Clouds -->
+                    <path class="svg-cloud" d="M100,150 Q130,120 170,140 Q210,120 240,150 Q270,150 250,180 L120,180 Q90,170 100,150" fill="rgba(255,255,255,0.05)"/>
+                    <path class="svg-cloud" d="M700,100 Q740,70 790,90 Q840,70 870,100 Q910,110 880,140 L720,140 Q680,120 700,100" fill="rgba(255,255,255,0.03)"/>
+                    
+                    <!-- N2 Molecules (Decorative static ones) -->
+                    <g transform="translate(300, 100)" class="svg-pulse" fill="var(--clr-nitrogen)">
+                        <circle cx="0" cy="0" r="6"/>
+                        <circle cx="16" cy="0" r="6"/>
+                        <line x1="5" y1="-3" x2="11" y2="-3" stroke="var(--clr-nitrogen)" stroke-width="1.5"/>
+                        <line x1="5" y1="0" x2="11" y2="0" stroke="var(--clr-nitrogen)" stroke-width="1.5"/>
+                        <line x1="5" y1="3" x2="11" y2="3" stroke="var(--clr-nitrogen)" stroke-width="1.5"/>
+                    </g>
+                    <g transform="translate(600, 180)" class="svg-pulse" fill="var(--clr-nitrogen)" opacity="0.6">
+                        <circle cx="0" cy="0" r="5"/><circle cx="14" cy="0" r="5"/>
+                        <line x1="4" y1="-2" x2="10" y2="-2" stroke="var(--clr-nitrogen)" stroke-width="1"/>
+                        <line x1="4" y1="2" x2="10" y2="2" stroke="var(--clr-nitrogen)" stroke-width="1"/>
+                    </g>
+                    
+                    <!-- Lightning (Hidden by default, shown in specific stage) -->
+                    <path id="svg-lightning" d="M800,0 L780,120 L820,150 L770,280 L810,320 L760,450" fill="none" stroke="var(--clr-lightning)" stroke-width="3" filter="url(#glow)" opacity="0" style="transition: opacity 0.3s;"/>
+                </g>
+
+                <!-- Plant & Roots (Grp-Plant) -->
+                <g class="comp-group grp-plant">
+                    <!-- Stem -->
+                    <path d="M500,450 Q510,300 480,150" fill="none" stroke="#1d8a4e" stroke-width="8" stroke-linecap="round"/>
+                    <path d="M480,150 Q470,100 490,50" fill="none" stroke="#25b364" stroke-width="5" stroke-linecap="round"/>
+                    
+                    <!-- Leaves -->
+                    <path d="M505,350 Q560,320 580,360 Q540,390 505,350" fill="url(#leafGrad)" stroke="#1d8a4e" stroke-width="2"/>
+                    <path d="M495,280 Q430,240 410,290 Q450,330 495,280" fill="url(#leafGrad)" stroke="#1d8a4e" stroke-width="2"/>
+                    <path d="M490,200 Q550,170 560,220 Q510,240 490,200" fill="url(#leafGrad)" stroke="#1d8a4e" stroke-width="2"/>
+                    
+                    <defs>
+                        <linearGradient id="leafGrad" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="#25b364"/>
+                            <stop offset="100%" stop-color="#0f5c31"/>
+                        </linearGradient>
+                    </defs>
+
+                    <!-- Root System -->
+                    <path d="M500,450 Q490,550 450,650" fill="none" stroke="#8b5a2b" stroke-width="6" stroke-linecap="round"/>
+                    <path d="M500,450 Q520,520 560,600" fill="none" stroke="#8b5a2b" stroke-width="5" stroke-linecap="round"/>
+                    <path d="M495,500 Q450,520 400,580" fill="none" stroke="#704720" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M510,540 Q560,560 600,620" fill="none" stroke="#704720" stroke-width="3" stroke-linecap="round"/>
+                    <path d="M475,590 Q450,650 430,700" fill="none" stroke="#5a3919" stroke-width="2" stroke-linecap="round"/>
+                </g>
+
+                <!-- Soil Microbes & Nodules (Grp-Microbes) -->
+                <g class="comp-group grp-microbes">
+                    <!-- Root Nodules (Rhizobium) -->
+                    <g transform="translate(490, 520)" class="svg-pulse" style="color: var(--clr-bacteria)">
+                        <circle cx="0" cy="0" r="18" fill="url(#noduleGlow)"/>
+                        <circle cx="0" cy="0" r="8" fill="#e8c894" stroke="#a37b45" stroke-width="2"/>
+                        <!-- Tiny bacteria dots inside -->
+                        <circle cx="-3" cy="-2" r="1.5" fill="#fff"/>
+                        <circle cx="2" cy="3" r="1.5" fill="#fff"/>
+                        <circle cx="3" cy="-1" r="1.5" fill="#fff"/>
+                    </g>
+                    <g transform="translate(455, 600)" class="svg-pulse" style="color: var(--clr-bacteria); animation-delay: 1s;">
+                        <circle cx="0" cy="0" r="15" fill="url(#noduleGlow)"/>
+                        <circle cx="0" cy="0" r="7" fill="#e8c894" stroke="#a37b45" stroke-width="2"/>
+                    </g>
+                    <g transform="translate(540, 570)" class="svg-pulse" style="color: var(--clr-bacteria); animation-delay: 0.5s;">
+                        <circle cx="0" cy="0" r="20" fill="url(#noduleGlow)"/>
+                        <circle cx="0" cy="0" r="9" fill="#e8c894" stroke="#a37b45" stroke-width="2"/>
+                    </g>
+
+                    <!-- Free-living soil bacteria / Nitrifying bacteria -->
+                    <g transform="translate(300, 650)">
+                        <rect x="-10" y="-5" width="20" height="10" rx="5" fill="#3a60ed" opacity="0.6"/>
+                        <rect x="5" y="-12" width="16" height="8" rx="4" fill="#3a60ed" opacity="0.5" transform="rotate(30)"/>
+                    </g>
+                    <g transform="translate(700, 550)">
+                        <rect x="-8" y="-4" width="16" height="8" rx="4" fill="#ed4264" opacity="0.6"/>
+                        <rect x="-15" y="2" width="14" height="7" rx="3.5" fill="#ed4264" opacity="0.5" transform="rotate(-20)"/>
+                    </g>
+                    
+                    <!-- Decomposition Matter -->
+                    <path d="M600,460 Q620,455 640,465 Q630,475 610,470 Z" fill="#4a5e3a" opacity="0.8"/>
+                    <path d="M250,455 Q270,450 280,460 Q260,465 245,460 Z" fill="#5e4c3a" opacity="0.8"/>
+                </g>
+            </svg>
+
+            <!-- MANDATORY NON-OVERLAPPING MARKERS -->
+            <!-- These use percentages to stay in place responsively over the SVG -->
+            <div class="marker" id="m1" data-target="item-1">1</div>
+            <div class="marker" id="m2" data-target="item-2">2</div>
+            <div class="marker" id="m3" data-target="item-3">3</div>
+            <div class="marker" id="m4" data-target="item-4">4</div>
+            <div class="marker" id="m5" data-target="item-5">5</div>
+            <div class="marker" id="m6" data-target="item-6">6</div>
+        </div>
+
+        <!-- RIGHT PANEL: LEGEND & CONTROLS -->
+        <div class="panel-column">
+            
+            <!-- MANDATORY STRICT LEGEND -->
+            <div class="glass-panel legend-panel" id="main-legend">
+                <h3 class="section-title" style="font-size: 1.2rem; margin-bottom: 8px;">System Components</h3>
+                
+                <div class="legend-item" id="item-1" data-target="m1">
+                    <div class="legend-badge">1</div>
+                    <div class="legend-content">
+                        <h4>Atmospheric Nitrogen (N₂)</h4>
+                        <p>Inert gas with a strong triple bond. Unusable by plants directly.</p>
+                    </div>
+                </div>
+                
+                <div class="legend-item" id="item-2" data-target="m2">
+                    <div class="legend-badge">2</div>
+                    <div class="legend-content">
+                        <h4>Legume Plant</h4>
+                        <p>Forms a symbiotic relationship with bacteria in its roots.</p>
+                    </div>
+                </div>
+
+                <div class="legend-item" id="item-3" data-target="m3">
+                    <div class="legend-badge">3</div>
+                    <div class="legend-content">
+                        <h4>Root Nodules (Rhizobium)</h4>
+                        <p>Biological factories where bacteria convert N₂ into Ammonia.</p>
+                    </div>
+                </div>
+
+                <div class="legend-item" id="item-4" data-target="m4">
+                    <div class="legend-badge">4</div>
+                    <div class="legend-content">
+                        <h4>Ammonification Zone</h4>
+                        <p>Decomposers break down dead matter into Ammonia (NH₃).</p>
+                    </div>
+                </div>
+
+                <div class="legend-item" id="item-5" data-target="m5">
+                    <div class="legend-badge">5</div>
+                    <div class="legend-content">
+                        <h4>Nitrifying Bacteria</h4>
+                        <p>Convert Ammonia into Nitrites, then usable Nitrates (NO₃⁻).</p>
+                    </div>
+                </div>
+
+                <div class="legend-item" id="item-6" data-target="m6">
+                    <div class="legend-badge">6</div>
+                    <div class="legend-content">
+                        <h4>Abiotic Fixation</h4>
+                        <p>Lightning energy breaks N₂ bonds, creating atmospheric nitrates.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MANDATORY WORKING PROCESS CONTROLLER -->
+            <div class="glass-panel cycle-controller">
+                <div class="cycle-header">
+                    <h3 class="section-title" style="margin:0; font-size: 1.2rem;">Mechanism</h3>
+                    <span class="cycle-badge">Closed Cycle</span>
+                </div>
+                
+                <div class="stage-info">
+                    <div class="stage-title">
+                        <span id="stage-num" style="color: var(--clr-nitrogen); font-weight: 800;">Stage 1:</span>
+                        <span id="stage-name">Atmospheric Reservoir</span>
+                    </div>
+                    <div class="stage-particles" id="stage-particles">
+                        <!-- Populated by JS -->
+                    </div>
+                    <p class="stage-desc" id="stage-desc">Nitrogen gas (N₂) makes up 78% of our atmosphere, but its strong triple bond makes it inaccessible to most living organisms.</p>
+                </div>
+
+                <div class="controls">
+                    <button class="btn" id="btn-prev" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                    </button>
+                    
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <div class="progress-dots" id="progress-dots">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <button class="btn btn-primary" id="btn-play">Auto-Play</button>
+
+                    <button class="btn" id="btn-next">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- INTERACTIVE SIMULATION -->
+    <h2 class="section-title">Environmental Simulation</h2>
+    <div class="simulation-grid">
+        <div class="glass-panel" style="padding: 24px;">
+            <p style="color: var(--text-muted); margin-bottom: 24px;">Observe how abiotic factors influence the rate of biological nitrogen fixation in the soil.</p>
+            
+            <div class="sim-control-group">
+                <div class="sim-label">
+                    <span>Soil Temperature</span>
+                    <span id="val-temp" style="color: var(--clr-ammonia)">25°C</span>
+                </div>
+                <input type="range" id="sim-temp" min="5" max="45" value="25">
+                <div style="display:flex; justify-content:space-between; font-size: 0.75rem; color:#666; margin-top:4px;">
+                    <span>Cold (Dormant)</span>
+                    <span>Optimum</span>
+                    <span>Hot (Denaturing)</span>
+                </div>
+            </div>
+
+            <div class="sim-control-group">
+                <div class="sim-label">
+                    <span>Soil Oxygen (Aeration)</span>
+                    <span id="val-o2" style="color: var(--clr-nitrogen)">Low (Optimal)</span>
+                </div>
+                <input type="range" id="sim-o2" min="0" max="100" value="20">
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;"><em>Note: The Nitrogenase enzyme is destroyed by high oxygen. Nodules use Leghemoglobin to control O₂ levels.</em></p>
+            </div>
+        </div>
+
+        <div class="glass-panel sim-readout">
+            <div style="font-size: 0.9rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 8px;">Fixation Rate</div>
+            <div class="sim-value" id="sim-rate">100%</div>
+            <div style="font-size: 0.85rem; color: var(--clr-bacteria); margin-top: 8px;" id="sim-status">Optimal symbiotic conditions</div>
+        </div>
+    </div>
+
+    <!-- EXTRA INFO GRID -->
+    <div class="info-grid">
+        <div class="glass-panel info-card card-fact">
+            <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg> The Haber Process</h3>
+            <p>In 1909, Fritz Haber invented a way to artificially fix nitrogen using extreme heat and pressure. Today, this industrial process consumes ~1% of the world's energy but produces fertilizer that sustains half the human population.</p>
+        </div>
+
+        <div class="glass-panel info-card card-mistake">
+            <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Common Misconception</h3>
+            <p><strong>Myth:</strong> Plants breathe in Nitrogen through their leaves like CO₂.<br><br><strong>Reality:</strong> Despite being surrounded by N₂ gas, leaves cannot absorb it. Plants must absorb "fixed" nitrogen (nitrates/ammonium) through their roots from the soil.</p>
+        </div>
+
+        <div class="glass-panel info-card card-app">
+            <h3><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Crop Rotation</h3>
+            <p>Farmers alternate planting nutrient-demanding crops (like corn) with legumes (like soybeans or clover). The legumes replenish the soil's nitrogen naturally, reducing the need for synthetic chemical fertilizers.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+/**
+ * ==========================================================================
+ * ARCHITECTURE & LOGIC
+ * ==========================================================================
+ * 1. Setup Canvas for responsive overlay & correct mapping to SVG
+ * 2. Particle System for animating flows between components.
+ * 3. State Machine for the "Working Process" Cycle.
+ * 4. Interactivity logic (Hover sync, Simulation sliders).
+ */
+
+// --- 1. Canvas Setup & Responsive SVG Mapping ---
+const canvas = document.getElementById('particle-canvas');
+const ctx = canvas.getContext('2d');
+const visualStage = document.getElementById('visual-stage');
+
+let cw, ch;
+let svgScale, offsetX, offsetY;
+
+function resizeCanvas() {
+    // Get actual CSS dimensions
+    const rect = visualStage.getBoundingClientRect();
+    cw = rect.width;
+    ch = rect.height;
+    
+    // Support high-DPI displays for crisp rendering
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = cw * dpr;
+    canvas.height = ch * dpr;
+    ctx.scale(dpr, dpr);
+
+    // Because the SVG uses preserveAspectRatio="xMidYMid slice",
+    // it scales up to cover the container and crops the overflow.
+    // We must calculate exactly where the internal 1000x800 coordinates fall on the Canvas.
+    svgScale = Math.max(cw / 1000, ch / 800);
+    offsetX = (cw - 1000 * svgScale) / 2;
+    offsetY = (ch - 800 * svgScale) / 2;
+}
+
+window.addEventListener('resize', resizeCanvas);
+window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+resizeCanvas();
+
+// Map internal SVG coordinates strictly to Canvas layout
+function toCanvasX(svgX) { return offsetX + (svgX * svgScale); }
+function toCanvasY(svgY) { return offsetY + (svgY * svgScale); }
+
+
+// --- 2. Particle Engine ---
+class Particle {
+    constructor(type, startPath, endPath, color, speedMulti) {
+        this.type = type;
+        this.color = color;
+        this.speedMulti = speedMulti;
+        this.progress = Math.random(); 
+        
+        this.path = { start: startPath, end: endPath };
+        this.x = 0;
+        this.y = 0;
+        this.size = type === 'n2' ? 3.5 : 2.5; 
+    }
+
+    update(globalSpeed, dt) {
+        this.progress += (0.001 * this.speedMulti * globalSpeed * dt);
+        if (this.progress > 1) this.progress = 0;
+
+        const sx = toCanvasX(this.path.start[0]);
+        const sy = toCanvasY(this.path.start[1]);
+        const ex = toCanvasX(this.path.end[0]);
+        const ey = toCanvasY(this.path.end[1]);
+
+        this.x = sx + (ex - sx) * this.progress;
+        this.y = sy + (ey - sy) * this.progress;
+    }
+
+    draw(ctx) {
+        ctx.beginPath();
+        if (this.type === 'n2') {
+            // Draw dual molecule for N2
+            ctx.arc(this.x - 3, this.y, this.size * svgScale, 0, Math.PI * 2);
+            ctx.arc(this.x + 3, this.y, this.size * svgScale, 0, Math.PI * 2);
+        } else {
+            ctx.arc(this.x, this.y, this.size * svgScale, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = this.color;
+        ctx.fill();
+    }
+}
+
+// Particle Flows configuration
+const FLOWS = {
+    fixation: [],       // Air to Roots
+    assimilation: [],   // Soil to Plant
+    decay: [],          // Plant to Soil
+    denitrification: [],// Soil to Air
+    lightning: []       // Air to Soil via rain
+};
+
+// SVG Coordinates: Sky(~50-200), Ground(450), Root Nodules(490,520), Nitrifiers(700,550), Decomposers(250,455)
+function initParticles() {
+    // 1. Biological Fixation (Air N2 -> Root Nodules NH3)
+    for(let i=0; i<30; i++) {
+        FLOWS.fixation.push(new Particle('n2', [400 + Math.random()*200, 100 + Math.random()*100], [490, 520], 'var(--clr-nitrogen)', 1));
+        FLOWS.fixation.push(new Particle('n2', [400 + Math.random()*200, 100 + Math.random()*100], [540, 570], 'var(--clr-nitrogen)', 1.2));
+    }
+    // 2. Assimilation (Nitrates -> Plant)
+    for(let i=0; i<20; i++) {
+        FLOWS.assimilation.push(new Particle('no3', [700, 550], [500, 450], 'var(--clr-nitrate)', 0.8));
+    }
+    // 3. Ammonification/Decay (Plant -> Soil Decomposers)
+    for(let i=0; i<15; i++) {
+        FLOWS.decay.push(new Particle('org', [500, 350], [250, 460], 'var(--clr-plant)', 0.5));
+    }
+    // 4. Denitrification (Nitrates -> Air N2)
+    for(let i=0; i<25; i++) {
+        FLOWS.denitrification.push(new Particle('n2', [700, 550], [800, 150], 'var(--clr-nitrogen)', 1.5));
+    }
+    // 5. Abiotic (Lightning)
+    for(let i=0; i<15; i++) {
+        FLOWS.lightning.push(new Particle('no3', [780, 200], [800, 460], 'var(--clr-nitrate)', 2.5));
+    }
+}
+initParticles();
+
+// Animation Loop Variables
+let lastTime = 0;
+let globalAnimSpeed = 1; // Controlled by simulation slider
+let activeFlows = []; // Controlled by Cycle State
+
+function animate(timestamp) {
+    if (!lastTime) lastTime = timestamp;
+    const dt = timestamp - lastTime;
+    lastTime = timestamp;
+
+    // VERY IMPORTANT: Clear rect fully each frame so the canvas doesn't black out the SVG behind it!
+    ctx.clearRect(0, 0, cw, ch);
+
+    // Update and draw active flows
+    activeFlows.forEach(flowKey => {
+        FLOWS[flowKey].forEach(p => {
+            p.update(globalAnimSpeed, dt);
+            p.draw(ctx);
+        });
+    });
+
+    requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+
+// --- 3. Working Process (The Cycle State Machine) ---
+const stages = [
+    {
+        id: 1,
+        title: "Atmospheric Reservoir",
+        desc: "Nitrogen gas (N₂) makes up 78% of our atmosphere. It is inert due to a strong triple bond, making it inaccessible to plants.",
+        flows: [], // Idle state visually
+        activeGroups: ['grp-air'],
+        particlesHtml: `<span class="particle-icon" style="background:var(--clr-nitrogen); color:#000;">N₂</span>`,
+        lightning: false
+    },
+    {
+        id: 2,
+        title: "Biological Fixation",
+        desc: "Rhizobium bacteria in legume root nodules break the N₂ triple bond using the Nitrogenase enzyme, converting it to Ammonia.",
+        flows: ['fixation'],
+        activeGroups: ['grp-air', 'grp-plant', 'grp-microbes'],
+        particlesHtml: `<span class="particle-icon" style="background:var(--clr-nitrogen); color:#000;">N₂</span> → <span class="particle-icon" style="background:var(--clr-ammonia); color:#000;">NH₃</span>`,
+        lightning: false
+    },
+    {
+        id: 3,
+        title: "Nitrification",
+        desc: "Free-living soil bacteria convert toxic Ammonia first into Nitrites (NO₂⁻), then into Nitrates (NO₃⁻) which plants prefer.",
+        flows: [], // Internal soil conversion
+        activeGroups: ['grp-soil', 'grp-microbes'],
+        particlesHtml: `<span class="particle-icon" style="background:var(--clr-ammonia); color:#000;">NH₃</span> → <span class="particle-icon" style="background:var(--clr-nitrate); color:#fff;">NO₃⁻</span>`,
+        lightning: false
+    },
+    {
+        id: 4,
+        title: "Assimilation",
+        desc: "Plant roots absorb the Nitrates from the soil and incorporate them into plant proteins and DNA.",
+        flows: ['assimilation'],
+        activeGroups: ['grp-plant', 'grp-soil'],
+        particlesHtml: `<span class="particle-icon" style="background:var(--clr-nitrate); color:#fff;">NO₃⁻</span> → <span class="particle-icon" style="background:var(--clr-plant); color:#000;">Proteins</span>`,
+        lightning: false
+    },
+    {
+        id: 5,
+        title: "Ammonification",
+        desc: "When plants die, decomposers (fungi/bacteria) break down organic nitrogen back into Ammonia in the soil.",
+        flows: ['decay'],
+        activeGroups: ['grp-plant', 'grp-microbes', 'grp-soil'],
+        particlesHtml: `<span class="particle-icon" style="background:var(--clr-plant); color:#000;">Dead Matter</span> → <span class="particle-icon" style="background:var(--clr-ammonia); color:#000;">NH₃</span>`,
+        lightning: false
+    },
+    {
+        id: 6,
+        title: "Denitrification",
+        desc: "In oxygen-poor soil, denitrifying bacteria convert Nitrates back into atmospheric N₂ gas, completing the cycle.",
+        flows: ['denitrification'],
+        activeGroups: ['grp-microbes', 'grp-air'],
+        particlesHtml: `<span class="particle-icon" style="background:var(--clr-nitrate); color:#fff;">NO₃⁻</span> → <span class="particle-icon" style="background:var(--clr-nitrogen); color:#000;">N₂</span>`,
+        lightning: false
+    },
+    {
+        id: 7,
+        title: "Abiotic Fixation",
+        desc: "Extreme energy from lightning strikes can split N₂ in the air, allowing it to bond with oxygen and fall as nitrate in rain.",
+        flows: ['lightning'],
+        activeGroups: ['grp-air', 'grp-soil'],
+        particlesHtml: `<span class="particle-icon" style="background:var(--clr-lightning); color:#000;">Energy</span> + <span class="particle-icon" style="background:var(--clr-nitrogen); color:#000;">N₂</span> → <span class="particle-icon" style="background:var(--clr-nitrate); color:#fff;">NO₃⁻</span>`,
+        lightning: true
+    }
+];
+
+let currentStage = 0;
+let isPlaying = false;
+
+// DOM Elements
+const elStageNum = document.getElementById('stage-num');
+const elStageName = document.getElementById('stage-name');
+const elStageDesc = document.getElementById('stage-desc');
+const elStageParticles = document.getElementById('stage-particles');
+const btnPrev = document.getElementById('btn-prev');
+const btnNext = document.getElementById('btn-next');
+const btnPlay = document.getElementById('btn-play');
+const progressFill = document.getElementById('progress-fill');
+const dotContainer = document.getElementById('progress-dots');
+const svgGroups = document.querySelectorAll('.comp-group');
+const svgLightning = document.getElementById('svg-lightning');
+
+// Initialize dots
+stages.forEach((_, i) => {
+    const dot = document.createElement('div');
+    dot.className = 'dot';
+    dot.addEventListener('click', () => goToStage(i));
+    dotContainer.appendChild(dot);
+});
+const dots = document.querySelectorAll('.dot');
+
+function updateStageVisuals(stageIndex) {
+    const stage = stages[stageIndex];
+    
+    // Text Updates
+    elStageNum.innerText = `Stage ${stage.id}:`;
+    elStageName.innerText = stage.title;
+    elStageDesc.innerText = stage.desc;
+    elStageParticles.innerHTML = stage.particlesHtml;
+    
+    // UI Updates
+    btnPrev.disabled = stageIndex === 0;
+    btnNext.disabled = stageIndex === stages.length - 1;
+    progressFill.style.width = `${((stageIndex) / (stages.length - 1)) * 100}%`;
+    
+    dots.forEach((d, i) => d.classList.toggle('active', i === stageIndex));
+
+    // SVG State Handling (Dim non-active, Highlight active)
+    if(isPlaying) {
+         svgGroups.forEach(g => g.classList.remove('dimmed'));
+    } else {
+        svgGroups.forEach(g => {
+            let isActive = false;
+            stage.activeGroups.forEach(cls => {
+                if(g.classList.contains(cls)) isActive = true;
+            });
+            if(isActive) {
+                g.classList.remove('dimmed');
+                g.classList.add('active');
+            } else {
+                g.classList.add('dimmed');
+                g.classList.remove('active');
+            }
+        });
+    }
+
+    // Canvas Particle Routing
+    if (isPlaying) {
+        activeFlows = ['fixation', 'assimilation', 'decay', 'denitrification'];
+    } else {
+        activeFlows = stage.flows;
+    }
+
+    // Special Abiotic visual
+    svgLightning.style.opacity = stage.lightning ? "1" : "0";
+}
+
+function goToStage(index) {
+    if (index < 0 || index >= stages.length) return;
+    currentStage = index;
+    updateStageVisuals(currentStage);
+}
+
+btnPrev.addEventListener('click', () => { stopAutoPlay(); goToStage(currentStage - 1); });
+btnNext.addEventListener('click', () => { stopAutoPlay(); goToStage(currentStage + 1); });
+
+function toggleAutoPlay() {
+    isPlaying = !isPlaying;
+    if (isPlaying) {
+        btnPlay.innerText = "Stop Cycle";
+        btnPlay.style.background = "rgba(237, 66, 100, 0.2)";
+        btnPlay.style.borderColor = "rgba(237, 66, 100, 0.4)";
+        btnPlay.style.color = "var(--clr-nitrate)";
+        
+        // Show overview mode
+        elStageNum.innerText = "Cycle Mode:";
+        elStageName.innerText = "Continuous Flow";
+        elStageDesc.innerText = "Observe the entire biogeochemical system operating simultaneously. Matter is neither created nor destroyed, only transformed.";
+        elStageParticles.innerHTML = "";
+        
+        updateStageVisuals(currentStage);
+        
+    } else {
+        stopAutoPlay();
+    }
+}
+
+function stopAutoPlay() {
+    isPlaying = false;
+    btnPlay.innerText = "Auto-Play";
+    btnPlay.style.background = "";
+    btnPlay.style.borderColor = "";
+    btnPlay.style.color = "";
+    goToStage(currentStage); // Reset to exact stage view
+}
+
+btnPlay.addEventListener('click', toggleAutoPlay);
+
+// Init first stage
+goToStage(0);
+
+
+// --- 4. Interactivity Logic (Hover Sync & Sim) ---
+
+// Label/Marker Sync
+const markers = document.querySelectorAll('.marker');
+const legendItems = document.querySelectorAll('.legend-item');
+
+function syncHighlight(targetId, active) {
+    const marker = document.getElementById(targetId) || document.querySelector(`.marker[data-target="${targetId}"]`);
+    const item = document.getElementById(targetId) || document.querySelector(`.legend-item[data-target="${targetId}"]`);
+    
+    if (marker) marker.classList.toggle('highlighted', active);
+    if (item) item.classList.toggle('highlighted', active);
+}
+
+markers.forEach(m => {
+    m.addEventListener('mouseenter', () => syncHighlight(m.id, true));
+    m.addEventListener('mouseleave', () => syncHighlight(m.id, false));
+    m.addEventListener('touchstart', (e) => { e.preventDefault(); syncHighlight(m.id, true); }, {passive: false});
+    m.addEventListener('touchend', (e) => { syncHighlight(m.id, false); }, {passive: false});
+});
+
+legendItems.forEach(item => {
+    item.addEventListener('mouseenter', () => syncHighlight(item.id, true));
+    item.addEventListener('mouseleave', () => syncHighlight(item.id, false));
+    item.addEventListener('touchstart', (e) => { syncHighlight(item.id, true); }, {passive: true});
+    item.addEventListener('touchend', (e) => { syncHighlight(item.id, false); }, {passive: true});
+});
+
+
+// Simulation Logic
+const simTemp = document.getElementById('sim-temp');
+const simO2 = document.getElementById('sim-o2');
+const valTemp = document.getElementById('val-temp');
+const valO2 = document.getElementById('val-o2');
+const simRate = document.getElementById('sim-rate');
+const simStatus = document.getElementById('sim-status');
+
+function calculateSim() {
+    const t = parseFloat(simTemp.value);
+    const o2 = parseFloat(simO2.value);
+    
+    valTemp.innerText = `${t}°C`;
+    
+    let o2Text = "Low (Optimal)";
+    if (o2 > 40 && o2 <= 70) o2Text = "Moderate (Inhibiting)";
+    if (o2 > 70) o2Text = "High (Toxic to Enzyme)";
+    valO2.innerText = o2Text;
+
+    // Fixation rate calculation model
+    // 1. Temperature: Bell curve peaking around 28C. 
+    const tempFactor = Math.exp(-Math.pow(t - 28, 2) / (2 * Math.pow(8, 2))); 
+    
+    // 2. O2: Inversely proportional, drops off sharply.
+    const o2Factor = 1 - (Math.pow(o2/100, 2));
+
+    const finalRate = Math.max(0, tempFactor * o2Factor);
+    const percentage = Math.round(finalRate * 100);
+    
+    simRate.innerText = `${percentage}%`;
+
+    // Visual feedback and Global Particle Speed
+    if (percentage > 80) {
+        simStatus.innerText = "Optimal symbiotic conditions";
+        simStatus.style.color = "var(--clr-bacteria)";
+        globalAnimSpeed = 1.2;
+    } else if (percentage > 40) {
+        simStatus.innerText = "Reduced fixation efficiency";
+        simStatus.style.color = "var(--clr-ammonia)";
+        globalAnimSpeed = 0.5;
+    } else {
+        simStatus.innerText = "Enzymes denatured / dormant";
+        simStatus.style.color = "var(--clr-nitrate)";
+        globalAnimSpeed = 0.1;
+    }
+    
+    // Adjust colors based on temperature
+    if (t > 38) {
+        simRate.style.color = "var(--clr-nitrate)";
+        simRate.style.textShadow = "0 0 20px rgba(237, 66, 100, 0.4)";
+    } else {
+        simRate.style.color = "var(--clr-plant)";
+        simRate.style.textShadow = "0 0 20px rgba(0, 255, 135, 0.4)";
+    }
+}
+
+simTemp.addEventListener('input', calculateSim);
+simO2.addEventListener('input', calculateSim);
+calculateSim(); // init
+</script>
+</body>
+</html>

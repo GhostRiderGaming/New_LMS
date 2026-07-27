@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Kinetic Anatomy: Joint Movement Simulator</title>
+    <style>
+        /* =========================================
+           CORE VARIABLES & THEME
+           ========================================= */
+        :root {
+            /* Palette: Deep Space Medical / Biomechanical */
+            --bg-dark: #07090f;
+            --bg-panel: rgba(16, 22, 35, 0.6);
+            --bg-panel-hover: rgba(25, 35, 55, 0.7);
+            
+            --accent-cyan: #00f3ff;
+            --accent-cyan-glow: rgba(0, 243, 255, 0.4);
+            --accent-magenta: #ff007f;
+            --accent-magenta-glow: rgba(255, 0, 127, 0.4);
+            --accent-purple: #9d00ff;
+            --accent-green: #00ff88;
+            --accent-yellow: #ffcc00;
+
+            --text-main: #f0f4f8;
+            --text-muted: #a0abc0;
+
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            
+            /* Fluid Typography */
+            --font-h1: clamp(2rem, 5vw, 4rem);
+            --font-h2: clamp(1.5rem, 3.5vw, 2.5rem);
+            --font-h3: clamp(1.2rem, 2.5vw, 1.8rem);
+            --font-body: clamp(0.9rem, 1.5vw, 1.1rem);
+            --font-small: clamp(0.75rem, 1vw, 0.9rem);
+
+            /* Spacing */
+            --space-xs: clamp(0.5rem, 1vw, 0.75rem);
+            --space-sm: clamp(0.75rem, 1.5vw, 1rem);
+            --space-md: clamp(1rem, 2vw, 1.5rem);
+            --space-lg: clamp(1.5rem, 3vw, 2.5rem);
+            --space-xl: clamp(2.5rem, 5vw, 4rem);
+
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+        }
+
+        /* =========================================
+           RESET & BASE
+           ========================================= */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 243, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(255, 0, 127, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Ambient animated background grid */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background-image: 
+                linear-gradient(var(--glass-border) 1px, transparent 1px),
+                linear-gradient(90deg, var(--glass-border) 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.2;
+            z-index: -1;
+            transform: perspective(500px) rotateX(60deg) translateY(-100px) translateZ(-200px);
+            animation: gridMove 20s linear infinite;
+        }
+        @keyframes gridMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 50px; }
+        }
+
+        /* Typography Styles */
+        h1, h2, h3 { font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+        h1 { font-size: var(--font-h1); background: linear-gradient(135deg, #fff, var(--text-muted)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--font-h2); margin-bottom: var(--space-md); color: #fff; }
+        h3 { font-size: var(--font-h3); margin-bottom: var(--space-sm); color: var(--accent-cyan); }
+        p { font-size: var(--font-body); color: var(--text-muted); margin-bottom: var(--space-sm); }
+        strong { color: var(--text-main); }
+
+        /* =========================================
+           LAYOUT & COMPONENTS
+           ========================================= */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--space-md) var(--space-lg);
+        }
+
+        section { margin-bottom: var(--space-xl); padding-top: var(--space-lg); }
+
+        /* Glassmorphism Panel */
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-lg);
+            box-shadow: var(--glass-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Generic Flex/Grid Layouts */
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: var(--space-lg); }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--space-md); }
+        .flex-col { display: flex; flex-direction: column; gap: var(--space-md); }
+        
+        /* UI Elements */
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: var(--font-small);
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            background: rgba(0, 243, 255, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid var(--accent-cyan);
+            margin-bottom: var(--space-md);
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 10px 20px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: var(--font-body);
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        .btn:hover { background: rgba(0, 243, 255, 0.1); border-color: var(--accent-cyan); box-shadow: 0 0 15px var(--accent-cyan-glow); }
+        .btn.active { background: var(--accent-cyan); color: #000; box-shadow: 0 0 20px var(--accent-cyan-glow); border-color: var(--accent-cyan); }
+
+        /* =========================================
+           SPECIFIC SECTIONS
+           ========================================= */
+
+        /* Hero */
+        .hero { text-align: center; padding: 10vh 0; position: relative; }
+        .hero p { max-width: 600px; margin: 0 auto; font-size: clamp(1.1rem, 2vw, 1.3rem); }
+
+        /* Visual Container for SVGs */
+        .visual-container {
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        @media (max-width: 768px) { .visual-container { aspect-ratio: 1/1; } }
+
+        /* --- DIAGRAM LABELS SYSTEM (MANDATORY) --- */
+        .diagram-layout {
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            gap: var(--space-lg);
+            align-items: start;
+        }
+        @media (max-width: 1024px) { .diagram-layout { grid-template-columns: 1fr; } }
+
+        .diagram-wrapper { position: relative; width: 100%; height: 100%; min-height: 300px; }
+        .diagram-wrapper svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5)); }
+
+        .marker {
+            position: absolute;
+            width: 32px; height: 32px;
+            background: var(--bg-dark);
+            border: 2px solid var(--accent-cyan);
+            border-radius: 50%;
+            color: var(--accent-cyan);
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 14px;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+        }
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--accent-cyan);
+            color: #000;
+            box-shadow: 0 0 20px var(--accent-cyan);
+        }
+
+        .legend-list { display: flex; flex-direction: column; gap: 12px; }
+        .legend-item {
+            display: flex; align-items: flex-start; gap: 16px;
+            padding: 12px;
+            border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 243, 255, 0.05);
+            border-color: rgba(0, 243, 255, 0.3);
+            transform: translateX(5px);
+        }
+        .legend-number {
+            width: 28px; height: 28px; flex-shrink: 0;
+            background: rgba(0, 243, 255, 0.1); border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 12px;
+        }
+        .legend-item.active .legend-number { background: var(--accent-cyan); color: #000; }
+        .legend-text h4 { font-size: var(--font-body); color: var(--text-main); margin-bottom: 2px; }
+        .legend-text p { font-size: var(--font-small); margin: 0; line-height: 1.4; }
+
+
+        /* --- WORKING PROCESS (MANDATORY) --- */
+        .working-section { position: relative; }
+        .stage-indicator {
+            display: flex; gap: 10px; justify-content: center; margin-bottom: var(--space-md);
+        }
+        .stage-dot {
+            width: 40px; height: 6px; border-radius: 3px; background: rgba(255,255,255,0.1);
+            transition: all 0.4s ease;
+        }
+        .stage-dot.active { background: var(--accent-magenta); box-shadow: 0 0 10px var(--accent-magenta-glow); width: 60px; }
+
+        .stage-content { min-height: 120px; text-align: center; }
+        .stage-title { color: var(--accent-magenta); font-size: var(--font-h3); margin-bottom: 8px; display: inline-flex; align-items: center; gap: 10px; }
+        .stage-desc { font-size: var(--font-body); max-width: 600px; margin: 0 auto; }
+        
+        .controls { display: flex; justify-content: center; gap: 16px; margin-top: var(--space-md); }
+
+        /* Working Process SVG specific animations */
+        #working-svg { width: 100%; height: 100%; }
+        .muscle-fiber { stroke-dasharray: 4; animation: flowDash 20s linear infinite; opacity: 0.3; transition: all 0.5s ease; }
+        
+        /* State Classes toggled by JS */
+        .state-trigger .signal-path { stroke-dasharray: 10 20; animation: signalTravel 1s linear infinite; opacity: 1; stroke: var(--accent-yellow); }
+        .state-trigger #bicep-group { filter: brightness(1.2) drop-shadow(0 0 10px rgba(255,0,127,0.5)); }
+        
+        .state-contract .bicep-body { transform: scale(1.1, 0.8) translate(-5px, 20px); fill: url(#muscleActiveGrad); }
+        .state-contract .muscle-fiber { opacity: 0.8; stroke: #fff; animation: flowDash 5s linear infinite; }
+        .state-contract #lower-arm-group { transform: rotate(-70deg); }
+        .state-contract .force-arrow { opacity: 1; transform: translateY(-20px); }
+        .state-contract .particles circle { animation: particleExplode 1s ease-out forwards; }
+
+        .state-extend .tricep-body { transform: scale(1.05, 0.85) translate(5px, 15px); fill: url(#muscleActiveGrad); }
+        .state-extend #lower-arm-group { transform: rotate(10deg); }
+        
+        #lower-arm-group {
+            transform-origin: 300px 300px; /* Precise pivot point of elbow */
+            transition: transform 1s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+        .bicep-body, .tricep-body {
+            transform-origin: center;
+            transition: all 1s cubic-bezier(0.25, 0.1, 0.25, 1);
+        }
+
+        @keyframes signalTravel { to { stroke-dashoffset: -30; } }
+        @keyframes flowDash { to { stroke-dashoffset: 100; } }
+        @keyframes particleExplode {
+            0% { transform: scale(0) translate(0,0); opacity: 1; }
+            100% { transform: scale(1.5) translate(var(--tx), var(--ty)); opacity: 0; }
+        }
+
+        /* --- SIMULATOR --- */
+        .simulator-layout {
+            display: grid; grid-template-columns: 1fr 300px; gap: var(--space-lg);
+        }
+        @media (max-width: 768px) { .simulator-layout { grid-template-columns: 1fr; } }
+        
+        .control-panel { background: rgba(0,0,0,0.4); padding: var(--space-md); border-radius: var(--radius-md); }
+        .slider-group { margin-bottom: var(--space-md); }
+        .slider-header { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: var(--font-small); color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+        .slider-val { color: var(--accent-cyan); font-weight: bold; font-family: monospace; font-size: 1.1rem; }
+        
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; margin: 10px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer;
+            background: rgba(255,255,255,0.1); border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px; width: 20px; border-radius: 50%;
+            background: var(--accent-cyan); cursor: pointer;
+            -webkit-appearance: none; margin-top: -7px;
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+            border: 2px solid #000;
+        }
+        input[type=range]::-moz-range-track {
+            width: 100%; height: 6px; cursor: pointer; background: rgba(255,255,255,0.1); border-radius: 3px;
+        }
+        input[type=range]::-moz-range-thumb {
+            height: 20px; width: 20px; border-radius: 50%; background: var(--accent-cyan); cursor: pointer; border: 2px solid #000; box-shadow: 0 0 10px var(--accent-cyan-glow);
+        }
+
+        /* Simulator Data readout */
+        .data-readout { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: var(--space-md); }
+        .data-box { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 10px; border-radius: var(--radius-sm); text-align: center; }
+        .data-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; }
+        .data-value { font-size: 1.2rem; color: #fff; font-family: monospace; font-weight: bold; }
+        .data-value.warning { color: var(--accent-magenta); text-shadow: 0 0 8px var(--accent-magenta-glow); }
+
+        /* Info Cards (Facts, Apps) */
+        .info-card {
+            background: linear-gradient(145deg, rgba(20,25,35,0.8), rgba(10,15,20,0.8));
+            border-left: 4px solid var(--accent-purple);
+            padding: var(--space-md); border-radius: var(--radius-md);
+            transition: transform 0.3s;
+        }
+        .info-card:hover { transform: translateY(-5px); }
+        .info-card.mistake { border-left-color: var(--accent-magenta); }
+        
+        /* SVG Utils shared */
+        .svg-text { fill: rgba(255,255,255,0.5); font-family: monospace; font-size: 12px; pointer-events: none; }
+        .glow-cyan { filter: drop-shadow(0 0 8px var(--accent-cyan)); }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        
+        <!-- HERO -->
+        <section class="hero">
+            <div class="badge">Biomechanical Visualization</div>
+            <h1>Kinetic Anatomy</h1>
+            <p>An interactive exploration of human synovial joints. Discover the complex biological engineering that enables fluid motion, load bearing, and kinetic energy transfer.</p>
+        </section>
+
+        <!-- COMPONENTS: SYNOVIAL JOINT -->
+        <section id="components" class="glass-panel">
+            <h2>Architecture of a Joint</h2>
+            <p>While joints vary by type (hinge, ball-and-socket), all highly mobile <strong>synovial joints</strong> share a common structural blueprint designed for frictionless movement under immense pressure.</p>
+            
+            <div class="diagram-layout" style="margin-top: var(--space-lg);">
+                
+                <!-- SVG DIAGRAM -->
+                <div class="diagram-wrapper" id="components-diagram">
+                    <!-- Markers placed via inline styles strictly for positioning over SVG features, logic in JS ensures no overlap with UI -->
+                    <div class="marker" data-target="item-cartilage" style="top: 38%; left: 45%;">1</div>
+                    <div class="marker" data-target="item-membrane" style="top: 45%; left: 30%;">2</div>
+                    <div class="marker" data-target="item-fluid" style="top: 50%; left: 55%;">3</div>
+                    <div class="marker" data-target="item-capsule" style="top: 58%; left: 25%;">4</div>
+                    <div class="marker" data-target="item-ligament" style="top: 65%; left: 75%;">5</div>
+
+                    <svg viewBox="0 0 600 600" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="boneBase" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#2a3040" />
+                                <stop offset="50%" stop-color="#4a5568" />
+                                <stop offset="100%" stop-color="#1a202c" />
+                            </linearGradient>
+                            <linearGradient id="cartilageGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#00f3ff" stop-opacity="0.8" />
+                                <stop offset="100%" stop-color="#00f3ff" stop-opacity="0.2" />
+                            </linearGradient>
+                            <linearGradient id="fluidGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="rgba(0, 255, 136, 0.4)" />
+                                <stop offset="100%" stop-color="rgba(0, 255, 136, 0.1)" />
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                            <!-- Porous texture pattern for bone marrow/inner structure -->
+                            <pattern id="boneTexture" patternUnits="userSpaceOnUse" width="20" height="20">
+                                <circle cx="10" cy="10" r="1.5" fill="rgba(255,255,255,0.05)"/>
+                                <circle cx="4" cy="4" r="1" fill="rgba(255,255,255,0.03)"/>
+                            </pattern>
+                        </defs>
+
+                        <!-- Background abstract circle -->
+                        <circle cx="300" cy="300" r="250" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="2" stroke-dasharray="10 5" />
+                        
+                        <!-- Top Bone (E.g., Femur/Humerus end) -->
+                        <g id="comp-bone-top">
+                            <path d="M220,50 L220,150 C220,220 180,250 180,300 C180,340 230,360 270,360 C290,360 310,340 330,360 C370,360 420,340 420,300 C420,250 380,220 380,150 L380,50 Z" fill="url(#boneBase)" stroke="#5a677d" stroke-width="2"/>
+                            <path d="M220,50 L220,150 C220,220 180,250 180,300 C180,340 230,360 270,360 C290,360 310,340 330,360 C370,360 420,340 420,300 C420,250 380,220 380,150 L380,50 Z" fill="url(#boneTexture)"/>
+                        </g>
+
+                        <!-- Articular Cartilage (Top) -->
+                        <path id="articular-cartilage" d="M180,300 C180,345 230,365 270,365 C290,365 310,345 330,365 C370,365 420,345 420,300 C430,330 400,380 330,380 C310,380 290,390 270,380 C200,380 170,330 180,300 Z" fill="url(#cartilageGlow)" filter="url(#glow)"/>
+
+                        <!-- Bottom Bone (E.g., Tibia/Ulna end) -->
+                        <g id="comp-bone-bottom">
+                            <path d="M200,550 L200,450 C200,390 170,370 170,330 C170,310 240,290 300,290 C360,290 430,310 430,330 C430,370 400,390 400,450 L400,550 Z" fill="url(#boneBase)" stroke="#5a677d" stroke-width="2"/>
+                        </g>
+                        
+                        <!-- Articular Cartilage (Bottom) -->
+                        <path d="M170,330 C170,310 240,290 300,290 C360,290 430,310 430,330 C420,300 360,275 300,275 C240,275 180,300 170,330 Z" fill="url(#cartilageGlow)" filter="url(#glow)"/>
+
+                        <!-- Joint Capsule & Synovial Membrane -->
+                        <path id="capsule" d="M175,250 C120,280 120,350 165,380 L165,380 L175,250 Z" fill="rgba(157, 0, 255, 0.15)" stroke="var(--accent-purple)" stroke-width="2" stroke-dasharray="5 5"/>
+                        <path d="M425,250 C480,280 480,350 435,380 L435,380 L425,250 Z" fill="rgba(157, 0, 255, 0.15)" stroke="var(--accent-purple)" stroke-width="2" stroke-dasharray="5 5"/>
+
+                        <!-- Synovial Fluid (Inside cavity) -->
+                        <path id="synovial-fluid" d="M185,300 C150,330 200,370 270,375 C290,375 310,350 330,375 C400,370 450,330 415,300 C430,330 360,390 300,390 C240,390 170,330 185,300 Z" fill="url(#fluidGrad)"/>
+                        
+                        <!-- Animated Fluid Particles inside -->
+                        <g fill="var(--accent-green)" opacity="0.6">
+                            <circle cx="200" cy="320" r="3"><animate attributeName="cy" values="320;340;320" dur="3s" repeatCount="indefinite"/></circle>
+                            <circle cx="250" cy="370" r="2.5"><animate attributeName="cy" values="370;360;370" dur="2.5s" repeatCount="indefinite"/></circle>
+                            <circle cx="350" cy="360" r="4"><animate attributeName="cy" values="360;330;360" dur="4s" repeatCount="indefinite"/></circle>
+                            <circle cx="400" cy="330" r="2"><animate attributeName="cy" values="330;350;330" dur="3.5s" repeatCount="indefinite"/></circle>
+                        </g>
+
+                        <!-- Extracapsular Ligament -->
+                        <path id="ligament" d="M410,200 C480,250 490,380 410,430 L430,440 C520,380 500,240 430,190 Z" fill="rgba(255,255,255,0.8)" stroke="#aaa" stroke-width="1"/>
+                        <path d="M420,210 C480,260 480,370 420,420" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="2"/> <!-- fiber line -->
+                    </svg>
+                </div>
+
+                <!-- LEGEND -->
+                <div class="legend-list">
+                    <div class="legend-item" id="item-cartilage">
+                        <div class="legend-number">1</div>
+                        <div class="legend-text">
+                            <h4>Articular Cartilage</h4>
+                            <p>Smooth, glassy tissue covering bone ends. Acts as a shock absorber and reduces friction to almost zero during movement.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-membrane">
+                        <div class="legend-number">2</div>
+                        <div class="legend-text">
+                            <h4>Synovial Membrane</h4>
+                            <p>Inner lining of the capsule. It secretes synovial fluid and filters nutrients from blood into the joint cavity.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-fluid">
+                        <div class="legend-number">3</div>
+                        <div class="legend-text">
+                            <h4>Synovial Fluid</h4>
+                            <p>Viscous, egg-white-like lubricant. It becomes less viscous (thinner) with movement, adapting to kinetic demands.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-capsule">
+                        <div class="legend-number">4</div>
+                        <div class="legend-text">
+                            <h4>Joint Capsule</h4>
+                            <p>Tough fibrous sleeve enclosing the joint. It provides stability and prevents the lubricating fluid from leaking out.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-ligament">
+                        <div class="legend-number">5</div>
+                        <div class="legend-text">
+                            <h4>Ligament</h4>
+                            <p>Strong bands of dense connective tissue holding bone to bone. They restrict joint movement to prevent dislocation.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING PROCESS: MECHANICS OF MOVEMENT -->
+        <section id="working" class="glass-panel working-section">
+            <h2>Biomechanics: The Flexion Cycle</h2>
+            <p>Joint movement is a coordinated sequence involving neuromuscular signals, muscle fiber contraction (agonist), and reciprocal relaxation (antagonist), acting upon the skeletal levers.</p>
+            
+            <div class="stage-indicator" id="working-indicators">
+                <div class="stage-dot active"></div>
+                <div class="stage-dot"></div>
+                <div class="stage-dot"></div>
+                <div class="stage-dot"></div>
+            </div>
+
+            <div class="stage-content">
+                <h3 class="stage-title" id="working-title">1. Resting Equilibrium</h3>
+                <p class="stage-desc" id="working-desc">The joint is neutral. Antagonistic muscles (biceps and triceps) maintain basal tone. Synovial fluid is highly viscous, holding the joint stable.</p>
+            </div>
+
+            <div class="visual-container" style="aspect-ratio: 2/1; margin-top: var(--space-md); background: #04060a;">
+                <svg id="working-svg" class="state-rest" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                        <!-- Muscle Gradients -->
+                        <linearGradient id="muscleRestGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#8a1c3a" />
+                            <stop offset="50%" stop-color="#b3244b" />
+                            <stop offset="100%" stop-color="#8a1c3a" />
+                        </linearGradient>
+                        <linearGradient id="muscleActiveGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#ff0044" />
+                            <stop offset="50%" stop-color="#ff007f" />
+                            <stop offset="100%" stop-color="#ff0044" />
+                        </linearGradient>
+                        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="var(--accent-cyan)" />
+                        </marker>
+                    </defs>
+
+                    <!-- Background Grid -->
+                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+                    </pattern>
+                    <rect width="100%" height="100%" fill="url(#grid)" />
+
+                    <!-- Brain Signal (Hidden by default, shown in Stage 2) -->
+                    <path class="signal-path" d="M50,50 Q 150,50 200,100 T 300,150" fill="none" stroke="transparent" stroke-width="4" />
+                    
+                    <!-- Upper Arm (Humerus Base) -->
+                    <path d="M300,80 L280,300 C280,320 320,320 320,300 L340,80 Z" fill="url(#boneBase)" stroke="#3a4556" />
+
+                    <!-- Bicep Muscle -->
+                    <g id="bicep-group">
+                        <path class="bicep-body" d="M285,120 Q 230,190 280,260 L 290,260 Q 250,190 295,120 Z" fill="url(#muscleRestGrad)" />
+                        <!-- Fibers -->
+                        <path class="muscle-fiber bicep-body" d="M280,130 Q 240,190 282,250" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" />
+                        <path class="muscle-fiber bicep-body" d="M288,125 Q 255,190 286,255" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" />
+                    </g>
+
+                    <!-- Tricep Muscle -->
+                    <g id="tricep-group">
+                        <path class="tricep-body" d="M335,120 Q 380,190 325,270 L 315,270 Q 360,190 325,120 Z" fill="url(#muscleRestGrad)" />
+                    </g>
+
+                    <!-- Lower Arm Group (Rotates) -->
+                    <g id="lower-arm-group">
+                        <!-- Pivot Joint visually -->
+                        <circle cx="300" cy="300" r="20" fill="#1a202c" stroke="var(--accent-cyan)" stroke-width="2" filter="url(#glow)"/>
+                        <circle cx="300" cy="300" r="8" fill="var(--accent-cyan)" />
+                        
+                        <!-- Radius / Ulna abstraction -->
+                        <path d="M290,310 L290,380 L700,380 L700,340 L310,290 Z" fill="url(#boneBase)" stroke="#3a4556" />
+                        
+                        <!-- Tendon insertion -->
+                        <path d="M285,260 L295,330 L305,330 Z" fill="#ccc" />
+                        
+                        <!-- Directional Arrow (Shown during movement) -->
+                        <path class="force-arrow" d="M350,340 A 60 60 0 0 1 250,340" fill="none" stroke="var(--accent-cyan)" stroke-width="3" marker-end="url(#arrowhead)" opacity="0" transition="opacity 0.3s"/>
+                    </g>
+                    
+                    <!-- Particles emitted from joint during movement -->
+                    <g class="particles" fill="var(--accent-green)">
+                        <circle cx="300" cy="300" r="3" style="--tx: -30px; --ty: -20px;" opacity="0"/>
+                        <circle cx="300" cy="300" r="4" style="--tx: 20px; --ty: -30px;" opacity="0"/>
+                        <circle cx="300" cy="300" r="2" style="--tx: 0px; --ty: -40px;" opacity="0"/>
+                    </g>
+                </svg>
+            </div>
+
+            <div class="controls">
+                <button class="btn" id="btn-prev">◄ Prev</button>
+                <button class="btn" id="btn-auto">Auto-Play ⟳</button>
+                <button class="btn" id="btn-next">Next ►</button>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATOR -->
+        <section id="simulator" class="glass-panel">
+            <h2>Elbow Biomechanics Lab</h2>
+            <p>Manipulate the parameters to observe the relationship between joint angle, muscle effort, and skeletal leverage.</p>
+            
+            <div class="simulator-layout">
+                <!-- Visual Feedback -->
+                <div class="visual-container" style="background: linear-gradient(180deg, #07090f 0%, #111827 100%);">
+                    <svg id="sim-svg" viewBox="0 0 600 500" preserveAspectRatio="xMidYMid meet">
+                        <!-- Re-using structural concepts from working SVG but optimized for arbitrary slider rotation -->
+                        <defs>
+                            <filter id="tensionGlow">
+                                <feGaussianBlur stdDeviation="5" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+                            </filter>
+                        </defs>
+                        <!-- Protractor Arc -->
+                        <path d="M200,250 A 150 150 0 0 1 500,250" fill="none" stroke="rgba(255,255,255,0.1)" stroke-dasharray="5 5" stroke-width="2"/>
+                        <text x="510" y="255" class="svg-text">0°</text>
+                        <text x="170" y="255" class="svg-text">180°</text>
+                        <text x="340" y="90" class="svg-text">90°</text>
+                        <line x1="350" y1="250" x2="350" y2="100" stroke="rgba(255,255,255,0.1)" stroke-width="1"/>
+
+                        <!-- Humerus -->
+                        <path d="M350,50 L330,250 C330,270 370,270 370,250 L350,50 Z" fill="url(#boneBase)" />
+                        
+                        <!-- Dynamic Bicep (Path morphed via JS scaling) -->
+                        <g id="sim-bicep-group" transform-origin="330 150">
+                            <path id="sim-bicep" d="M340,80 Q 280,160 330,230 L 340,230 Q 310,160 345,80 Z" fill="url(#muscleRestGrad)" filter="url(#tensionGlow)" />
+                        </g>
+
+                        <!-- Dynamic Forearm Group -->
+                        <g id="sim-forearm" transform-origin="350 250">
+                            <!-- Pivot -->
+                            <circle cx="350" cy="250" r="15" fill="#1a202c" stroke="#fff" stroke-width="2"/>
+                            <!-- Arm -->
+                            <path d="M340,260 L340,290 L600,290 L600,260 Z" fill="url(#boneBase)" />
+                            <circle cx="580" cy="275" r="30" fill="rgba(0, 243, 255, 0.1)" stroke="var(--accent-cyan)" stroke-dasharray="2 2" id="sim-weight-vis"/>
+                            <text x="580" y="280" text-anchor="middle" font-family="monospace" fill="#fff" font-size="12" id="sim-weight-text">0kg</text>
+                        </g>
+                        
+                        <!-- Angle text overlay -->
+                        <text x="350" y="220" text-anchor="middle" fill="var(--accent-cyan)" font-family="monospace" font-size="18" font-weight="bold" id="sim-angle-overlay">0°</text>
+                    </svg>
+                </div>
+
+                <!-- Controls -->
+                <div class="control-panel flex-col">
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>Flexion Angle</span>
+                            <span class="slider-val" id="val-angle">0°</span>
+                        </div>
+                        <input type="range" id="slider-angle" min="0" max="140" value="0">
+                        <p style="font-size: 0.75rem; margin-top: 5px;">0° = Full Extension, 140° = Full Flexion</p>
+                    </div>
+
+                    <div class="slider-group">
+                        <div class="slider-header">
+                            <span>External Load (Weight)</span>
+                            <span class="slider-val" id="val-load">0 kg</span>
+                        </div>
+                        <input type="range" id="slider-load" min="0" max="25" value="0">
+                    </div>
+
+                    <div class="data-readout">
+                        <div class="data-box">
+                            <div class="data-label">Muscle Tension</div>
+                            <div class="data-value" id="data-tension">Low</div>
+                        </div>
+                        <div class="data-box">
+                            <div class="data-label">Joint Compression</div>
+                            <div class="data-value" id="data-compression">1.0x</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SUPPLEMENTARY INFO -->
+        <div class="grid-2">
+            <div class="info-card">
+                <h3>Engineering Marvel</h3>
+                <p>Human articular cartilage has a coefficient of friction of roughly <strong>0.002</strong>. By comparison, ice sliding on ice has a coefficient of 0.03. Your joints are 15 times more slippery than ice, allowing decades of continuous use without wearing down the bone under normal conditions.</p>
+            </div>
+            
+            <div class="info-card mistake">
+                <h3>Common Misconception</h3>
+                <p><strong>"Cracking your knuckles causes arthritis."</strong></p>
+                <p>False. The popping sound is cavitation — the formation and rapid collapse of gas bubbles in the synovial fluid as the joint capsule is stretched. Multiple major studies have found no correlation between knuckle cracking and osteoarthritis.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- =========================================
+         JAVASCRIPT LOGIC
+         ========================================= -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* --- 1. DIAGRAM LABELS SYSTEM --- */
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function clearActiveMarkers() {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => {
+                    clearActiveMarkers();
+                    marker.classList.add('active');
+                    const targetId = marker.getAttribute('data-target');
+                    document.getElementById(targetId).classList.add('active');
+                });
+                // Touch support
+                marker.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    clearActiveMarkers();
+                    marker.classList.add('active');
+                    document.getElementById(marker.getAttribute('data-target')).classList.add('active');
+                });
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => {
+                    clearActiveMarkers();
+                    item.classList.add('active');
+                    const marker = document.querySelector(`.marker[data-target="${item.id}"]`);
+                    if(marker) marker.classList.add('active');
+                });
+            });
+
+            /* --- 2. WORKING PROCESS STATE MACHINE --- */
+            const stages = [
+                {
+                    title: "1. Resting Equilibrium",
+                    desc: "The joint is neutral. Antagonistic muscles maintain basal tone. Synovial fluid is highly viscous, holding the joint stable.",
+                    class: "state-rest",
+                    particles: false
+                },
+                {
+                    title: "2. Neuromuscular Activation",
+                    desc: "An action potential travels down the motor neuron. Acetylcholine crosses the synapse, triggering calcium release in muscle fibers.",
+                    class: "state-trigger",
+                    particles: false
+                },
+                {
+                    title: "3. Agonist Contraction",
+                    desc: "Myosin heads bind to actin, pulling fibers inward. The bicep thickens, exerting immense pulling force on the radius bone via tendons.",
+                    class: "state-contract",
+                    particles: true
+                },
+                {
+                    title: "4. Antagonist Extension",
+                    desc: "The bicep relaxes. The tricep contracts, pulling the ulna backwards to return the joint to a neutral or extended position.",
+                    class: "state-extend",
+                    particles: false
+                }
+            ];
+
+            let currentStage = 0;
+            let autoPlayInterval = null;
+            const svgEl = document.getElementById('working-svg');
+            const titleEl = document.getElementById('working-title');
+            const descEl = document.getElementById('working-desc');
+            const dots = document.querySelectorAll('.stage-dot');
+            const btnAuto = document.getElementById('btn-auto');
+
+            function updateStage(index) {
+                // Remove all state classes
+                stages.forEach(s => svgEl.classList.remove(s.class));
+                
+                // Set new state
+                currentStage = index;
+                const stage = stages[currentStage];
+                
+                // Update DOM
+                svgEl.classList.add(stage.class);
+                titleEl.textContent = stage.title;
+                descEl.textContent = stage.desc;
+                
+                // Update Dots
+                dots.forEach((dot, i) => {
+                    dot.classList.toggle('active', i === currentStage);
+                });
+            }
+
+            document.getElementById('btn-next').addEventListener('click', () => {
+                stopAutoPlay();
+                updateStage((currentStage + 1) % stages.length);
+            });
+            document.getElementById('btn-prev').addEventListener('click', () => {
+                stopAutoPlay();
+                updateStage((currentStage - 1 + stages.length) % stages.length);
+            });
+
+            function stopAutoPlay() {
+                if(autoPlayInterval) {
+                    clearInterval(autoPlayInterval);
+                    autoPlayInterval = null;
+                    btnAuto.classList.remove('active');
+                }
+            }
+
+            btnAuto.addEventListener('click', () => {
+                if(autoPlayInterval) {
+                    stopAutoPlay();
+                } else {
+                    btnAuto.classList.add('active');
+                    updateStage((currentStage + 1) % stages.length); // immediate step
+                    autoPlayInterval = setInterval(() => {
+                        updateStage((currentStage + 1) % stages.length);
+                    }, 3000); // 3 seconds per stage
+                }
+            });
+
+
+            /* --- 3. INTERACTIVE SIMULATOR MATH & BINDINGS --- */
+            const sliderAngle = document.getElementById('slider-angle');
+            const sliderLoad = document.getElementById('slider-load');
+            const valAngle = document.getElementById('val-angle');
+            const valLoad = document.getElementById('val-load');
+            const dataTension = document.getElementById('data-tension');
+            const dataComp = document.getElementById('data-compression');
+            
+            const simForearm = document.getElementById('sim-forearm');
+            const simBicep = document.getElementById('sim-bicep');
+            const weightVis = document.getElementById('sim-weight-vis');
+            const weightText = document.getElementById('sim-weight-text');
+            const angleOverlay = document.getElementById('sim-angle-overlay');
+
+            function updateSimulator() {
+                const angle = parseInt(sliderAngle.value); // 0 to 140
+                const load = parseInt(sliderLoad.value); // 0 to 25
+
+                // Update text values
+                valAngle.textContent = `${angle}°`;
+                valLoad.textContent = `${load} kg`;
+                weightText.textContent = `${load}kg`;
+                angleOverlay.textContent = `${angle}°`;
+
+                // 1. Rotate Forearm. In our SVG, 0 deg slider = horizontal (0 deg rotation).
+                // Flexion means rotating UPwards (negative degrees in SVG coordinates).
+                simForearm.style.transform = `rotate(-${angle}deg)`;
+
+                // 2. Muscle Bulge (Bicep)
+                // As angle goes 0 -> 140, bicep gets shorter (scaleX conceptually) and thicker (scaleY)
+                // We use transform scale. 
+                const bulgeFactor = 1 + (angle / 140) * 0.4; // Max 40% thicker
+                const shortenFactor = 1 - (angle / 140) * 0.2; // Max 20% shorter
+                simBicep.style.transform = `scale(${shortenFactor}, ${bulgeFactor})`;
+
+                // 3. Muscle Tension Color & Glow based on Load + Angle
+                // Harder work = redder color, more glow
+                // Effort is higher when load is high AND angle is around 90 (max mechanical disadvantage)
+                const mechanicalDisadvantage = Math.sin((angle * Math.PI) / 180); // 1 at 90deg, 0 at 0/180
+                const effort = (load / 25) * (0.2 + 0.8 * mechanicalDisadvantage); // 0.0 to 1.0
+
+                if (effort < 0.2) {
+                    simBicep.style.fill = "url(#muscleRestGrad)";
+                    simBicep.style.filter = "none";
+                    dataTension.textContent = "Low";
+                    dataTension.style.color = "var(--text-muted)";
+                } else if (effort < 0.6) {
+                    simBicep.style.fill = "#d4194e";
+                    simBicep.style.filter = "drop-shadow(0 0 5px rgba(212,25,78,0.5))";
+                    dataTension.textContent = "Moderate";
+                    dataTension.style.color = "var(--accent-yellow)";
+                } else {
+                    simBicep.style.fill = "url(#muscleActiveGrad)";
+                    simBicep.style.filter = "drop-shadow(0 0 15px rgba(255,0,127,0.8))";
+                    dataTension.textContent = "HIGH";
+                    dataTension.style.color = "var(--accent-magenta)";
+                }
+
+                // 4. Joint Compression calculation
+                // Base compression 1.0x. Adds up based on load and muscle tension pulling joint together.
+                const compression = (1.0 + (load * 0.1) + (effort * 1.5)).toFixed(1);
+                dataComp.textContent = `${compression}x Bodyweight`;
+                if(compression > 3.0) {
+                    dataComp.classList.add('warning');
+                } else {
+                    dataComp.classList.remove('warning');
+                }
+
+                // Visual Weight Indicator
+                const weightScale = 1 + (load/25);
+                weightVis.style.transform = `scale(${weightScale})`;
+                if(load > 0) {
+                    weightVis.style.fill = "rgba(255, 0, 127, 0.2)";
+                    weightVis.style.stroke = "var(--accent-magenta)";
+                } else {
+                    weightVis.style.fill = "rgba(0, 243, 255, 0.1)";
+                    weightVis.style.stroke = "var(--accent-cyan)";
+                }
+            }
+
+            // Event Listeners for Touch & Mouse on sliders
+            ['input', 'touchmove'].forEach(evt => {
+                sliderAngle.addEventListener(evt, updateSimulator, {passive: true});
+                sliderLoad.addEventListener(evt, updateSimulator, {passive: true});
+            });
+
+            // Initial call
+            updateSimulator();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Optics: Eye Defects & Correction Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & GLOBAL RESET
+           ========================================================================== */
+        :root {
+            /* Premium Dark Theme Palette */
+            --bg-base: #030712;
+            --bg-surface: rgba(17, 24, 39, 0.6);
+            --bg-glass: rgba(30, 41, 59, 0.4);
+            --bg-glass-hover: rgba(30, 41, 59, 0.7);
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            --accent-cyan: #06b6d4;
+            --accent-cyan-glow: rgba(6, 182, 212, 0.6);
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            
+            --error-red: #ef4444;
+            --success-green: #10b981;
+
+            --border-light: rgba(255, 255, 255, 0.1);
+            --border-highlight: rgba(255, 255, 255, 0.2);
+
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            
+            /* Fluid Typography */
+            --text-xs: clamp(0.75rem, 1vw + 0.5rem, 0.875rem);
+            --text-sm: clamp(0.875rem, 1.2vw + 0.5rem, 1rem);
+            --text-base: clamp(1rem, 1.5vw + 0.5rem, 1.125rem);
+            --text-lg: clamp(1.125rem, 2vw + 0.5rem, 1.5rem);
+            --text-xl: clamp(1.5rem, 3vw + 0.5rem, 2.5rem);
+            --text-xxl: clamp(2rem, 5vw + 1rem, 4rem);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.08) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Ambient Animated Background */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s infinite ease-in-out alternate;
+        }
+        .orb-1 { width: 40vw; height: 40vw; background: var(--accent-blue); top: -10%; left: -10%; }
+        .orb-2 { width: 30vw; height: 30vw; background: var(--accent-purple); bottom: 10%; right: -5%; animation-delay: -5s; }
+        
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(5%, 10%) scale(1.1); }
+        }
+
+        /* ==========================================================================
+           LAYOUT & CONTAINERS
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: clamp(16px, 4vw, 48px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(32px, 6vw, 80px);
+        }
+
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: clamp(20px, 4vw, 40px);
+            box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+            transition: border-color 0.3s ease, transform 0.3s ease;
+        }
+        
+        @media (max-width: 768px) {
+            /* Reduce blur on mobile for performance */
+            .glass-panel { backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 16px;}
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: clamp(24px, 4vw, 48px);
+        }
+
+        h1, h2, h3 {
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+        
+        h1 { font-size: var(--text-xxl); line-height: 1.1; background: linear-gradient(to right, #fff, var(--accent-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--text-xl); color: var(--text-main); margin-bottom: 12px;}
+        h3 { font-size: var(--text-lg); color: var(--accent-cyan); margin-bottom: 8px;}
+        p { font-size: var(--text-base); color: var(--text-muted); }
+
+        /* ==========================================================================
+           COMPONENTS: ANATOMY (MARKERS + LEGEND)
+           ========================================================================== */
+        .anatomy-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 32px;
+            align-items: center;
+        }
+        @media (min-width: 1024px) {
+            .anatomy-grid { grid-template-columns: 3fr 2fr; }
+        }
+
+        .svg-container {
+            position: relative;
+            width: 100%;
+            min-height: 240px;
+            aspect-ratio: 16 / 9;
+            background: radial-gradient(circle at center, rgba(6, 182, 212, 0.05) 0%, transparent 70%);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .svg-container svg {
+            width: 90%;
+            height: 90%;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+        }
+
+        /* Anatomical Markers */
+        .marker {
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .marker circle.bg {
+            fill: var(--bg-surface);
+            stroke: var(--accent-cyan);
+            stroke-width: 2;
+            transition: all 0.3s;
+        }
+        .marker text {
+            fill: var(--accent-cyan);
+            font-family: var(--font-main);
+            font-size: 14px;
+            font-weight: bold;
+            pointer-events: none;
+            transition: all 0.3s;
+        }
+        .marker:hover circle.bg, .marker.active circle.bg {
+            fill: var(--accent-cyan);
+            filter: drop-shadow(0 0 10px var(--accent-cyan-glow));
+        }
+        .marker:hover text, .marker.active text { fill: #000; }
+        
+        .part-highlight {
+            transition: opacity 0.3s;
+            opacity: 0.8;
+        }
+        .marker.active ~ .part-highlight, .part-highlight.active {
+            opacity: 1;
+            filter: drop-shadow(0 0 8px var(--accent-cyan-glow));
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.02);
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(6, 182, 212, 0.08);
+            border-color: var(--accent-cyan-glow);
+            transform: translateX(4px);
+        }
+        .legend-badge {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            background: var(--bg-base);
+            border: 1.5px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+            transition: all 0.2s;
+        }
+        .legend-item:hover .legend-badge, .legend-item.active .legend-badge {
+            background: var(--accent-cyan);
+            color: #000;
+            box-shadow: 0 0 12px var(--accent-cyan-glow);
+        }
+        .legend-text { display: flex; flex-direction: column; gap: 4px; }
+        .legend-title { font-weight: 600; color: var(--text-main); font-size: var(--text-sm); }
+        .legend-desc { font-size: var(--text-xs); color: var(--text-muted); }
+
+
+        /* ==========================================================================
+           WORKING MECHANISM (STEP-BY-STEP)
+           ========================================================================== */
+        .mechanism-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }
+        @media (min-width: 1024px) {
+            .mechanism-container { grid-template-columns: 1fr 1fr; align-items: stretch;}
+        }
+
+        .mech-visual {
+            position: relative;
+            background: #000;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+            overflow: hidden;
+            aspect-ratio: 16/10;
+        }
+        
+        .mech-svg { width: 100%; height: 100%; }
+
+        .mech-controls {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.2);
+            padding: 24px;
+            border-radius: var(--radius-md);
+        }
+
+        .stage-info { flex-grow: 1; }
+        .stage-num { 
+            display: inline-block; 
+            padding: 4px 12px; 
+            background: var(--accent-blue); 
+            color: #fff; 
+            border-radius: 20px; 
+            font-size: var(--text-xs); 
+            font-weight: bold; 
+            margin-bottom: 12px;
+        }
+        .stage-title { font-size: var(--text-lg); margin-bottom: 12px; color: #fff; }
+        .stage-desc { font-size: var(--text-base); color: var(--text-muted); }
+
+        .mech-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border-light);
+        }
+
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { 
+            width: 8px; height: 8px; 
+            border-radius: 50%; 
+            background: var(--border-highlight);
+            transition: all 0.3s;
+        }
+        .dot.active { background: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-cyan-glow); transform: scale(1.5); }
+
+        .btn-icon {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-highlight);
+            color: var(--text-main);
+            width: 44px; height: 44px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-icon:hover:not(:disabled) { background: var(--accent-cyan); color: #000; border-color: var(--accent-cyan); }
+        .btn-icon:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Animation Classes for SVG */
+        .ray-path {
+            stroke-dasharray: 1000;
+            stroke-dashoffset: 1000;
+            transition: stroke-dashoffset 1s ease-in-out;
+        }
+        .ray-path.draw { stroke-dashoffset: 0; }
+        
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (CORE)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+            border-radius: var(--radius-lg);
+        }
+        @media (min-width: 1024px) {
+            .sim-layout { grid-template-columns: 320px 1fr; }
+        }
+
+        /* Controls Panel */
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            background: rgba(0,0,0,0.3);
+            padding: 24px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 12px; }
+        .control-label { font-size: var(--text-sm); font-weight: 600; color: var(--text-main); display: flex; justify-content: space-between;}
+        
+        /* Segmented Control (Radio) */
+        .segmented-control {
+            display: flex;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 4px;
+        }
+        .segmented-control label {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            font-size: var(--text-xs);
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+        .segmented-control input[type="radio"] { display: none; }
+        .segmented-control input[type="radio"]:checked + label {
+            background: var(--accent-blue);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        /* Custom Slider */
+        .range-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            outline: none;
+            margin: 12px 0;
+        }
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--text-main);
+            border: 2px solid var(--accent-cyan);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+            transition: transform 0.1s;
+        }
+        .range-slider::-webkit-slider-thumb:active { transform: scale(1.2); }
+
+        /* Toggle Switch */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+            padding: 12px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 12px;
+            transition: 0.3s;
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px; left: 2px;
+            width: 20px; height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+        input[type="checkbox"] { display: none; }
+        input[type="checkbox"]:checked + .toggle-container { background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3); }
+        input[type="checkbox"]:checked + .toggle-container .toggle-switch { background: var(--success-green); }
+        input[type="checkbox"]:checked + .toggle-container .toggle-switch::after { transform: translateX(20px); }
+
+        /* Visual Arena */
+        .sim-arena {
+            position: relative;
+            background: #02040a;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-light);
+            overflow: hidden;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        #simCanvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 2; /* Rays go over the eye */
+            pointer-events: none;
+        }
+
+        .sim-eye-svg {
+            position: absolute;
+            width: 80%;
+            height: 80%;
+            max-width: 600px;
+            z-index: 1;
+            /* Allow SVG to deform slightly based on defect via CSS transform applied by JS */
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: center;
+        }
+
+        /* Status Overlay */
+        .sim-status {
+            position: absolute;
+            top: 16px; right: 16px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: var(--text-xs);
+            font-weight: bold;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            border: 1px solid var(--border-highlight);
+            z-index: 3;
+            transition: all 0.3s;
+        }
+        .status-focus-retina { color: var(--success-green); border-color: var(--success-green); box-shadow: 0 0 10px rgba(16,185,129,0.2); }
+        .status-focus-error { color: var(--error-red); border-color: var(--error-red); box-shadow: 0 0 10px rgba(239,68,68,0.2); }
+
+        /* ==========================================================================
+           INFO CARDS (Facts, Revision)
+           ========================================================================== */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        
+        .info-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            transition: transform 0.3s, background 0.3s;
+        }
+        .info-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.06);
+            border-color: var(--border-highlight);
+        }
+        .icon-wrapper {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            background: rgba(6, 182, 212, 0.1);
+            color: var(--accent-cyan);
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 16px;
+            font-size: 24px;
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-light);
+            font-size: var(--text-sm);
+        }
+        .comparison-table th { color: var(--accent-cyan); font-weight: 600; }
+        .comparison-table tr:last-child td { border-bottom: none; }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+    </div>
+
+    <main class="container">
+        
+        <!-- Header -->
+        <header class="section-header">
+            <h3 style="color: var(--accent-purple); letter-spacing: 2px; text-transform: uppercase; font-size: var(--text-xs);">Interactive Physics & Biology</h3>
+            <h1>Optics of the Human Eye</h1>
+            <p style="max-width: 600px; margin: 16px auto 0;">Explore how light is focused to create vision, understand common refractive defects, and visualize how modern corrective lenses restore perfect sight.</p>
+        </header>
+
+        <!-- SECTION 1: Anatomy (Visual + Legend) -->
+        <section class="glass-panel">
+            <h2>1. Optical Components of the Eye</h2>
+            <p style="margin-bottom: 24px;">The eye is a complex biological camera. Hover or tap the markers to explore the structures responsible for focusing light.</p>
+            
+            <div class="anatomy-grid">
+                <!-- SVG Illustration -->
+                <div class="svg-container">
+                    <svg viewBox="0 0 800 600" id="anatomySvg">
+                        <!-- Definitions for gradients -->
+                        <defs>
+                            <radialGradient id="eyeballGrad" cx="50%" cy="50%" r="50%" fx="30%" fy="30%">
+                                <stop offset="0%" stop-color="#ffffff" />
+                                <stop offset="80%" stop-color="#e2e8f0" />
+                                <stop offset="100%" stop-color="#cbd5e1" />
+                            </radialGradient>
+                            <radialGradient id="lensGrad" cx="50%" cy="50%" r="50%" fx="40%" fy="40%">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.9)" />
+                                <stop offset="70%" stop-color="rgba(186,230,253,0.5)" />
+                                <stop offset="100%" stop-color="rgba(14,165,233,0.3)" />
+                            </radialGradient>
+                            <linearGradient id="retinaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#ef4444" />
+                                <stop offset="50%" stop-color="#b91c1c" />
+                                <stop offset="100%" stop-color="#7f1d1d" />
+                            </linearGradient>
+                            <linearGradient id="opticNerve" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#fef08a" />
+                                <stop offset="100%" stop-color="#ca8a04" />
+                            </linearGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+
+                        <!-- Eyeball Structure (Sclera) -->
+                        <path class="part-highlight" data-part="2" d="M 400 100 C 580 100 700 220 700 300 C 700 380 580 500 400 500 C 220 500 180 380 180 300 C 180 220 220 100 400 100 Z" fill="url(#eyeballGrad)" stroke="#94a3b8" stroke-width="4"/>
+                        
+                        <!-- Retina (Inner lining at back) -->
+                        <path class="part-highlight" data-part="5" d="M 400 115 C 550 115 670 230 670 300 C 670 370 550 485 400 485" fill="none" stroke="url(#retinaGrad)" stroke-width="8" stroke-linecap="round"/>
+
+                        <!-- Optic Nerve -->
+                        <path class="part-highlight" data-part="6" d="M 685 280 C 730 280 770 290 800 320 L 800 280 C 770 250 730 240 685 240 Z" fill="url(#opticNerve)"/>
+                        <path d="M 685 280 C 730 280 770 290 800 320" fill="none" stroke="#eab308" stroke-width="2"/>
+                        <path d="M 685 240 C 730 240 770 250 800 280" fill="none" stroke="#eab308" stroke-width="2"/>
+
+                        <!-- Cornea (Front bulge) -->
+                        <path class="part-highlight" data-part="1" d="M 180 200 C 120 230 120 370 180 400" fill="rgba(255,255,255,0.2)" stroke="#38bdf8" stroke-width="6" stroke-linecap="round"/>
+
+                        <!-- Iris -->
+                        <path class="part-highlight" data-part="4" d="M 190 220 L 210 260 M 190 380 L 210 340" stroke="#0ea5e9" stroke-width="12" stroke-linecap="round"/>
+
+                        <!-- Lens -->
+                        <ellipse class="part-highlight" data-part="3" cx="240" cy="300" rx="20" ry="50" fill="url(#lensGrad)" stroke="#38bdf8" stroke-width="2"/>
+
+                        <!-- Ciliary Muscles & Suspensory Ligaments -->
+                        <path d="M 210 220 L 240 250 M 210 380 L 240 350" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="4,4"/>
+                        <circle cx="210" cy="220" r="8" fill="#f43f5e"/>
+                        <circle cx="210" cy="380" r="8" fill="#f43f5e"/>
+
+                        <!-- Markers (Positioned over parts) -->
+                        <g class="marker" data-target="1" transform="translate(140, 250)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="5" text-anchor="middle">1</text>
+                        </g>
+                        <g class="marker" data-target="2" transform="translate(450, 150)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="5" text-anchor="middle">2</text>
+                        </g>
+                        <g class="marker" data-target="3" transform="translate(240, 300)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="5" text-anchor="middle">3</text>
+                        </g>
+                        <g class="marker" data-target="4" transform="translate(195, 360)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="5" text-anchor="middle">4</text>
+                        </g>
+                        <g class="marker" data-target="5" transform="translate(640, 420)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="5" text-anchor="middle">5</text>
+                        </g>
+                        <g class="marker" data-target="6" transform="translate(740, 270)">
+                            <circle class="bg" cx="0" cy="0" r="14"/>
+                            <text x="0" y="5" text-anchor="middle">6</text>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Legend List (Safe from overlap) -->
+                <div class="legend-list" id="anatomyLegend">
+                    <div class="legend-item" data-id="1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Cornea</span>
+                            <span class="legend-desc">Clear front window. Provides 70% of the eye's focusing power by bending incoming light.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="2">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Sclera</span>
+                            <span class="legend-desc">The tough, white outer coat that maintains the shape of the eyeball and protects internal structures.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="3">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Crystalline Lens</span>
+                            <span class="legend-desc">Flexible biconvex structure. Changes shape to fine-tune focus for near or distant objects (Accommodation).</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="4">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Iris & Pupil</span>
+                            <span class="legend-desc">Colored muscle that controls the pupil size, regulating how much light enters the eye.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="5">
+                        <div class="legend-badge">5</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Retina</span>
+                            <span class="legend-desc">Light-sensitive screen at the back. Contains photoreceptors (rods and cones) that convert light to signals.</span>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="6">
+                        <div class="legend-badge">6</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Optic Nerve</span>
+                            <span class="legend-desc">Bundle of nerve fibers transmitting visual information from the retina to the brain.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: Working Mechanism (Linear Sequence) -->
+        <section class="glass-panel">
+            <h2>2. The Mechanism of Vision</h2>
+            <p style="margin-bottom: 24px;">How does light transform into an image? Follow the linear path of a light wave entering a healthy eye.</p>
+
+            <div class="mechanism-container">
+                <div class="mech-visual" id="mechVisualArea">
+                    <!-- SVG for animation sequence -->
+                    <svg viewBox="0 0 800 500" class="mech-svg">
+                        <defs>
+                            <radialGradient id="lightSrcGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#fff"/>
+                                <stop offset="100%" stop-color="rgba(250, 204, 21, 0)"/>
+                            </radialGradient>
+                        </defs>
+                        
+                        <!-- Base Eye Outline -->
+                        <path d="M 350 150 C 500 150 600 200 600 250 C 600 300 500 350 350 350 C 200 350 180 300 180 250 C 180 200 200 150 350 150 Z" fill="none" stroke="#334155" stroke-width="2"/>
+                        <path d="M 180 180 C 140 200 140 300 180 320" fill="none" stroke="#38bdf8" stroke-width="4" id="mechCornea" style="transition: filter 0.3s;"/>
+                        <ellipse cx="220" cy="250" rx="15" ry="40" fill="none" stroke="#0ea5e9" stroke-width="2" id="mechLens" style="transition: filter 0.3s;"/>
+                        <path d="M 600 200 C 620 230 620 270 600 300" fill="none" stroke="#ef4444" stroke-width="4" id="mechRetina" style="transition: filter 0.3s;"/>
+                        <path d="M 610 250 L 700 250" fill="none" stroke="#eab308" stroke-width="4" stroke-dasharray="10,5" id="mechNerve" style="transition: opacity 0.3s; opacity: 0.2;"/>
+
+                        <!-- Light Source Object (Tree icon) -->
+                        <g id="mechObject" transform="translate(60, 220)" style="transition: transform 0.5s;">
+                            <path d="M 20 60 L 20 30 M 0 30 L 40 30 L 20 0 Z" fill="none" stroke="#4ade80" stroke-width="4" stroke-linejoin="round"/>
+                        </g>
+
+                        <!-- Animated Light Rays Group -->
+                        <g id="mechRays" stroke="#06b6d4" stroke-width="2" fill="none" style="filter: drop-shadow(0 0 5px #06b6d4);">
+                            <!-- Ray paths will be defined/animated via JS -->
+                            <path id="rayTop" d="M 80 220 L 150 220" class="ray-path"/>
+                            <path id="rayMid" d="M 80 250 L 150 250" class="ray-path"/>
+                            <path id="rayBot" d="M 80 280 L 150 280" class="ray-path"/>
+                        </g>
+
+                        <!-- Brain Signal Particles -->
+                        <circle id="signal1" cx="620" cy="250" r="4" fill="#fff" opacity="0"/>
+                        <circle id="signal2" cx="620" cy="250" r="4" fill="#fff" opacity="0"/>
+                    </svg>
+                </div>
+
+                <div class="mech-controls">
+                    <div class="stage-info">
+                        <span class="stage-num" id="stageNum">Stage 1 of 4</span>
+                        <h3 class="stage-title" id="stageTitle">Light Emission</h3>
+                        <p class="stage-desc" id="stageDesc">Light rays bounce off an object and travel in parallel straight lines towards the eye.</p>
+                    </div>
+
+                    <div class="mech-nav">
+                        <button class="btn-icon" id="btnPrevMech" disabled>
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        </button>
+                        
+                        <div class="progress-dots" id="mechDots">
+                            <div class="dot active"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+
+                        <button class="btn-icon" id="btnNextMech">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: Interactive Simulation (The Core Experience) -->
+        <section class="glass-panel" style="border-color: rgba(6, 182, 212, 0.4); box-shadow: 0 0 40px rgba(6, 182, 212, 0.1);">
+            <div class="section-header" style="margin-bottom: 24px; text-align: left;">
+                <h2>3. Interactive Refraction Lab</h2>
+                <p>Simulate how eye shape causes visual defects, and apply optical physics (lenses) to correct the focal point back onto the retina.</p>
+            </div>
+
+            <div class="sim-layout">
+                <!-- Controls Sidebar -->
+                <div class="sim-controls">
+                    
+                    <div class="control-group">
+                        <span class="control-label">Visual Condition</span>
+                        <div class="segmented-control">
+                            <input type="radio" id="cond-normal" name="condition" value="normal" checked>
+                            <label for="cond-normal">Normal Sight</label>
+                            
+                            <input type="radio" id="cond-myopia" name="condition" value="myopia">
+                            <label for="cond-myopia">Myopia</label>
+                            
+                            <input type="radio" id="cond-hyperopia" name="condition" value="hyperopia">
+                            <label for="cond-hyperopia">Hyperopia</label>
+                        </div>
+                        <p id="cond-desc" style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 4px;">Perfect focal point exactly on the retina.</p>
+                    </div>
+
+                    <div class="control-group" id="severity-group" style="opacity: 0.5; pointer-events: none;">
+                        <div class="control-label">
+                            <span>Defect Severity (Eyeball Shape)</span>
+                            <span id="severity-val">0</span>
+                        </div>
+                        <input type="range" id="sim-severity" class="range-slider" min="0" max="1" step="0.05" value="0">
+                        <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted);">
+                            <span>Mild</span><span>Severe</span>
+                        </div>
+                    </div>
+
+                    <div style="height: 1px; background: var(--border-light); margin: 8px 0;"></div>
+
+                    <div class="control-group">
+                        <span class="control-label" style="color: var(--accent-cyan);">Apply Corrective Lens</span>
+                        <label>
+                            <input type="checkbox" id="sim-correct">
+                            <div class="toggle-container">
+                                <div>
+                                    <div style="font-size: 14px; font-weight: bold; color: #fff;">Wear Glasses</div>
+                                    <div id="lens-type-text" style="font-size: 11px; opacity: 0.8;">No lens needed</div>
+                                </div>
+                                <div class="toggle-switch"></div>
+                            </div>
+                        </label>
+                    </div>
+
+                </div>
+
+                <!-- Simulation Visual Arena -->
+                <div class="sim-arena" id="simArena">
+                    <!-- Status Badge -->
+                    <div class="sim-status status-focus-retina" id="simStatus">
+                        Focus: On Retina (Clear Vision)
+                    </div>
+
+                    <!-- Static SVG Background (Eyeball) - Will be stretched via CSS -->
+                    <svg class="sim-eye-svg" id="simEyeShape" viewBox="0 0 500 400" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <radialGradient id="simGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="85%" stop-color="#0f172a" />
+                                <stop offset="100%" stop-color="#1e293b" />
+                            </radialGradient>
+                            <linearGradient id="simRetinaGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="transparent" />
+                                <stop offset="50%" stop-color="rgba(239, 68, 68, 0.5)" />
+                                <stop offset="100%" stop-color="transparent" />
+                            </linearGradient>
+                        </defs>
+                        <!-- Main eyeball body -->
+                        <path id="simEyeballPath" d="M 250 100 C 400 100 450 150 450 200 C 450 250 400 300 250 300 C 100 300 80 250 80 200 C 80 150 100 100 250 100 Z" fill="url(#simGrad)" stroke="#334155" stroke-width="2"/>
+                        <!-- Retina Highlight Area -->
+                        <path id="simRetinaPath" d="M 430 150 C 455 180 455 220 430 250" fill="none" stroke="url(#simRetinaGrad)" stroke-width="12" stroke-linecap="round"/>
+                        <!-- Cornea -->
+                        <path d="M 80 160 C 50 180 50 220 80 240" fill="rgba(6, 182, 212, 0.1)" stroke="#06b6d4" stroke-width="3" stroke-linecap="round"/>
+                        <!-- Lens -->
+                        <ellipse cx="110" cy="200" rx="10" ry="35" fill="rgba(255,255,255,0.1)" stroke="#cbd5e1" stroke-width="1"/>
+                    </svg>
+
+                    <!-- Dynamic Canvas for Light Rays and Glasses -->
+                    <canvas id="simCanvas"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: Application & Facts Grid -->
+        <section class="grid-3">
+            <article class="info-card">
+                <div class="icon-wrapper">👁️</div>
+                <h3>Presbyopia (Aging Eye)</h3>
+                <p>Around age 40, the crystalline lens loses elasticity. Even without myopia/hyperopia, the eye struggles to accommodate for near vision, requiring "reading glasses" (convex lenses).</p>
+            </article>
+            
+            <article class="info-card">
+                <div class="icon-wrapper">📏</div>
+                <h3>Astigmatism</h3>
+                <p>Occurs when the cornea is shaped more like a football than a basketball. This causes light to focus at multiple points, resulting in blurred or distorted vision at all distances. Corrected with cylindrical lenses.</p>
+            </article>
+
+            <article class="info-card">
+                <div class="icon-wrapper">✨</div>
+                <h3>Laser Eye Surgery (LASIK)</h3>
+                <p>Instead of placing a lens outside the eye, lasers precisely vaporize microscopic amounts of corneal tissue, permanently altering its curve to achieve the perfect focal point internally.</p>
+            </article>
+        </section>
+
+        <!-- SECTION 5: Quick Revision -->
+        <section class="glass-panel">
+            <h2>Quick Revision Reference</h2>
+            <div style="overflow-x: auto;">
+                <table class="comparison-table">
+                    <thead>
+                        <tr>
+                            <th>Defect Name</th>
+                            <th>Common Name</th>
+                            <th>Physical Cause</th>
+                            <th>Focal Point</th>
+                            <th>Corrective Lens</th>
+                            <th>Lens Function</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Myopia</td>
+                            <td>Nearsightedness</td>
+                            <td>Eyeball too long or cornea too curved.</td>
+                            <td><strong>In front</strong> of retina</td>
+                            <td><strong style="color: #06b6d4;">Concave</strong> (diverging)</td>
+                            <td>Spreads light rays out before they enter eye, pushing focus back.</td>
+                        </tr>
+                        <tr>
+                            <td>Hypermetropia</td>
+                            <td>Farsightedness</td>
+                            <td>Eyeball too short or cornea too flat.</td>
+                            <td><strong>Behind</strong> retina</td>
+                            <td><strong style="color: #8b5cf6;">Convex</strong> (converging)</td>
+                            <td>Bends light rays inward before they enter eye, pulling focus forward.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        /* ==========================================================================
+           1. ANATOMY INTERACTION LOGIC
+           ========================================================================== */
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+        const highlightPaths = document.querySelectorAll('.part-highlight');
+
+        function activateAnatomyPart(id) {
+            // Reset all
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            highlightPaths.forEach(p => p.classList.remove('active'));
+
+            // Activate specific
+            document.querySelector(`.marker[data-target="${id}"]`).classList.add('active');
+            document.querySelector(`.legend-item[data-id="${id}"]`).classList.add('active');
+            
+            const part = document.querySelector(`.part-highlight[data-part="${id}"]`);
+            if(part) part.classList.add('active');
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => activateAnatomyPart(marker.dataset.target));
+            marker.addEventListener('click', () => activateAnatomyPart(marker.dataset.target));
+        });
+
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => activateAnatomyPart(item.dataset.id));
+            item.addEventListener('click', () => activateAnatomyPart(item.dataset.id));
+        });
+
+
+        /* ==========================================================================
+           2. WORKING MECHANISM SEQUENCE LOGIC
+           ========================================================================== */
+        const stages = [
+            {
+                title: "Light Emission",
+                desc: "Light rays bounce off an object and travel in parallel straight lines towards the cornea.",
+                anim: () => {
+                    document.getElementById('mechObject').style.transform = "translate(60px, 220px) scale(1)";
+                    setRayPaths([
+                        "M 80 220 L 150 220",
+                        "M 80 250 L 150 250",
+                        "M 80 280 L 150 280"
+                    ]);
+                    glowElement('mechCornea', false); glowElement('mechLens', false); glowElement('mechRetina', false);
+                    stopSignals();
+                }
+            },
+            {
+                title: "Initial Refraction",
+                desc: "The convex surface of the cornea provides ~70% of the bending power, beginning to converge the rays.",
+                anim: () => {
+                    glowElement('mechCornea', true); glowElement('mechLens', false); glowElement('mechRetina', false);
+                    setRayPaths([
+                        "M 80 220 L 180 220 L 220 230",
+                        "M 80 250 L 180 250 L 220 250",
+                        "M 80 280 L 180 280 L 220 270"
+                    ]);
+                }
+            },
+            {
+                title: "Fine Focusing",
+                desc: "The crystalline lens adjusts its shape to bend the rays precisely, aiming for a single focal point on the retina.",
+                anim: () => {
+                    glowElement('mechCornea', false); glowElement('mechLens', true); glowElement('mechRetina', true);
+                    setRayPaths([
+                        "M 80 220 L 180 220 L 220 230 L 600 250",
+                        "M 80 250 L 180 250 L 220 250 L 600 250",
+                        "M 80 280 L 180 280 L 220 270 L 600 250"
+                    ]);
+                }
+            },
+            {
+                title: "Signal Transmission",
+                desc: "Photoreceptors on the retina convert focused light into electrical signals sent via the optic nerve to the brain.",
+                anim: () => {
+                    glowElement('mechRetina', true); glowElement('mechLens', false);
+                    document.getElementById('mechNerve').style.opacity = '1';
+                    startSignals();
+                }
+            }
+        ];
+
+        let currentStage = 0;
+        const stageNumEl = document.getElementById('stageNum');
+        const stageTitleEl = document.getElementById('stageTitle');
+        const stageDescEl = document.getElementById('stageDesc');
+        const dots = document.querySelectorAll('#mechDots .dot');
+        const btnPrev = document.getElementById('btnPrevMech');
+        const btnNext = document.getElementById('btnNextMech');
+
+        function glowElement(id, active) {
+            document.getElementById(id).style.filter = active ? 'drop-shadow(0 0 8px #0ea5e9)' : 'none';
+        }
+
+        function setRayPaths(pathArray) {
+            const ids = ['rayTop', 'rayMid', 'rayBot'];
+            ids.forEach((id, idx) => {
+                const el = document.getElementById(id);
+                // Trick to restart animation
+                el.classList.remove('draw');
+                void el.offsetWidth; // trigger reflow
+                el.setAttribute('d', pathArray[idx]);
+                el.classList.add('draw');
+            });
+        }
+
+        let signalInterval;
+        function startSignals() {
+            if(signalInterval) clearInterval(signalInterval);
+            let s1 = document.getElementById('signal1');
+            let s2 = document.getElementById('signal2');
+            let t = 0;
+            s1.style.opacity = 1; s2.style.opacity = 1;
+            signalInterval = setInterval(() => {
+                t += 0.05;
+                s1.setAttribute('cx', 610 + (t%1)*90);
+                s2.setAttribute('cx', 610 + ((t+0.5)%1)*90);
+            }, 30);
+        }
+        function stopSignals() {
+            clearInterval(signalInterval);
+            document.getElementById('signal1').style.opacity = 0;
+            document.getElementById('signal2').style.opacity = 0;
+            document.getElementById('mechNerve').style.opacity = 0.2;
+        }
+
+        function updateMechanismStage(index) {
+            currentStage = index;
+            
+            // Update UI text
+            stageNumEl.textContent = `Stage ${index + 1} of ${stages.length}`;
+            stageTitleEl.textContent = stages[index].title;
+            stageDescEl.textContent = stages[index].desc;
+            
+            // Update Dots
+            dots.forEach((dot, i) => dot.classList.toggle('active', i === index));
+            
+            // Update Buttons
+            btnPrev.disabled = index === 0;
+            btnNext.disabled = index === stages.length - 1;
+
+            // Trigger Animation
+            stages[index].anim();
+        }
+
+        btnPrev.addEventListener('click', () => { if(currentStage > 0) updateMechanismStage(currentStage - 1); });
+        btnNext.addEventListener('click', () => { if(currentStage < stages.length - 1) updateMechanismStage(currentStage + 1); });
+
+        // Initialize first stage
+        updateMechanismStage(0);
+
+
+        /* ==========================================================================
+           3. CORE INTERACTIVE SIMULATION (CANVAS)
+           ========================================================================== */
+        
+        // --- State ---
+        const state = {
+            condition: 'normal', // normal, myopia, hyperopia
+            severity: 0,         // 0 to 1
+            isCorrected: false,
+            time: 0
+        };
+
+        // --- DOM Elements ---
+        const radioRadios = document.querySelectorAll('input[name="condition"]');
+        const sliderSeverity = document.getElementById('sim-severity');
+        const toggleCorrect = document.getElementById('sim-correct');
+        const severityGroup = document.getElementById('severity-group');
+        const descCond = document.getElementById('cond-desc');
+        const lensTypeText = document.getElementById('lens-type-text');
+        const statusBadge = document.getElementById('simStatus');
+        
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const arena = document.getElementById('simArena');
+        const svgEyeShape = document.getElementById('simEyeShape');
+
+        // --- Descriptions ---
+        const dict = {
+            normal: "Perfect focal point exactly on the retina.",
+            myopia: "Eyeball is too long. Focus falls IN FRONT of retina.",
+            hyperopia: "Eyeball is too short. Focus falls BEHIND retina."
+        };
+
+        // --- Event Listeners ---
+        radioRadios.forEach(r => {
+            r.addEventListener('change', (e) => {
+                state.condition = e.target.value;
+                descCond.textContent = dict[state.condition];
+                
+                if(state.condition === 'normal') {
+                    state.severity = 0;
+                    sliderSeverity.value = 0;
+                    severityGroup.style.opacity = '0.5';
+                    severityGroup.style.pointerEvents = 'none';
+                    // Auto turn off glasses if switching to normal
+                    toggleCorrect.checked = false;
+                    state.isCorrected = false;
+                } else {
+                    if(state.severity === 0) {
+                        state.severity = 0.5; // default mid severity
+                        sliderSeverity.value = 0.5;
+                    }
+                    severityGroup.style.opacity = '1';
+                    severityGroup.style.pointerEvents = 'auto';
+                }
+                updateUIState();
+            });
+        });
+
+        sliderSeverity.addEventListener('input', (e) => {
+            state.severity = parseFloat(e.target.value);
+            document.getElementById('severity-val').textContent = Math.round(state.severity * 100) + '%';
+            updateUIState();
+        });
+
+        toggleCorrect.addEventListener('change', (e) => {
+            if(state.condition === 'normal') {
+                e.target.checked = false; // Prevent wearing glasses if normal
+                return;
+            }
+            state.isCorrected = e.target.checked;
+            updateUIState();
+        });
+
+        function updateUIState() {
+            // Update Glasses Text
+            if(!state.isCorrected || state.condition === 'normal') {
+                lensTypeText.textContent = "No lens active";
+                lensTypeText.style.color = "inherit";
+            } else if (state.condition === 'myopia') {
+                lensTypeText.textContent = "Concave Lens (Diverging)";
+                lensTypeText.style.color = "var(--accent-cyan)";
+            } else {
+                lensTypeText.textContent = "Convex Lens (Converging)";
+                lensTypeText.style.color = "var(--accent-purple)";
+            }
+
+            // Deform SVG Eyeball visually based on severity
+            let stretchX = 1;
+            if (state.condition === 'myopia') stretchX = 1 + (state.severity * 0.15); // max 15% longer
+            if (state.condition === 'hyperopia') stretchX = 1 - (state.severity * 0.1); // max 10% shorter
+            svgEyeShape.style.transform = `scaleX(${stretchX})`;
+        }
+
+
+        // --- Canvas Rendering Logic ---
+        
+        // Logical coordinates based on a 1000x1000 internal resolution to handle resizing cleanly
+        const LOGICAL_W = 1000;
+        const LOGICAL_H = 600;
+
+        function resizeCanvas() {
+            const rect = arena.getBoundingClientRect();
+            // High DPI support
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            
+            // Normalize coordinate system so we can draw using logical units
+            ctx.scale(canvas.width / LOGICAL_W, canvas.height / LOGICAL_H);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function drawLensShape(ctx, x, y, type) {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#fff';
+            ctx.shadowBlur = 10;
+
+            ctx.beginPath();
+            if (type === 'myopia') {
+                // Concave Lens )( 
+                ctx.moveTo(-10, -80);
+                ctx.quadraticCurveTo(10, 0, -10, 80);
+                ctx.lineTo(20, 80);
+                ctx.quadraticCurveTo(0, 0, 20, -80);
+                ctx.closePath();
+                ctx.strokeStyle = 'var(--accent-cyan)';
+                ctx.shadowColor = 'var(--accent-cyan)';
+            } else if (type === 'hyperopia') {
+                // Convex Lens ()
+                ctx.moveTo(0, -80);
+                ctx.quadraticCurveTo(30, 0, 0, 80);
+                ctx.quadraticCurveTo(-30, 0, 0, -80);
+                ctx.closePath();
+                ctx.strokeStyle = 'var(--accent-purple)';
+                ctx.shadowColor = 'var(--accent-purple)';
+            }
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Animation Loop
+        function renderSimulation() {
+            // Clear canvas
+            ctx.clearRect(0, 0, LOGICAL_W, LOGICAL_H);
+
+            state.time += 0.02; // Time variable for flowing particles
+
+            // Calculate Base Coordinates (Relative to LOGICAL_W/H)
+            const centerY = LOGICAL_H / 2;
+            const startX = 50;
+            const glassX = 300;
+            const eyeLensX = 520;  // Matches approx center of eye in SVG
+            const normalRetinaX = 850; // Matches back of eye in SVG
+
+            // 1. Calculate Actual Retina Position (SVG deforms, so focal point logic must map)
+            let currentRetinaX = normalRetinaX;
+            if (state.condition === 'myopia') {
+                currentRetinaX = normalRetinaX + (state.severity * 100); // retina moves back
+            } else if (state.condition === 'hyperopia') {
+                currentRetinaX = normalRetinaX - (state.severity * 70); // retina moves forward
+            }
+
+            // 2. Calculate Focal Point
+            let targetFocusX = normalRetinaX; // Base natural focal length of the lens
+            
+            if (state.isCorrected) {
+                // If corrected, the system focuses exactly on the CURRENT retina position
+                targetFocusX = currentRetinaX;
+            } else {
+                // Uncorrected: lens always focuses at normal distance (approx), 
+                // missing the actual deformed retina.
+                 targetFocusX = normalRetinaX; 
+            }
+
+            // Status UI Update
+            const errorMargin = Math.abs(targetFocusX - currentRetinaX);
+            if(errorMargin < 10) {
+                statusBadge.className = 'sim-status status-focus-retina';
+                statusBadge.textContent = "Focus: On Retina (Clear)";
+            } else {
+                statusBadge.className = 'sim-status status-focus-error';
+                statusBadge.innerHTML = `Focus: ${state.condition === 'myopia' ? 'In Front Of' : 'Behind'} Retina (Blurry)`;
+            }
+
+
+            // 3. Draw Corrective Lens if active
+            if (state.isCorrected && state.condition !== 'normal') {
+                drawLensShape(ctx, glassX, centerY, state.condition);
+            }
+
+            // 4. Ray Tracing Mathematics & Drawing
+            const numRays = 5;
+            const spreadY = 80; // Spread of rays from source
+            
+            for (let i = 0; i < numRays; i++) {
+                // Calculate starting Y
+                const normalizedY = (i / (numRays - 1)) - 0.5; // -0.5 to 0.5
+                let yOrigin = centerY + (normalizedY * spreadY);
+                
+                let path = [];
+                path.push({x: startX, y: yOrigin});
+
+                let currentY = yOrigin;
+
+                // Step A: Hit Glasses?
+                if (state.isCorrected) {
+                    path.push({x: glassX, y: currentY});
+                    // Lens bends the ray. 
+                    // Concave (myopia) spreads out. Convex (hyperopia) converges.
+                    let bendFactor = 0;
+                    if(state.condition === 'myopia') bendFactor = 1.2; 
+                    if(state.condition === 'hyperopia') bendFactor = -1.2;
+
+                    // Calculate Y at eye lens based on bend
+                    // Angle logic simplified for visualization
+                    const yDiff = currentY - centerY;
+                    currentY = centerY + yDiff + (yDiff * bendFactor * state.severity * 0.5); 
+                }
+
+                // Step B: Hit Eye Lens
+                path.push({x: eyeLensX, y: currentY});
+
+                // Step C: Hit Focus Point
+                // To draw accurately, we draw a line from EyeLens towards FocusX.
+                // We stop drawing at the RetinaX plane.
+                
+                const slope = (centerY - currentY) / (targetFocusX - eyeLensX);
+                
+                // Where does this ray hit the current retina plane?
+                const yAtRetina = currentY + slope * (currentRetinaX - eyeLensX);
+
+                // If focus is BEFORE retina (myopia uncorrected), ray crosses axis and continues.
+                // If focus is BEHIND retina (hyperopia uncorrected), ray hits retina before crossing.
+                
+                if (targetFocusX < currentRetinaX) {
+                    // Hits focus, then diverges to retina
+                    path.push({x: targetFocusX, y: centerY});
+                    path.push({x: currentRetinaX, y: yAtRetina});
+                } else {
+                    // Hits retina before/at focus
+                    path.push({x: currentRetinaX, y: yAtRetina});
+                    // Optional: Draw dotted line extending to virtual focus behind eye
+                    // if (targetFocusX > currentRetinaX) ...
+                }
+
+                // --- Draw the Line ---
+                ctx.beginPath();
+                ctx.moveTo(path[0].x, path[0].y);
+                for(let j=1; j<path.length; j++) {
+                    ctx.lineTo(path[j].x, path[j].y);
+                }
+
+                // Styling
+                ctx.strokeStyle = state.isCorrected ? '#10b981' : '#06b6d4'; // Green if corrected, cyan default
+                if(errorMargin > 10) ctx.strokeStyle = '#ef4444'; // Red if blurry
+                
+                ctx.lineWidth = 2;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = ctx.strokeStyle;
+                
+                // If ray goes past focus (myopia blur cone), draw it with lower opacity
+                ctx.stroke();
+
+                // --- Draw Flowing Particles along the path ---
+                // Calculate total path length roughly
+                let totalLen = 0;
+                let segments = [];
+                for(let j=0; j<path.length-1; j++) {
+                    let dx = path[j+1].x - path[j].x;
+                    let dy = path[j+1].y - path[j].y;
+                    let dist = Math.sqrt(dx*dx + dy*dy);
+                    segments.push({dist: dist, dx: dx/dist, dy: dy/dist, startX: path[j].x, startY: path[j].y});
+                    totalLen += dist;
+                }
+
+                // Particle position based on time
+                const numParticles = 3;
+                for(let p=0; p<numParticles; p++) {
+                    let pProgress = ((state.time + p/numParticles) % 1) * totalLen;
+                    let traveled = 0;
+                    
+                    for(let seg of segments) {
+                        if (pProgress <= traveled + seg.dist) {
+                            let remain = pProgress - traveled;
+                            let px = seg.startX + seg.dx * remain;
+                            let py = seg.startY + seg.dy * remain;
+                            
+                            // Draw particle
+                            ctx.beginPath();
+                            ctx.arc(px, py, 3, 0, Math.PI*2);
+                            ctx.fillStyle = '#fff';
+                            ctx.fill();
+                            break;
+                        }
+                        traveled += seg.dist;
+                    }
+                }
+            }
+
+            requestAnimationFrame(renderSimulation);
+        }
+
+        // Start animation loop
+        requestAnimationFrame(renderSimulation);
+
+    </script>
+</body>
+</html>

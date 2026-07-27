@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fertilizer vs Manure Simulation</title>
+    <style>
+        /* ==========================================================================
+           ROOT VARIABLES & TYPOGRAPHY
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-base: #060a0f;
+            --bg-panel: rgba(16, 24, 39, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --organic-main: #4ade80;
+            --organic-glow: rgba(74, 222, 128, 0.4);
+            --organic-dark: #166534;
+            --earth-main: #b45309;
+            
+            --synthetic-main: #2dd4bf;
+            --synthetic-glow: rgba(45, 212, 191, 0.4);
+            --synthetic-alt: #a855f7;
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            
+            /* Fluid Typography */
+            --font-title: clamp(2rem, 5vw, 4rem);
+            --font-h2: clamp(1.5rem, 3vw, 2.5rem);
+            --font-h3: clamp(1.2rem, 2vw, 1.75rem);
+            --font-body: clamp(0.9rem, 1.2vw, 1.1rem);
+            --font-small: clamp(0.75rem, 1vw, 0.9rem);
+            
+            /* Spacing */
+            --space-xs: clamp(0.5rem, 1vw, 0.75rem);
+            --space-sm: clamp(1rem, 2vw, 1.5rem);
+            --space-md: clamp(1.5rem, 3vw, 2.5rem);
+            --space-lg: clamp(3rem, 6vw, 5rem);
+            
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-xl: 32px;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ==========================================================================
+           BACKGROUND ANIMATION (CANVAS)
+           ========================================================================== */
+        #ambient-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* ==========================================================================
+           UI COMPONENTS & GLASSMORPHISM
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--space-sm);
+        }
+
+        section {
+            margin-bottom: var(--space-lg);
+            padding-top: var(--space-md);
+        }
+
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-md);
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .text-gradient {
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: transparent;
+        }
+        
+        .gradient-organic {
+            background-image: linear-gradient(135deg, #a3e635, #22c55e);
+        }
+        
+        .gradient-synthetic {
+            background-image: linear-gradient(135deg, #2dd4bf, #3b82f6);
+        }
+
+        h1 { font-size: var(--font-title); font-weight: 800; line-height: 1.1; margin-bottom: var(--space-sm); text-align: center; letter-spacing: -0.02em; }
+        h2 { font-size: var(--font-h2); font-weight: 700; margin-bottom: var(--space-md); display: flex; align-items: center; gap: 12px; }
+        h3 { font-size: var(--font-h3); font-weight: 600; margin-bottom: var(--space-xs); }
+        p { font-size: var(--font-body); color: var(--text-muted); }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: var(--font-small);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(255,255,255,0.1);
+        }
+
+        /* ==========================================================================
+           HEADER / INTRO
+           ========================================================================== */
+        header {
+            min-height: 60vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: var(--space-lg) var(--space-sm);
+            position: relative;
+        }
+
+        .intro-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--space-md);
+            margin-top: var(--space-lg);
+        }
+
+        .card {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+            transition: var(--transition-smooth);
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            border-color: var(--glass-highlight);
+        }
+
+        /* ==========================================================================
+           COMPONENT DIAGRAMS (MARKER + LEGEND SYSTEM)
+           ========================================================================== */
+        .diagram-section {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-md);
+        }
+        
+        @media (min-width: 1024px) {
+            .diagram-section {
+                grid-template-columns: 1.2fr 0.8fr;
+                align-items: start;
+            }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: var(--space-sm);
+            border: 1px solid var(--glass-border);
+        }
+
+        .svg-illustration {
+            width: 100%;
+            height: auto;
+            max-height: 500px;
+            overflow: visible;
+        }
+
+        /* Interactive Markers on SVG */
+        .marker {
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        
+        .marker-bg {
+            fill: rgba(0, 0, 0, 0.7);
+            stroke-width: 2;
+            transition: var(--transition-smooth);
+        }
+        
+        .marker-text {
+            fill: white;
+            font-family: sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+
+        .marker:hover .marker-bg, .marker.active .marker-bg {
+            fill: var(--text-main);
+            transform: scale(1.2);
+            transform-origin: center;
+        }
+        
+        .marker.type-organic:hover .marker-bg, .marker.type-organic.active .marker-bg { stroke: var(--organic-main); box-shadow: 0 0 15px var(--organic-main); }
+        .marker.type-synthetic:hover .marker-bg, .marker.type-synthetic.active .marker-bg { stroke: var(--synthetic-main); box-shadow: 0 0 15px var(--synthetic-main); }
+
+        .marker:hover .marker-text, .marker.active .marker-text { fill: black; }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: var(--space-sm);
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            transform: translateX(5px);
+        }
+        
+        .legend-item.type-organic.active { border-color: var(--organic-glow); box-shadow: inset 4px 0 0 var(--organic-main); }
+        .legend-item.type-synthetic.active { border-color: var(--synthetic-glow); box-shadow: inset 4px 0 0 var(--synthetic-main); }
+
+        .legend-badge {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            font-weight: bold;
+            flex-shrink: 0;
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item.active .legend-badge {
+            background: white;
+            color: black;
+        }
+
+        .legend-content h4 {
+            font-size: var(--font-body);
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .legend-content p {
+            font-size: var(--font-small);
+            line-height: 1.4;
+            margin: 0;
+        }
+
+        /* ==========================================================================
+           WORKING MECHANISM (STEP-BY-STEP)
+           ========================================================================== */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .mechanism-stage {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            min-height: 300px;
+            background: linear-gradient(to bottom, #1e293b 0%, #0f172a 40%, #291a13 40%, #170d08 100%);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        .mech-svg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* SVG Animation Classes applied via JS */
+        .mech-water, .mech-nutrient, .mech-microbe, .mech-root-glow { opacity: 0; transition: opacity 0.5s ease; }
+        
+        /* Stage 1: Application */
+        .stage-1 .mech-fertilizer-drop { animation: dropDown 1s forwards; }
+        .stage-1 .mech-manure-drop { animation: dropDown 1s forwards; }
+        
+        /* Stage 2: Breakdown */
+        .stage-2 .mech-water { opacity: 1; animation: rain 1s infinite linear; }
+        .stage-2 .mech-fertilizer-pellet { animation: dissolveFast 2s forwards; }
+        .stage-2 .mech-microbe { opacity: 1; animation: wiggle 2s infinite ease-in-out; }
+        .stage-2 .mech-manure-chunk { animation: degradeSlow 3s forwards; }
+        
+        /* Stage 3: Absorption */
+        .stage-3 .mech-nutrient { opacity: 1; animation: floatUp 3s infinite; }
+        .stage-3 .mech-root-glow { opacity: 0.6; animation: pulseGlow 2s infinite; }
+        
+        /* Stage 4: Soil Impact */
+        .stage-4 .mech-soil-structure { animation: enhanceSoil 2s forwards; }
+        .stage-4 .mech-leaching { animation: leachDown 2s forwards; opacity: 1;}
+
+        @keyframes dropDown { from { transform: translateY(-50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes rain { 0% { transform: translateY(-10px); opacity: 0;} 50% {opacity:0.5;} 100% { transform: translateY(20px); opacity: 0;} }
+        @keyframes dissolveFast { 0% { r: 8; fill: #2dd4bf; } 100% { r: 2; fill: transparent; stroke: #2dd4bf; opacity:0;} }
+        @keyframes wiggle { 0%, 100% { transform: rotate(-10deg) scale(1); } 50% { transform: rotate(10deg) scale(1.1); } }
+        @keyframes degradeSlow { 0% { transform: scale(1); } 100% { transform: scale(0.6); opacity: 0.7;} }
+        @keyframes floatUp { 0% { transform: translateY(0) scale(1); opacity: 0.8;} 100% { transform: translateY(-40px) scale(0.5); opacity: 0;} }
+        @keyframes pulseGlow { 0%, 100% { stroke-width: 2; stroke-opacity: 0.3;} 50% { stroke-width: 6; stroke-opacity: 0.8;} }
+        @keyframes enhanceSoil { 0% { fill: #291a13; } 100% { fill: #3e2723; } } /* darker, richer soil */
+        @keyframes leachDown { 0% { transform: translateY(0); opacity: 0.8; } 100% { transform: translateY(50px); opacity: 0; } }
+
+
+        /* Controls */
+        .controls-bar {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+            background: rgba(0,0,0,0.3);
+            padding: var(--space-sm);
+            border-radius: var(--radius-md);
+        }
+        
+        @media (min-width: 768px) {
+            .controls-bar {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+            }
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-smooth);
+        }
+        .dot.active { background: white; box-shadow: 0 0 10px white; transform: scale(1.2); }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        button {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: var(--font-small);
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover { background: rgba(255,255,255,0.2); }
+        button:active { transform: scale(0.95); }
+        button.primary { background: linear-gradient(135deg, #3b82f6, #2dd4bf); border: none; }
+        
+        .stage-info {
+            flex: 1;
+            text-align: center;
+        }
+        @media (min-width: 768px) { .stage-info { text-align: left; margin-left: var(--space-sm); } }
+
+        .stage-info h4 { color: #60a5fa; font-size: var(--font-body); margin-bottom: 4px; }
+        .stage-info p { font-size: var(--font-small); margin: 0; color: #cbd5e1; }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-md);
+        }
+        
+        @media (min-width: 1024px) {
+            .sim-layout { grid-template-columns: 350px 1fr; }
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--font-small);
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-main);
+        }
+
+        /* Custom Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: linear-gradient(to right, var(--organic-main), var(--synthetic-main));
+            border-radius: 3px;
+        }
+
+        .sim-meters {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin-top: var(--space-md);
+            padding-top: var(--space-md);
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .meter-wrap {
+            background: rgba(0,0,0,0.3);
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .meter-fill {
+            height: 100%;
+            width: 50%;
+            transition: width 0.3s ease, background-color 0.3s ease;
+            border-radius: 6px;
+        }
+        
+        .meter-health .meter-fill { background: var(--organic-main); }
+        .meter-growth .meter-fill { background: var(--synthetic-main); }
+
+        .sim-display {
+            position: relative;
+            background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 60%, #8d6e63 60%, #3e2723 100%);
+            border-radius: var(--radius-md);
+            min-height: 400px;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 10%;
+        }
+
+        /* CSS Rendered Plant for Simulation */
+        .sim-plant {
+            position: relative;
+            width: 10px;
+            height: 20px; /* Base height */
+            background: #4ade80;
+            border-radius: 5px 5px 0 0;
+            transform-origin: bottom center;
+            transition: height 0.5s ease, filter 0.5s ease;
+            z-index: 10;
+        }
+        
+        .sim-leaf {
+            position: absolute;
+            width: 30px;
+            height: 15px;
+            background: #22c55e;
+            border-radius: 15px 0 15px 0;
+            transition: transform 0.5s ease, opacity 0.5s ease;
+            opacity: 0;
+            transform: scale(0);
+        }
+        
+        .sim-leaf.left { left: -25px; transform-origin: bottom right; }
+        .sim-leaf.right { right: -25px; border-radius: 0 15px 0 15px; transform-origin: bottom left; }
+        
+        /* Time overlay */
+        .sim-time {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.5);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ==========================================================================
+           GRID SECTIONS (COMPARISON, FACTS)
+           ========================================================================== */
+        .bento-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-sm);
+        }
+        
+        @media (min-width: 768px) {
+            .bento-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (min-width: 1024px) {
+            .bento-grid { grid-template-columns: repeat(3, 1fr); }
+            .bento-wide { grid-column: span 2; }
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: var(--space-sm);
+        }
+        
+        .comparison-table th, .comparison-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: var(--font-small);
+        }
+        
+        .comparison-table th { color: var(--text-muted); font-weight: 600; }
+        .comparison-table td:nth-child(2) { color: var(--organic-main); }
+        .comparison-table td:nth-child(3) { color: var(--synthetic-main); }
+
+        .fact-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 20px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Animated Background -->
+    <canvas id="ambient-canvas"></canvas>
+
+    <div class="container">
+        
+        <!-- HEADER -->
+        <header>
+            <div class="tag" style="margin-bottom: 20px;">Agricultural Science Visualized</div>
+            <h1>Plant Nutrition:<br> <span class="text-gradient gradient-organic">Manure</span> vs <span class="text-gradient gradient-synthetic">Fertilizer</span></h1>
+            <p style="max-width: 600px; margin: 0 auto; margin-top: var(--space-sm);">
+                Discover how organic matter and synthetic chemicals interact with soil and plants at a microscopic level.
+            </p>
+        </header>
+
+        <!-- OVERVIEW CARDS -->
+        <section class="intro-grid">
+            <div class="glass-panel card">
+                <div style="font-size: 2rem; margin-bottom: 10px;">🐄</div>
+                <h3 class="text-gradient gradient-organic">Manure (Organic)</h3>
+                <p>Natural byproduct derived from animal feces, urine, and agricultural waste. Complex structure requiring biological breakdown.</p>
+                <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid var(--glass-border);">
+                    <span class="tag" style="color: #4ade80;">Slow Release</span>
+                    <span class="tag" style="color: #fbbf24;">Soil Builder</span>
+                </div>
+            </div>
+            
+            <div class="glass-panel card">
+                <div style="font-size: 2rem; margin-bottom: 10px;">🧪</div>
+                <h3 class="text-gradient gradient-synthetic">Fertilizer (Synthetic)</h3>
+                <p>Commercially manufactured chemical compounds containing concentrated, specific plant nutrients in readily available forms.</p>
+                <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid var(--glass-border);">
+                    <span class="tag" style="color: #2dd4bf;">Fast Acting</span>
+                    <span class="tag" style="color: #f472b6;">Targeted</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- COMPONENTS DIAGRAM -->
+        <section>
+            <h2><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2v20"/></svg> Structural Composition</h2>
+            <p style="margin-bottom: var(--space-md);">Examine the physical and chemical makeup. Tap markers to explore components.</p>
+            
+            <div class="glass-panel diagram-section">
+                <!-- SVG Container -->
+                <div class="illustration-container">
+                    <svg class="svg-illustration" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Gradients for Manure -->
+                            <linearGradient id="manureGrad" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="0%" stop-color="#5d4037" />
+                                <stop offset="100%" stop-color="#3e2723" />
+                            </linearGradient>
+                            <radialGradient id="strawGrad">
+                                <stop offset="0%" stop-color="#fbc02d" />
+                                <stop offset="100%" stop-color="#f57f17" />
+                            </radialGradient>
+                            
+                            <!-- Gradients for Fertilizer -->
+                            <linearGradient id="bagGrad" x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stop-color="#e0f2fe" />
+                                <stop offset="100%" stop-color="#bae6fd" />
+                            </linearGradient>
+                            <radialGradient id="nGrad" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#60a5fa" />
+                                <stop offset="100%" stop-color="#2563eb" />
+                            </radialGradient>
+                            <radialGradient id="pGrad" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#c084fc" />
+                                <stop offset="100%" stop-color="#9333ea" />
+                            </radialGradient>
+                            <radialGradient id="kGrad" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#fde047" />
+                                <stop offset="100%" stop-color="#ca8a04" />
+                            </radialGradient>
+                            
+                            <!-- Drop Shadow -->
+                            <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="10" stdDeviation="10" flood-opacity="0.3" />
+                            </filter>
+                        </defs>
+
+                        <!-- LEFT: MANURE -->
+                        <g transform="translate(150, 200)" filter="url(#dropShadow)">
+                            <!-- Base Pile -->
+                            <path d="M-120,80 Q0,-80 120,80 Z" fill="url(#manureGrad)" />
+                            <path d="M-80,90 Q-20,0 60,90 Z" fill="#4e342e" opacity="0.6"/>
+                            
+                            <!-- Organic Debris (Straw/Leaves) -->
+                            <path d="M-60,20 L-40,10 L-50,30" stroke="url(#strawGrad)" stroke-width="4" stroke-linecap="round" fill="none"/>
+                            <path d="M40,40 L70,30" stroke="url(#strawGrad)" stroke-width="3" stroke-linecap="round" fill="none"/>
+                            <path d="M-10, -10 Q0,-30 20,-20 Q10,0 -10,-10 Z" fill="#4ade80" opacity="0.8"/>
+                            
+                            <!-- Earthworm -->
+                            <path d="M20,60 Q40,30 60,50 Q70,60 80,40" stroke="#f48fb1" stroke-width="6" stroke-linecap="round" fill="none"/>
+
+                            <!-- Markers for Manure -->
+                            <g class="marker type-organic" data-target="legend-m1" transform="translate(0, 30)">
+                                <circle class="marker-bg" cx="0" cy="0" r="14" stroke="#4ade80"/>
+                                <text class="marker-text" x="0" y="1">1</text>
+                            </g>
+                            <g class="marker type-organic" data-target="legend-m2" transform="translate(-50, 15)">
+                                <circle class="marker-bg" cx="0" cy="0" r="14" stroke="#4ade80"/>
+                                <text class="marker-text" x="0" y="1">2</text>
+                            </g>
+                            <g class="marker type-organic" data-target="legend-m3" transform="translate(50, 50)">
+                                <circle class="marker-bg" cx="0" cy="0" r="14" stroke="#4ade80"/>
+                                <text class="marker-text" x="0" y="1">3</text>
+                            </g>
+                            
+                            <text x="0" y="120" fill="#a3e635" font-family="sans-serif" font-weight="bold" font-size="20" text-anchor="middle">MANURE</text>
+                        </g>
+
+                        <!-- RIGHT: FERTILIZER -->
+                        <g transform="translate(550, 160)" filter="url(#dropShadow)">
+                            <!-- Bag -->
+                            <path d="M-70,-60 L70,-60 L90,120 L-90,120 Z" fill="url(#bagGrad)" />
+                            <path d="M-70,-60 Q0,-40 70,-60 L70,-50 Q0,-30 -70,-50 Z" fill="#0284c7" opacity="0.5"/>
+                            <text x="0" y="0" fill="#0369a1" font-family="sans-serif" font-weight="900" font-size="28" text-anchor="middle">N-P-K</text>
+                            <text x="0" y="25" fill="#0369a1" font-family="sans-serif" font-weight="bold" font-size="14" text-anchor="middle">20 - 10 - 10</text>
+                            
+                            <!-- Pellets spilling out -->
+                            <circle cx="-60" cy="110" r="12" fill="url(#nGrad)"/>
+                            <circle cx="-30" cy="130" r="10" fill="url(#pGrad)"/>
+                            <circle cx="0" cy="115" r="14" fill="url(#kGrad)"/>
+                            <circle cx="30" cy="135" r="9" fill="url(#nGrad)"/>
+                            <circle cx="60" cy="120" r="11" fill="url(#pGrad)"/>
+
+                            <!-- Markers for Fertilizer -->
+                            <g class="marker type-synthetic" data-target="legend-f1" transform="translate(0, -10)">
+                                <circle class="marker-bg" cx="0" cy="0" r="14" stroke="#2dd4bf"/>
+                                <text class="marker-text" x="0" y="1">4</text>
+                            </g>
+                            <g class="marker type-synthetic" data-target="legend-f2" transform="translate(0, 115)">
+                                <circle class="marker-bg" cx="0" cy="0" r="14" stroke="#2dd4bf"/>
+                                <text class="marker-text" x="0" y="1">5</text>
+                            </g>
+                            
+                            <text x="0" y="160" fill="#2dd4bf" font-family="sans-serif" font-weight="bold" font-size="20" text-anchor="middle">FERTILIZER</text>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Legend List -->
+                <div class="legend-list">
+                    <h3 style="font-size: var(--font-small); color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">Manure Components</h3>
+                    <div class="legend-item type-organic" id="legend-m1" data-marker="m1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Organic Matrix</h4>
+                            <p>Bulk carbon-based material that improves soil structure and water retention.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item type-organic" id="legend-m2" data-marker="m2">
+                        <div class="legend-content">
+                            <div class="legend-badge" style="float:left; margin-right: 10px;">2</div>
+                            <h4>Complex Nutrients</h4>
+                            <p>Nutrients bound in organic molecules, requiring microbial breakdown.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item type-organic" id="legend-m3" data-marker="m3">
+                        <div class="legend-content">
+                            <div class="legend-badge" style="float:left; margin-right: 10px;">3</div>
+                            <h4>Biological Activity</h4>
+                            <p>Introduces beneficial bacteria, fungi, and worms to the soil ecosystem.</p>
+                        </div>
+                    </div>
+                    
+                    <h3 style="font-size: var(--font-small); color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; margin-top: 12px;">Fertilizer Components</h3>
+                    <div class="legend-item type-synthetic" id="legend-f1" data-marker="f1">
+                        <div class="legend-content">
+                            <div class="legend-badge" style="float:left; margin-right: 10px;">4</div>
+                            <h4>Exact Ratio (N-P-K)</h4>
+                            <p>Guaranteed percentages of Nitrogen (leaves), Phosphorus (roots), and Potassium (health).</p>
+                        </div>
+                    </div>
+                    <div class="legend-item type-synthetic" id="legend-f2" data-marker="f2">
+                        <div class="legend-content">
+                            <div class="legend-badge" style="float:left; margin-right: 10px;">5</div>
+                            <h4>Water-Soluble Salts</h4>
+                            <p>Inorganic compounds that dissolve immediately in water for instant root uptake.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING MECHANISM (DEDICATED SECTION) -->
+        <section>
+            <h2><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> Mechanism of Action</h2>
+            <p style="margin-bottom: var(--space-md);">A linear sequence showing how soil and plants process both inputs from application to cellular uptake.</p>
+            
+            <div class="glass-panel mechanism-container" id="mech-container">
+                
+                <!-- SVG Animation Viewport -->
+                <div class="mechanism-stage" id="mech-stage-view">
+                    <svg class="mech-svg" viewBox="0 0 1000 500" preserveAspectRatio="xMidYMid slice">
+                        <!-- Background Split: Left Manure, Right Fertilizer -->
+                        <rect x="0" y="0" width="500" height="500" fill="transparent"/>
+                        <line x1="500" y1="0" x2="500" y2="500" stroke="rgba(255,255,255,0.1)" stroke-dasharray="10 10"/>
+                        
+                        <text x="250" y="40" fill="rgba(255,255,255,0.3)" font-size="24" text-anchor="middle" font-weight="bold" letter-spacing="2">MANURE PATHWAY</text>
+                        <text x="750" y="40" fill="rgba(255,255,255,0.3)" font-size="24" text-anchor="middle" font-weight="bold" letter-spacing="2">FERTILIZER PATHWAY</text>
+
+                        <!-- Ground Line -->
+                        <line x1="0" y1="200" x2="1000" y2="200" stroke="#475569" stroke-width="2"/>
+                        
+                        <!-- Soil Substrates (Dynamic color via CSS) -->
+                        <rect class="mech-soil-structure" x="0" y="201" width="499" height="300" fill="#291a13" opacity="0.8"/>
+                        <rect x="501" y="201" width="500" height="300" fill="#1e1b24" opacity="0.8"/>
+
+                        <!-- Plant Roots -->
+                        <g stroke="#a3e635" fill="none" stroke-linecap="round">
+                            <!-- Left Root (Manure) -->
+                            <path class="mech-root-glow" d="M250,200 Q260,250 220,300 Q180,350 200,400" stroke-width="3"/>
+                            <path class="mech-root-glow" d="M250,200 Q240,260 280,320 Q320,380 290,420" stroke-width="2"/>
+                            
+                            <!-- Right Root (Fertilizer) -->
+                            <path class="mech-root-glow" d="M750,200 Q760,250 720,300 Q680,350 700,400" stroke-width="3"/>
+                            <path class="mech-root-glow" d="M750,200 Q740,260 780,320 Q820,380 790,420" stroke-width="2"/>
+                        </g>
+
+                        <!-- Stems (Above ground) -->
+                        <path d="M250,200 L250,100" stroke="#4ade80" stroke-width="8" stroke-linecap="round"/>
+                        <path d="M750,200 L750,100" stroke="#4ade80" stroke-width="8" stroke-linecap="round"/>
+
+                        <!-- STAGE 1: Application Elements -->
+                        <g class="mech-manure-drop" opacity="0">
+                            <path d="M230,190 Q250,170 270,190 Z" fill="#5d4037"/>
+                            <path d="M180,195 Q200,180 220,195 Z" fill="#4e342e"/>
+                        </g>
+                        
+                        <g class="mech-fertilizer-drop" opacity="0">
+                            <circle cx="730" cy="195" r="4" fill="#60a5fa"/>
+                            <circle cx="750" cy="190" r="5" fill="#c084fc"/>
+                            <circle cx="770" cy="196" r="3" fill="#fde047"/>
+                        </g>
+
+                        <!-- STAGE 2: Breakdown Elements -->
+                        <!-- Rain/Water -->
+                        <g class="mech-water" fill="#38bdf8">
+                            <circle cx="200" cy="100" r="2"/><circle cx="300" cy="120" r="2"/>
+                            <circle cx="700" cy="110" r="2"/><circle cx="800" cy="90" r="2"/>
+                        </g>
+                        
+                        <!-- Microbes (Manure side) -->
+                        <g class="mech-microbe" fill="#bef264">
+                            <circle cx="220" cy="220" r="3"/><circle cx="260" cy="230" r="2"/><circle cx="240" cy="250" r="3.5"/>
+                        </g>
+                        
+                        <!-- Dissolving Pellets (Fertilizer side) -->
+                        <circle class="mech-fertilizer-pellet" cx="740" cy="220" r="0" fill="transparent"/>
+                        <circle class="mech-fertilizer-pellet" cx="760" cy="230" r="0" fill="transparent"/>
+
+                        <!-- STAGE 3: Absorption Elements -->
+                        <!-- Nutrients moving up -->
+                        <g class="mech-nutrient" fill="#fff" opacity="0">
+                            <circle cx="220" cy="300" r="4" fill="#a3e635"/>
+                            <circle cx="280" cy="320" r="3" fill="#a3e635"/>
+                            <circle cx="720" cy="300" r="5" fill="#60a5fa"/>
+                            <circle cx="780" cy="320" r="4" fill="#c084fc"/>
+                        </g>
+
+                        <!-- STAGE 4: Soil Impact -->
+                        <!-- Leaching arrows (Fertilizer side) -->
+                        <g class="mech-leaching" opacity="0">
+                            <path d="M720,380 L720,430 L710,420 M720,430 L730,420" stroke="#ef4444" stroke-width="2" fill="none"/>
+                            <path d="M780,360 L780,440 L770,430 M780,440 L790,430" stroke="#ef4444" stroke-width="2" fill="none"/>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Controls UI -->
+                <div class="controls-bar">
+                    <div class="btn-group">
+                        <button id="btn-prev"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev</button>
+                        <button id="btn-next" class="primary">Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></button>
+                    </div>
+                    
+                    <div class="stage-info">
+                        <h4 id="mech-title">1. Application</h4>
+                        <p id="mech-desc">Inputs are added to the topsoil layer.</p>
+                    </div>
+
+                    <div style="display:flex; flex-direction: column; gap: 8px; align-items: center;">
+                        <div class="progress-dots" id="mech-dots">
+                            <div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                        </div>
+                        <button id="btn-autoplay" style="padding: 4px 10px; font-size: 10px; border-radius: 10px;">Auto-Play</button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION -->
+        <section>
+            <h2><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10M18 20V4M6 20v-4"/></svg> Growth & Soil Simulation</h2>
+            <p style="margin-bottom: var(--space-md);">Adjust the ratio of inputs over time to see the trade-off between immediate plant growth and long-term soil health.</p>
+            
+            <div class="glass-panel sim-layout">
+                <!-- Controls -->
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <label>
+                            <span style="color: var(--organic-main);">100% Manure</span>
+                            <span style="color: var(--synthetic-main);">100% Fertilizer</span>
+                        </label>
+                        <input type="range" id="sim-ratio" min="0" max="100" value="50">
+                        <div style="text-align: center; font-size: 12px; margin-top: 8px; color: var(--text-muted);" id="sim-ratio-val">Balanced Approach (50/50)</div>
+                    </div>
+
+                    <div class="control-group" style="margin-top: 20px;">
+                        <label>Time Simulation</label>
+                        <button id="btn-sim-play" class="primary" style="width: 100%; justify-content: center;">Start Growing Season</button>
+                    </div>
+
+                    <div class="sim-meters">
+                        <div>
+                            <div style="display:flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                                <span>Plant Growth Rate</span>
+                                <span id="val-growth">50%</span>
+                            </div>
+                            <div class="meter-wrap meter-growth">
+                                <div class="meter-fill" id="bar-growth"></div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <div style="display:flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                                <span>Long-term Soil Health</span>
+                                <span id="val-health">50%</span>
+                            </div>
+                            <div class="meter-wrap meter-health">
+                                <div class="meter-fill" id="bar-health"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Display -->
+                <div class="sim-display">
+                    <div class="sim-time">Day: <span id="sim-day">0</span></div>
+                    
+                    <!-- Ground layer handled by background gradient, plant injected here -->
+                    <div class="sim-plant" id="sim-plant">
+                        <div class="sim-leaf left"></div>
+                        <div class="sim-leaf right" style="bottom: 30px;"></div>
+                        <div class="sim-leaf left" style="bottom: 60px;"></div>
+                        <div class="sim-leaf right" style="bottom: 90px;"></div>
+                        <div class="sim-leaf left" style="bottom: 120px;"></div>
+                        <div class="sim-leaf right" style="bottom: 150px;"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- COMPARISON & FACTS -->
+        <section class="bento-grid">
+            <div class="glass-panel bento-wide">
+                <h3>Key Differences</h3>
+                <div style="overflow-x: auto;">
+                    <table class="comparison-table">
+                        <thead>
+                            <tr>
+                                <th>Feature</th>
+                                <th>Manure (Organic)</th>
+                                <th>Fertilizer (Synthetic)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Nutrient Concentration</td>
+                                <td>Relatively low and variable</td>
+                                <td>High and precisely known</td>
+                            </tr>
+                            <tr>
+                                <td>Action Speed</td>
+                                <td>Slow (needs microbial breakdown)</td>
+                                <td>Immediate (water soluble)</td>
+                            </tr>
+                            <tr>
+                                <td>Soil Impact</td>
+                                <td>Improves structure & water retention</td>
+                                <td>No structural benefit, can increase salinity</td>
+                            </tr>
+                            <tr>
+                                <td>Environmental Risk</td>
+                                <td>Low (except if over-applied near water)</td>
+                                <td>High risk of leaching and algal blooms</td>
+                            </tr>
+                            <tr>
+                                <td>Cost (Large Scale)</td>
+                                <td>Bulky to transport, low material cost</td>
+                                <td>Expensive, but easy to transport/apply</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="glass-panel">
+                <div class="fact-icon">💡</div>
+                <h3 style="font-size: var(--font-body); color: #fbbf24;">Scientific Fact</h3>
+                <p style="font-size: var(--font-small); margin-top: 8px;">
+                    Synthetic fertilizers revolutionized global agriculture during the "Green Revolution." It is estimated that without the <b>Haber-Bosch process</b> (which synthesizes ammonia for fertilizer from atmospheric nitrogen), the Earth could only support about half of its current human population.
+                </p>
+            </div>
+            
+            <div class="glass-panel">
+                <div class="fact-icon">⚠️</div>
+                <h3 style="font-size: var(--font-body); color: #f87171;">Common Mistake</h3>
+                <p style="font-size: var(--font-small); margin-top: 8px;">
+                    <b>"Fertilizer Burn"</b> occurs when synthetic fertilizers are over-applied. Because they are concentrated salts, excess amounts draw moisture <i>out</i> of the plant roots through osmosis, dehydrating and killing the plant instead of feeding it.
+                </p>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        /**
+         * ==========================================================================
+         * 1. AMBIENT BACKGROUND ANIMATION (CANVAS)
+         * ==========================================================================
+         */
+        const canvas = document.getElementById('ambient-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth * window.devicePixelRatio;
+            canvas.height = window.innerHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            initParticles();
+        }
+
+        class Particle {
+            constructor() {
+                this.x = Math.random() * window.innerWidth;
+                this.y = Math.random() * window.innerHeight;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedY = Math.random() * 0.5 + 0.1;
+                // Organic green/brown vs synthetic blue/purple
+                this.color = Math.random() > 0.5 ? 
+                    `rgba(74, 222, 128, ${Math.random() * 0.2})` : // green
+                    `rgba(96, 165, 250, ${Math.random() * 0.2})`;  // blue
+            }
+            update() {
+                this.y -= this.speedY;
+                if (this.y < 0) {
+                    this.y = window.innerHeight;
+                    this.x = Math.random() * window.innerWidth;
+                }
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            let particleCount = window.innerWidth < 768 ? 30 : 80;
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animateCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animateCanvas);
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+        animateCanvas();
+
+        /**
+         * ==========================================================================
+         * 2. DIAGRAM MARKER INTERACTION
+         * ==========================================================================
+         */
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function activatePair(id) {
+            // Deactivate all
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            // Activate specific
+            const marker = document.querySelector(`.marker[data-target="${id}"]`);
+            const legend = document.getElementById(id);
+            if(marker) marker.classList.add('active');
+            if(legend) legend.classList.add('active');
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => activatePair(marker.dataset.target));
+            marker.addEventListener('touchstart', (e) => { e.preventDefault(); activatePair(marker.dataset.target); });
+        });
+
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => activatePair(item.id));
+            item.addEventListener('touchstart', (e) => { e.preventDefault(); activatePair(item.id); });
+        });
+
+
+        /**
+         * ==========================================================================
+         * 3. WORKING MECHANISM LOGIC
+         * ==========================================================================
+         */
+        const stages = [
+            {
+                title: "1. Application",
+                desc: "Manure (left) adds bulk organic matter to surface. Fertilizer (right) applies concentrated mineral salts.",
+                class: "stage-1"
+            },
+            {
+                title: "2. Breakdown & Dissolving",
+                desc: "Water dissolves synthetic salts instantly. Microbes must slowly digest complex organic manure to release nutrients.",
+                class: "stage-2"
+            },
+            {
+                title: "3. Cellular Uptake",
+                desc: "Roots absorb simplified ions (N, P, K). Fertilizer provides a massive flush. Manure provides a steady trickle.",
+                class: "stage-3"
+            },
+            {
+                title: "4. Environmental Impact",
+                desc: "Manure builds dark, rich soil structure. Excess synthetic fertilizer leaches past roots, potentially polluting groundwater.",
+                class: "stage-4"
+            }
+        ];
+
+        let currentStage = 0;
+        const mechContainer = document.getElementById('mech-container');
+        const titleEl = document.getElementById('mech-title');
+        const descEl = document.getElementById('mech-desc');
+        const dots = document.querySelectorAll('#mech-dots .dot');
+        let autoplayTimer = null;
+
+        function setStage(index) {
+            // Clean up old classes
+            stages.forEach(s => mechContainer.classList.remove(s.class));
+            
+            // Force DOM reflow to restart CSS animations
+            void mechContainer.offsetWidth;
+            
+            // Apply new state
+            currentStage = index;
+            mechContainer.classList.add(stages[currentStage].class);
+            titleEl.textContent = stages[currentStage].title;
+            descEl.textContent = stages[currentStage].desc;
+            
+            dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === currentStage);
+            });
+        }
+
+        document.getElementById('btn-prev').addEventListener('click', () => {
+            stopAutoplay();
+            setStage((currentStage - 1 + stages.length) % stages.length);
+        });
+
+        document.getElementById('btn-next').addEventListener('click', () => {
+            stopAutoplay();
+            setStage((currentStage + 1) % stages.length);
+        });
+
+        function stopAutoplay() {
+            if(autoplayTimer) {
+                clearInterval(autoplayTimer);
+                autoplayTimer = null;
+                document.getElementById('btn-autoplay').style.background = 'rgba(255,255,255,0.1)';
+            }
+        }
+
+        document.getElementById('btn-autoplay').addEventListener('click', (e) => {
+            if(autoplayTimer) {
+                stopAutoplay();
+            } else {
+                e.target.style.background = 'rgba(255,255,255,0.4)';
+                setStage(0); // Start from beginning
+                autoplayTimer = setInterval(() => {
+                    setStage((currentStage + 1) % stages.length);
+                }, 4000); // 4 seconds per stage
+            }
+        });
+        
+        // Init first stage
+        setStage(0);
+
+
+        /**
+         * ==========================================================================
+         * 4. INTERACTIVE SIMULATION
+         * ==========================================================================
+         */
+        const simSlider = document.getElementById('sim-ratio');
+        const simRatioText = document.getElementById('sim-ratio-val');
+        const barGrowth = document.getElementById('bar-growth');
+        const barHealth = document.getElementById('bar-health');
+        const valGrowth = document.getElementById('val-growth');
+        const valHealth = document.getElementById('val-health');
+        const simPlant = document.getElementById('sim-plant');
+        const simDay = document.getElementById('sim-day');
+        const btnSimPlay = document.getElementById('btn-sim-play');
+        const simLeaves = document.querySelectorAll('.sim-leaf');
+
+        let simInterval = null;
+        let day = 0;
+        let baseHeight = 20;
+
+        function updateMeters(ratio) {
+            // ratio: 0 = Manure, 100 = Fertilizer
+            
+            // Growth rate: High with fertilizer, moderate with manure
+            let growthRate = 30 + (ratio * 0.7); 
+            
+            // Soil Health: High with manure, drops with pure fertilizer
+            let soilHealth = 95 - (ratio * 0.8);
+            
+            // Update UI
+            barGrowth.style.width = `${growthRate}%`;
+            valGrowth.textContent = `${Math.round(growthRate)}%`;
+            
+            barHealth.style.width = `${soilHealth}%`;
+            valHealth.textContent = `${Math.round(soilHealth)}%`;
+            
+            // Update text label
+            if(ratio < 20) simRatioText.textContent = "Heavy Organic (Slow, Sustainable)";
+            else if(ratio > 80) simRatioText.textContent = "Heavy Synthetic (Fast, Depleting)";
+            else simRatioText.textContent = "Balanced Approach";
+            
+            return { growthRate, soilHealth };
+        }
+
+        simSlider.addEventListener('input', (e) => {
+            updateMeters(e.target.value);
+        });
+        
+        // Init meters
+        updateMeters(50);
+
+        btnSimPlay.addEventListener('click', () => {
+            if(simInterval) return; // Already running
+            
+            day = 0;
+            simPlant.style.height = '20px'; // Reset
+            simLeaves.forEach(l => {
+                l.style.transform = 'scale(0)';
+                l.style.opacity = '0';
+            });
+            
+            const ratio = parseInt(simSlider.value);
+            const stats = updateMeters(ratio);
+            
+            // Visual mapping: 
+            // High growth rate = taller final height
+            // Low soil health = leaves turn slightly yellow/pale
+            
+            const targetHeight = 100 + (stats.growthRate * 2.5); // Max ~350px
+            const leafColor = stats.soilHealth < 40 ? '#fde047' : '#22c55e'; // yellow if poor health
+            
+            simLeaves.forEach(l => l.style.background = leafColor);
+            simPlant.style.background = stats.soilHealth < 40 ? '#84cc16' : '#4ade80';
+            
+            btnSimPlay.disabled = true;
+            btnSimPlay.textContent = "Simulating...";
+
+            simInterval = setInterval(() => {
+                day++;
+                simDay.textContent = day;
+                
+                // Animate plant growing based on current day
+                const progress = day / 30; // 30 day season
+                const currentHeight = 20 + ((targetHeight - 20) * easeOutQuad(progress));
+                
+                simPlant.style.height = `${currentHeight}px`;
+                
+                // Pop leaves based on height
+                simLeaves.forEach((leaf, i) => {
+                    const threshold = 50 + (i * 30);
+                    if(currentHeight > threshold) {
+                        leaf.style.transform = 'scale(1)';
+                        leaf.style.opacity = '1';
+                    }
+                });
+
+                if(day >= 30) {
+                    clearInterval(simInterval);
+                    simInterval = null;
+                    btnSimPlay.disabled = false;
+                    btnSimPlay.textContent = "Restart Season";
+                }
+            }, 100);
+        });
+
+        // Easing function for smoother growth
+        function easeOutQuad(t) { return t * (2 - t); }
+
+    </script>
+</body>
+</html>

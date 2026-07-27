@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Redox: Oxidation & Reduction Simulator</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Core Colors */
+            --bg-base: #05050A;
+            --bg-surface: rgba(20, 20, 35, 0.4);
+            --bg-surface-hover: rgba(30, 30, 50, 0.6);
+            
+            /* Theme Colors */
+            --ox-color: #FF4D4D; /* Red for Oxidation/Loss */
+            --ox-glow: rgba(255, 77, 77, 0.4);
+            --red-color: #00E5FF; /* Cyan for Reduction/Gain */
+            --red-glow: rgba(0, 229, 255, 0.4);
+            --electron-color: #00FF88;
+            
+            /* Materials */
+            --zinc-color: #9090A0;
+            --copper-color: #C87640;
+            
+            /* Text */
+            --text-primary: #FFFFFF;
+            --text-secondary: #A0A0B5;
+            --text-accent: #E0E0FF;
+            
+            /* UI Elements */
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+            
+            /* Layout */
+            --container-padding: clamp(1rem, 4vw, 3rem);
+            --border-radius-lg: 24px;
+            --border-radius-md: 16px;
+            --border-radius-sm: 8px;
+            
+            /* Typography */
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            line-height: 1.6;
+            font-size: clamp(14px, 1.5vw, 16px);
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(255, 77, 77, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(0, 229, 255, 0.05), transparent 25%);
+            background-attachment: fixed;
+        }
+
+        /* Ambient Background Canvas */
+        #ambient-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            opacity: 0.6;
+        }
+
+        /* ==========================================================================
+           2. TYPOGRAPHY & UTILITIES
+           ========================================================================== */
+        h1 {
+            font-size: clamp(2.5rem, 6vw, 4.5rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #FFF 0%, #A0A0B5 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1rem;
+        }
+
+        h2 {
+            font-size: clamp(1.8rem, 4vw, 2.5rem);
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+
+        h3 {
+            font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+            font-weight: 500;
+            color: var(--text-accent);
+            margin-bottom: 1rem;
+        }
+
+        p {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .highlight-ox { color: var(--ox-color); font-weight: 600; text-shadow: 0 0 10px var(--ox-glow); }
+        .highlight-red { color: var(--red-color); font-weight: 600; text-shadow: 0 0 10px var(--red-glow); }
+        .highlight-e { color: var(--electron-color); font-weight: 600; }
+
+        /* Glassmorphism */
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--glass-shadow);
+            padding: var(--container-padding);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                padding: clamp(16px, 4vw, 24px);
+            }
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 clamp(16px, 4vw, 40px);
+        }
+
+        section {
+            padding: clamp(4rem, 10vw, 8rem) 0;
+            position: relative;
+        }
+
+        /* Layout Grids */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+            gap: clamp(20px, 4vw, 40px);
+        }
+        
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+            gap: clamp(16px, 3vw, 32px);
+        }
+
+        /* ==========================================================================
+           3. HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding-top: 10vh;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            z-index: 2;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1.1rem, 2vw, 1.5rem);
+            color: var(--text-accent);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        /* Abstract Atom Animation */
+        .hero-visual {
+            width: clamp(200px, 40vw, 400px);
+            height: clamp(200px, 40vw, 400px);
+            margin: 0 auto 2rem;
+            position: relative;
+        }
+
+        .hero-visual svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        .electron-orbit {
+            transform-origin: center;
+            animation: rotateOrbit linear infinite;
+        }
+
+        .e1 { animation-duration: 8s; }
+        .e2 { animation-duration: 12s; animation-direction: reverse; }
+        .e3 { animation-duration: 10s; }
+
+        @keyframes rotateOrbit {
+            100% { transform: rotate(360deg); }
+        }
+
+        .electron-dot {
+            filter: drop-shadow(0 0 8px var(--electron-color));
+        }
+
+        /* ==========================================================================
+           4. CONCEPT (OIL RIG)
+           ========================================================================== */
+        .concept-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        .concept-visual {
+            width: 100%;
+            max-width: 300px;
+            aspect-ratio: 1;
+            margin-bottom: 2rem;
+            position: relative;
+        }
+
+        /* SVG Animation classes */
+        .anim-ox-e {
+            animation: e-leave 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        @keyframes e-leave {
+            0%, 20% { transform: translate(0, 0); opacity: 1; }
+            70%, 100% { transform: translate(100px, -50px); opacity: 0; }
+        }
+
+        .anim-red-e {
+            animation: e-arrive 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+        @keyframes e-arrive {
+            0%, 20% { transform: translate(-100px, -50px); opacity: 0; }
+            70%, 100% { transform: translate(0, 0); opacity: 1; }
+        }
+
+        .mnemonic {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            letter-spacing: 0.05em;
+            margin: 1rem 0;
+            background: rgba(0,0,0,0.3);
+            padding: 10px 20px;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+        }
+
+        /* ==========================================================================
+           5. COMPONENTS (Galvanic Cell) & MARKERS
+           ========================================================================== */
+        .components-layout {
+            display: flex;
+            gap: 2rem;
+            align-items: stretch;
+        }
+        
+        @media (max-width: 1024px) {
+            .components-layout { flex-direction: column; }
+        }
+
+        .illustration-container {
+            flex: 2;
+            position: relative;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--border-radius-md);
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+        }
+
+        .illustration-container svg {
+            width: 100%;
+            height: auto;
+            max-height: 500px;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
+        }
+
+        /* Markers overlay */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #FFF;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            transition: all 0.2s ease;
+            backdrop-filter: blur(4px);
+            z-index: 10;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: rgba(255, 255, 255, 0.9);
+            color: #000;
+            box-shadow: 0 0 20px rgba(255,255,255,0.6);
+        }
+
+        /* Marker Positions (Percentages for responsive) */
+        #mk-anode { top: 60%; left: 25%; border-color: var(--ox-color); }
+        #mk-cathode { top: 60%; left: 75%; border-color: var(--red-color); }
+        #mk-wire { top: 25%; left: 50%; border-color: var(--electron-color); }
+        #mk-salt { top: 50%; left: 50%; border-color: #FFF; }
+        #mk-load { top: 15%; left: 50%; border-color: #FFD700; }
+
+        /* Legend Sidebar */
+        .legend-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 300px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.1);
+            transform: translateX(5px);
+        }
+
+        .legend-item.active[data-target="anode"] { border-left: 4px solid var(--ox-color); }
+        .legend-item.active[data-target="cathode"] { border-left: 4px solid var(--red-color); }
+        .legend-item.active[data-target="wire"] { border-left: 4px solid var(--electron-color); }
+        
+        .legend-num {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .legend-text h4 {
+            font-size: 1.1rem;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+        
+        .legend-text p {
+            font-size: 0.9rem;
+            margin: 0;
+            line-height: 1.4;
+        }
+
+        /* ==========================================================================
+           6. WORKING PROCESS (Interactive State Machine)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .process-visual {
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: var(--border-radius-md);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+        
+        @media (max-width: 768px) {
+            .process-visual { aspect-ratio: 4/3; }
+        }
+
+        #process-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Process Controls */
+        .process-controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 1rem;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--border-radius-md);
+        }
+
+        .process-info {
+            text-align: center;
+            min-height: 80px; /* Prevent layout jump */
+        }
+
+        .process-info h3 {
+            color: #FFF;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .stage-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+        }
+
+        .controls-row {
+            display: flex;
+            align-items: center;
+            gap: clamp(10px, 2vw, 20px);
+            width: 100%;
+            justify-content: center;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #FFF;
+            padding: 10px 20px;
+            border-radius: 30px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: #FFF;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button.primary-btn {
+            background: linear-gradient(135deg, rgba(0, 229, 255, 0.3), rgba(0, 100, 255, 0.3));
+            border-color: var(--red-color);
+        }
+        
+        button.primary-btn:hover {
+            background: linear-gradient(135deg, rgba(0, 229, 255, 0.5), rgba(0, 100, 255, 0.5));
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.4);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+
+        .dot.active {
+            background: var(--electron-color);
+            box-shadow: 0 0 10px var(--electron-color);
+            transform: scale(1.3);
+        }
+
+        /* ==========================================================================
+           7. INTERACTIVE SIMULATION (Sandbox)
+           ========================================================================== */
+        .sim-container {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 2rem;
+        }
+        
+        @media (max-width: 1024px) {
+            .sim-container { grid-template-columns: 1fr; }
+        }
+
+        .sim-view {
+            background: #000;
+            border-radius: var(--border-radius-md);
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            aspect-ratio: 16/9;
+            position: relative;
+        }
+
+        #sim-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Voltage Overlay */
+        .meter-overlay {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            border: 2px solid #333;
+            border-radius: 8px;
+            padding: 10px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: inset 0 0 20px rgba(0,0,0,1);
+        }
+
+        .meter-value {
+            font-family: 'Courier New', monospace;
+            font-size: 2rem;
+            color: #FF3366;
+            text-shadow: 0 0 10px rgba(255,51,102,0.6);
+            font-weight: bold;
+        }
+
+        .sim-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .control-group {
+            background: rgba(0,0,0,0.2);
+            padding: 1.5rem;
+            border-radius: var(--border-radius-sm);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .control-group label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-weight: 500;
+            color: var(--text-accent);
+        }
+
+        /* Custom Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #FFF;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+
+        /* Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255,255,255,0.1);
+            transition: .4s;
+            border-radius: 34px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px; width: 26px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--electron-color); border-color: var(--electron-color); }
+        input:checked + .slider:before { transform: translateX(26px); box-shadow: -2px 0 10px rgba(0,0,0,0.3); }
+
+        .switch-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* ==========================================================================
+           8. INFO SECTIONS (Applications, Facts, Mistakes)
+           ========================================================================== */
+        .info-card {
+            padding: 2rem;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .info-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 1rem;
+            fill: var(--text-accent);
+        }
+
+        .mistake-card {
+            border-top: 4px solid var(--ox-color);
+        }
+        
+        .fact-card {
+            border-top: 4px solid var(--electron-color);
+        }
+
+        /* ==========================================================================
+           9. REVISION
+           ========================================================================== */
+        .revision-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        
+        .revision-table th, .revision-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--glass-border);
+        }
+        
+        .revision-table th {
+            color: var(--text-accent);
+            font-weight: 600;
+        }
+
+        @media (max-width: 600px) {
+            .revision-table th, .revision-table td { padding: 0.5rem; font-size: 0.9rem; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="ambient-canvas"></canvas>
+
+    <!-- HERO SECTION -->
+    <section class="hero" id="intro">
+        <div class="container hero-content">
+            <span class="hero-subtitle">Interactive Science Visualization</span>
+            <h1>Oxidation & Reduction</h1>
+            <p style="font-size: clamp(1.1rem, 2vw, 1.3rem); max-width: 600px; margin: 0 auto 3rem;">
+                Explore the invisible transfer of electrons that powers batteries, rusts metal, and sustains life.
+            </p>
+            
+            <!-- Animated Hero SVG -->
+            <div class="hero-visual">
+                <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <radialGradient id="nucleusGlow" cx="50%" cy="50%" r="50%">
+                            <stop offset="0%" stop-color="#fff" stop-opacity="1"/>
+                            <stop offset="30%" stop-color="#00E5FF" stop-opacity="0.8"/>
+                            <stop offset="100%" stop-color="#00E5FF" stop-opacity="0"/>
+                        </radialGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <!-- Nucleus -->
+                    <circle cx="100" cy="100" r="15" fill="url(#nucleusGlow)" />
+                    
+                    <!-- Orbits -->
+                    <circle cx="100" cy="100" r="40" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+                    <circle cx="100" cy="100" r="70" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="1" />
+                    <circle cx="100" cy="100" r="95" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1" stroke-dasharray="4 4"/>
+                    
+                    <!-- Electrons -->
+                    <g class="electron-orbit e1">
+                        <circle cx="100" cy="60" r="4" fill="var(--electron-color)" filter="url(#glow)"/>
+                    </g>
+                    <g class="electron-orbit e2">
+                        <circle cx="30" cy="100" r="4" fill="var(--electron-color)" filter="url(#glow)"/>
+                    </g>
+                    <g class="electron-orbit e3">
+                        <circle cx="195" cy="100" r="4" fill="var(--electron-color)" filter="url(#glow)"/>
+                        <!-- Electron leaving animation -->
+                        <path d="M 195 100 Q 220 50 250 20" fill="none" stroke="var(--electron-color)" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.5">
+                            <animate attributeName="stroke-dashoffset" from="20" to="0" dur="1s" repeatCount="indefinite" />
+                        </path>
+                    </g>
+                </svg>
+            </div>
+        </div>
+    </section>
+
+    <!-- OVERVIEW SECTION -->
+    <section id="basics">
+        <div class="container">
+            <div class="glass-panel text-center" style="max-width: 900px; margin: 0 auto;">
+                <h2>The Core Concept</h2>
+                <p>Redox reactions are simply about the <strong>movement of electrons</strong> between atoms. They always happen together; if one loses, another must gain.</p>
+                
+                <div class="mnemonic">O.I.L. R.I.G.</div>
+                <p style="margin-bottom: 3rem;"><strong>O</strong>xidation <strong>I</strong>s <strong>L</strong>oss • <strong>R</strong>eduction <strong>I</strong>s <strong>G</strong>ain (of electrons)</p>
+
+                <div class="grid-2">
+                    <!-- Oxidation Concept -->
+                    <div class="concept-card">
+                        <div class="concept-visual">
+                            <svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <radialGradient id="atomNeutral" cx="50%" cy="50%" r="50%">
+                                        <stop offset="0%" stop-color="#888"/>
+                                        <stop offset="100%" stop-color="#444"/>
+                                    </radialGradient>
+                                    <radialGradient id="atomPositive" cx="50%" cy="50%" r="50%">
+                                        <stop offset="0%" stop-color="#FF8888"/>
+                                        <stop offset="100%" stop-color="#AA3333"/>
+                                    </radialGradient>
+                                </defs>
+                                <!-- Arrow -->
+                                <path d="M 100 100 L 200 100" stroke="rgba(255,255,255,0.2)" stroke-width="2" marker-end="url(#arrowhead)"/>
+                                <!-- Before -->
+                                <circle cx="60" cy="100" r="30" fill="url(#atomNeutral)"/>
+                                <text x="60" y="105" fill="#fff" text-anchor="middle" font-size="16">Zn</text>
+                                <!-- After -->
+                                <circle cx="240" cy="100" r="25" fill="url(#atomPositive)"/>
+                                <text x="240" y="105" fill="#fff" text-anchor="middle" font-size="16">Zn²⁺</text>
+                                <!-- Electron leaving -->
+                                <g class="anim-ox-e">
+                                    <circle cx="75" cy="80" r="6" fill="var(--electron-color)" filter="url(#glow)"/>
+                                    <text x="75" y="70" fill="#fff" font-size="12">e⁻</text>
+                                </g>
+                            </svg>
+                        </div>
+                        <h3 class="highlight-ox">Oxidation</h3>
+                        <p>An atom <strong style="color:white">loses</strong> electrons, becoming positively charged (or less negative).</p>
+                    </div>
+
+                    <!-- Reduction Concept -->
+                    <div class="concept-card">
+                        <div class="concept-visual">
+                            <svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <radialGradient id="atomIon" cx="50%" cy="50%" r="50%">
+                                        <stop offset="0%" stop-color="#88CCFF"/>
+                                        <stop offset="100%" stop-color="#3377AA"/>
+                                    </radialGradient>
+                                    <radialGradient id="atomSolid" cx="50%" cy="50%" r="50%">
+                                        <stop offset="0%" stop-color="#D28F5A"/>
+                                        <stop offset="100%" stop-color="#9C5221"/>
+                                    </radialGradient>
+                                </defs>
+                                <!-- Arrow -->
+                                <path d="M 100 100 L 200 100" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+                                <!-- Before -->
+                                <circle cx="60" cy="100" r="25" fill="url(#atomIon)"/>
+                                <text x="60" y="105" fill="#fff" text-anchor="middle" font-size="16">Cu²⁺</text>
+                                <!-- After -->
+                                <circle cx="240" cy="100" r="30" fill="url(#atomSolid)"/>
+                                <text x="240" y="105" fill="#fff" text-anchor="middle" font-size="16">Cu</text>
+                                <!-- Electron arriving -->
+                                <g class="anim-red-e">
+                                    <circle cx="225" cy="80" r="6" fill="var(--electron-color)" filter="url(#glow)"/>
+                                    <text x="225" y="70" fill="#fff" font-size="12">e⁻</text>
+                                </g>
+                            </svg>
+                        </div>
+                        <h3 class="highlight-red">Reduction</h3>
+                        <p>An atom <strong style="color:white">gains</strong> electrons, becoming neutrally or negatively charged.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- COMPONENTS SECTION (Legend Pattern) -->
+    <section id="components">
+        <div class="container">
+            <h2>The Galvanic Cell Setup</h2>
+            <p>A classic example of redox at work is a battery (Galvanic cell). It separates the oxidation and reduction reactions to force electrons to travel through a wire, creating usable electricity.</p>
+            
+            <div class="glass-panel">
+                <div class="components-layout">
+                    
+                    <!-- SVG Illustration with Overlaid Markers -->
+                    <div class="illustration-container">
+                        <!-- High Quality SVG Background -->
+                        <svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <linearGradient id="beakerGlass" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stop-color="rgba(255,255,255,0.1)"/>
+                                    <stop offset="10%" stop-color="rgba(255,255,255,0.4)"/>
+                                    <stop offset="50%" stop-color="rgba(255,255,255,0.05)"/>
+                                    <stop offset="90%" stop-color="rgba(255,255,255,0.3)"/>
+                                    <stop offset="100%" stop-color="rgba(255,255,255,0.1)"/>
+                                </linearGradient>
+                                <linearGradient id="zincLiquid" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="rgba(200,200,200,0.4)"/>
+                                    <stop offset="100%" stop-color="rgba(150,150,150,0.6)"/>
+                                </linearGradient>
+                                <linearGradient id="copperLiquid" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="rgba(0,150,255,0.4)"/>
+                                    <stop offset="100%" stop-color="rgba(0,80,200,0.6)"/>
+                                </linearGradient>
+                                <linearGradient id="zincMetal" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stop-color="#666"/>
+                                    <stop offset="50%" stop-color="#AAA"/>
+                                    <stop offset="100%" stop-color="#555"/>
+                                </linearGradient>
+                                <linearGradient id="copperMetal" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stop-color="#8B4513"/>
+                                    <stop offset="50%" stop-color="#D28F5A"/>
+                                    <stop offset="100%" stop-color="#703509"/>
+                                </linearGradient>
+                                <linearGradient id="saltBridgeFill" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="rgba(255,255,255,0.8)"/>
+                                    <stop offset="100%" stop-color="rgba(200,200,255,0.6)"/>
+                                </linearGradient>
+                            </defs>
+
+                            <!-- Left Beaker (Anode side) -->
+                            <!-- Liquid -->
+                            <path d="M 50 200 L 230 200 L 220 370 L 60 370 Z" fill="url(#zincLiquid)"/>
+                            <!-- Glass -->
+                            <path d="M 40 150 L 50 380 Q 55 390 70 390 L 210 390 Q 225 390 230 380 L 240 150" fill="none" stroke="url(#beakerGlass)" stroke-width="4" stroke-linecap="round"/>
+                            <!-- Liquid Surface Ellipse -->
+                            <ellipse cx="140" cy="200" rx="90" ry="15" fill="rgba(200,200,200,0.2)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+
+                            <!-- Right Beaker (Cathode side) -->
+                            <!-- Liquid -->
+                            <path d="M 370 200 L 550 200 L 540 370 L 380 370 Z" fill="url(#copperLiquid)"/>
+                            <!-- Glass -->
+                            <path d="M 360 150 L 370 380 Q 375 390 390 390 L 530 390 Q 545 390 550 380 L 560 150" fill="none" stroke="url(#beakerGlass)" stroke-width="4" stroke-linecap="round"/>
+                            <ellipse cx="460" cy="200" rx="90" ry="15" fill="rgba(0,150,255,0.2)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+
+                            <!-- Zinc Electrode (Anode) -->
+                            <rect x="115" y="100" width="40" height="230" rx="5" fill="url(#zincMetal)" />
+                            <text x="135" y="140" fill="#222" text-anchor="middle" font-weight="bold" font-size="14">Zn</text>
+
+                            <!-- Copper Electrode (Cathode) -->
+                            <rect x="445" y="100" width="40" height="230" rx="5" fill="url(#copperMetal)" />
+                            <text x="465" y="140" fill="#FFF" text-anchor="middle" font-weight="bold" font-size="14">Cu</text>
+
+                            <!-- Salt Bridge -->
+                            <path d="M 180 250 L 180 120 Q 180 80 220 80 L 380 80 Q 420 80 420 120 L 420 250" fill="none" stroke="url(#saltBridgeFill)" stroke-width="25" stroke-linecap="round"/>
+                            <path d="M 180 250 L 180 120 Q 180 80 220 80 L 380 80 Q 420 80 420 120 L 420 250" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="29" stroke-linecap="round"/>
+
+                            <!-- Wire & Voltmeter -->
+                            <path d="M 135 100 L 135 50 L 465 50 L 465 100" fill="none" stroke="#222" stroke-width="4"/>
+                            <path d="M 135 100 L 135 50 L 465 50 L 465 100" fill="none" stroke="#888" stroke-width="2"/>
+                            
+                            <!-- Voltmeter dial -->
+                            <circle cx="300" cy="50" r="30" fill="#222" stroke="#555" stroke-width="3"/>
+                            <circle cx="300" cy="50" r="25" fill="#FFF"/>
+                            <path d="M 280 60 A 20 20 0 0 1 320 60" fill="none" stroke="#333" stroke-width="2"/>
+                            <!-- Needle -->
+                            <line x1="300" y1="65" x2="315" y2="40" stroke="#F00" stroke-width="2" stroke-linecap="round"/>
+                            <text x="300" y="65" fill="#333" text-anchor="middle" font-weight="bold" font-size="10">V</text>
+                            
+                        </svg>
+
+                        <!-- HTML Markers (Positioned over SVG wrapper) -->
+                        <div class="marker" id="mk-anode" data-target="anode">1</div>
+                        <div class="marker" id="mk-cathode" data-target="cathode">2</div>
+                        <div class="marker" id="mk-wire" data-target="wire">3</div>
+                        <div class="marker" id="mk-salt" data-target="salt">4</div>
+                        <div class="marker" id="mk-load" data-target="load">5</div>
+                    </div>
+
+                    <!-- Legend List -->
+                    <div class="legend-container">
+                        <div class="legend-item" data-target="anode">
+                            <div class="legend-num" style="color: var(--ox-color); border-color: var(--ox-color);">1</div>
+                            <div class="legend-text">
+                                <h4>Anode (Zinc)</h4>
+                                <p>The electrode where <strong>oxidation</strong> occurs. Zinc metal loses electrons and dissolves as ions.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-target="cathode">
+                            <div class="legend-num" style="color: var(--red-color); border-color: var(--red-color);">2</div>
+                            <div class="legend-text">
+                                <h4>Cathode (Copper)</h4>
+                                <p>The electrode where <strong>reduction</strong> occurs. Copper ions in solution gain electrons and plate as solid metal.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-target="wire">
+                            <div class="legend-num" style="color: var(--electron-color); border-color: var(--electron-color);">3</div>
+                            <div class="legend-text">
+                                <h4>External Circuit</h4>
+                                <p>The wire provides a path for <span class="highlight-e">electrons</span> to flow from the Anode to the Cathode.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-target="salt">
+                            <div class="legend-num">4</div>
+                            <div class="legend-text">
+                                <h4>Salt Bridge</h4>
+                                <p>A tube filled with inert ions (like $K^+$ and $NO_3^-$). It completes the circuit by allowing ions to flow, neutralizing charge buildup.</p>
+                            </div>
+                        </div>
+                        <div class="legend-item" data-target="load">
+                            <div class="legend-num" style="color: #FFD700; border-color: #FFD700;">5</div>
+                            <div class="legend-text">
+                                <h4>Voltmeter / Load</h4>
+                                <p>Measures the electrical potential difference (voltage) or consumes the electrical energy (like a bulb).</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING PROCESS (Mandatory Dedicated Section) -->
+    <section id="working">
+        <div class="container">
+            <h2>Mechanism: How it Works</h2>
+            <p>The Galvanic cell operates in a continuous cycle. Step through the stages to see how electron and ion flows are interconnected.</p>
+            
+            <div class="glass-panel working-container">
+                
+                <!-- State visualizer (Canvas based for particle flow control) -->
+                <div class="process-visual">
+                    <canvas id="process-canvas"></canvas>
+                </div>
+
+                <div class="process-controls">
+                    <div class="process-info">
+                        <h3><span class="stage-badge" id="stg-num">Stage 1/4</span> <span id="stg-title">Zinc Oxidation</span></h3>
+                        <p id="stg-desc">Zinc atoms at the anode surface lose 2 electrons, becoming $Zn^{2+}$ ions and entering the solution.</p>
+                    </div>
+
+                    <div class="controls-row">
+                        <button id="btn-prev">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg> Prev
+                        </button>
+                        
+                        <div class="progress-dots" id="stg-dots">
+                            <div class="dot active"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                            <div class="dot"></div>
+                        </div>
+
+                        <button id="btn-next">
+                            Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
+
+                        <div style="width: 1px; height: 24px; background: rgba(255,255,255,0.2); margin: 0 10px;"></div>
+
+                        <button id="btn-play" class="primary-btn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" id="play-icon"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Auto-Play
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION -->
+    <section id="simulation">
+        <div class="container">
+            <h2>Interactive Sandbox</h2>
+            <p>Experiment with the cell. Close the circuit to start the reaction and adjust the concentration to see how it affects reaction speed and voltage.</p>
+            
+            <div class="glass-panel sim-container">
+                
+                <div class="sim-view">
+                    <canvas id="sim-canvas"></canvas>
+                    <div class="meter-overlay">
+                        <span style="font-size: 10px; text-transform: uppercase; letter-spacing: 1px;">Output Voltage</span>
+                        <div class="meter-value" id="sim-voltage">0.00 V</div>
+                    </div>
+                </div>
+
+                <div class="sim-panel">
+                    <h3>Controls</h3>
+                    
+                    <div class="control-group">
+                        <div class="switch-row">
+                            <span>Main Circuit</span>
+                            <label class="switch">
+                                <input type="checkbox" id="sim-switch">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <p style="font-size: 0.8rem; margin-top: 8px; margin-bottom: 0;">Open/Close wire connection.</p>
+                    </div>
+
+                    <div class="control-group">
+                        <label>
+                            Ion Concentration
+                            <span id="conc-val">Standard (1M)</span>
+                        </label>
+                        <input type="range" id="sim-conc" min="1" max="100" value="50">
+                        <p style="font-size: 0.8rem; margin-top: 8px; margin-bottom: 0;">Affects reaction rate (current flow).</p>
+                    </div>
+                    
+                    <div class="control-group" style="margin-top: auto; border: none; background: rgba(0,229,255,0.1);">
+                        <p style="font-size: 0.85rem; margin: 0;">
+                            <strong>Observation:</strong> Notice how the anode shrinks (oxidation) and cathode grows (reduction) over time when the circuit is closed.
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- INFO SECTION -->
+    <section id="info">
+        <div class="container">
+            <div class="grid-3">
+                <!-- Applications -->
+                <div class="glass-panel info-card">
+                    <svg class="info-icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
+                    <h3>Real-world Applications</h3>
+                    <ul style="padding-left: 1rem; color: var(--text-secondary);">
+                        <li><strong>Batteries:</strong> From AAs to Lithium-ion EV batteries, all store energy via redox.</li>
+                        <li><strong>Corrosion:</strong> Rusting iron is spontaneous oxidation.</li>
+                        <li><strong>Biology:</strong> Cellular respiration (making ATP) relies heavily on electron transport chains.</li>
+                    </ul>
+                </div>
+
+                <!-- Fact -->
+                <div class="glass-panel info-card fact-card">
+                    <svg class="info-icon" fill="var(--electron-color)" viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6C7.8 12.16 7 10.63 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg>
+                    <h3 style="color: var(--electron-color);">Did you know?</h3>
+                    <p>The term "oxidation" originally meant "combining with oxygen" (like fire or rust). Later, scientists realized oxygen simply steals electrons, so they redefined oxidation as the <strong>loss of electrons</strong>, whether oxygen is involved or not!</p>
+                </div>
+
+                <!-- Mistake -->
+                <div class="glass-panel info-card mistake-card">
+                    <svg class="info-icon" fill="var(--ox-color)" viewBox="0 0 24 24"><path d="M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>
+                    <h3 style="color: var(--ox-color);">Common Mistake</h3>
+                    <p><strong>Current vs. Electron Flow:</strong><br>In physics, "conventional current" flows from Positive (+) to Negative (-). However, the actual physical particles (electrons) flow from the Anode (-) to the Cathode (+). They move in opposite directions!</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- REVISION -->
+    <section id="revision" style="padding-bottom: 4rem;">
+        <div class="container">
+            <div class="glass-panel" style="max-width: 800px; margin: 0 auto;">
+                <h2>Quick Revision</h2>
+                <div style="overflow-x: auto;">
+                    <table class="revision-table">
+                        <thead>
+                            <tr>
+                                <th>Property</th>
+                                <th style="color: var(--ox-color);">Oxidation (Anode)</th>
+                                <th style="color: var(--red-color);">Reduction (Cathode)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Electrons</td>
+                                <td>Lost (e- leave)</td>
+                                <td>Gained (e- arrive)</td>
+                            </tr>
+                            <tr>
+                                <td>Oxidation State</td>
+                                <td>Increases (becomes more positive)</td>
+                                <td>Decreases (becomes more negative)</td>
+                            </tr>
+                            <tr>
+                                <td>Electrode Mass</td>
+                                <td>Decreases (dissolves into ions)</td>
+                                <td>Increases (ions plate as solid)</td>
+                            </tr>
+                            <tr>
+                                <td>Charge (Galvanic)</td>
+                                <td>Negative (-)</td>
+                                <td>Positive (+)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        // ---------------------------------------------------------
+        // 1. Legend & Marker Interaction
+        // ---------------------------------------------------------
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function activatePair(targetId) {
+            markers.forEach(m => m.classList.toggle('active', m.dataset.target === targetId));
+            legendItems.forEach(l => l.classList.toggle('active', l.dataset.target === targetId));
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => activatePair(marker.dataset.target));
+            marker.addEventListener('click', () => activatePair(marker.dataset.target));
+            marker.addEventListener('mouseleave', () => activatePair(null));
+        });
+
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => activatePair(item.dataset.target));
+            item.addEventListener('mouseleave', () => activatePair(null));
+        });
+
+        // ---------------------------------------------------------
+        // 2. Ambient Background Canvas
+        // ---------------------------------------------------------
+        const bgCanvas = document.getElementById('ambient-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let bgParticles = [];
+
+        function resizeBg() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeBg);
+        resizeBg();
+
+        class BgParticle {
+            constructor() {
+                this.x = Math.random() * bgCanvas.width;
+                this.y = Math.random() * bgCanvas.height;
+                this.r = Math.random() * 2 + 1;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+                this.alpha = Math.random() * 0.5;
+                this.color = Math.random() > 0.5 ? '#00E5FF' : '#FF4D4D';
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < 0 || this.x > bgCanvas.width) this.vx *= -1;
+                if (this.y < 0 || this.y > bgCanvas.height) this.vy *= -1;
+            }
+            draw() {
+                bgCtx.beginPath();
+                bgCtx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+                bgCtx.fillStyle = this.color;
+                bgCtx.globalAlpha = this.alpha;
+                bgCtx.fill();
+            }
+        }
+
+        for(let i = 0; i < 50; i++) bgParticles.push(new BgParticle());
+
+        function animBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgParticles.forEach(p => { p.update(); p.draw(); });
+            requestAnimationFrame(animBg);
+        }
+        animBg();
+
+        // ---------------------------------------------------------
+        // Core Simulation Engine (Shared for both canvas sections)
+        // ---------------------------------------------------------
+        class CellEngine {
+            constructor(canvas, isInteractive = false) {
+                this.canvas = canvas;
+                this.ctx = canvas.getContext('2d');
+                this.particles = [];
+                this.active = isInteractive ? false : true;
+                this.stageFilter = -1; // -1 means all stages (continuous)
+                
+                this.layout = { scale: 1, cx: 0, cy: 0 };
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                this.canvas.width = rect.width * dpr;
+                this.canvas.height = rect.height * dpr;
+                this.ctx.scale(dpr, dpr);
+                
+                // Logical coordinates: 1000x600 reference frame
+                const refW = 1000;
+                const refH = 600;
+                const scaleX = rect.width / refW;
+                const scaleY = rect.height / refH;
+                this.layout.scale = Math.min(scaleX, scaleY) * 0.9;
+                this.layout.cx = rect.width / 2;
+                this.layout.cy = rect.height / 2;
+            }
+
+            // Reference coordinate drawing helper
+            tX(x) { return this.layout.cx + (x - 500) * this.layout.scale; }
+            tY(y) { return this.layout.cy + (y - 300) * this.layout.scale; }
+            tS(s) { return s * this.layout.scale; }
+
+            drawBeakers() {
+                const ctx = this.ctx;
+                
+                // Draw Base setup
+                ctx.lineWidth = this.tS(6);
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                
+                // Left Beaker
+                ctx.beginPath();
+                ctx.moveTo(this.tX(100), this.tY(150));
+                ctx.lineTo(this.tX(100), this.tY(500));
+                ctx.lineTo(this.tX(400), this.tY(500));
+                ctx.lineTo(this.tX(400), this.tY(150));
+                ctx.stroke();
+                // Left Liquid
+                ctx.fillStyle = 'rgba(150,150,150,0.3)';
+                ctx.fillRect(this.tX(100), this.tY(250), this.tS(300), this.tS(250));
+
+                // Right Beaker
+                ctx.beginPath();
+                ctx.moveTo(this.tX(600), this.tY(150));
+                ctx.lineTo(this.tX(600), this.tY(500));
+                ctx.lineTo(this.tX(900), this.tY(500));
+                ctx.lineTo(this.tX(900), this.tY(150));
+                ctx.stroke();
+                // Right Liquid
+                ctx.fillStyle = 'rgba(0,150,255,0.3)';
+                ctx.fillRect(this.tX(600), this.tY(250), this.tS(300), this.tS(250));
+
+                // Salt Bridge
+                ctx.beginPath();
+                ctx.moveTo(this.tX(300), this.tY(350));
+                ctx.lineTo(this.tX(300), this.tY(100));
+                ctx.arc(this.tX(500), this.tY(100), this.tS(200), Math.PI, 0);
+                ctx.lineTo(this.tX(700), this.tY(350));
+                ctx.lineWidth = this.tS(40);
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.stroke();
+
+                // Electrodes
+                // Zinc
+                ctx.fillStyle = '#888';
+                let znHeight = 350;
+                let znWidth = 60;
+                // Simple animation shrink/grow effect based on active state (for sim)
+                if(this.active && this.stageFilter === -1) {
+                   const time = Date.now() * 0.0001;
+                   // Just subtle breathing for visual interest if not tracking absolute state
+                   znWidth = 60 - Math.sin(time)*5; 
+                }
+                ctx.fillRect(this.tX(200 - znWidth/2), this.tY(150), this.tS(znWidth), this.tS(znHeight));
+                ctx.fillStyle = '#000';
+                ctx.font = `bold ${this.tS(24)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText('Zn', this.tX(200), this.tY(250));
+
+                // Copper
+                ctx.fillStyle = '#C87640';
+                let cuWidth = 60;
+                if(this.active && this.stageFilter === -1) {
+                   const time = Date.now() * 0.0001;
+                   cuWidth = 60 + Math.sin(time)*5; 
+                }
+                ctx.fillRect(this.tX(800 - cuWidth/2), this.tY(150), this.tS(cuWidth), this.tS(znHeight));
+                ctx.fillStyle = '#FFF';
+                ctx.fillText('Cu', this.tX(800), this.tY(250));
+
+                // Wire
+                ctx.beginPath();
+                ctx.moveTo(this.tX(200), this.tY(150));
+                ctx.lineTo(this.tX(200), this.tY(50));
+                ctx.lineTo(this.tX(800), this.tY(50));
+                ctx.lineTo(this.tX(800), this.tY(150));
+                ctx.lineWidth = this.tS(8);
+                ctx.strokeStyle = '#555';
+                ctx.stroke();
+
+                // Bulp/Meter center
+                ctx.beginPath();
+                ctx.arc(this.tX(500), this.tY(50), this.tS(30), 0, Math.PI*2);
+                ctx.fillStyle = this.active ? '#FFD700' : '#222';
+                ctx.fill();
+                if(this.active) {
+                    ctx.shadowColor = '#FFD700';
+                    ctx.shadowBlur = 20;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+            }
+
+            emitParticle(type) {
+                // type: 0=e-, 1=Zn2+, 2=Cu2+, 3=SO4(left), 4=K(right)
+                let p = { type, progress: 0, speed: 0.005 + Math.random()*0.002 };
+                
+                // Adjust speed based on simulation slider if applicable
+                if(window.simSpeedMod) p.speed *= window.simSpeedMod;
+
+                this.particles.push(p);
+            }
+
+            updateParticles() {
+                if(!this.active) return;
+                
+                // Emission Logic based on Stage
+                // 0: Ox, 1: Wire, 2: Red, 3: Salt
+                if (Math.random() < 0.05) {
+                    if(this.stageFilter === -1 || this.stageFilter === 0) this.emitParticle(1); // Zn2+ leaves anode
+                    if(this.stageFilter === -1 || this.stageFilter === 1) this.emitParticle(0); // e- wire
+                    if(this.stageFilter === -1 || this.stageFilter === 2) this.emitParticle(2); // Cu2+ goes to cathode
+                    if(this.stageFilter === -1 || this.stageFilter === 3) {
+                        this.emitParticle(3); // Anion left
+                        this.emitParticle(4); // Cation right
+                    }
+                }
+
+                // Update Progress
+                for(let i = this.particles.length - 1; i >= 0; i--) {
+                    this.particles[i].progress += this.particles[i].speed;
+                    if(this.particles[i].progress > 1) {
+                        this.particles.splice(i, 1);
+                    }
+                }
+            }
+
+            drawParticles() {
+                const ctx = this.ctx;
+                
+                this.particles.forEach(p => {
+                    let x, y, color, label, size = this.tS(12);
+                    
+                    if(p.type === 0) { // Electron (Wire: 200,150 -> 200,50 -> 800,50 -> 800,150)
+                        color = '#00FF88'; label = 'e⁻'; size = this.tS(6);
+                        if(p.progress < 0.2) { // Up
+                            x = 200; y = 150 - (p.progress/0.2)*100;
+                        } else if (p.progress < 0.8) { // Across
+                            x = 200 + ((p.progress-0.2)/0.6)*600; y = 50;
+                        } else { // Down
+                            x = 800; y = 50 + ((p.progress-0.8)/0.2)*100;
+                        }
+                    } 
+                    else if (p.type === 1) { // Zn2+ (Leaves 200,300 into liquid)
+                        color = '#FF4D4D'; label = 'Zn²⁺';
+                        x = 200 + p.progress * 100 * (Math.random() > 0.5 ? 1 : -1);
+                        y = 300 + p.progress * 150;
+                    }
+                    else if (p.type === 2) { // Cu2+ (From liquid to 800,300)
+                        color = '#00E5FF'; label = 'Cu²⁺';
+                        x = 700 + p.progress * 100; // rough path
+                        y = 450 - p.progress * 150;
+                    }
+                    else if (p.type === 3) { // Anion in salt bridge (Right to Left)
+                        color = '#FFF'; label = '-'; size=this.tS(8);
+                        // Path: 700,350 -> arc -> 300,350
+                        x = 700 - p.progress * 400;
+                        y = 100 + Math.abs(Math.sin(p.progress * Math.PI)) * 100; // crude arc
+                        y = p.progress < 0.2 ? 350 - (p.progress/0.2)*250 :
+                            p.progress > 0.8 ? 100 + ((p.progress-0.8)/0.2)*250 : 100;
+                    }
+                    else if (p.type === 4) { // Cation in salt bridge (Left to Right)
+                        color = '#FFF'; label = '+'; size=this.tS(8);
+                        x = 300 + p.progress * 400;
+                        y = p.progress < 0.2 ? 350 - (p.progress/0.2)*250 :
+                            p.progress > 0.8 ? 100 + ((p.progress-0.8)/0.2)*250 : 100;
+                    }
+
+                    // Draw
+                    ctx.beginPath();
+                    ctx.arc(this.tX(x), this.tY(y), size, 0, Math.PI*2);
+                    ctx.fillStyle = color;
+                    ctx.shadowColor = color;
+                    ctx.shadowBlur = 10;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                    
+                    if(label && size > this.tS(6)) {
+                        ctx.fillStyle = '#000';
+                        ctx.font = `bold ${this.tS(10)}px sans-serif`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(label, this.tX(x), this.tY(y));
+                    }
+                });
+            }
+
+            render() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.drawBeakers();
+                this.updateParticles();
+                this.drawParticles();
+
+                // Highlight active stage
+                if(this.stageFilter !== -1) {
+                    this.ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    
+                    // Punch out highlight
+                    this.ctx.globalCompositeOperation = 'destination-out';
+                    this.ctx.beginPath();
+                    if(this.stageFilter === 0) { // Anode
+                        this.ctx.arc(this.tX(200), this.tY(300), this.tS(150), 0, Math.PI*2);
+                    } else if (this.stageFilter === 1) { // Wire
+                        this.ctx.rect(this.tX(100), this.tY(0), this.tS(800), this.tS(100));
+                    } else if (this.stageFilter === 2) { // Cathode
+                        this.ctx.arc(this.tX(800), this.tY(300), this.tS(150), 0, Math.PI*2);
+                    } else if (this.stageFilter === 3) { // Salt
+                        this.ctx.arc(this.tX(500), this.tY(150), this.tS(250), 0, Math.PI*2);
+                    }
+                    this.ctx.fill();
+                    this.ctx.globalCompositeOperation = 'source-over';
+                    
+                    // Redraw active parts over highlight
+                    this.drawParticles();
+                }
+            }
+        }
+
+        // ---------------------------------------------------------
+        // 3. Working Process (State Machine)
+        // ---------------------------------------------------------
+        const processCanvas = document.getElementById('process-canvas');
+        const processEng = new CellEngine(processCanvas, false);
+        processEng.active = true;
+
+        const stages = [
+            { title: "Zinc Oxidation", desc: "Zinc atoms at the anode surface lose electrons, becoming Zn²⁺ ions and dissolving into the solution.", highlight: 0 },
+            { title: "Electron Flow", desc: "The freed electrons are pushed through the external wire towards the cathode, creating electrical current.", highlight: 1 },
+            { title: "Copper Reduction", desc: "Electrons arrive at the cathode. Cu²⁺ ions in the solution gain these electrons and form solid copper.", highlight: 2 },
+            { title: "Ion Balancing", desc: "To prevent charge buildup, negative ions flow through the salt bridge to the anode, and positive to the cathode.", highlight: 3 }
+        ];
+
+        let currentStage = 0;
+        let isAutoPlay = false;
+        let autoPlayTimer = null;
+
+        const uiTitle = document.getElementById('stg-title');
+        const uiDesc = document.getElementById('stg-desc');
+        const uiNum = document.getElementById('stg-num');
+        const uiDots = document.querySelectorAll('#stg-dots .dot');
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnPlay = document.getElementById('btn-play');
+
+        function setStage(idx) {
+            currentStage = (idx + 4) % 4; // Wrap around
+            
+            uiTitle.innerText = stages[currentStage].title;
+            uiDesc.innerText = stages[currentStage].desc;
+            uiNum.innerText = `Stage ${currentStage + 1}/4`;
+            
+            uiDots.forEach((d, i) => d.classList.toggle('active', i === currentStage));
+            
+            processEng.stageFilter = stages[currentStage].highlight;
+            processEng.particles = []; // Clear old particles
+        }
+
+        btnNext.addEventListener('click', () => { stopAutoPlay(); setStage(currentStage + 1); });
+        btnPrev.addEventListener('click', () => { stopAutoPlay(); setStage(currentStage - 1); });
+        
+        function toggleAutoPlay() {
+            isAutoPlay = !isAutoPlay;
+            const icon = document.getElementById('play-icon');
+            if(isAutoPlay) {
+                btnPlay.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg> Pause`;
+                processEng.stageFilter = -1; // Show whole system running
+                uiTitle.innerText = "Continuous Cycle";
+                uiDesc.innerText = "All processes happen simultaneously. Oxidation drives electron flow, causing reduction, while ions balance the charge.";
+                uiNum.innerText = `Auto-Play`;
+                uiDots.forEach(d => d.classList.remove('active'));
+            } else {
+                btnPlay.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" id="play-icon"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Auto-Play`;
+                setStage(currentStage); // Revert to specific stage
+            }
+        }
+        btnPlay.addEventListener('click', toggleAutoPlay);
+
+        function stopAutoPlay() {
+            if(isAutoPlay) toggleAutoPlay();
+        }
+
+        function animProcess() {
+            processEng.render();
+            requestAnimationFrame(animProcess);
+        }
+        setStage(0);
+        animProcess();
+
+
+        // ---------------------------------------------------------
+        // 4. Interactive Simulation (Sandbox)
+        // ---------------------------------------------------------
+        const simCanvas = document.getElementById('sim-canvas');
+        const simEng = new CellEngine(simCanvas, true);
+        simEng.stageFilter = -1; // Always show full system
+        
+        const simSwitch = document.getElementById('sim-switch');
+        const simConc = document.getElementById('sim-conc');
+        const simVoltage = document.getElementById('sim-voltage');
+        const concVal = document.getElementById('conc-val');
+
+        window.simSpeedMod = 1;
+
+        simSwitch.addEventListener('change', (e) => {
+            simEng.active = e.target.checked;
+            updateSimMeter();
+        });
+
+        simConc.addEventListener('input', (e) => {
+            const val = e.target.value;
+            if(val < 30) concVal.innerText = "Diluted";
+            else if (val < 70) concVal.innerText = "Standard (1M)";
+            else concVal.innerText = "Concentrated";
+            
+            // Adjust speed multiplier (0.5x to 2x)
+            window.simSpeedMod = 0.5 + (val / 100) * 1.5;
+            updateSimMeter();
+        });
+
+        function updateSimMeter() {
+            if(!simEng.active) {
+                simVoltage.innerText = "0.00 V";
+                simVoltage.style.color = "#555";
+                simVoltage.style.textShadow = "none";
+                return;
+            }
+            
+            // Base standard potential for Zn-Cu is ~1.10V
+            // Nernst equation approximation for visual effect
+            const concFactor = (simConc.value - 50) / 100; 
+            let voltage = 1.10 + (concFactor * 0.05); // slight variation based on concentration
+            
+            simVoltage.innerText = voltage.toFixed(2) + " V";
+            simVoltage.style.color = "#00FF88";
+            simVoltage.style.textShadow = "0 0 15px rgba(0,255,136,0.6)";
+        }
+
+        function animSim() {
+            simEng.render();
+            requestAnimationFrame(animSim);
+        }
+        animSim();
+
+    </script>
+</body>
+</html>

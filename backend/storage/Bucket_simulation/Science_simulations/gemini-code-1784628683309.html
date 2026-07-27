@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Vaccination & Immunity Simulator</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME SETUP
+           ========================================================================== */
+        :root {
+            --bg-dark: #050b14;
+            --bg-glow: #0a192f;
+            --glass-bg: rgba(16, 33, 65, 0.4);
+            --glass-border: rgba(100, 255, 218, 0.15);
+            --glass-highlight: rgba(255, 255, 255, 0.05);
+            
+            --text-main: #ccd6f6;
+            --text-muted: #8892b0;
+            --accent-cyan: #64ffda;
+            --accent-blue: #3b82f6;
+            --accent-purple: #8b5cf6;
+            --danger-red: #ef4444;
+            --safe-green: #10b981;
+            --warning-gold: #fbbf24;
+
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: "Fira Code", "Roboto Mono", monospace;
+
+            --spacing-xs: clamp(0.25rem, 0.5vw, 0.5rem);
+            --spacing-sm: clamp(0.5rem, 1vw, 1rem);
+            --spacing-md: clamp(1rem, 2vw, 1.5rem);
+            --spacing-lg: clamp(1.5rem, 3vw, 2.5rem);
+            --spacing-xl: clamp(2.5rem, 5vw, 4rem);
+
+            --radius-md: 12px;
+            --radius-lg: 24px;
+            --radius-full: 999px;
+
+            --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            --glow-cyan: 0 0 20px rgba(100, 255, 218, 0.4);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body, html {
+            width: 100%;
+            height: 100%;
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+            line-height: 1.6;
+        }
+
+        /* Fluid Typography */
+        h1 { font-size: clamp(2rem, 5vw, 4rem); font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 600; margin-bottom: var(--spacing-md); color: #fff;}
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; margin-bottom: var(--spacing-sm); color: var(--text-main);}
+        p { font-size: clamp(0.875rem, 1.2vw, 1.125rem); color: var(--text-muted); margin-bottom: var(--spacing-sm); }
+        .subtitle { font-size: clamp(1rem, 1.5vw, 1.25rem); color: var(--accent-cyan); font-weight: 400; text-transform: uppercase; letter-spacing: 0.1em; }
+
+        /* ==========================================================================
+           UTILITIES & LAYOUT
+           ========================================================================== */
+        #bg-canvas {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: var(--spacing-xl) var(--spacing-md);
+            position: relative;
+            z-index: 1;
+        }
+
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-glass);
+            padding: var(--spacing-lg);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(8px); /* Performance on mobile */
+                -webkit-backdrop-filter: blur(8px);
+                padding: var(--spacing-md);
+                border-radius: var(--radius-md);
+            }
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--glass-highlight), transparent);
+        }
+
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-lg); align-items: center; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--spacing-md); }
+        
+        @media (max-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr; }
+        }
+
+        /* Buttons & Inputs */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.8em 1.5em;
+            background: rgba(100, 255, 218, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid var(--accent-cyan);
+            border-radius: var(--radius-full);
+            font-family: var(--font-mono);
+            font-size: clamp(0.8rem, 1vw, 1rem);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            gap: 0.5em;
+        }
+        .btn:hover { background: rgba(100, 255, 218, 0.2); box-shadow: var(--glow-cyan); transform: translateY(-2px); }
+        .btn.active { background: var(--accent-cyan); color: var(--bg-dark); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; transform: none; }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            margin: var(--spacing-sm) 0;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: var(--glow-cyan);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: var(--glass-border);
+            border-radius: 2px;
+        }
+
+        /* ==========================================================================
+           SECTIONS SPECIFIC STYLES
+           ========================================================================== */
+        
+        /* Hero Section */
+        #hero { min-height: 80vh; display: flex; flex-direction: column; justify-content: center; text-align: center; }
+        .hero-graphics { margin-top: var(--spacing-lg); display: flex; justify-content: center; gap: var(--spacing-md); }
+        .hero-orb {
+            width: clamp(60px, 10vw, 100px); height: clamp(60px, 10vw, 100px);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), transparent);
+            box-shadow: inset 0 0 20px rgba(255,255,255,0.1), 0 0 30px currentColor;
+            animation: float 6s ease-in-out infinite;
+        }
+        .hero-orb.vaccine { color: var(--accent-cyan); border: 2px solid var(--accent-cyan); }
+        .hero-orb.virus { color: var(--danger-red); border: 2px dashed var(--danger-red); animation-delay: -3s; }
+        
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+
+        /* Components Diagram (STRICT PATTERN) */
+        .components-layout {
+            display: flex;
+            flex-direction: row;
+            gap: var(--spacing-lg);
+            align-items: stretch;
+        }
+        .components-visual {
+            flex: 1;
+            position: relative;
+            min-height: 400px;
+            background: radial-gradient(circle at center, rgba(59, 130, 246, 0.1), transparent);
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+        .components-legend {
+            flex: 0 0 350px;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+        
+        @media (max-width: 1024px) {
+            .components-layout { flex-direction: column; }
+            .components-visual { min-height: 300px; }
+            .components-legend { flex: auto; }
+        }
+
+        /* Strict Marker Logic */
+        .marker {
+            position: absolute;
+            width: clamp(24px, 4vw, 32px); height: clamp(24px, 4vw, 32px);
+            background: var(--bg-dark);
+            border: 2px solid;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-family: var(--font-mono); font-weight: bold; font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+        }
+        .marker:hover, .marker.active { transform: scale(1.2); box-shadow: 0 0 15px currentColor; }
+        
+        .legend-item {
+            display: flex; align-items: flex-start; gap: var(--spacing-sm);
+            padding: var(--spacing-sm);
+            background: rgba(255,255,255,0.02);
+            border-radius: var(--radius-md);
+            border-left: 4px solid;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .legend-item:hover, .legend-item.active { background: rgba(255,255,255,0.08); transform: translateX(5px); }
+        .legend-badge {
+            width: 24px; height: 24px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: currentColor; color: var(--bg-dark);
+            font-family: var(--font-mono); font-size: 0.8rem; font-weight: bold;
+            flex-shrink: 0;
+        }
+        .legend-content h4 { font-size: 1rem; color: #fff; margin-bottom: 2px; }
+        .legend-content p { font-size: 0.85rem; margin: 0; line-height: 1.3; }
+
+        /* SVG Inner Styling for Components */
+        .svg-canvas { width: 100%; height: 100%; position: absolute; top:0; left:0; }
+        .cell-path { transition: all 0.4s ease; transform-origin: center; }
+        .marker.active ~ .svg-canvas .cell-group:not(.active) { opacity: 0.3; filter: grayscale(100%); }
+        .cell-group { transition: opacity 0.4s ease, filter 0.4s ease; }
+
+        /* Working Process Section (MANDATORY STRUCTURE) */
+        .working-container { display: flex; flex-direction: column; gap: var(--spacing-md); }
+        
+        .stage-header {
+            display: flex; justify-content: space-between; align-items: flex-end;
+            padding-bottom: var(--spacing-sm); border-bottom: 1px solid var(--glass-border);
+        }
+        .stage-title { color: var(--accent-cyan); font-family: var(--font-mono); }
+        
+        .working-canvas-container {
+            width: 100%; height: clamp(300px, 40vh, 500px);
+            background: #020617; /* Deeper dark for contrast */
+            border-radius: var(--radius-md);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+        canvas { display: block; width: 100%; height: 100%; }
+
+        .caption-bar {
+            background: rgba(10, 25, 47, 0.8);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--radius-md);
+            text-align: center;
+            min-height: 3em;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid rgba(100, 255, 218, 0.2);
+            color: #fff;
+        }
+
+        .controls { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--spacing-sm); }
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--glass-border); transition: all 0.3s; }
+        .dot.active { background: var(--accent-cyan); box-shadow: var(--glow-cyan); transform: scale(1.2); }
+
+        /* Simulation Section */
+        .sim-layout { display: grid; grid-template-columns: 3fr 1fr; gap: var(--spacing-lg); }
+        @media (max-width: 1024px) { .sim-layout { grid-template-columns: 1fr; } }
+        
+        .sim-canvas-wrap {
+            width: 100%; height: clamp(400px, 60vh, 600px);
+            background: #050b14; border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border); position: relative;
+        }
+        
+        .sim-controls { display: flex; flex-direction: column; gap: var(--spacing-md); }
+        .control-group { background: rgba(0,0,0,0.2); padding: var(--spacing-sm); border-radius: var(--radius-md); }
+        .stat-box {
+            display: flex; justify-content: space-between; padding: 0.5rem;
+            border-radius: 6px; margin-bottom: 4px; font-family: var(--font-mono); font-size: 0.9rem;
+        }
+        .stat-box.s-sus { color: var(--accent-blue); background: rgba(59, 130, 246, 0.1); }
+        .stat-box.s-vac { color: var(--safe-green); background: rgba(16, 185, 129, 0.1); }
+        .stat-box.s-inf { color: var(--danger-red); background: rgba(239, 68, 68, 0.1); }
+        .stat-box.s-rec { color: var(--text-muted); background: rgba(136, 146, 176, 0.1); }
+
+        /* Info Cards (Facts, Mistakes, etc) */
+        .info-card {
+            padding: var(--spacing-md);
+            border-radius: var(--radius-md);
+            background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%);
+            border: 1px solid var(--glass-border);
+            height: 100%;
+        }
+        .info-card h3 { display: flex; align-items: center; gap: 8px; color: #fff; }
+        .icon { width: 24px; height: 24px; fill: currentColor; }
+
+        .timeline { position: relative; padding-left: 20px; border-left: 2px solid var(--glass-border); }
+        .timeline-item { position: relative; margin-bottom: var(--spacing-md); }
+        .timeline-item::before {
+            content: ''; position: absolute; left: -25px; top: 5px;
+            width: 10px; height: 10px; border-radius: 50%; background: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        <!-- Section 1: Hero / Introduction -->
+        <section id="hero">
+            <h2 class="subtitle">Interactive Biological Simulation</h2>
+            <h1>Vaccination & Immunity</h1>
+            <p style="max-width: 600px; margin: 0 auto; font-size: 1.2rem;">
+                Explore the microscopic battlefield where engineering meets biology. 
+                Discover how simulating an infection trains your body's defense network to achieve lasting immunity.
+            </p>
+            
+            <div class="hero-graphics">
+                <div class="hero-orb vaccine" title="Vaccine">
+                    <svg viewBox="0 0 24 24" width="40" height="40" stroke="currentColor" stroke-width="2" fill="none"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.5 15.5h13"/><circle cx="12" cy="18" r="2"/></svg>
+                </div>
+                <div class="hero-orb virus" title="Pathogen">
+                    <svg viewBox="0 0 24 24" width="40" height="40" stroke="currentColor" stroke-width="2" fill="none"><circle cx="12" cy="12" r="6"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M4.93 4.93l2.83 2.83"/><path d="M16.24 16.24l2.83 2.83"/><path d="M2 12h4"/><path d="M18 12h4"/><path d="M4.93 19.07l2.83-2.83"/><path d="M16.24 7.76l2.83-2.83"/></svg>
+                </div>
+            </div>
+            
+            <div style="margin-top: var(--spacing-lg);">
+                <a href="#overview" class="btn">Initiate Simulation ↓</a>
+            </div>
+        </section>
+
+        <!-- Section 2: Topic Overview -->
+        <section id="overview" class="glass-panel" style="margin-bottom: var(--spacing-xl);">
+            <div class="grid-2">
+                <div>
+                    <h2 class="subtitle" style="color: var(--accent-purple);">01. Overview</h2>
+                    <h2>The Ultimate Training Simulation</h2>
+                    <p>
+                        A vaccine is not a cure; it is a <strong>training program</strong> for your immune system. 
+                        It contains a harmless blueprint or a deactivated fragment of a pathogen (antigen).
+                    </p>
+                    <p>
+                        By introducing this harmless version, the body safely learns to identify the threat, 
+                        develops specific weapons (antibodies), and creates a memory record. If the real, dangerous pathogen ever enters, 
+                        the immune system neutralizes it before illness can occur.
+                    </p>
+                </div>
+                <div style="position: relative; height: 100%; min-height: 200px; display: flex; align-items: center; justify-content: center;">
+                   <!-- Abstract representation of recognition -->
+                   <svg width="100%" height="100%" viewBox="0 0 300 200" preserveAspectRatio="xMidYMid meet">
+                       <defs>
+                           <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                               <stop offset="0%" style="stop-color:var(--accent-cyan);stop-opacity:0.8" />
+                               <stop offset="100%" style="stop-color:var(--accent-blue);stop-opacity:0.2" />
+                           </linearGradient>
+                           <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                               <feGaussianBlur stdDeviation="5" result="blur" />
+                               <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                           </filter>
+                       </defs>
+                       <!-- Lock and Key metaphor -->
+                       <path d="M 100 100 Q 150 50 200 100 Q 150 150 100 100" fill="none" stroke="var(--accent-cyan)" stroke-width="4" stroke-dasharray="5,5" />
+                       <circle cx="80" cy="100" r="30" fill="url(#grad1)" filter="url(#glow)"/>
+                       <path d="M 70 90 L 90 90 L 80 110 Z" fill="#fff" opacity="0.8"/> <!-- Receptor shape -->
+                       <path d="M 220 100 L 260 100 L 250 80 L 230 80 Z" fill="var(--danger-red)" opacity="0.6" filter="url(#glow)"/> <!-- Antigen shape fitting -->
+                       <text x="150" y="180" fill="var(--text-muted)" text-anchor="middle" font-family="monospace" font-size="12">Pattern Recognition</text>
+                   </svg>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Main Components (STRICT LABELING PATTERN) -->
+        <section id="components" class="glass-panel" style="margin-bottom: var(--spacing-xl);">
+            <h2 class="subtitle" style="color: var(--accent-purple);">02. System Components</h2>
+            <h2>The Immune Cast</h2>
+            <p style="margin-bottom: var(--spacing-md);">Explore the cellular units involved in a vaccine response. Hover over markers to identify.</p>
+            
+            <div class="components-layout">
+                <!-- Visual Area -->
+                <div class="components-visual" id="comp-visual">
+                    
+                    <!-- Base SVG Drawing -->
+                    <svg class="svg-canvas" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid slice">
+                        <defs>
+                            <radialGradient id="macroGrad" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#fff" stop-opacity="0.9"/>
+                                <stop offset="70%" stop-color="var(--accent-blue)" stop-opacity="0.6"/>
+                                <stop offset="100%" stop-color="var(--bg-dark)" stop-opacity="0"/>
+                            </radialGradient>
+                            <filter id="cellGlow"><feGaussianBlur stdDeviation="8" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                        </defs>
+                        
+                        <!-- Environment fluid -->
+                        <path d="M -100 250 Q 200 150 400 250 T 900 250 L 900 600 L -100 600 Z" fill="rgba(59, 130, 246, 0.05)" />
+
+                        <!-- Group 1: Vaccine Particle -->
+                        <g class="cell-group" id="svg-g-1">
+                            <circle cx="200" cy="150" r="25" fill="var(--accent-cyan)" opacity="0.2" filter="url(#cellGlow)"/>
+                            <path d="M 200 120 L 200 180 M 170 150 L 230 150 M 180 130 L 220 170 M 180 170 L 220 130" stroke="var(--accent-cyan)" stroke-width="3" stroke-linecap="round"/>
+                            <!-- Broken piece to signify 'safe' -->
+                            <circle cx="235" cy="120" r="5" fill="var(--accent-cyan)"/>
+                        </g>
+
+                        <!-- Group 2: Macrophage -->
+                        <g class="cell-group" id="svg-g-2">
+                            <!-- Blob shape -->
+                            <path class="cell-path" d="M 300 250 C 250 200, 350 150, 400 220 C 450 180, 500 250, 480 300 C 520 350, 450 400, 400 380 C 320 420, 280 350, 320 300 C 260 280, 280 260, 300 250 Z" fill="url(#macroGrad)" filter="url(#cellGlow)" opacity="0.8"/>
+                            <circle cx="400" cy="300" r="30" fill="var(--accent-purple)" opacity="0.5" filter="url(#cellGlow)"/> <!-- Nucleus -->
+                            <!-- Receptors holding an antigen fragment -->
+                            <path d="M 320 230 L 300 200" stroke="var(--text-main)" stroke-width="2"/>
+                            <polygon points="295,190 305,190 300,205" fill="var(--accent-cyan)"/>
+                        </g>
+
+                        <!-- Group 3: Helper T-Cell -->
+                        <g class="cell-group" id="svg-g-3">
+                            <circle cx="650" cy="200" r="45" fill="var(--warning-gold)" opacity="0.1" filter="url(#cellGlow)"/>
+                            <circle cx="650" cy="200" r="40" fill="rgba(251, 191, 36, 0.4)" stroke="var(--warning-gold)" stroke-width="2"/>
+                            <circle cx="650" cy="200" r="15" fill="#fff" opacity="0.3"/> <!-- Nucleus -->
+                            <!-- Receptors linking to Macrophage -->
+                            <path d="M 520 280 Q 580 240 610 215" stroke="var(--warning-gold)" stroke-width="2" stroke-dasharray="4,4"/>
+                        </g>
+
+                        <!-- Group 4: B-Cell -->
+                        <g class="cell-group" id="svg-g-4">
+                            <circle cx="600" cy="400" r="50" fill="var(--safe-green)" opacity="0.1" filter="url(#cellGlow)"/>
+                            <circle cx="600" cy="400" r="45" fill="rgba(16, 185, 129, 0.4)" stroke="var(--safe-green)" stroke-width="2"/>
+                            <circle cx="610" cy="390" r="20" fill="#fff" opacity="0.3"/> <!-- Nucleus -->
+                            <!-- Surface Antibodies -->
+                            <path d="M 555 400 L 530 400 M 530 400 L 515 385 M 530 400 L 515 415" stroke="var(--safe-green)" stroke-width="2" fill="none"/>
+                            <path d="M 645 400 L 670 400 M 670 400 L 685 385 M 670 400 L 685 415" stroke="var(--safe-green)" stroke-width="2" fill="none"/>
+                        </g>
+
+                        <!-- Group 5: Antibodies (Free floating) -->
+                        <g class="cell-group" id="svg-g-5">
+                            <g transform="translate(700, 300) rotate(45)">
+                                <path d="M 0 0 L 0 -20 M 0 -20 L -10 -30 M 0 -20 L 10 -30" stroke="var(--safe-green)" stroke-width="3" fill="none" filter="url(#cellGlow)"/>
+                            </g>
+                            <g transform="translate(720, 350) rotate(-20)">
+                                <path d="M 0 0 L 0 -20 M 0 -20 L -10 -30 M 0 -20 L 10 -30" stroke="var(--safe-green)" stroke-width="3" fill="none" filter="url(#cellGlow)"/>
+                            </g>
+                        </g>
+                    </svg>
+
+                    <!-- HTML Overlays for Markers (Positioned via CSS percentages relative to container) -->
+                    <div class="marker" data-target="1" style="left: 25%; top: 30%; color: var(--accent-cyan); border-color: var(--accent-cyan);">1</div>
+                    <div class="marker" data-target="2" style="left: 50%; top: 60%; color: var(--accent-blue); border-color: var(--accent-blue);">2</div>
+                    <div class="marker" data-target="3" style="left: 81%; top: 40%; color: var(--warning-gold); border-color: var(--warning-gold);">3</div>
+                    <div class="marker" data-target="4" style="left: 75%; top: 80%; color: var(--safe-green); border-color: var(--safe-green);">4</div>
+                    <div class="marker" data-target="5" style="left: 90%; top: 65%; color: var(--safe-green); border-color: var(--safe-green);">5</div>
+                </div>
+
+                <!-- Legend List (Strict flow, no overlap) -->
+                <div class="components-legend" id="comp-legend">
+                    <div class="legend-item" data-target="1" style="color: var(--accent-cyan); border-color: var(--accent-cyan);">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Vaccine Antigen</h4>
+                            <p>Harmless fragment of the pathogen (e.g., mRNA or viral protein).</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="2" style="color: var(--accent-blue); border-color: var(--accent-blue);">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4>Antigen-Presenting Cell (Macrophage)</h4>
+                            <p>Swallows the antigen and displays pieces of it on its surface to alert others.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="3" style="color: var(--warning-gold); border-color: var(--warning-gold);">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4>Helper T-Cell</h4>
+                            <p>Reads the displayed antigen and acts as the commander, sending chemical signals.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="4" style="color: var(--safe-green); border-color: var(--safe-green);">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-content">
+                            <h4>B-Cell</h4>
+                            <p>Receives orders and transforms into a plasma cell to mass-produce weapons.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-target="5" style="color: var(--safe-green); border-color: var(--safe-green);">
+                        <div class="legend-badge">5</div>
+                        <div class="legend-content">
+                            <h4>Antibodies</h4>
+                            <p>Y-shaped proteins that perfectly match and neutralize the specific pathogen.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Working Process (MANDATORY DEDICATED SECTION - Canvas based) -->
+        <section id="working" class="glass-panel" style="margin-bottom: var(--spacing-xl);">
+            <h2 class="subtitle" style="color: var(--accent-purple);">03. Mechanism</h2>
+            <h2>The Immunization Sequence</h2>
+            <p style="margin-bottom: var(--spacing-md);">Observe the step-by-step linear sequence of how a vaccine trains the immune system.</p>
+            
+            <div class="working-container">
+                <!-- Header -->
+                <div class="stage-header">
+                    <div>
+                        <span style="color: var(--text-muted); font-family: var(--font-mono); font-size: 0.9rem;">STAGE <span id="w-stage-num">1</span> OF 4</span>
+                        <h3 class="stage-title" id="w-stage-title">Injection & Entry</h3>
+                    </div>
+                    <div class="progress-dots" id="w-progress">
+                        <div class="dot active"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+                    </div>
+                </div>
+
+                <!-- Canvas Visualization -->
+                <div class="working-canvas-container">
+                    <canvas id="working-canvas"></canvas>
+                </div>
+
+                <!-- Sync Caption -->
+                <div class="caption-bar" id="w-caption">
+                    Vaccine particles enter muscle tissue. They are harmless but look foreign.
+                </div>
+
+                <!-- Controls -->
+                <div class="controls">
+                    <button class="btn" id="w-btn-prev" disabled>← Previous</button>
+                    <button class="btn" id="w-btn-play"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Auto-Play</button>
+                    <button class="btn" id="w-btn-next">Next Stage →</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: Interactive Simulation -->
+        <section id="simulation" class="glass-panel" style="margin-bottom: var(--spacing-xl);">
+            <h2 class="subtitle" style="color: var(--accent-purple);">04. Population Dynamics</h2>
+            <h2>Herd Immunity Simulator</h2>
+            <p style="margin-bottom: var(--spacing-md);">
+                Watch how vaccination protects those who cannot be vaccinated. 
+                Adjust variables to see how disease spreads in a population (Dots = People).
+            </p>
+            
+            <div class="sim-layout">
+                <!-- Canvas -->
+                <div class="sim-canvas-wrap">
+                    <canvas id="sim-canvas"></canvas>
+                </div>
+                
+                <!-- Controls & Stats -->
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <label for="sim-vac-rate" style="font-family: var(--font-mono); font-size: 0.9rem; color: var(--safe-green);">Initial Vaccination Rate: <span id="val-vac-rate">50%</span></label>
+                        <input type="range" id="sim-vac-rate" min="0" max="100" value="50">
+                        
+                        <label for="sim-inf-rate" style="font-family: var(--font-mono); font-size: 0.9rem; color: var(--danger-red); margin-top: 10px; display:block;">Transmission Chance: <span id="val-inf-rate">60%</span></label>
+                        <input type="range" id="sim-inf-rate" min="10" max="100" value="60">
+                    </div>
+
+                    <div class="control-group">
+                        <div class="stat-box s-sus"><span>Susceptible (Blue)</span> <strong id="stat-sus">0</strong></div>
+                        <div class="stat-box s-vac"><span>Vaccinated (Green)</span> <strong id="stat-vac">0</strong></div>
+                        <div class="stat-box s-inf"><span>Infected (Red)</span> <strong id="stat-inf">0</strong></div>
+                        <div class="stat-box s-rec"><span>Recovered (Gray)</span> <strong id="stat-rec">0</strong></div>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; margin-top: auto;">
+                        <button class="btn" id="sim-btn-start" style="flex: 1;">Restart Sim</button>
+                        <button class="btn" id="sim-btn-pause" style="flex: 1;">Pause</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 6: Extras Grid -->
+        <section id="extras" style="margin-bottom: var(--spacing-xl);">
+            <div class="grid-3">
+                <!-- Facts -->
+                <div class="info-card">
+                    <h3>
+                        <svg class="icon" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm1 15h-2v-6h2zm0-8h-2V7h2z"/></svg>
+                        Interesting Facts
+                    </h3>
+                    <ul class="timeline" style="margin-top: var(--spacing-sm); list-style:none;">
+                        <li class="timeline-item">
+                            <strong style="color:var(--text-main)">First Vaccine:</strong> Developed in 1796 by Edward Jenner for Smallpox using cowpox.
+                        </li>
+                        <li class="timeline-item">
+                            <strong style="color:var(--text-main)">Eradication:</strong> Smallpox is the only human disease to have been completely eradicated globally via vaccination.
+                        </li>
+                        <li class="timeline-item">
+                            <strong style="color:var(--text-main)">mRNA Tech:</strong> Uses synthetic genetic code to instruct your own cells to build the antigen, bypassing the need to inject actual virus parts.
+                        </li>
+                    </ul>
+                </div>
+                
+                <!-- Mistakes -->
+                <div class="info-card">
+                    <h3>
+                        <svg class="icon" viewBox="0 0 24 24" style="fill: var(--danger-red);"><path d="M12 2L1 21h22M12 6l7.53 13H4.47M11 10v4h2v-4m-2 6v2h2v-2"/></svg>
+                        Common Misconceptions
+                    </h3>
+                    <div style="margin-top: var(--spacing-sm);">
+                        <p><strong style="color:var(--danger-red)">Myth:</strong> Vaccines cause the disease.</p>
+                        <p><strong style="color:var(--safe-green)">Fact:</strong> They contain inactivated/partial pathogens that cannot reproduce or cause illness. Mild fever is just your immune system working.</p>
+                        <hr style="border: 0; border-top: 1px solid var(--glass-border); margin: 10px 0;">
+                        <p><strong style="color:var(--danger-red)">Myth:</strong> Natural immunity is always better.</p>
+                        <p><strong style="color:var(--safe-green)">Fact:</strong> While natural infection creates immunity, the risk of severe complications or death is significantly higher than vaccine side effects.</p>
+                    </div>
+                </div>
+
+                <!-- Revision -->
+                <div class="info-card">
+                    <h3>
+                        <svg class="icon" viewBox="0 0 24 24" style="fill: var(--accent-blue);"><path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-9 14l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        Quick Revision
+                    </h3>
+                    <div style="margin-top: var(--spacing-sm); display: flex; flex-direction: column; gap: 8px;">
+                        <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px;">
+                            <strong style="color:var(--accent-cyan)">Antigen:</strong> The "ID Tag" of a threat.
+                        </div>
+                        <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px;">
+                            <strong style="color:var(--accent-blue)">Macrophage:</strong> The scout/eater cell.
+                        </div>
+                        <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px;">
+                            <strong style="color:var(--warning-gold)">T-Cell:</strong> The coordinator.
+                        </div>
+                        <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px;">
+                            <strong style="color:var(--safe-green)">Antibody:</strong> The specific weapon.
+                        </div>
+                        <div style="background: rgba(255,255,255,0.05); padding: 8px; border-radius: 4px;">
+                            <strong style="color:var(--accent-purple)">Memory B-Cell:</strong> Stores the weapon blueprint for future use.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        // --- Utility: Resize Canvas safely (Strict requirement) ---
+        function resizeCanvas(canvas, ctx) {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            return { width: rect.width, height: rect.height };
+        }
+
+        // ==========================================================================
+        // 1. AMBIENT BACKGROUND ANIMATION
+        // ==========================================================================
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let bgWidth, bgHeight;
+        let particles = [];
+
+        function initBg() {
+            const dims = resizeCanvas(bgCanvas, bgCtx);
+            bgWidth = dims.width; bgHeight = dims.height;
+            particles = [];
+            for(let i=0; i<30; i++) {
+                particles.push({
+                    x: Math.random() * bgWidth,
+                    y: Math.random() * bgHeight,
+                    r: Math.random() * 3 + 1,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    alpha: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        function drawBg() {
+            bgCtx.clearRect(0, 0, bgWidth, bgHeight);
+            
+            // Draw cellular network lines
+            bgCtx.lineWidth = 1;
+            for(let i=0; i<particles.length; i++) {
+                let p = particles[i];
+                p.x += p.vx; p.y += p.vy;
+                
+                // Wrap around
+                if(p.x < 0) p.x = bgWidth; if(p.x > bgWidth) p.x = 0;
+                if(p.y < 0) p.y = bgHeight; if(p.y > bgHeight) p.y = 0;
+
+                bgCtx.beginPath();
+                bgCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                bgCtx.fillStyle = `rgba(100, 255, 218, ${p.alpha})`;
+                bgCtx.fill();
+
+                for(let j=i+1; j<particles.length; j++) {
+                    let p2 = particles[j];
+                    let dist = Math.hypot(p.x - p2.x, p.y - p2.y);
+                    if(dist < 150) {
+                        bgCtx.beginPath();
+                        bgCtx.moveTo(p.x, p.y);
+                        bgCtx.lineTo(p2.x, p2.y);
+                        bgCtx.strokeStyle = `rgba(59, 130, 246, ${(1 - dist/150) * 0.2})`;
+                        bgCtx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(drawBg);
+        }
+        
+        window.addEventListener('resize', () => {
+            initBg();
+            if(w_initialized) { w_dims = resizeCanvas(w_canvas, w_ctx); }
+            if(sim_initialized) { sim_dims = resizeCanvas(sim_canvas, sim_ctx); initSim(); }
+        });
+        
+        initBg();
+        drawBg();
+
+        // ==========================================================================
+        // 2. COMPONENTS INTERACTION (STRICT PATTERN)
+        // ==========================================================================
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+        const svgGroups = document.querySelectorAll('.cell-group');
+
+        function activateComponent(targetId) {
+            // Reset all
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            svgGroups.forEach(g => g.classList.remove('active'));
+
+            if(targetId) {
+                document.querySelector(`.marker[data-target="${targetId}"]`).classList.add('active');
+                
+                const legendItem = document.querySelector(`.legend-item[data-target="${targetId}"]`);
+                legendItem.classList.add('active');
+                
+                // Ensure legend item is visible on mobile scroll
+                if(window.innerWidth <= 1024) {
+                    legendItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+
+                document.getElementById(`svg-g-${targetId}`).classList.add('active');
+            }
+        }
+
+        // Add events (Mouse and Touch)
+        markers.forEach(el => {
+            const id = el.getAttribute('data-target');
+            el.addEventListener('mouseenter', () => activateComponent(id));
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); activateComponent(id); }, {passive: false});
+        });
+        
+        legendItems.forEach(el => {
+            const id = el.getAttribute('data-target');
+            el.addEventListener('mouseenter', () => activateComponent(id));
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); activateComponent(id); }, {passive: false});
+        });
+
+        document.getElementById('comp-visual').addEventListener('mouseleave', () => activateComponent(null));
+        document.getElementById('comp-legend').addEventListener('mouseleave', () => activateComponent(null));
+
+
+        // ==========================================================================
+        // 3. WORKING PROCESS (MANDATORY DEDICATED SECTION)
+        // ==========================================================================
+        const w_canvas = document.getElementById('working-canvas');
+        const w_ctx = w_canvas.getContext('2d');
+        let w_dims = {width:0, height:0};
+        let w_initialized = false;
+
+        // Sequence State
+        let currentStage = 0; // 0 to 3
+        const stages = [
+            { title: "Injection & Entry", caption: "Vaccine particles enter. They are harmless but possess the target antigen pattern." },
+            { title: "Antigen Presentation", caption: "Macrophages engulf the vaccine, breaking it down and displaying the antigen on their surface." },
+            { title: "T-Cell Activation", caption: "Helper T-Cells bind to the presented antigen, releasing chemical signals (cytokines) to mobilize defenses." },
+            { title: "Antibody Production", caption: "B-Cells activate, producing specific antibodies and forming Memory Cells for long-term immunity." }
+        ];
+
+        // Animation Engine Variables
+        let w_time = 0;
+        let w_isAutoPlay = false;
+        let w_lastTime = performance.now();
+        let w_transitionTime = 0; // 0 to 1 for morphing states
+
+        // Entities for the sequence
+        const w_entities = {
+            vaccines: [],
+            macrophage: {x: 0, y: 0, scale: 0, opacity: 0},
+            tcell: {x: 0, y: 0, scale: 0, opacity: 0},
+            bcell: {x: 0, y: 0, scale: 0, opacity: 0},
+            particles: [], // Cytokines, broken parts
+            antibodies: []
+        };
+
+        function initWorking() {
+            w_dims = resizeCanvas(w_canvas, w_ctx);
+            w_initialized = true;
+            resetStageEntities(currentStage);
+            requestAnimationFrame(drawWorking);
+        }
+
+        function resetStageEntities(stage) {
+            const cw = w_dims.width; const ch = w_dims.height;
+            w_transitionTime = 0;
+            w_entities.particles = [];
+            w_entities.antibodies = [];
+            
+            // Base setup for target stage
+            if(stage === 0) {
+                w_entities.vaccines = [{x: cw*0.1, y: ch*0.5, tx: cw*0.5, ty: ch*0.5, scale: 1}];
+                w_entities.macrophage = {x: cw*0.8, y: ch*0.5, scale: 0.5, opacity: 0};
+                w_entities.tcell = {scale: 0, opacity: 0};
+                w_entities.bcell = {scale: 0, opacity: 0};
+            }
+            else if(stage === 1) {
+                w_entities.vaccines = [];
+                w_entities.macrophage = {x: cw*0.5, y: ch*0.5, scale: 1.2, opacity: 1, eating: true};
+                w_entities.tcell = {x: cw*0.9, y: ch*0.3, scale: 0.5, opacity: 0};
+                w_entities.bcell = {scale: 0, opacity: 0};
+            }
+            else if(stage === 2) {
+                w_entities.macrophage = {x: cw*0.3, y: ch*0.5, scale: 1, opacity: 1, presenting: true};
+                w_entities.tcell = {x: cw*0.6, y: ch*0.5, scale: 1, opacity: 1, active: true};
+                w_entities.bcell = {x: cw*0.9, y: ch*0.8, scale: 0.5, opacity: 0};
+                
+                // Spawn cytokines
+                for(let i=0; i<5; i++) {
+                    w_entities.particles.push({
+                        x: cw*0.6, y: ch*0.5, 
+                        tx: cw*0.9 + (Math.random()-0.5)*50, ty: ch*0.8 + (Math.random()-0.5)*50,
+                        progress: -i*0.2, type: 'signal'
+                    });
+                }
+            }
+            else if (stage === 3) {
+                w_entities.macrophage = {x: cw*0.2, y: ch*0.3, scale: 0.6, opacity: 0.5, presenting: true};
+                w_entities.tcell = {x: cw*0.4, y: ch*0.3, scale: 0.6, opacity: 0.5};
+                w_entities.bcell = {x: cw*0.5, y: ch*0.6, scale: 1.2, opacity: 1, producing: true};
+                
+                // Spawn Antibodies
+                for(let i=0; i<8; i++) {
+                    w_entities.antibodies.push({
+                        x: cw*0.5, y: ch*0.6,
+                        vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4 - 2,
+                        rot: Math.random()*Math.PI*2,
+                        life: 0
+                    });
+                }
+            }
+        }
+
+        // Easing function
+        const easeOutQuad = t => t * (2 - t);
+
+        function drawWorking(currentTime) {
+            if(!w_initialized) return;
+            const dt = (currentTime - w_lastTime) / 1000;
+            w_lastTime = currentTime;
+            w_time += dt;
+
+            // Transition logic (simple interpolation)
+            if(w_transitionTime < 1) {
+                w_transitionTime += dt * 1.5; // Speed of transition
+                if(w_transitionTime > 1) w_transitionTime = 1;
+            }
+
+            const ctx = w_ctx;
+            const cw = w_dims.width; const ch = w_dims.height;
+            
+            // Clear
+            ctx.clearRect(0, 0, cw, ch);
+            ctx.globalCompositeOperation = 'lighter'; // Glow effect
+
+            // Helper to draw cells
+            function drawCell(x, y, radius, color, scale, opacity, pulse = false) {
+                if(opacity <= 0) return;
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.scale(scale, scale);
+                if(pulse) {
+                    const p = 1 + Math.sin(w_time * 5) * 0.05;
+                    ctx.scale(p, p);
+                }
+                ctx.globalAlpha = opacity;
+                
+                // Core
+                ctx.beginPath();
+                ctx.arc(0, 0, radius, 0, Math.PI*2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                
+                // Glow
+                let gradient = ctx.createRadialGradient(0, 0, radius*0.5, 0, 0, radius*1.5);
+                gradient.addColorStop(0, color);
+                gradient.addColorStop(1, 'transparent');
+                ctx.beginPath();
+                ctx.arc(0, 0, radius*1.5, 0, Math.PI*2);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                
+                ctx.restore();
+            }
+
+            const easeT = easeOutQuad(w_transitionTime);
+
+            // Logic per stage based on transition time
+            if (currentStage === 0) {
+                let v = w_entities.vaccines[0];
+                if(v) {
+                    let cx = v.x + (v.tx - v.x) * easeT;
+                    drawCell(cx, v.ty, 15, '#64ffda', 1, 1, true); // Vaccine
+                }
+                let m = w_entities.macrophage;
+                drawCell(m.x - (m.x - cw*0.7)*easeT, m.y, 40, '#3b82f6', m.scale + easeT*0.5, easeT);
+            }
+            else if (currentStage === 1) {
+                let m = w_entities.macrophage;
+                drawCell(m.x, m.y, 40, '#3b82f6', m.scale, m.opacity, true);
+                
+                // Show digesting pieces inside
+                if(easeT > 0.3) {
+                    ctx.save(); ctx.translate(m.x, m.y); ctx.globalAlpha = Math.sin(w_time*3)*0.5 + 0.5;
+                    ctx.fillStyle = '#64ffda'; ctx.beginPath(); ctx.arc(-10, -5, 5, 0, Math.PI*2); ctx.fill();
+                    ctx.beginPath(); ctx.arc(10, 10, 4, 0, Math.PI*2); ctx.fill();
+                    ctx.restore();
+                }
+                
+                // Antenna/Receptor appearing
+                if(easeT > 0.7) {
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(m.x+30, m.y-20); ctx.lineTo(m.x+50, m.y-30); ctx.stroke();
+                    ctx.fillStyle = '#64ffda'; ctx.beginPath(); ctx.arc(m.x+50, m.y-30, 4, 0, Math.PI*2); ctx.fill(); // Antigen
+                }
+                let t = w_entities.tcell;
+                drawCell(t.x, t.y, 35, '#fbbf24', t.scale + easeT*0.5, easeT);
+            }
+            else if (currentStage === 2) {
+                let m = w_entities.macrophage;
+                drawCell(m.x, m.y, 40, '#3b82f6', m.scale, m.opacity);
+                // Receptor
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(m.x+30, m.y); ctx.lineTo(m.x+60, m.y); ctx.stroke();
+                ctx.fillStyle = '#64ffda'; ctx.beginPath(); ctx.arc(m.x+60, m.y, 4, 0, Math.PI*2); ctx.fill();
+                
+                let t = w_entities.tcell;
+                drawCell(t.x, t.y, 35, '#fbbf24', t.scale, t.opacity, true);
+                // T-Cell Receptor connecting
+                ctx.strokeStyle = '#fbbf24';
+                ctx.beginPath(); ctx.moveTo(t.x-25, t.y); ctx.lineTo(t.x-45, t.y); ctx.stroke();
+
+                let b = w_entities.bcell;
+                drawCell(b.x, b.y, 45, '#10b981', b.scale + easeT*0.5, easeT);
+
+                // Draw cytokines (signals)
+                w_entities.particles.forEach(p => {
+                    p.progress += dt;
+                    if(p.progress > 0 && p.progress < 1) {
+                        let px = p.x + (p.tx - p.x) * easeOutQuad(p.progress);
+                        let py = p.y + (p.ty - p.y) * easeOutQuad(p.progress);
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI*2); ctx.fill();
+                    } else if (p.progress >= 1) {
+                        p.progress = -0.2; // loop
+                    }
+                });
+            }
+            else if (currentStage === 3) {
+                let m = w_entities.macrophage; drawCell(m.x, m.y, 40, '#3b82f6', m.scale, m.opacity);
+                let t = w_entities.tcell; drawCell(t.x, t.y, 35, '#fbbf24', t.scale, t.opacity);
+                let b = w_entities.bcell; drawCell(b.x, b.y, 45, '#10b981', b.scale, b.opacity, true);
+
+                // Draw and move antibodies
+                ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+                w_entities.antibodies.forEach(a => {
+                    a.life += dt;
+                    if(a.life > 0.5) { // Start emerging
+                        a.x += a.vx; a.y += a.vy; a.rot += 0.05;
+                        // Wrap
+                        if(a.x < 0 || a.x > cw) { a.x = b.x; a.y = b.y; a.life = 0; }
+                        if(a.y < 0 || a.y > ch) { a.x = b.x; a.y = b.y; a.life = 0; }
+                        
+                        ctx.save();
+                        ctx.translate(a.x, a.y);
+                        ctx.rotate(a.rot);
+                        ctx.globalAlpha = Math.min(1, a.life);
+                        // Draw Y shape
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0); ctx.lineTo(0, -10);
+                        ctx.moveTo(0, -10); ctx.lineTo(-8, -18);
+                        ctx.moveTo(0, -10); ctx.lineTo(8, -18);
+                        ctx.stroke();
+                        // Glowing tips
+                        ctx.fillStyle = '#64ffda';
+                        ctx.beginPath(); ctx.arc(-8, -18, 2, 0, Math.PI*2); ctx.fill();
+                        ctx.beginPath(); ctx.arc(8, -18, 2, 0, Math.PI*2); ctx.fill();
+                        ctx.restore();
+                    }
+                });
+            }
+
+            ctx.globalCompositeOperation = 'source-over';
+
+            // Auto-play logic
+            if(w_isAutoPlay && w_transitionTime >= 1) {
+                // Stay on step for a bit, then move
+                if(!this.stepTimer) this.stepTimer = 0;
+                this.stepTimer += dt;
+                if(this.stepTimer > 3) { // 3 seconds per stage
+                    this.stepTimer = 0;
+                    changeStage(currentStage === 3 ? 0 : currentStage + 1);
+                }
+            }
+
+            requestAnimationFrame(drawWorking);
+        }
+
+        function updateDOMStage() {
+            document.getElementById('w-stage-num').textContent = currentStage + 1;
+            document.getElementById('w-stage-title').textContent = stages[currentStage].title;
+            
+            // Subtle transition for text
+            const cap = document.getElementById('w-caption');
+            cap.style.opacity = 0;
+            setTimeout(() => {
+                cap.textContent = stages[currentStage].caption;
+                cap.style.opacity = 1;
+            }, 300);
+
+            // Update dots
+            document.querySelectorAll('#w-progress .dot').forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentStage);
+            });
+
+            // Update buttons
+            document.getElementById('w-btn-prev').disabled = currentStage === 0;
+        }
+
+        function changeStage(newStage) {
+            currentStage = newStage;
+            updateDOMStage();
+            resetStageEntities(currentStage);
+        }
+
+        document.getElementById('w-btn-prev').addEventListener('click', () => {
+            w_isAutoPlay = false; document.getElementById('w-btn-play').classList.remove('active');
+            if(currentStage > 0) changeStage(currentStage - 1);
+        });
+        document.getElementById('w-btn-next').addEventListener('click', () => {
+            w_isAutoPlay = false; document.getElementById('w-btn-play').classList.remove('active');
+            changeStage(currentStage === 3 ? 0 : currentStage + 1);
+        });
+        document.getElementById('w-btn-play').addEventListener('click', function() {
+            w_isAutoPlay = !w_isAutoPlay;
+            this.classList.toggle('active', w_isAutoPlay);
+        });
+
+        // Initialize when scrolled into view
+        const observer = new IntersectionObserver((entries) => {
+            if(entries[0].isIntersecting && !w_initialized) {
+                initWorking();
+            }
+        });
+        observer.observe(document.getElementById('working'));
+
+        // ==========================================================================
+        // 4. SIMULATION SECTION (Herd Immunity)
+        // ==========================================================================
+        const sim_canvas = document.getElementById('sim-canvas');
+        const sim_ctx = sim_canvas.getContext('2d');
+        let sim_dims = {width:0, height:0};
+        let sim_initialized = false;
+        
+        let sim_people = [];
+        let sim_isRunning = true;
+        const SIM_POPULATION = 150;
+        
+        // Colors from variables
+        const c_sus = '#3b82f6'; // Blue
+        const c_vac = '#10b981'; // Green
+        const c_inf = '#ef4444'; // Red
+        const c_rec = '#8892b0'; // Gray
+
+        function initSim() {
+            if(!sim_initialized) sim_dims = resizeCanvas(sim_canvas, sim_ctx);
+            sim_initialized = true;
+            sim_people = [];
+            
+            const vacRate = parseInt(document.getElementById('sim-vac-rate').value) / 100;
+            
+            for(let i=0; i<SIM_POPULATION; i++) {
+                let state = Math.random() < vacRate ? 'vac' : 'sus';
+                
+                // Always start with 1 infected (patient zero)
+                if(i === 0) state = 'inf';
+
+                sim_people.push({
+                    x: Math.random() * sim_dims.width,
+                    y: Math.random() * sim_dims.height,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
+                    r: 4,
+                    state: state,
+                    timer: 0 // For recovery
+                });
+            }
+            updateSimStats();
+            if(!sim_loop_running) { sim_loop_running = true; requestAnimationFrame(simLoop); }
+        }
+
+        let sim_loop_running = false;
+
+        function simLoop() {
+            if(!sim_isRunning) {
+                if(sim_loop_running) requestAnimationFrame(simLoop);
+                return;
+            }
+
+            const ctx = sim_ctx;
+            const w = sim_dims.width; const h = sim_dims.height;
+            const transRate = parseInt(document.getElementById('sim-inf-rate').value) / 100;
+            
+            // Clear with slight trail
+            ctx.fillStyle = 'rgba(5, 11, 20, 0.3)';
+            ctx.fillRect(0, 0, w, h);
+
+            let stats = { sus: 0, vac: 0, inf: 0, rec: 0 };
+
+            // Spatial partitioning could optimize this, but N=150 is fine for O(N^2)
+            for(let i=0; i<SIM_POPULATION; i++) {
+                let p = sim_people[i];
+                
+                // Movement
+                p.x += p.vx; p.y += p.vy;
+                
+                // Bounce walls
+                if(p.x - p.r < 0 || p.x + p.r > w) p.vx *= -1;
+                if(p.y - p.r < 0 || p.y + p.r > h) p.vy *= -1;
+
+                // Infection Logic
+                if(p.state === 'inf') {
+                    p.timer++;
+                    if(p.timer > 300) { // Recover after ~5 seconds at 60fps
+                        p.state = 'rec';
+                    }
+                }
+
+                stats[p.state]++;
+
+                // Draw
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                
+                if(p.state === 'sus') { ctx.fillStyle = c_sus; }
+                else if(p.state === 'vac') { 
+                    ctx.fillStyle = c_vac;
+                    // Shield visual
+                    ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
+                    ctx.lineWidth = 1;
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 2, 0, Math.PI*2); ctx.stroke();
+                    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); // reset for fill
+                }
+                else if(p.state === 'inf') { 
+                    ctx.fillStyle = c_inf;
+                    // Pulse visual
+                    ctx.shadowBlur = 10; ctx.shadowColor = c_inf;
+                }
+                else if(p.state === 'rec') { ctx.fillStyle = c_rec; }
+                
+                ctx.fill();
+                ctx.shadowBlur = 0; // reset
+
+                // Collisions (O(N^2) / 2)
+                for(let j=i+1; j<SIM_POPULATION; j++) {
+                    let p2 = sim_people[j];
+                    let dx = p.x - p2.x; let dy = p.y - p2.y;
+                    let distSq = dx*dx + dy*dy;
+                    let minDist = p.r + p2.r + 2; // slightly larger hit area
+                    
+                    if(distSq < minDist*minDist) {
+                        // Resolve physical overlap (simple bounce)
+                        let dist = Math.sqrt(distSq);
+                        let nx = dx/dist; let ny = dy/dist;
+                        // Swap velocities roughly
+                        let tvx = p.vx; let tvy = p.vy;
+                        p.vx = p2.vx; p.vy = p2.vy;
+                        p2.vx = tvx; p2.vy = tvy;
+
+                        // Separate
+                        let sep = (minDist - dist) / 2;
+                        p.x += nx * sep; p.y += ny * sep;
+                        p2.x -= nx * sep; p2.y -= ny * sep;
+
+                        // Transmission Logic
+                        if(p.state === 'inf' && p2.state === 'sus' && Math.random() < transRate) { p2.state = 'inf'; p2.timer = 0; }
+                        else if(p2.state === 'inf' && p.state === 'sus' && Math.random() < transRate) { p.state = 'inf'; p.timer = 0; }
+                        
+                        // Vaccinated individuals have a 95% reduction in transmission chance
+                        if(p.state === 'inf' && p2.state === 'vac' && Math.random() < (transRate * 0.05)) { p2.state = 'inf'; p2.timer = 0; }
+                        else if(p2.state === 'inf' && p.state === 'vac' && Math.random() < (transRate * 0.05)) { p.state = 'inf'; p.timer = 0; }
+                    }
+                }
+            }
+
+            // UI Updates (throttled slightly by binding to loop, but visually fine)
+            document.getElementById('stat-sus').textContent = stats.sus;
+            document.getElementById('stat-vac').textContent = stats.vac;
+            document.getElementById('stat-inf').textContent = stats.inf;
+            document.getElementById('stat-rec').textContent = stats.rec;
+
+            // Auto-pause if no infected left
+            if(stats.inf === 0 && sim_isRunning) {
+                // Optional: visual cue that it ended
+            }
+
+            requestAnimationFrame(simLoop);
+        }
+
+        function updateSimStats() {
+            // Initial UI update before loop runs
+        }
+
+        // Sim Event Listeners
+        document.getElementById('sim-vac-rate').addEventListener('input', (e) => {
+            document.getElementById('val-vac-rate').textContent = e.target.value + '%';
+        });
+        document.getElementById('sim-inf-rate').addEventListener('input', (e) => {
+            document.getElementById('val-inf-rate').textContent = e.target.value + '%';
+        });
+
+        document.getElementById('sim-btn-start').addEventListener('click', () => {
+            sim_isRunning = true;
+            document.getElementById('sim-btn-pause').textContent = 'Pause';
+            initSim();
+        });
+
+        document.getElementById('sim-btn-pause').addEventListener('click', (e) => {
+            sim_isRunning = !sim_isRunning;
+            e.target.textContent = sim_isRunning ? 'Pause' : 'Resume';
+        });
+
+        // Initialize Sim when visible
+        const simObserver = new IntersectionObserver((entries) => {
+            if(entries[0].isIntersecting && !sim_initialized) {
+                sim_dims = resizeCanvas(sim_canvas, sim_ctx);
+                initSim();
+            }
+        });
+        simObserver.observe(document.getElementById('simulation'));
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Evaporation | Premium Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            /* Color Palette */
+            --bg-base: #050914;
+            --bg-surface: rgba(13, 20, 36, 0.6);
+            --bg-surface-light: rgba(26, 38, 64, 0.8);
+            
+            --accent-cyan: #00f0ff;
+            --accent-cyan-glow: rgba(0, 240, 255, 0.4);
+            --accent-blue: #3a86ff;
+            --accent-orange: #ff9000;
+            --accent-orange-glow: rgba(255, 144, 0, 0.4);
+            --text-main: #ffffff;
+            --text-muted: #a0aec0;
+            
+            /* Glassmorphism */
+            --glass-border: 1px solid rgba(255, 255, 255, 0.08);
+            --glass-bg: rgba(15, 23, 42, 0.4);
+            --glass-blur: blur(16px);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+
+            /* Typography */
+            --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --fs-h1: clamp(2.5rem, 5vw, 4.5rem);
+            --fs-h2: clamp(1.8rem, 3vw, 2.5rem);
+            --fs-h3: clamp(1.2rem, 2vw, 1.5rem);
+            --fs-body: clamp(0.95rem, 1vw, 1.1rem);
+            --fs-small: clamp(0.8rem, 0.8vw, 0.9rem);
+
+            /* Layout */
+            --container-width: 1280px;
+            --spacing-section: clamp(3rem, 6vw, 6rem);
+            --spacing-element: clamp(1rem, 2vw, 2rem);
+            --border-radius: 20px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(58, 134, 255, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* ==========================================================================
+           2. TYPOGRAPHY & UTILITIES
+           ========================================================================== */
+        h1, h2, h3 { font-weight: 700; line-height: 1.2; }
+        h1 { font-size: var(--fs-h1); letter-spacing: -1px; margin-bottom: 1rem; }
+        h2 { font-size: var(--fs-h2); margin-bottom: 1.5rem; color: var(--accent-cyan); }
+        h3 { font-size: var(--fs-h3); margin-bottom: 0.5rem; }
+        p { font-size: var(--fs-body); color: var(--text-muted); margin-bottom: 1rem; }
+        
+        .highlight { color: var(--accent-cyan); font-weight: 600; }
+        .highlight-heat { color: var(--accent-orange); font-weight: 600; }
+
+        .container {
+            max-width: var(--container-width);
+            margin: 0 auto;
+            padding: 0 clamp(1rem, 4vw, 2rem);
+        }
+
+        .section { margin-bottom: var(--spacing-section); }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: var(--glass-border);
+            border-radius: var(--border-radius);
+            padding: var(--spacing-element);
+            box-shadow: var(--glass-shadow);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        }
+
+        /* Mobile specific blur reduction */
+        @media (max-width: 768px) {
+            .glass-card {
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                background: rgba(15, 23, 42, 0.6); /* Slightly more opaque */
+            }
+        }
+
+        /* ==========================================================================
+           3. HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            position: relative;
+            padding-top: 4rem;
+        }
+
+        .hero-bg-anim {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            background: radial-gradient(circle, var(--accent-cyan) 0%, transparent 70%);
+            border-radius: 50%;
+            opacity: 0;
+            animation: floatUp linear infinite;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(100%) scale(0.5); opacity: 0; }
+            20% { opacity: 0.6; }
+            80% { opacity: 0.2; }
+            100% { transform: translateY(-100px) scale(1.5); opacity: 0; }
+        }
+
+        .hero-content { max-width: 800px; z-index: 1; }
+        .hero-subtitle { font-size: var(--fs-h3); color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 2px; display: block; margin-bottom: 1rem; }
+
+        /* ==========================================================================
+           4. DIAGRAM LABELS PATTERN (MANDATORY)
+           ========================================================================== */
+        .diagram-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        @media (min-width: 1024px) {
+            .diagram-container { grid-template-columns: 1.2fr 0.8fr; }
+        }
+
+        .illustration-box {
+            position: relative;
+            width: 100%;
+            min-height: 280px;
+            background: var(--bg-surface);
+            border-radius: var(--border-radius);
+            border: var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            overflow: hidden;
+        }
+
+        .illustration-svg {
+            width: 100%;
+            height: auto;
+            max-height: 500px;
+            filter: drop-shadow(0 0 20px rgba(0, 240, 255, 0.2));
+        }
+
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: var(--accent-cyan);
+            color: var(--bg-base);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--accent-cyan-glow);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+            transform: translate(-50%, -50%);
+        }
+
+        .marker::after {
+            content: '';
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            border: 2px solid var(--accent-cyan);
+            animation: pulseMarker 2s infinite;
+        }
+
+        @keyframes pulseMarker {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(1.8); opacity: 0; }
+        }
+
+        .marker.active, .marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: #fff;
+            box-shadow: 0 0 25px #fff;
+        }
+
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            list-style: none;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-surface-light);
+            border-radius: 12px;
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item.active {
+            background: rgba(0, 240, 255, 0.1);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(10px);
+        }
+
+        .legend-num {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: rgba(0, 240, 255, 0.2);
+            color: var(--accent-cyan);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            border: 1px solid var(--accent-cyan);
+        }
+
+        .legend-item.active .legend-num {
+            background: var(--accent-cyan);
+            color: var(--bg-base);
+        }
+
+        .legend-text { display: flex; flex-direction: column; }
+        .legend-title { font-weight: 700; color: #fff; font-size: var(--fs-body); }
+        .legend-desc { font-size: var(--fs-small); color: var(--text-muted); margin-top: 0.2rem; }
+
+        /* ==========================================================================
+           5. WORKING PROCESS SECTION
+           ========================================================================== */
+        .process-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .process-visual {
+            width: 100%;
+            height: clamp(300px, 50vh, 500px);
+            background: #02040a;
+            border-radius: var(--border-radius);
+            border: var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        #processCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .process-ui {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            padding: 1.5rem;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            pointer-events: none; /* Let clicks pass to controls below */
+        }
+
+        .stage-info {
+            pointer-events: auto;
+            max-width: 600px;
+        }
+
+        .stage-title { font-size: var(--fs-h3); color: var(--accent-cyan); margin-bottom: 0.2rem; }
+        .stage-caption { font-size: var(--fs-body); color: #fff; }
+
+        .process-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: var(--bg-surface-light);
+            padding: 1rem 1.5rem;
+            border-radius: 100px;
+            border: var(--glass-border);
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .control-btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 0.6rem 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: var(--fs-small);
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .control-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
+        .control-btn:active { transform: scale(0.95); }
+        .control-btn.primary { background: var(--accent-cyan); color: #000; border: none; box-shadow: 0 0 15px var(--accent-cyan-glow); }
+        .control-btn.primary:hover { background: #fff; box-shadow: 0 0 20px #fff; }
+
+        .progress-dots {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+        .dot.active { background: var(--accent-cyan); box-shadow: 0 0 10px var(--accent-cyan); transform: scale(1.3); }
+
+        /* ==========================================================================
+           6. INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .sim-grid { grid-template-columns: 2fr 1fr; }
+        }
+
+        .sim-view {
+            width: 100%;
+            height: clamp(350px, 60vh, 600px);
+            background: #000;
+            border-radius: var(--border-radius);
+            border: var(--glass-border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #simCanvas { width: 100%; height: 100%; display: block; }
+
+        .sim-overlay-data {
+            position: absolute;
+            top: 1rem; left: 1rem;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid rgba(0,240,255,0.3);
+            pointer-events: none;
+        }
+        
+        .data-row { display: flex; justify-content: space-between; gap: 1rem; margin-bottom: 0.5rem; font-family: monospace; font-size: var(--fs-small); }
+        .data-label { color: var(--text-muted); }
+        .data-value { color: var(--accent-cyan); font-weight: bold; }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .control-label { font-size: var(--fs-small); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: #fff; }
+        .control-val-display { font-size: var(--fs-small); color: var(--accent-cyan); font-family: monospace; }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 24px; /* Touch target size */
+            margin: 0;
+        }
+
+        input[type=range]:focus { outline: none; }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+            transition: transform 0.1s;
+        }
+        
+        input[type=range]:active::-webkit-slider-thumb { transform: scale(1.2); background: #fff; }
+
+        /* Color specific sliders */
+        #tempSlider::-webkit-slider-thumb { background: var(--accent-orange); box-shadow: 0 0 10px var(--accent-orange-glow); }
+        #tempSlider:active::-webkit-slider-thumb { background: #fff; }
+        #humiditySlider::-webkit-slider-thumb { background: var(--accent-blue); }
+
+        /* ==========================================================================
+           7. CARDS GRID (Apps, Facts, Mistakes)
+           ========================================================================== */
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .icon-card {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            transition: transform 0.3s;
+        }
+        .icon-card:hover { transform: translateY(-5px); }
+        
+        .card-icon {
+            width: 50px; height: 50px;
+            background: rgba(0,240,255,0.1);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            border: 1px solid rgba(0,240,255,0.2);
+            color: var(--accent-cyan);
+        }
+        .card-icon svg { width: 24px; height: 24px; fill: currentColor; }
+
+        .mistake-card .card-icon { color: #ff4757; background: rgba(255,71,87,0.1); border-color: rgba(255,71,87,0.2); }
+        .mistake-title { color: #ff4757; }
+        .correction { color: #2ed573; font-weight: 600; font-size: var(--fs-small); margin-top: 0.5rem; display: block; }
+
+        /* ==========================================================================
+           8. REVISION
+           ========================================================================== */
+        .revision-list {
+            list-style: none;
+        }
+        .revision-list li {
+            position: relative;
+            padding-left: 2rem;
+            margin-bottom: 1rem;
+            font-size: var(--fs-body);
+        }
+        .revision-list li::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0.4rem;
+            width: 8px; height: 8px;
+            background: var(--accent-cyan);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--accent-cyan);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background Particles -->
+    <div class="hero-bg-anim" id="bgParticles"></div>
+
+    <main class="container">
+        
+        <!-- 1. INTRODUCTION -->
+        <section class="section hero">
+            <div class="hero-content">
+                <span class="hero-subtitle">Phase Transition</span>
+                <h1>Evaporation</h1>
+                <p style="font-size: var(--fs-h3); color: var(--text-muted);">The invisible escape of water molecules into the atmosphere, happening quietly around us every single day.</p>
+            </div>
+        </section>
+
+        <!-- 2. TOPIC OVERVIEW -->
+        <section class="section">
+            <div class="glass-card">
+                <h2>What is Evaporation?</h2>
+                <p>Evaporation is a type of vaporization that occurs on the <span class="highlight">surface</span> of a liquid as it changes into the gas phase. Unlike boiling, which happens throughout the entire liquid body at a specific temperature, evaporation occurs gradually and can happen at <span class="highlight">any temperature</span> above absolute zero.</p>
+                <p>It is the primary pathway that water moves from the liquid state back into the water cycle as atmospheric water vapor.</p>
+            </div>
+        </section>
+
+        <!-- 3. MAIN COMPONENTS (Anatomy of a Liquid Surface) -->
+        <section class="section">
+            <h2>Anatomy of Evaporation</h2>
+            <p>To understand how water disappears, we must look at the microscopic battle happening at the surface.</p>
+            
+            <div class="diagram-container">
+                <!-- Visual Box -->
+                <div class="illustration-box">
+                    <!-- Pure SVG Illustration -->
+                    <svg class="illustration-svg" viewBox="0 0 500 400" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="waterGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="rgba(0, 240, 255, 0.4)" />
+                                <stop offset="100%" stop-color="rgba(11, 30, 80, 0.9)" />
+                            </linearGradient>
+                            <linearGradient id="vaporGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="rgba(0, 240, 255, 0.2)" />
+                                <stop offset="100%" stop-color="rgba(0, 240, 255, 0)" />
+                            </linearGradient>
+                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="5" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                        </defs>
+                        
+                        <!-- Air/Vapor Zone -->
+                        <rect x="50" y="20" width="400" height="180" fill="url(#vaporGrad)" />
+                        
+                        <!-- Water Body -->
+                        <path d="M50 200 Q 250 195 450 200 L 450 380 L 50 380 Z" fill="url(#waterGrad)" />
+                        <path d="M50 200 Q 250 195 450 200" fill="none" stroke="#00f0ff" stroke-width="3" filter="url(#glow)" />
+
+                        <!-- Escaped Vapor Molecule -->
+                        <g transform="translate(250, 80)">
+                            <circle cx="0" cy="0" r="12" fill="#fff" filter="url(#glow)"/>
+                            <path d="M0 15 Q -10 30 0 50" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-dasharray="4,4"/>
+                        </g>
+
+                        <!-- High Energy Surface Molecule -->
+                        <g transform="translate(320, 200)">
+                            <circle cx="0" cy="0" r="14" fill="#ff9000" filter="url(#glow)"/>
+                            <circle cx="0" cy="0" r="18" fill="none" stroke="#ff9000" stroke-width="1" opacity="0.6">
+                                <animate attributeName="r" values="18;25;18" dur="1s" repeatCount="indefinite" />
+                                <animate attributeName="opacity" values="0.6;0;0.6" dur="1s" repeatCount="indefinite" />
+                            </circle>
+                            <!-- Escaping arrow -->
+                            <path d="M0 -20 L 0 -50 M -5 -45 L 0 -50 L 5 -45" fill="none" stroke="#ff9000" stroke-width="2" />
+                        </g>
+
+                        <!-- Intermolecular Forces (Springs) -->
+                        <g stroke="rgba(0, 240, 255, 0.4)" stroke-width="2" stroke-dasharray="2,2">
+                            <line x1="150" y1="280" x2="220" y2="250" />
+                            <line x1="150" y1="280" x2="200" y2="330" />
+                            <line x1="220" y1="250" x2="200" y2="330" />
+                        </g>
+
+                        <!-- Bulk Molecule -->
+                        <g transform="translate(150, 280)">
+                            <circle cx="0" cy="0" r="12" fill="#3a86ff" />
+                            <circle cx="-3" cy="-3" r="3" fill="#fff" opacity="0.4" />
+                        </g>
+                        <g transform="translate(220, 250)">
+                            <circle cx="0" cy="0" r="12" fill="#3a86ff" />
+                        </g>
+                        <g transform="translate(200, 330)">
+                            <circle cx="0" cy="0" r="12" fill="#3a86ff" />
+                        </g>
+                    </svg>
+
+                    <!-- Markers (Absolute to illustration-box, % based positioning) -->
+                    <!-- Position 1: Vapor -->
+                    <div class="marker" data-target="comp-vapor" style="left: 50%; top: 20%;">1</div>
+                    <!-- Position 2: Surface High Energy -->
+                    <div class="marker" data-target="comp-surface" style="left: 64%; top: 50%;">2</div>
+                    <!-- Position 3: Forces -->
+                    <div class="marker" data-target="comp-forces" style="left: 37%; top: 72%;">3</div>
+                    <!-- Position 4: Bulk -->
+                    <div class="marker" data-target="comp-bulk" style="left: 30%; top: 70%;">4</div>
+                </div>
+
+                <!-- Legend List (Normal Flow) -->
+                <ul class="legend-list">
+                    <li class="legend-item" id="comp-vapor">
+                        <div class="legend-num">1</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Water Vapor (Gas)</span>
+                            <span class="legend-desc">Escaped molecules floating freely in the air.</span>
+                        </div>
+                    </li>
+                    <li class="legend-item" id="comp-surface">
+                        <div class="legend-num">2</div>
+                        <div class="legend-text">
+                            <span class="legend-title">High-Energy Surface Molecule</span>
+                            <span class="legend-desc">Absorbed enough heat to vibrate violently and break bonds.</span>
+                        </div>
+                    </li>
+                    <li class="legend-item" id="comp-forces">
+                        <div class="legend-num">3</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Intermolecular Forces</span>
+                            <span class="legend-desc">The invisible "glue" holding liquid molecules together.</span>
+                        </div>
+                    </li>
+                    <li class="legend-item" id="comp-bulk">
+                        <div class="legend-num">4</div>
+                        <div class="legend-text">
+                            <span class="legend-title">Bulk Liquid Molecules</span>
+                            <span class="legend-desc">Lower average energy, securely bonded to neighbors.</span>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </section>
+
+        <!-- 4. WORKING PROCESS (The Mechanism) -->
+        <section class="section">
+            <h2>The Escape Mechanism</h2>
+            <p>Evaporation is a linear sequence occurring at the microscopic level. Watch how a single molecule transitions from liquid to gas.</p>
+            
+            <div class="process-container">
+                <div class="process-visual">
+                    <canvas id="processCanvas"></canvas>
+                    <div class="process-ui">
+                        <div class="stage-info">
+                            <h3 class="stage-title" id="procTitle">1. Liquid State</h3>
+                            <p class="stage-caption" id="procCaption">Molecules move randomly, bound together by intermolecular forces.</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="process-controls">
+                    <div class="progress-dots" id="procDots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="control-btn" id="btnProcPrev">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                        </button>
+                        <button class="control-btn primary" id="btnProcPlay">
+                            Auto-Play
+                        </button>
+                        <button class="control-btn" id="btnProcNext">
+                            Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. INTERACTIVE SIMULATION -->
+        <section class="section">
+            <h2>Interactive Laboratory</h2>
+            <p>Control environmental factors to see how they affect the rate of evaporation.</p>
+            
+            <div class="sim-grid">
+                <!-- Canvas Area -->
+                <div class="sim-view">
+                    <canvas id="simCanvas"></canvas>
+                    
+                    <!-- Realtime Data Overlay -->
+                    <div class="sim-overlay-data">
+                        <div class="data-row">
+                            <span class="data-label">Evaporation Rate:</span>
+                            <span class="data-value" id="lblRate">Low</span>
+                        </div>
+                        <div class="data-row">
+                            <span class="data-label">Vapor Particles:</span>
+                            <span class="data-value" id="lblVaporCount">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls Area -->
+                <div class="glass-card sim-controls">
+                    <h3>Environment Controls</h3>
+                    
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span class="control-label">Temperature (Heat)</span>
+                            <span class="control-val-display" id="valTemp">20°C</span>
+                        </div>
+                        <input type="range" id="tempSlider" min="0" max="100" value="20">
+                        <p style="font-size: 0.8rem; margin: 0; color: #777;">Higher heat provides kinetic energy to break bonds.</p>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span class="control-label">Surface Area</span>
+                            <span class="control-val-display" id="valArea">Normal</span>
+                        </div>
+                        <input type="range" id="areaSlider" min="50" max="150" value="100">
+                        <p style="font-size: 0.8rem; margin: 0; color: #777;">Wider container exposes more molecules to the air.</p>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span class="control-label">Wind Speed</span>
+                            <span class="control-val-display" id="valWind">Calm</span>
+                        </div>
+                        <input type="range" id="windSlider" min="0" max="100" value="0">
+                        <p style="font-size: 0.8rem; margin: 0; color: #777;">Sweeps vapor away, preventing air saturation.</p>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span class="control-label">Humidity</span>
+                            <span class="control-val-display" id="valHumid">40%</span>
+                        </div>
+                        <input type="range" id="humidSlider" min="0" max="100" value="40">
+                        <p style="font-size: 0.8rem; margin: 0; color: #777;">High humidity pushes vapor back into the liquid.</p>
+                    </div>
+                    
+                    <button class="control-btn" id="btnResetSim" style="margin-top: 1rem; justify-content: center;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Reset Simulation
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. APPLICATIONS -->
+        <section class="section">
+            <h2>Real-World Applications</h2>
+            <div class="grid-3">
+                <div class="glass-card icon-card">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <h3>Sweating (Cooling)</h3>
+                    <p>When sweat evaporates from your skin, it takes thermal energy (heat) with it, effectively lowering your body temperature.</p>
+                </div>
+                <div class="glass-card icon-card">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242M12 12v9M8 17l4 4 4-4"/></svg>
+                    </div>
+                    <h3>The Water Cycle</h3>
+                    <p>Oceans and lakes evaporate continuously. This invisible vapor rises, cools, condenses into clouds, and returns as rain.</p>
+                </div>
+                <div class="glass-card icon-card">
+                    <div class="card-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 2v20M5 10h14M5 14h14"/></svg>
+                    </div>
+                    <h3>Drying Clothes</h3>
+                    <p>Hanging clothes on a line uses wind to sweep away humid air and solar heat to increase molecule energy, speeding up evaporation.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 7 & 8. FACTS AND MISTAKES -->
+        <section class="section">
+            <div class="grid-3" style="grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));">
+                
+                <div class="glass-card">
+                    <h2>Interesting Fact</h2>
+                    <h3 style="color: var(--accent-orange);">Evaporative Cooling</h3>
+                    <p>Evaporation is inherently a cooling process. Because only the highest-energy (hottest) molecules manage to escape the liquid, the average energy of the molecules left behind decreases. This makes the remaining liquid physically colder!</p>
+                </div>
+
+                <div class="glass-card mistake-card">
+                    <h2>Common Mistake</h2>
+                    <h3 class="mistake-title">"Water only turns to gas at 100°C"</h3>
+                    <p>Many confuse boiling with evaporation.</p>
+                    <span class="correction">Correction: Boiling happens at the boiling point (100°C for water) throughout the liquid. Evaporation happens only at the surface, and occurs at ANY temperature above freezing. Puddles dry up on a 15°C day!</span>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- 9. REVISION -->
+        <section class="section">
+            <div class="glass-card">
+                <h2>Quick Revision</h2>
+                <ul class="revision-list">
+                    <li><span class="highlight">Definition:</span> Liquid turning to gas at the surface below boiling point.</li>
+                    <li><span class="highlight">Mechanism:</span> High-energy molecules overcome intermolecular forces and escape into the air.</li>
+                    <li><span class="highlight">Rate increases with:</span> Higher Temperature, larger Surface Area, higher Wind Speed.</li>
+                    <li><span class="highlight">Rate decreases with:</span> Higher ambient Humidity (air is already full of water vapor).</li>
+                    <li><span class="highlight">Result:</span> Causes cooling of the remaining liquid body.</li>
+                </ul>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ==========================================================================
+         JAVASCRIPT
+         ========================================================================== -->
+    <script>
+        /**
+         * UTILITY: Responsive Canvas Sizing
+         */
+        function resizeCanvas(canvas, containerElement) {
+            const rect = containerElement.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            return { width: rect.width, height: rect.height };
+        }
+
+        /**
+         * 1. BACKGROUND PARTICLES ANIMATION
+         */
+        function initBgParticles() {
+            const container = document.getElementById('bgParticles');
+            const count = 30;
+            for(let i=0; i<count; i++) {
+                let p = document.createElement('div');
+                p.className = 'particle';
+                let size = Math.random() * 60 + 20;
+                p.style.width = size + 'px';
+                p.style.height = size + 'px';
+                p.style.left = Math.random() * 100 + '%';
+                p.style.top = (Math.random() * 50 + 50) + '%';
+                p.style.animationDuration = (Math.random() * 10 + 5) + 's';
+                p.style.animationDelay = (Math.random() * 5) + 's';
+                container.appendChild(p);
+            }
+        }
+        initBgParticles();
+
+        /**
+         * 2. DIAGRAM LABELS INTERACTION (Legend Pattern)
+         */
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function highlightDiagramElement(id) {
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            if(id) {
+                const marker = document.querySelector(`.marker[data-target="${id}"]`);
+                const legend = document.getElementById(id);
+                if(marker) marker.classList.add('active');
+                if(legend) legend.classList.add('active');
+            }
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => highlightDiagramElement(marker.dataset.target));
+            marker.addEventListener('touchstart', (e) => { e.preventDefault(); highlightDiagramElement(marker.dataset.target); });
+        });
+        
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => highlightDiagramElement(item.id));
+            item.addEventListener('touchstart', (e) => { e.preventDefault(); highlightDiagramElement(item.id); });
+        });
+
+        document.querySelector('.diagram-container').addEventListener('mouseleave', () => highlightDiagramElement(null));
+
+
+        /**
+         * 3. WORKING PROCESS SIMULATION (Stages)
+         */
+        const procCanvas = document.getElementById('processCanvas');
+        const procCtx = procCanvas.getContext('2d');
+        const procContainer = document.querySelector('.process-visual');
+        let procDim = { width: 0, height: 0 };
+        
+        // Stages Data
+        const stages = [
+            { title: "1. Liquid State", caption: "Molecules in the bulk liquid vibrate and move, held together by intermolecular bonds." },
+            { title: "2. Heat Absorption", caption: "Energy (heat) enters. Molecules vibrate faster, increasing their kinetic energy." },
+            { title: "3. Surface Migration", caption: "High-energy molecules make their way to the surface layer." },
+            { title: "4. Breaking Bonds", caption: "A molecule gains enough energy to overcome the downward pull of its neighbors." },
+            { title: "5. The Escape (Vapor)", caption: "The molecule breaks free into the air. The average energy of remaining liquid drops (cooling)." }
+        ];
+
+        let currentStage = 0;
+        let procAutoPlay = false;
+        let procAnimFrame;
+        let processMolecules = [];
+        let heroMolecule = null; // The one that escapes
+        let procTime = 0;
+
+        class ProcMolecule {
+            constructor(x, y, isHero) {
+                this.x = x; this.baseY = y; this.y = y;
+                this.isHero = isHero;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = (Math.random() - 0.5) * 2;
+                this.energy = 0; // 0 to 1
+                this.escaped = false;
+            }
+            update(stage) {
+                // Base jiggle
+                let speedMult = 1 + (stage >= 1 ? 2 : 0);
+                this.x += this.vx * speedMult + (Math.random()-0.5);
+                this.y += this.vy * speedMult + (Math.random()-0.5);
+
+                // Containment (Spring back to base)
+                this.x += (procDim.width/2 + (this.isHero ? 0 : (Math.random()*100 - 50)) - this.x) * 0.05;
+                
+                if(!this.escaped) {
+                    let targetY = this.baseY;
+                    if (this.isHero) {
+                        if (stage === 2) targetY = procDim.height * 0.4; // Move to surface
+                        if (stage === 3) targetY = procDim.height * 0.35; // Straining
+                    }
+                    this.y += (targetY - this.y) * 0.1;
+                }
+
+                if (this.isHero && stage === 4 && !this.escaped) {
+                    this.vy = -5; // Shoot up
+                    this.escaped = true;
+                }
+                
+                if (this.escaped) {
+                    this.y += this.vy;
+                }
+
+                // Energy/Color logic
+                if (stage >= 1 && this.isHero) this.energy = Math.min(1, this.energy + 0.05);
+                else if (stage >= 1) this.energy = Math.min(0.5, this.energy + 0.01);
+                
+                if (stage === 4 && !this.isHero) this.energy = Math.max(0, this.energy - 0.02); // Cooling
+            }
+            draw(ctx) {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, 12, 0, Math.PI*2);
+                
+                // Color interpolation: Blue -> Orange -> White
+                let r, g, b;
+                if (this.energy < 0.5) {
+                    // Blue to Orange
+                    let t = this.energy * 2;
+                    r = 58 + t * (255 - 58);
+                    g = 134 + t * (144 - 134);
+                    b = 255 + t * (0 - 255);
+                } else {
+                    // Orange to White
+                    let t = (this.energy - 0.5) * 2;
+                    r = 255;
+                    g = 144 + t * (255 - 144);
+                    b = 0 + t * (255 - 0);
+                }
+                
+                ctx.fillStyle = `rgb(${r},${g},${b})`;
+                ctx.fill();
+                
+                if (this.isHero) {
+                    ctx.shadowColor = `rgb(${r},${g},${b})`;
+                    ctx.shadowBlur = 15;
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.shadowBlur = 0;
+                }
+            }
+        }
+
+        function initProcessSim() {
+            procDim = resizeCanvas(procCanvas, procContainer);
+            processMolecules = [];
+            // Create bulk
+            for(let i=0; i<15; i++) {
+                processMolecules.push(new ProcMolecule(
+                    procDim.width/2 + (Math.random()*150 - 75),
+                    procDim.height * 0.7 + (Math.random()*60 - 30),
+                    false
+                ));
+            }
+            // Create Hero (starts in bulk)
+            heroMolecule = new ProcMolecule(procDim.width/2, procDim.height * 0.65, true);
+            processMolecules.push(heroMolecule);
+        }
+
+        function drawProcessLinks(ctx, stage) {
+            if (stage >= 4) return; // Bonds break
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
+            ctx.lineWidth = 2;
+            
+            let stretch = stage === 3 ? 1 : 0; // Simulate stretching
+
+            processMolecules.forEach((m1, i) => {
+                processMolecules.forEach((m2, j) => {
+                    if (i < j) {
+                        let d = Math.hypot(m1.x - m2.x, m1.y - m2.y);
+                        if (d < 80 + (m1.isHero || m2.isHero ? stretch * 50 : 0)) {
+                            ctx.beginPath();
+                            ctx.moveTo(m1.x, m1.y);
+                            // Squiggly line if stretching
+                            if (stretch && (m1.isHero || m2.isHero)) {
+                                ctx.lineTo(m1.x + (m2.x-m1.x)/2 + Math.sin(procTime*0.5)*10, m1.y + (m2.y-m1.y)/2);
+                                ctx.strokeStyle = 'rgba(255, 144, 0, 0.5)'; // Hot bond
+                            } else {
+                                ctx.strokeStyle = 'rgba(0, 240, 255, 0.3)';
+                            }
+                            ctx.lineTo(m2.x, m2.y);
+                            ctx.stroke();
+                        }
+                    }
+                });
+            });
+        }
+
+        function renderProcess() {
+            procCtx.clearRect(0, 0, procDim.width, procDim.height);
+            procTime++;
+
+            // Draw Water body
+            let waterLevel = procDim.height * 0.45;
+            procCtx.fillStyle = 'rgba(11, 30, 80, 0.5)';
+            procCtx.fillRect(0, waterLevel, procDim.width, procDim.height - waterLevel);
+            procCtx.beginPath();
+            procCtx.moveTo(0, waterLevel);
+            // Wave effect
+            for(let x=0; x<procDim.width; x+=10) {
+                procCtx.lineTo(x, waterLevel + Math.sin(x*0.02 + procTime*0.05)*5);
+            }
+            procCtx.lineTo(procDim.width, procDim.height);
+            procCtx.lineTo(0, procDim.height);
+            procCtx.fill();
+            procCtx.strokeStyle = 'rgba(0, 240, 255, 0.5)';
+            procCtx.stroke();
+
+            // Heat waves
+            if (currentStage >= 1 && currentStage < 4) {
+                procCtx.fillStyle = 'rgba(255, 144, 0, 0.1)';
+                procCtx.fillRect(0, procDim.height-50, procDim.width, 50);
+                for(let i=0; i<5; i++) {
+                    procCtx.fillStyle = `rgba(255, 144, 0, ${Math.random()*0.3})`;
+                    procCtx.beginPath();
+                    procCtx.arc(procDim.width/2 + Math.sin(procTime*0.1 + i)*100, procDim.height - Math.random()*100, Math.random()*20, 0, Math.PI*2);
+                    procCtx.fill();
+                }
+            }
+
+            drawProcessLinks(procCtx, currentStage);
+
+            processMolecules.forEach(m => {
+                m.update(currentStage);
+                m.draw(procCtx);
+            });
+
+            procAnimFrame = requestAnimationFrame(renderProcess);
+        }
+
+        function updateProcessUI() {
+            document.getElementById('procTitle').innerText = stages[currentStage].title;
+            document.getElementById('procCaption').innerText = stages[currentStage].caption;
+            
+            const dots = document.querySelectorAll('#procDots .dot');
+            dots.forEach((dot, index) => {
+                dot.className = 'dot' + (index === currentStage ? ' active' : '');
+            });
+
+            if(currentStage === 0) initProcessSim(); // Reset positions if back to start
+        }
+
+        function setProcessStage(s) {
+            currentStage = Math.max(0, Math.min(s, stages.length - 1));
+            updateProcessUI();
+        }
+
+        document.getElementById('btnProcPrev').addEventListener('click', () => { procAutoPlay = false; setProcessStage(currentStage - 1); });
+        document.getElementById('btnProcNext').addEventListener('click', () => { procAutoPlay = false; setProcessStage(currentStage + 1); });
+        document.getElementById('btnProcPlay').addEventListener('click', (e) => {
+            procAutoPlay = !procAutoPlay;
+            e.target.style.background = procAutoPlay ? '#fff' : 'var(--accent-cyan)';
+            if(procAutoPlay && currentStage === stages.length - 1) setProcessStage(0);
+        });
+
+        setInterval(() => {
+            if(procAutoPlay) {
+                if(currentStage < stages.length - 1) setProcessStage(currentStage + 1);
+                else setProcessStage(0);
+            }
+        }, 3000);
+
+        window.addEventListener('resize', () => { procDim = resizeCanvas(procCanvas, procContainer); });
+        initProcessSim();
+        updateProcessUI();
+        renderProcess();
+
+
+        /**
+         * 4. MAIN INTERACTIVE SIMULATION
+         */
+        const simCanvas = document.getElementById('simCanvas');
+        const simCtx = simCanvas.getContext('2d');
+        const simContainer = document.querySelector('.sim-view');
+        let simDim = { width: 0, height: 0 };
+        
+        // Sim State
+        let config = {
+            temp: 20,    // 0-100
+            area: 100,   // 50-150 (Container width)
+            wind: 0,     // 0-100
+            humid: 40    // 0-100
+        };
+
+        let simParticles = [];
+        let waterLevel = 0.6; // 60% full
+        let vaporCountDisplay = 0;
+        let simTime = 0;
+
+        class Particle {
+            constructor(x, y, isVapor) {
+                this.x = x;
+                this.y = y;
+                this.isVapor = isVapor;
+                this.vx = (Math.random() - 0.5);
+                this.vy = isVapor ? -Math.random()*2 - 1 : (Math.random() - 0.5);
+                this.life = 1.0; // For vapor fading
+            }
+
+            update(waterY, containerLeft, containerRight) {
+                // Base speed determined by temperature
+                let speedMod = 0.5 + (config.temp / 100) * 2;
+
+                if (!this.isVapor) {
+                    // Liquid behavior
+                    this.x += this.vx * speedMod;
+                    this.y += this.vy * speedMod;
+                    
+                    // Bounce off walls and bottom
+                    if (this.x < containerLeft) { this.x = containerLeft; this.vx *= -1; }
+                    if (this.x > containerRight) { this.x = containerRight; this.vx *= -1; }
+                    if (this.y > simDim.height) { this.y = simDim.height; this.vy *= -1; }
+                    
+                    // Surface interaction
+                    if (this.y < waterY + 5) {
+                        this.y = waterY + 5;
+                        // Evaporation chance (Temp increases chance, Humidity decreases it)
+                        let evapChance = (config.temp * 0.0005) * (1 - config.humid/200);
+                        if (Math.random() < evapChance) {
+                            this.isVapor = true;
+                            this.vy = -Math.random()*2 - 1 - (config.temp/100);
+                        } else {
+                            this.vy *= -1; // Bounce back down
+                        }
+                    }
+                } else {
+                    // Vapor behavior
+                    this.x += this.vx + (config.wind / 100) * 5; // Wind effect
+                    this.y += this.vy;
+                    
+                    // Float up slightly faster with heat
+                    this.vy -= (config.temp / 1000); 
+
+                    // Condensation chance based on humidity
+                    if (this.y > waterY - 50 && Math.random() < (config.humid * 0.0001)) {
+                        this.isVapor = false;
+                        this.vy = Math.abs(this.vy); // Fall down
+                    }
+
+                    // Fade out
+                    if (this.y < -50 || this.x > simDim.width + 50) {
+                        this.life = 0;
+                    }
+                }
+            }
+
+            draw(ctx) {
+                ctx.beginPath();
+                if (this.isVapor) {
+                    ctx.arc(this.x, this.y, 3, 0, Math.PI*2);
+                    ctx.fillStyle = `rgba(150, 240, 255, ${this.life * 0.6})`;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#00f0ff';
+                } else {
+                    ctx.arc(this.x, this.y, 4, 0, Math.PI*2);
+                    // Color based on temp
+                    let r = Math.floor(58 + (config.temp/100)*197);
+                    let g = Math.floor(134 + (config.temp/100)*10);
+                    let b = Math.floor(255 - (config.temp/100)*255);
+                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    ctx.shadowBlur = 0;
+                }
+                ctx.fill();
+            }
+        }
+
+        function populateLiquid() {
+            simParticles = [];
+            const containerWidth = simDim.width * (config.area / 200); // area max 150 -> 75% of screen
+            const containerLeft = (simDim.width - containerWidth) / 2;
+            const waterY = simDim.height * (1 - waterLevel);
+            
+            // Generate initial particles based on volume
+            let particleCount = Math.floor(config.area * waterLevel * 3);
+            
+            for(let i=0; i<particleCount; i++) {
+                simParticles.push(new Particle(
+                    containerLeft + Math.random() * containerWidth,
+                    waterY + Math.random() * (simDim.height - waterY),
+                    false
+                ));
+            }
+        }
+
+        function renderSim() {
+            simCtx.clearRect(0, 0, simDim.width, simDim.height);
+            simTime++;
+            
+            simCtx.globalCompositeOperation = 'source-over';
+
+            // Draw Environment
+            
+            // Heat Source (Bottom Glow)
+            if (config.temp > 20) {
+                let heatAlpha = (config.temp - 20) / 80 * 0.3;
+                let grd = simCtx.createLinearGradient(0, simDim.height, 0, simDim.height - 100);
+                grd.addColorStop(0, `rgba(255, 144, 0, ${heatAlpha})`);
+                grd.addColorStop(1, 'transparent');
+                simCtx.fillStyle = grd;
+                simCtx.fillRect(0, 0, simDim.width, simDim.height);
+            }
+
+            // Wind Lines
+            if (config.wind > 0) {
+                simCtx.strokeStyle = `rgba(255, 255, 255, ${config.wind/400})`;
+                simCtx.lineWidth = 2;
+                for(let i=0; i<5; i++) {
+                    let y = (simTime * 2 + i*50) % (simDim.height * 0.5);
+                    let xOffset = (simTime * config.wind * 0.1) % simDim.width;
+                    simCtx.beginPath();
+                    simCtx.moveTo(xOffset, y);
+                    simCtx.lineTo(xOffset + config.wind, y);
+                    simCtx.stroke();
+                }
+            }
+
+            // Humidity Haze (Top)
+            if (config.humid > 0) {
+                 let humAlpha = (config.humid / 100) * 0.2;
+                 simCtx.fillStyle = `rgba(150, 150, 150, ${humAlpha})`;
+                 simCtx.fillRect(0, 0, simDim.width, simDim.height * 0.3);
+            }
+
+            // Container Math
+            const containerWidth = simDim.width * (config.area / 200);
+            const containerLeft = (simDim.width - containerWidth) / 2;
+            const containerRight = containerLeft + containerWidth;
+            const waterY = simDim.height * (1 - waterLevel);
+
+            // Draw Beaker/Container
+            simCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+            simCtx.lineWidth = 4;
+            simCtx.beginPath();
+            simCtx.moveTo(containerLeft, 50);
+            simCtx.lineTo(containerLeft, simDim.height);
+            simCtx.lineTo(containerRight, simDim.height);
+            simCtx.lineTo(containerRight, 50);
+            simCtx.stroke();
+
+            // Draw Water Mass (Behind particles)
+            let waterColor = `rgba(${58 + (config.temp/100)*100}, ${134}, ${255 - (config.temp/100)*100}, 0.3)`;
+            simCtx.fillStyle = waterColor;
+            simCtx.fillRect(containerLeft, waterY, containerWidth, simDim.height - waterY);
+            
+            // Surface line
+            simCtx.strokeStyle = `rgba(0, 240, 255, 0.8)`;
+            simCtx.lineWidth = 2;
+            simCtx.beginPath();
+            simCtx.moveTo(containerLeft, waterY);
+            for(let x=containerLeft; x<=containerRight; x+=10) {
+                // Boiling effect at high temp
+                let boil = config.temp > 80 ? Math.random()*5 : 0;
+                simCtx.lineTo(x, waterY + Math.sin(x*0.05 + simTime*0.1)*3 - boil);
+            }
+            simCtx.stroke();
+
+            // Particles Update & Draw
+            let currentVapor = 0;
+            simCtx.globalCompositeOperation = 'screen';
+            
+            for (let i = simParticles.length - 1; i >= 0; i--) {
+                let p = simParticles[i];
+                p.update(waterY, containerLeft, containerRight);
+                
+                if (p.life <= 0) {
+                    simParticles.splice(i, 1);
+                    // Deduct from water level very slightly when completely gone
+                    waterLevel -= 0.0001; 
+                } else {
+                    p.draw(simCtx);
+                    if (p.isVapor) currentVapor++;
+                }
+            }
+
+            // UI Updates
+            vaporCountDisplay += (currentVapor - vaporCountDisplay) * 0.1; // Smooth counter
+            document.getElementById('lblVaporCount').innerText = Math.round(vaporCountDisplay);
+            
+            let rateCalc = (config.temp * 0.5) + (config.area * 0.2) + (config.wind * 0.3) - (config.humid * 0.2);
+            let rateText = "Low";
+            if (rateCalc > 80) rateText = "Very High";
+            else if (rateCalc > 50) rateText = "High";
+            else if (rateCalc > 30) rateText = "Moderate";
+            document.getElementById('lblRate').innerText = rateText;
+
+            // Ensure water doesn't go negative
+            if (waterLevel < 0.05) waterLevel = 0.05;
+
+            requestAnimationFrame(renderSim);
+        }
+
+        // Sim Event Listeners
+        function updateConfig() {
+            config.temp = parseInt(document.getElementById('tempSlider').value);
+            config.area = parseInt(document.getElementById('areaSlider').value);
+            config.wind = parseInt(document.getElementById('windSlider').value);
+            config.humid = parseInt(document.getElementById('humidSlider').value);
+
+            document.getElementById('valTemp').innerText = config.temp + '°C';
+            
+            let areaText = "Normal";
+            if(config.area < 80) areaText = "Narrow";
+            if(config.area > 120) areaText = "Wide";
+            document.getElementById('valArea').innerText = areaText;
+
+            document.getElementById('valWind').innerText = config.wind + ' km/h';
+            document.getElementById('valHumid').innerText = config.humid + '%';
+        }
+
+        ['tempSlider', 'areaSlider', 'windSlider', 'humidSlider'].forEach(id => {
+            let el = document.getElementById(id);
+            el.addEventListener('input', updateConfig);
+            // Handle touch explicitly for better mobile UX
+            el.addEventListener('touchmove', updateConfig, {passive: true});
+        });
+
+        document.getElementById('btnResetSim').addEventListener('click', () => {
+            document.getElementById('tempSlider').value = 20;
+            document.getElementById('areaSlider').value = 100;
+            document.getElementById('windSlider').value = 0;
+            document.getElementById('humidSlider').value = 40;
+            updateConfig();
+            waterLevel = 0.6;
+            populateLiquid();
+        });
+
+        window.addEventListener('resize', () => { 
+            simDim = resizeCanvas(simCanvas, simContainer); 
+            populateLiquid(); // Repopulate on resize to fit new width
+        });
+        
+        // Init Main Sim
+        simDim = resizeCanvas(simCanvas, simContainer);
+        populateLiquid();
+        updateConfig();
+        renderSim();
+
+    </script>
+</body>
+</html>

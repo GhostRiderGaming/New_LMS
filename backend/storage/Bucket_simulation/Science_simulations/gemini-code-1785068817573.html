@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Isotopes & Isobars Explorer</title>
+    <style>
+        /* ==========================================================================
+           BASE VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            --bg-deep: #030712;
+            --bg-glow: #0f172a;
+            
+            --glass-bg: rgba(15, 23, 42, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            --proton-core: #ff2a5f;
+            --proton-glow: rgba(255, 42, 95, 0.6);
+            --neutron-core: #06b6d4;
+            --neutron-glow: rgba(6, 182, 212, 0.6);
+            --electron-core: #fde047;
+            
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #8b5cf6;
+            
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            --border-radius-lg: 24px;
+            --border-radius-md: 16px;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            font-size: clamp(14px, 1.5vw, 16px);
+        }
+
+        /* Ambient Background Canvas */
+        #ambient-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* ==========================================================================
+           TYPOGRAPHY & LAYOUT
+           ========================================================================== */
+        h1 { font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(1.8rem, 3.5vw, 2.5rem); font-weight: 700; margin-bottom: 1rem; color: var(--text-main); }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; margin-bottom: 0.5rem; }
+        p { color: var(--text-muted); margin-bottom: 1rem; }
+        
+        .highlight-proton { color: #ff4d79; font-weight: 600; text-shadow: 0 0 10px rgba(255, 42, 95, 0.4); }
+        .highlight-neutron { color: #22d3ee; font-weight: 600; text-shadow: 0 0 10px rgba(6, 182, 212, 0.4); }
+        .highlight-mass { color: #c084fc; font-weight: 600; }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(20px, 4vw, 60px) clamp(16px, 4vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 100px);
+        }
+
+        /* ==========================================================================
+           UI COMPONENTS (GLASSMORPHISM)
+           ========================================================================== */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius-lg);
+            box-shadow: var(--glass-shadow);
+            padding: clamp(20px, 4vw, 40px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Subtle inner glow */
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: rgba(139, 92, 246, 0.2);
+            color: #c084fc;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            text-align: center;
+            min-height: 70vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        
+        .hero-title-wrapper {
+            background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(1.1rem, 2vw, 1.4rem);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* ==========================================================================
+           COMPONENTS SECTION & LEGEND (STRICT RULE IMPLEMENTATION)
+           ========================================================================== */
+        .components-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            align-items: center;
+        }
+        @media (min-width: 1024px) {
+            .components-layout { grid-template-columns: 1.5fr 1fr; }
+        }
+
+        .visual-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            aspect-ratio: 1/1;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.03) 0%, transparent 70%);
+            border-radius: var(--border-radius-md);
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .visual-container canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Numbered Markers */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            transition: var(--transition-smooth);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            z-index: 10;
+        }
+
+        .marker[data-target="proton"] { border-color: var(--proton-core); box-shadow: 0 0 15px var(--proton-glow); }
+        .marker[data-target="neutron"] { border-color: var(--neutron-core); box-shadow: 0 0 15px var(--neutron-glow); }
+        .marker[data-target="electron"] { border-color: var(--electron-core); box-shadow: 0 0 10px rgba(253, 224, 71, 0.5); }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 12px 16px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(5px);
+        }
+        
+        .legend-item.active[data-target="proton"] { border-color: var(--proton-core); background: rgba(255, 42, 95, 0.1); }
+        .legend-item.active[data-target="neutron"] { border-color: var(--neutron-core); background: rgba(6, 182, 212, 0.1); }
+        .legend-item.active[data-target="electron"] { border-color: var(--electron-core); background: rgba(253, 224, 71, 0.1); }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+            flex-shrink: 0;
+        }
+        
+        .legend-item[data-target="proton"] .legend-badge { background: var(--proton-core); box-shadow: 0 0 10px var(--proton-glow); }
+        .legend-item[data-target="neutron"] .legend-badge { background: var(--neutron-core); box-shadow: 0 0 10px var(--neutron-glow); }
+        .legend-item[data-target="electron"] .legend-badge { background: var(--electron-core); color: #000; }
+
+        .legend-content h4 { font-size: 1.1rem; color: #fff; margin-bottom: 2px; }
+        .legend-content p { font-size: 0.9rem; margin: 0; color: var(--text-muted); }
+
+        /* ==========================================================================
+           OVERVIEW (COMPARISON)
+           ========================================================================== */
+        .comparison-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        @media (min-width: 768px) {
+            .comparison-grid { grid-template-columns: 1fr 1fr; }
+        }
+
+        .compare-card {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius-md);
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .compare-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+        }
+        .compare-card.isotope::before { background: linear-gradient(90deg, var(--proton-core), var(--accent)); }
+        .compare-card.isobar::before { background: linear-gradient(90deg, var(--neutron-core), var(--accent)); }
+
+        .concept-visual {
+            height: 150px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            gap: 20px;
+        }
+        
+        .element-box {
+            width: 80px;
+            height: 90px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background: rgba(255,255,255,0.05);
+        }
+        .elem-mass { position: absolute; top: 5px; left: 8px; font-size: 0.9rem; font-weight: bold; color: #c084fc; }
+        .elem-atomic { position: absolute; bottom: 5px; left: 8px; font-size: 0.9rem; color: #ff4d79; }
+        .elem-sym { font-size: 2rem; font-weight: 800; color: #fff; line-height: 1; }
+
+        .scale-balance {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* ==========================================================================
+           WORKING PROCESS (CLASSIFICATION ENGINE)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .working-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .working-controls {
+            display: flex;
+            gap: 10px;
+            background: rgba(0,0,0,0.3);
+            padding: 6px;
+            border-radius: 30px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .btn-control {
+            background: transparent;
+            border: none;
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: var(--transition-smooth);
+        }
+        .btn-control:hover { background: rgba(255,255,255,0.1); }
+        .btn-control.play-active { background: rgba(139, 92, 246, 0.4); box-shadow: 0 0 15px rgba(139, 92, 246, 0.4); }
+        .btn-control svg { width: 20px; height: 20px; fill: currentColor; }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            margin: 10px 0;
+            overflow: hidden;
+            display: flex;
+        }
+        .progress-segment {
+            flex: 1;
+            height: 100%;
+            border-right: 1px solid var(--bg-deep);
+            background: transparent;
+            transition: background 0.3s;
+        }
+        .progress-segment.active { background: var(--accent); }
+        .progress-segment.completed { background: rgba(139, 92, 246, 0.5); }
+
+        .working-stage-info {
+            text-align: center;
+            min-height: 80px;
+        }
+        .stage-title { font-size: 1.2rem; font-weight: bold; color: #fff; margin-bottom: 5px; }
+        .stage-caption { color: var(--text-muted); font-size: 1rem; }
+
+        .working-visual {
+            width: 100%;
+            height: clamp(250px, 40vw, 400px);
+            background: radial-gradient(ellipse at center, rgba(139, 92, 246, 0.1) 0%, transparent 70%);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            border-radius: var(--border-radius-md);
+            position: relative;
+        }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATOR
+           ========================================================================== */
+        .simulator-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+        @media (min-width: 1024px) {
+            .simulator-layout { grid-template-columns: 3fr 1fr; }
+        }
+
+        .sim-visual-area {
+            position: relative;
+            height: clamp(300px, 50vw, 500px);
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--border-radius-md);
+            border: 1px inset rgba(255,255,255,0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sim-canvases {
+            display: flex;
+            flex: 1;
+            width: 100%;
+        }
+        .sim-canvas-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-right: 1px dashed rgba(255,255,255,0.1);
+        }
+        .sim-canvas-wrapper:last-child { border: none; }
+        
+        .sim-atom-label {
+            position: absolute;
+            top: 20px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: rgba(255,255,255,0.2);
+            z-index: 1;
+        }
+
+        .sim-result-bar {
+            height: 60px;
+            background: rgba(255,255,255,0.02);
+            border-top: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            transition: var(--transition-smooth);
+        }
+        .result-isotope { color: var(--proton-core); text-shadow: 0 0 10px var(--proton-glow); background: rgba(255, 42, 95, 0.05); }
+        .result-isobar { color: var(--neutron-core); text-shadow: 0 0 10px var(--neutron-glow); background: rgba(6, 182, 212, 0.05); }
+        .result-none { color: var(--text-muted); }
+
+        .sim-controls-area {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .control-group {
+            background: rgba(255,255,255,0.03);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .control-group h4 { text-align: center; margin-bottom: 1rem; color: #fff; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;}
+
+        .slider-container {
+            margin-bottom: 1.2rem;
+        }
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            color: var(--text-muted);
+        }
+        .slider-val { font-weight: bold; color: #fff; }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+        
+        .slider-p::-webkit-slider-runnable-track { background: linear-gradient(90deg, rgba(255,42,95,0.2), var(--proton-core)); }
+        .slider-n::-webkit-slider-runnable-track { background: linear-gradient(90deg, rgba(6,182,212,0.2), var(--neutron-core)); }
+
+        .sim-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 1rem;
+            text-align: center;
+        }
+        .stat-box {
+            background: rgba(0,0,0,0.2);
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+        .stat-val { font-size: 1.2rem; font-weight: bold; color: #fff; }
+
+        /* ==========================================================================
+           INFO CARDS (APPLICATIONS & FACTS)
+           ========================================================================== */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--border-radius-md);
+            padding: 1.5rem;
+            transition: var(--transition-smooth);
+            position: relative;
+            overflow: hidden;
+        }
+        .info-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.05);
+            border-color: rgba(255,255,255,0.1);
+        }
+        
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+        }
+
+        /* Responsive Utilities */
+        @media (max-width: 767px) {
+            .glass-panel { padding: 20px 16px; }
+            .container { padding: 30px 16px; gap: 60px;}
+            .concept-visual { flex-direction: column; height: auto; gap: 10px; padding: 20px 0;}
+            .scale-balance { transform: rotate(90deg); } /* Adjust visual for stacking */
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient animated background -->
+    <canvas id="ambient-bg"></canvas>
+
+    <div class="container">
+        
+        <!-- HERO SECTION -->
+        <header class="hero">
+            <span class="badge">Interactive Physics Simulation</span>
+            <div class="hero-title-wrapper">
+                <h1>Isotopes & Isobars</h1>
+            </div>
+            <p class="hero-subtitle">Dive into the nucleus. Discover how varying proton and neutron counts define the fundamental building blocks of our universe.</p>
+        </header>
+
+        <!-- OVERVIEW SECTION -->
+        <section class="glass-panel" id="overview">
+            <h2>The Cosmic Identity Game</h2>
+            <p>Every atom in the universe is defined by what's inside its dense center: the nucleus. But what happens when we tweak the recipe? We get families of atoms that look similar but act differently.</p>
+            
+            <div class="comparison-grid">
+                <div class="compare-card isotope">
+                    <h3>Isotopes</h3>
+                    <p>Same element, different mass.</p>
+                    <div class="concept-visual">
+                        <div class="element-box">
+                            <span class="elem-mass">12</span>
+                            <span class="elem-sym">C</span>
+                            <span class="elem-atomic">6</span>
+                        </div>
+                        <div class="scale-balance">
+                            <svg viewBox="0 0 100 100" width="100%" height="100%">
+                                <path d="M10,50 L90,20 L50,90 Z" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+                                <circle cx="50" cy="90" r="4" fill="#fff"/>
+                                <line x1="10" y1="50" x2="10" y2="70" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-dasharray="2,2"/>
+                                <line x1="90" y1="20" x2="90" y2="40" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-dasharray="2,2"/>
+                            </svg>
+                        </div>
+                        <div class="element-box">
+                            <span class="elem-mass" style="color: #ff2a5f">14</span>
+                            <span class="elem-sym">C</span>
+                            <span class="elem-atomic">6</span>
+                        </div>
+                    </div>
+                    <p>Identical <span class="highlight-proton">Protons (6)</span>, varying <span class="highlight-neutron">Neutrons (6 vs 8)</span>. They share chemical properties but have different physical stability.</p>
+                </div>
+                
+                <div class="compare-card isobar">
+                    <h3>Isobars</h3>
+                    <p>Different elements, same mass.</p>
+                    <div class="concept-visual">
+                        <div class="element-box">
+                            <span class="elem-mass">40</span>
+                            <span class="elem-sym" style="font-size: 1.5rem">Ar</span>
+                            <span class="elem-atomic">18</span>
+                        </div>
+                        <div class="scale-balance">
+                            <svg viewBox="0 0 100 100" width="100%" height="100%">
+                                <line x1="10" y1="40" x2="90" y2="40" stroke="rgba(255,255,255,0.5)" stroke-width="3"/>
+                                <polygon points="50,40 40,70 60,70" fill="rgba(255,255,255,0.2)"/>
+                            </svg>
+                        </div>
+                        <div class="element-box">
+                            <span class="elem-mass">40</span>
+                            <span class="elem-sym" style="font-size: 1.5rem">Ca</span>
+                            <span class="elem-atomic" style="color: #22d3ee">20</span>
+                        </div>
+                    </div>
+                    <p>Different <span class="highlight-proton">Protons (18 vs 20)</span>, but their total <span class="highlight-mass">Mass Number (40)</span> is identical. Entirely different chemical properties.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- COMPONENTS SECTION (STRICT LABELS) -->
+        <section class="glass-panel" id="components">
+            <span class="badge">Anatomy of an Atom</span>
+            <h2>The Nuclear Components</h2>
+            <p>To understand isotopes and isobars, we must look at the subatomic particles. The core (nucleus) determines mass and identity.</p>
+            
+            <div class="components-layout">
+                <!-- Visual with Markers -->
+                <div class="visual-container" id="anatomy-container">
+                    <canvas id="anatomy-canvas"></canvas>
+                    
+                    <!-- Absolute markers positioned via JS relative to canvas center -->
+                    <div class="marker" data-target="proton" id="marker-p">1</div>
+                    <div class="marker" data-target="neutron" id="marker-n">2</div>
+                    <div class="marker" data-target="electron" id="marker-e">3</div>
+                </div>
+
+                <!-- Document Flow Legend -->
+                <div class="legend-list">
+                    <div class="legend-item" data-target="proton">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Proton (Z)</h4>
+                            <p>Positively charged. The number of protons determines the element's identity (Atomic Number).</p>
+                        </div>
+                    </div>
+                    
+                    <div class="legend-item" data-target="neutron">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4>Neutron (N)</h4>
+                            <p>Neutral charge. Adds mass. Changing this creates an Isotope.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="legend-item" data-target="electron">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4>Electron (e⁻)</h4>
+                            <p>Negatively charged. Orbits the nucleus. Defines chemical bonds, but negligible mass.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING PROCESS SECTION -->
+        <section class="glass-panel" id="working">
+            <span class="badge">Mechanism</span>
+            <div class="working-header">
+                <div>
+                    <h2>Classification Engine</h2>
+                    <p>How physicists determine if two unknown atoms are Isotopes, Isobars, or neither.</p>
+                </div>
+                <div class="working-controls">
+                    <button class="btn-control" id="btn-prev" title="Previous Stage">
+                        <svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+                    </button>
+                    <button class="btn-control" id="btn-play" title="Auto-Play Sequence">
+                        <svg viewBox="0 0 24 24" id="icon-play"><path d="M8 5v14l11-7z"/></svg>
+                        <svg viewBox="0 0 24 24" id="icon-pause" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    </button>
+                    <button class="btn-control" id="btn-next" title="Next Stage">
+                        <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="progress-bar" id="work-progress">
+                <div class="progress-segment"></div>
+                <div class="progress-segment"></div>
+                <div class="progress-segment"></div>
+                <div class="progress-segment"></div>
+            </div>
+
+            <div class="working-stage-info">
+                <div class="stage-title" id="stage-title">Stage 1: Atomic Input</div>
+                <div class="stage-caption" id="stage-caption">Two unknown atomic nuclei enter the analysis chamber.</div>
+            </div>
+
+            <div class="working-visual">
+                <canvas id="working-canvas"></canvas>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION -->
+        <section class="glass-panel" id="simulation">
+            <span class="badge">Interactive Lab</span>
+            <h2>Nucleus Builder</h2>
+            <p>Adjust protons and neutrons to build elements. Watch how the relationship between Atom A and Atom B changes dynamically.</p>
+            
+            <div class="simulator-layout">
+                <div class="sim-visual-area">
+                    <div class="sim-canvases">
+                        <div class="sim-canvas-wrapper">
+                            <div class="sim-atom-label">A</div>
+                            <canvas id="sim-canvas-A"></canvas>
+                        </div>
+                        <div class="sim-canvas-wrapper">
+                            <div class="sim-atom-label">B</div>
+                            <canvas id="sim-canvas-B"></canvas>
+                        </div>
+                    </div>
+                    <div class="sim-result-bar" id="sim-result">
+                        DIFFERENT ELEMENTS
+                    </div>
+                </div>
+
+                <div class="sim-controls-area">
+                    <!-- Controls A -->
+                    <div class="control-group">
+                        <h4>Atom A: <span id="name-A" style="color:var(--accent)">Carbon</span></h4>
+                        <div class="slider-container">
+                            <div class="slider-header">
+                                <span>Protons (Z)</span>
+                                <span class="slider-val highlight-proton" id="val-p-A">6</span>
+                            </div>
+                            <input type="range" class="slider-p" id="slider-p-A" min="1" max="10" value="6">
+                        </div>
+                        <div class="slider-container">
+                            <div class="slider-header">
+                                <span>Neutrons (N)</span>
+                                <span class="slider-val highlight-neutron" id="val-n-A">6</span>
+                            </div>
+                            <input type="range" class="slider-n" id="slider-n-A" min="0" max="12" value="6">
+                        </div>
+                        <div class="sim-stats">
+                            <div class="stat-box">Sym<br><span class="stat-val" id="sym-A">C</span></div>
+                            <div class="stat-box">Mass<br><span class="stat-val" id="mass-A" style="color:#c084fc">12</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Controls B -->
+                    <div class="control-group">
+                        <h4>Atom B: <span id="name-B" style="color:var(--accent)">Carbon</span></h4>
+                        <div class="slider-container">
+                            <div class="slider-header">
+                                <span>Protons (Z)</span>
+                                <span class="slider-val highlight-proton" id="val-p-B">6</span>
+                            </div>
+                            <input type="range" class="slider-p" id="slider-p-B" min="1" max="10" value="6">
+                        </div>
+                        <div class="slider-container">
+                            <div class="slider-header">
+                                <span>Neutrons (N)</span>
+                                <span class="slider-val highlight-neutron" id="val-n-B">8</span>
+                            </div>
+                            <input type="range" class="slider-n" id="slider-n-B" min="0" max="12" value="8">
+                        </div>
+                        <div class="sim-stats">
+                            <div class="stat-box">Sym<br><span class="stat-val" id="sym-B">C</span></div>
+                            <div class="stat-box">Mass<br><span class="stat-val" id="mass-B" style="color:#c084fc">14</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- FACTS & APPLICATIONS -->
+        <section class="glass-panel" id="facts">
+            <h2>Real-World Impact</h2>
+            <div class="cards-grid">
+                <div class="info-card">
+                    <div class="card-icon">🦴</div>
+                    <h3>Carbon Dating</h3>
+                    <p>Living things absorb Carbon-12 and Carbon-14 (isotopes). After death, unstable C-14 decays. By measuring the ratio, scientists can date ancient fossils.</p>
+                </div>
+                <div class="info-card">
+                    <div class="card-icon">🏥</div>
+                    <h3>Medical Tracers</h3>
+                    <p>Isotopes like Iodine-131 emit detectable radiation. Doctors inject them to image internal organs (like the thyroid) and target cancer cells precisely.</p>
+                </div>
+                <div class="info-card">
+                    <div class="card-icon">⚡</div>
+                    <h3>Beta Decay</h3>
+                    <p>Isobars often result from Beta decay. When a neutron in Carbon-14 turns into a proton, it becomes Nitrogen-14. Same mass, new element!</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        /**
+         * UTILITY: Canvas setup with High DPI support
+         */
+        function setupCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            
+            function resize() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                canvas.style.width = `${rect.width}px`;
+                canvas.style.height = `${rect.height}px`;
+                return { w: rect.width, h: rect.height };
+            }
+            
+            const dims = resize();
+            return { canvas, ctx, resize, w: dims.w, h: dims.h };
+        }
+
+        /**
+         * PHYSICS/DRAWING ENGINE: Nucleus rendering
+         * Generates a 3D-looking cluster of spheres
+         */
+        class AtomRenderer {
+            constructor() {
+                // Element data for small atomic numbers
+                this.elements = [
+                    "Neutronium", "Hydrogen", "Helium", "Lithium", "Beryllium", 
+                    "Boron", "Carbon", "Nitrogen", "Oxygen", "Fluorine", "Neon"
+                ];
+                this.symbols = ["n", "H", "He", "Li", "Be", "B", "C", "N", "O", "F", "Ne"];
+            }
+
+            // Pseudo-random but deterministic generation based on counts
+            generateNucleons(pCount, nCount, radiusScale) {
+                let nucleons = [];
+                const total = pCount + nCount;
+                // Seed based logic to keep shape consistent for same isotope
+                let seed = (pCount * 13) + (nCount * 7);
+                const random = () => {
+                    let x = Math.sin(seed++) * 10000;
+                    return x - Math.floor(x);
+                };
+
+                const sphereRadius = Math.max(4, 15 - Math.sqrt(total)); // Smaller as count grows
+                const clusterRadius = sphereRadius * Math.pow(total, 0.33) * radiusScale;
+
+                for (let i = 0; i < total; i++) {
+                    const isProton = i < pCount;
+                    // Spherical distribution mapped to 2D
+                    const theta = random() * Math.PI * 2;
+                    const phi = Math.acos(2 * random() - 1);
+                    const r = Math.pow(random(), 1/3) * clusterRadius;
+
+                    const x = r * Math.sin(phi) * Math.cos(theta);
+                    const y = r * Math.sin(phi) * Math.sin(theta);
+                    const z = r * Math.cos(phi); // Used for depth sorting
+
+                    nucleons.push({ x, y, z, isProton, r: sphereRadius });
+                }
+
+                // Sort by Z (depth) for 3D drawing effect (back to front)
+                nucleons.sort((a, b) => a.z - b.z);
+                return nucleons;
+            }
+
+            drawNucleon(ctx, x, y, r, isProton) {
+                ctx.beginPath();
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                
+                const grad = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.1, x, y, r);
+                if (isProton) {
+                    grad.addColorStop(0, '#ff8a9f'); // Highlight
+                    grad.addColorStop(0.3, '#ff2a5f'); // Base
+                    grad.addColorStop(1, '#8b0029'); // Shadow
+                } else {
+                    grad.addColorStop(0, '#a5f3fc');
+                    grad.addColorStop(0.3, '#06b6d4');
+                    grad.addColorStop(1, '#083344');
+                }
+                
+                ctx.fillStyle = grad;
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            drawElectronOrbits(ctx, cx, cy, pCount, time, scale = 1) {
+                if (pCount === 0) return;
+                
+                // Simple Bohr model shells: 2, 8
+                const shells = [
+                    { cap: 2, radius: 40 * scale, speed: 0.002 },
+                    { cap: 8, radius: 70 * scale, speed: 0.0015 }
+                ];
+                
+                let eRemaining = pCount;
+                
+                shells.forEach((shell, shellIdx) => {
+                    if (eRemaining <= 0) return;
+                    
+                    const eInShell = Math.min(eRemaining, shell.cap);
+                    eRemaining -= eInShell;
+                    
+                    // Draw orbit path
+                    ctx.beginPath();
+                    ctx.ellipse(cx, cy, shell.radius * 1.5, shell.radius, (shellIdx * Math.PI/4), 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.setLineDash([4, 4]);
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    
+                    // Draw electrons
+                    for (let i = 0; i < eInShell; i++) {
+                        const angle = (Math.PI * 2 / eInShell) * i + (time * shell.speed * (shellIdx%2===0?1:-1));
+                        // Ellipse math
+                        const rotation = (shellIdx * Math.PI/4);
+                        const ex_base = Math.cos(angle) * shell.radius * 1.5;
+                        const ey_base = Math.sin(angle) * shell.radius;
+                        
+                        const ex = cx + ex_base * Math.cos(rotation) - ey_base * Math.sin(rotation);
+                        const ey = cy + ex_base * Math.sin(rotation) + ey_base * Math.cos(rotation);
+                        
+                        ctx.beginPath();
+                        ctx.arc(ex, ey, 3 * scale, 0, Math.PI * 2);
+                        ctx.fillStyle = '#fde047';
+                        ctx.shadowColor = '#fde047';
+                        ctx.shadowBlur = 10;
+                        ctx.fill();
+                        ctx.shadowBlur = 0; // reset
+                    }
+                });
+            }
+
+            drawAtom(ctx, cx, cy, pCount, nCount, time, scale = 1, alpha = 1) {
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                
+                // Draw orbits
+                this.drawElectronOrbits(ctx, cx, cy, pCount, time, scale);
+                
+                // Draw Nucleus
+                const nucleons = this.generateNucleons(pCount, nCount, scale);
+                for (let n of nucleons) {
+                    this.drawNucleon(ctx, cx + n.x, cy + n.y, n.r, n.isProton);
+                }
+                
+                ctx.restore();
+            }
+        }
+
+        const engine = new AtomRenderer();
+        let globalTime = 0;
+
+        // ==========================================================================
+        // AMBIENT BACKGROUND
+        // ==========================================================================
+        const bg = setupCanvas('ambient-bg');
+        const particles = [];
+        for(let i=0; i<30; i++) {
+            particles.push({
+                x: Math.random(), y: Math.random(),
+                vx: (Math.random()-0.5)*0.001, vy: (Math.random()-0.5)*0.001,
+                size: Math.random() * 2 + 1
+            });
+        }
+
+        function drawAmbient() {
+            bg.ctx.clearRect(0, 0, bg.w, bg.h);
+            bg.ctx.fillStyle = 'rgba(139, 92, 246, 0.3)';
+            
+            particles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if(p.x < 0 || p.x > 1) p.vx *= -1;
+                if(p.y < 0 || p.y > 1) p.vy *= -1;
+                
+                bg.ctx.beginPath();
+                bg.ctx.arc(p.x * bg.w, p.y * bg.h, p.size, 0, Math.PI*2);
+                bg.ctx.fill();
+            });
+        }
+
+        // ==========================================================================
+        // COMPONENTS (ANATOMY) SECTION & LEGEND INTERACTION
+        // ==========================================================================
+        const anatomy = setupCanvas('anatomy-canvas');
+        let anatomyHover = null;
+
+        function drawAnatomy() {
+            anatomy.ctx.clearRect(0, 0, anatomy.w, anatomy.h);
+            const cx = anatomy.w / 2;
+            const cy = anatomy.h / 2;
+            
+            // Draw a Lithium-6 atom (3P, 3N)
+            engine.drawAtom(anatomy.ctx, cx, cy, 3, 3, globalTime, 1.5);
+
+            // Update Marker Positions dynamically based on canvas size
+            const mrkP = document.getElementById('marker-p');
+            const mrkN = document.getElementById('marker-n');
+            const mrkE = document.getElementById('marker-e');
+            
+            // Approximate coordinates based on logic
+            mrkP.style.left = `calc(50% - 10px)`;
+            mrkP.style.top = `calc(50% - 15px)`;
+            
+            mrkN.style.left = `calc(50% + 15px)`;
+            mrkN.style.top = `calc(50% + 10px)`;
+            
+            // Electron position changes with time, need to sample the orbit path roughly
+            const eAngle = globalTime * 0.002; 
+            const eRadius = 40 * 1.5 * 1.5; // Shell 1 radius * canvas scale * ellipse stretch
+            const ex = 50 + (Math.cos(eAngle) * 30); // % based
+            const ey = 50 + (Math.sin(eAngle) * 20);
+            mrkE.style.left = `${ex}%`;
+            mrkE.style.top = `${ey}%`;
+        }
+
+        // Legend Interaction Logic
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function setAnatomyActive(target) {
+            markers.forEach(m => m.classList.toggle('active', m.dataset.target === target));
+            legendItems.forEach(l => l.classList.toggle('active', l.dataset.target === target));
+        }
+
+        markers.forEach(m => {
+            m.addEventListener('mouseenter', () => setAnatomyActive(m.dataset.target));
+            m.addEventListener('mouseleave', () => setAnatomyActive(null));
+        });
+        legendItems.forEach(l => {
+            l.addEventListener('mouseenter', () => setAnatomyActive(l.dataset.target));
+            l.addEventListener('mouseleave', () => setAnatomyActive(null));
+        });
+
+
+        // ==========================================================================
+        // WORKING PROCESS (CLASSIFICATION ENGINE)
+        // ==========================================================================
+        const workCanvas = setupCanvas('working-canvas');
+        
+        const workData = {
+            stage: 0,
+            maxStages: 4,
+            isPlaying: false,
+            animProgress: 0,
+            atom1: { p: 6, n: 6 }, // C-12
+            atom2: { p: 6, n: 8 }, // C-14
+            stages: [
+                { title: "Stage 1: Atomic Input", desc: "Two unknown nuclei enter the analysis chamber." },
+                { title: "Stage 2: Proton Scan (Z)", desc: "Counting protons. Determines element identity." },
+                { title: "Stage 3: Mass Scan (A)", desc: "Weighing total nucleons (Protons + Neutrons)." },
+                { title: "Stage 4: Classification", desc: "Comparing Z and A outputs." }
+            ]
+        };
+
+        function drawWorking() {
+            const ctx = workCanvas.ctx;
+            const w = workCanvas.w;
+            const h = workCanvas.h;
+            ctx.clearRect(0, 0, w, h);
+
+            const cx1 = w * 0.3;
+            const cx2 = w * 0.7;
+            const cy = h * 0.4;
+            
+            // Base Atoms
+            engine.drawAtom(ctx, cx1, cy, workData.atom1.p, workData.atom1.n, globalTime, 1.2);
+            engine.drawAtom(ctx, cx2, cy, workData.atom2.p, workData.atom2.n, globalTime, 1.2);
+
+            // Morphing/Animation based on stage and animProgress (0 to 1)
+            ctx.textAlign = 'center';
+            ctx.font = 'bold 16px Arial';
+
+            if (workData.stage >= 1) { // Proton Scan
+                const alpha = workData.stage === 1 ? workData.animProgress : 1;
+                ctx.globalAlpha = alpha;
+                
+                // Scan beams
+                ctx.strokeStyle = `rgba(255, 42, 95, ${alpha * 0.5})`;
+                ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(cx1, cy + 40); ctx.lineTo(cx1, cy + 80); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(cx2, cy + 40); ctx.lineTo(cx2, cy + 80); ctx.stroke();
+                
+                // Outputs
+                ctx.fillStyle = '#ff2a5f';
+                ctx.fillText(`Z = ${workData.atom1.p}`, cx1, cy + 100);
+                ctx.fillText(`Z = ${workData.atom2.p}`, cx2, cy + 100);
+                
+                // Check mark if same
+                if (workData.stage > 1 && workData.atom1.p === workData.atom2.p) {
+                    ctx.fillStyle = '#10b981';
+                    ctx.fillText("SAME Z", w/2, cy + 100);
+                    ctx.beginPath(); ctx.moveTo(cx1+40, cy+95); ctx.lineTo(cx2-40, cy+95);
+                    ctx.strokeStyle = '#10b981'; ctx.setLineDash([4,4]); ctx.stroke(); ctx.setLineDash([]);
+                }
+                ctx.globalAlpha = 1;
+            }
+
+            if (workData.stage >= 2) { // Mass Scan
+                const alpha = workData.stage === 2 ? workData.animProgress : 1;
+                ctx.globalAlpha = alpha;
+                
+                ctx.strokeStyle = `rgba(192, 132, 252, ${alpha * 0.5})`;
+                ctx.beginPath(); ctx.moveTo(cx1, cy + 110); ctx.lineTo(cx1, cy + 150); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(cx2, cy + 110); ctx.lineTo(cx2, cy + 150); ctx.stroke();
+                
+                const mass1 = workData.atom1.p + workData.atom1.n;
+                const mass2 = workData.atom2.p + workData.atom2.n;
+                
+                ctx.fillStyle = '#c084fc';
+                ctx.fillText(`A = ${mass1}`, cx1, cy + 170);
+                ctx.fillText(`A = ${mass2}`, cx2, cy + 170);
+
+                if (workData.stage > 2 && mass1 !== mass2) {
+                     ctx.fillStyle = '#ef4444';
+                     ctx.fillText("DIFFERENT A", w/2, cy + 170);
+                }
+                ctx.globalAlpha = 1;
+            }
+
+            if (workData.stage >= 3) { // Result
+                const alpha = workData.stage === 3 ? workData.animProgress : 1;
+                ctx.globalAlpha = alpha;
+                
+                ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                ctx.fillRect(w/2 - 100, cy + 200, 200, 40);
+                ctx.strokeStyle = '#ff2a5f';
+                ctx.strokeRect(w/2 - 100, cy + 200, 200, 40);
+                
+                ctx.fillStyle = '#ff2a5f';
+                ctx.font = 'bold 20px Arial';
+                ctx.fillText("ISOTOPES", w/2, cy + 227);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        // Working UI Logic
+        const btnPrev = document.getElementById('btn-prev');
+        const btnNext = document.getElementById('btn-next');
+        const btnPlay = document.getElementById('btn-play');
+        const iconPlay = document.getElementById('icon-play');
+        const iconPause = document.getElementById('icon-pause');
+        const segments = document.querySelectorAll('.progress-segment');
+        const sTitle = document.getElementById('stage-title');
+        const sCaption = document.getElementById('stage-caption');
+
+        function updateWorkingStage(newStage) {
+            if(newStage < 0 || newStage >= workData.maxStages) return;
+            workData.stage = newStage;
+            workData.animProgress = 0; // Reset animation for new stage
+            
+            sTitle.innerText = workData.stages[workData.stage].title;
+            sCaption.innerText = workData.stages[workData.stage].desc;
+
+            segments.forEach((seg, idx) => {
+                seg.classList.remove('active', 'completed');
+                if (idx < workData.stage) seg.classList.add('completed');
+                if (idx === workData.stage) seg.classList.add('active');
+            });
+        }
+        updateWorkingStage(0);
+
+        btnNext.addEventListener('click', () => { workData.isPlaying = false; updatePlayIcon(); updateWorkingStage(workData.stage + 1); });
+        btnPrev.addEventListener('click', () => { workData.isPlaying = false; updatePlayIcon(); updateWorkingStage(workData.stage - 1); });
+        
+        function updatePlayIcon() {
+            iconPlay.style.display = workData.isPlaying ? 'none' : 'block';
+            iconPause.style.display = workData.isPlaying ? 'block' : 'none';
+            btnPlay.classList.toggle('play-active', workData.isPlaying);
+        }
+
+        btnPlay.addEventListener('click', () => {
+            workData.isPlaying = !workData.isPlaying;
+            updatePlayIcon();
+            if(workData.isPlaying && workData.stage === workData.maxStages -1) {
+                updateWorkingStage(0); // Restart if at end
+            }
+        });
+
+
+        // ==========================================================================
+        // INTERACTIVE SIMULATION
+        // ==========================================================================
+        const simA = setupCanvas('sim-canvas-A');
+        const simB = setupCanvas('sim-canvas-B');
+        
+        const simState = {
+            A: { p: 6, n: 6 },
+            B: { p: 6, n: 8 }
+        };
+
+        function updateSimData(id, type, val) {
+            simState[id][type] = parseInt(val);
+            document.getElementById(`val-${type}-${id}`).innerText = val;
+            
+            // Update UI strings
+            const p = simState[id].p;
+            const n = simState[id].n;
+            
+            document.getElementById(`name-${id}`).innerText = engine.elements[p] || "Unknown";
+            document.getElementById(`sym-${id}`).innerText = engine.symbols[p] || "?";
+            document.getElementById(`mass-${id}`).innerText = p + n;
+
+            checkRelationship();
+        }
+
+        function checkRelationship() {
+            const p1 = simState.A.p, n1 = simState.A.n, m1 = p1 + n1;
+            const p2 = simState.B.p, n2 = simState.B.n, m2 = p2 + n2;
+            
+            const resBar = document.getElementById('sim-result');
+            resBar.className = 'sim-result-bar'; // reset
+            
+            if (p1 === p2 && n1 === n2) {
+                resBar.innerText = "IDENTICAL ATOMS";
+                resBar.classList.add('result-none');
+            }
+            else if (p1 === p2) {
+                resBar.innerText = "THESE ARE ISOTOPES";
+                resBar.classList.add('result-isotope');
+            } 
+            else if (m1 === m2) {
+                resBar.innerText = "THESE ARE ISOBARS";
+                resBar.classList.add('result-isobar');
+            } 
+            else {
+                resBar.innerText = "DIFFERENT ELEMENTS";
+                resBar.classList.add('result-none');
+            }
+        }
+
+        // Add event listeners to sliders
+        ['A', 'B'].forEach(id => {
+            ['p', 'n'].forEach(type => {
+                document.getElementById(`slider-${type}-${id}`).addEventListener('input', (e) => {
+                    updateSimData(id, type, e.target.value);
+                });
+            });
+        });
+        
+        function drawSimulator() {
+            simA.ctx.clearRect(0, 0, simA.w, simA.h);
+            engine.drawAtom(simA.ctx, simA.w/2, simA.h/2, simState.A.p, simState.A.n, globalTime, 1.2);
+            
+            simB.ctx.clearRect(0, 0, simB.w, simB.h);
+            engine.drawAtom(simB.ctx, simB.w/2, simB.h/2, simState.B.p, simState.B.n, globalTime, 1.2);
+        }
+
+        // ==========================================================================
+        // MAIN RENDER LOOP & RESIZING
+        // ==========================================================================
+        window.addEventListener('resize', () => {
+            bg.resize();
+            anatomy.resize();
+            workCanvas.resize();
+            simA.resize();
+            simB.resize();
+        });
+
+        function animate() {
+            globalTime++;
+            
+            drawAmbient();
+            drawAnatomy();
+            
+            // Working Process Animation Logic
+            if(workData.animProgress < 1) {
+                workData.animProgress += 0.02; // Transition speed
+            } else if (workData.isPlaying) {
+                // Hold stage for a bit then move to next
+                setTimeout(() => {
+                    if (workData.isPlaying) {
+                        if (workData.stage < workData.maxStages - 1) {
+                            updateWorkingStage(workData.stage + 1);
+                        } else {
+                            updateWorkingStage(0); // Loop
+                        }
+                    }
+                }, 1000);
+                workData.isPlaying = false; // Pause loop briefly
+                setTimeout(()=> { if(document.getElementById('icon-pause').style.display === 'block') workData.isPlaying = true; }, 1050);
+            }
+            drawWorking();
+            
+            drawSimulator();
+
+            requestAnimationFrame(animate);
+        }
+
+        // Init
+        animate();
+        checkRelationship(); // Initial check
+
+    </script>
+</body>
+</html>

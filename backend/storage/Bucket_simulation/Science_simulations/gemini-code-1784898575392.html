@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Soap vs Detergent: Molecular Mechanics</title>
+    <style>
+        /* ==========================================================================
+           GLOBAL VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-dark: #070913;
+            --bg-glow: #1a2345;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            --text-main: #f0f4ff;
+            --text-muted: #9ba4b5;
+            --accent-cyan: #00f2fe;
+            --accent-blue: #4facfe;
+            --accent-pink: #ff0844;
+            --accent-yellow: #f6d365;
+            --scum-color: #8c92a6;
+            
+            --font-main: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            
+            --sp-xs: clamp(0.5rem, 1vw, 0.75rem);
+            --sp-sm: clamp(0.75rem, 1.5vw, 1rem);
+            --sp-md: clamp(1rem, 2vw, 1.5rem);
+            --sp-lg: clamp(1.5rem, 3vw, 2.5rem);
+            --sp-xl: clamp(2rem, 5vw, 4rem);
+
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --radius-xl: 32px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Ambient Background */
+        .ambient-bg {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1; overflow: hidden; background: var(--bg-dark);
+        }
+        .ambient-orb {
+            position: absolute; border-radius: 50%; filter: blur(100px);
+            animation: float 20s infinite alternate ease-in-out; opacity: 0.5;
+        }
+        .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: radial-gradient(circle, var(--accent-blue) 0%, transparent 70%); }
+        .orb-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: radial-gradient(circle, #2a0845 0%, transparent 70%); animation-delay: -5s; }
+        .orb-3 { top: 40%; left: 60%; width: 30vw; height: 30vw; background: radial-gradient(circle, var(--accent-cyan) 0%, transparent 70%); opacity: 0.3; animation-delay: -10s; }
+
+        @keyframes float { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(5%, 10%) scale(1.1); } }
+
+        /* Typography */
+        h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: var(--sp-sm); background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.75rem, 4vw, 2.5rem); font-weight: 700; margin-bottom: var(--sp-md); }
+        h3 { font-size: clamp(1.25rem, 2.5vw, 1.5rem); font-weight: 600; margin-bottom: var(--sp-sm); color: var(--accent-cyan); }
+        p { font-size: clamp(1rem, 1.5vw, 1.125rem); color: var(--text-muted); margin-bottom: var(--sp-md); }
+        .highlight { color: #fff; font-weight: 500; }
+
+        /* Layout & Containers */
+        .container { max-width: 1400px; margin: 0 auto; padding: var(--sp-xl) var(--sp-md); display: flex; flex-direction: column; gap: var(--sp-xl); }
+        
+        .glass-panel {
+            background: var(--glass-bg); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border); border-radius: var(--radius-lg);
+            padding: var(--sp-lg); box-shadow: 0 24px 48px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+            position: relative; overflow: hidden; transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+        .glass-panel::before {
+            content: ''; position: absolute; top: 0; left: -100%; width: 50%; height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255,255,255,0.05), transparent);
+            transform: skewX(-20deg); transition: left 0.7s ease;
+        }
+        .glass-panel:hover::before { left: 150%; }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-lg); align-items: stretch; }
+        @media (max-width: 1024px) { .grid-2 { grid-template-columns: 1fr; } }
+
+        /* Mobile Adjustments for Performance */
+        @media (max-width: 768px) {
+            .glass-panel { backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); padding: var(--sp-md); border-radius: var(--radius-md); }
+            .container { padding: var(--sp-lg) var(--sp-sm); gap: var(--sp-lg); }
+        }
+
+        /* ==========================================================================
+           SECTION: DIAGRAM LABELS (Strict Implementation)
+           ========================================================================== */
+        .diagram-container {
+            display: flex; gap: var(--sp-md); align-items: flex-start;
+        }
+        .diagram-visual {
+            flex: 1; min-height: 300px; position: relative;
+            background: rgba(0,0,0,0.2); border-radius: var(--radius-md); border: 1px solid var(--glass-border);
+            display: flex; justify-content: center; align-items: center; padding: var(--sp-md);
+        }
+        .diagram-svg { width: 100%; height: 100%; max-height: 400px; overflow: visible; }
+        
+        .diagram-legend {
+            width: 300px; display: flex; flex-direction: column; gap: var(--sp-sm); flex-shrink: 0;
+        }
+
+        @media (max-width: 1024px) {
+            .diagram-container { flex-direction: column; }
+            .diagram-legend { width: 100%; flex-direction: row; flex-wrap: wrap; }
+            .legend-item { flex: 1 1 calc(50% - var(--sp-sm)); min-width: 200px; }
+        }
+
+        /* Markers */
+        .marker {
+            position: absolute; width: 28px; height: 28px; border-radius: 50%;
+            background: rgba(255,255,255,0.1); border: 2px solid var(--accent-cyan);
+            color: #fff; display: flex; justify-content: center; align-items: center;
+            font-size: 0.875rem; font-weight: bold; cursor: pointer;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.4); backdrop-filter: blur(4px);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 10;
+        }
+        .marker:hover, .marker.active {
+            transform: scale(1.2); background: var(--accent-cyan); color: #000;
+            box-shadow: 0 0 20px var(--accent-cyan);
+        }
+
+        /* Specific colors for marker types */
+        .marker[data-color="blue"] { border-color: var(--accent-blue); box-shadow: 0 0 15px rgba(79, 172, 254, 0.4); }
+        .marker[data-color="blue"]:hover, .marker[data-color="blue"].active { background: var(--accent-blue); color: #000; box-shadow: 0 0 20px var(--accent-blue); }
+        .marker[data-color="yellow"] { border-color: var(--accent-yellow); box-shadow: 0 0 15px rgba(246, 211, 101, 0.4); }
+        .marker[data-color="yellow"]:hover, .marker[data-color="yellow"].active { background: var(--accent-yellow); color: #000; box-shadow: 0 0 20px var(--accent-yellow); }
+
+        /* Legend Items */
+        .legend-item {
+            display: flex; gap: var(--sp-sm); padding: var(--sp-sm);
+            background: rgba(255,255,255,0.02); border: 1px solid transparent;
+            border-radius: var(--radius-md); cursor: pointer; transition: all 0.3s ease;
+        }
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08); border-color: var(--glass-highlight);
+            transform: translateX(5px);
+        }
+        .legend-badge {
+            width: 24px; height: 24px; border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            background: var(--glass-bg); border: 1px solid var(--text-muted); color: var(--text-main);
+            font-size: 0.75rem; font-weight: bold; flex-shrink: 0; transition: all 0.3s ease;
+        }
+        .legend-item.active .legend-badge {
+            background: var(--text-main); color: var(--bg-dark); border-color: var(--text-main);
+        }
+        .legend-content h4 { font-size: 0.9rem; margin-bottom: 2px; color: var(--text-main); }
+        .legend-content p { font-size: 0.8rem; margin: 0; line-height: 1.3; }
+
+        /* ==========================================================================
+           SECTION: WORKING PROCESS (Canvas + Controls)
+           ========================================================================== */
+        .working-container { display: flex; flex-direction: column; gap: var(--sp-md); }
+        .canvas-wrapper {
+            position: relative; width: 100%; padding-top: 56.25%; /* 16:9 Aspect Ratio */
+            background: radial-gradient(ellipse at center, #111a30 0%, #070913 100%);
+            border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--glass-border);
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.5);
+        }
+        canvas {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: block; /* prevents inline baseline gap */
+        }
+        
+        .controls-bar {
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--sp-sm);
+            padding: var(--sp-sm) var(--sp-md); background: rgba(0,0,0,0.3); border-radius: var(--radius-md); border: 1px solid var(--glass-border);
+        }
+        
+        .btn {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+            color: #fff; padding: 8px 16px; border-radius: 20px; font-size: 0.9rem; font-weight: 500;
+            cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+            font-family: inherit;
+        }
+        .btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        .btn:active { transform: translateY(0); }
+        .btn-primary { background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan)); border: none; color: #000; font-weight: 600; }
+        .btn-primary:hover { box-shadow: 0 0 15px rgba(0, 242, 254, 0.5); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .progress-indicator { display: flex; gap: 8px; }
+        .step-dot {
+            width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2);
+            transition: all 0.3s; cursor: pointer;
+        }
+        .step-dot.active { background: var(--accent-cyan); box-shadow: 0 0 10px var(--accent-cyan); transform: scale(1.2); }
+
+        .stage-info { text-align: center; margin-top: var(--sp-sm); min-height: 60px; }
+        .stage-title { font-size: 1.2rem; font-weight: 600; color: var(--accent-cyan); margin-bottom: 4px; }
+        .stage-caption { font-size: 0.95rem; color: var(--text-muted); }
+
+        /* ==========================================================================
+           SECTION: INTERACTIVE SIMULATION (Sliders)
+           ========================================================================== */
+        .sim-controls { display: flex; flex-direction: column; gap: var(--sp-md); margin-bottom: var(--sp-md); }
+        .control-group { background: rgba(0,0,0,0.2); padding: var(--sp-md); border-radius: var(--radius-md); }
+        .control-group label { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: 500; }
+        .value-display { color: var(--accent-cyan); font-weight: bold; }
+        
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; height: 30px; margin: 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; border: 1px solid rgba(255,255,255,0.05);
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px; width: 20px; border-radius: 50%; background: var(--accent-cyan);
+            cursor: pointer; -webkit-appearance: none; margin-top: -8px; box-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        .toggle-group { display: flex; background: rgba(0,0,0,0.3); border-radius: 30px; padding: 4px; position: relative; }
+        .toggle-btn {
+            flex: 1; padding: 10px; text-align: center; cursor: pointer; border-radius: 26px; z-index: 1;
+            font-weight: 600; color: var(--text-muted); transition: color 0.3s;
+        }
+        .toggle-btn.active { color: #fff; }
+        .toggle-slider {
+            position: absolute; top: 4px; left: 4px; height: calc(100% - 8px); width: calc(50% - 4px);
+            background: linear-gradient(90deg, #2b3252, #1b203d); border: 1px solid var(--glass-highlight);
+            border-radius: 26px; transition: transform 0.3s cubic-bezier(0.4, 0.0, 0.2, 1); box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        /* Feature Cards */
+        .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: var(--sp-md); }
+        .card {
+            background: rgba(255,255,255,0.02); border: 1px solid var(--glass-border); border-radius: var(--radius-md);
+            padding: var(--sp-md); transition: transform 0.3s, background 0.3s;
+        }
+        .card:hover { transform: translateY(-5px); background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.15); }
+        .card-icon { font-size: 2rem; margin-bottom: 12px; display: inline-block; }
+    </style>
+</head>
+<body>
+
+    <div class="ambient-bg">
+        <div class="ambient-orb orb-1"></div>
+        <div class="ambient-orb orb-2"></div>
+        <div class="ambient-orb orb-3"></div>
+    </div>
+
+    <div class="container">
+        <!-- HEADER -->
+        <header style="text-align: center; margin-bottom: var(--sp-md);">
+            <h1>Molecular Cleansers</h1>
+            <p style="max-width: 600px; margin: 0 auto; font-size: 1.2rem;">An interactive exploration of how Soap and Detergent manipulate water to defeat dirt.</p>
+        </header>
+
+        <!-- SECTION 1: COMPONENTS -->
+        <section class="glass-panel" id="components-section">
+            <h2>1. The Molecules</h2>
+            <p>Both cleansers are <span class="highlight">surfactants</span> (surface active agents). They possess a dual nature, acting as a bridge between oil and water, which normally repel each other.</p>
+            
+            <div class="diagram-container">
+                <div class="diagram-visual">
+                    <!-- Premium SVG Illustration -->
+                    <svg class="diagram-svg" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Gradients -->
+                            <radialGradient id="grad-hydrophilic-soap" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#fff" />
+                                <stop offset="30%" stop-color="#f6d365" />
+                                <stop offset="100%" stop-color="#fda085" />
+                            </radialGradient>
+                            <radialGradient id="grad-hydrophilic-det" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#fff" />
+                                <stop offset="30%" stop-color="#4facfe" />
+                                <stop offset="100%" stop-color="#00f2fe" />
+                            </radialGradient>
+                            <linearGradient id="grad-tail" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#4a5568" />
+                                <stop offset="100%" stop-color="#718096" />
+                            </linearGradient>
+                            <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="5" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                            <filter id="drop-shadow">
+                                <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#000" flood-opacity="0.5"/>
+                            </filter>
+                        </defs>
+
+                        <!-- Soap Molecule -->
+                        <g transform="translate(50, 80)" filter="url(#drop-shadow)">
+                            <text x="250" y="-30" fill="rgba(255,255,255,0.5)" font-size="14" font-weight="bold" text-anchor="middle" letter-spacing="2">SOAP (Sodium Stearate)</text>
+                            
+                            <!-- Tail -->
+                            <path d="M 0,20 Q 20,-10 40,20 T 80,20 T 120,20 T 160,20 T 200,20 T 240,20 L 280,20" 
+                                  fill="none" stroke="url(#grad-tail)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+                            <!-- Internal tail bonds styling -->
+                            <path d="M 0,20 Q 20,-10 40,20 T 80,20 T 120,20 T 160,20 T 200,20 T 240,20 L 280,20" 
+                                  fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="4" stroke-linecap="round"/>
+                            
+                            <!-- Head -->
+                            <circle cx="310" cy="20" r="25" fill="url(#grad-hydrophilic-soap)" filter="url(#glow)"/>
+                            <text x="310" y="25" fill="#000" font-size="14" font-weight="bold" text-anchor="middle">-COO⁻</text>
+                            <circle cx="345" cy="5" r="10" fill="#a0aec0" />
+                            <text x="345" y="9" fill="#000" font-size="10" font-weight="bold" text-anchor="middle">Na⁺</text>
+                        </g>
+
+                        <!-- Detergent Molecule -->
+                        <g transform="translate(50, 200)" filter="url(#drop-shadow)">
+                            <text x="250" y="-30" fill="rgba(255,255,255,0.5)" font-size="14" font-weight="bold" text-anchor="middle" letter-spacing="2">DETERGENT (Alkylbenzene Sulfonate)</text>
+                            
+                            <!-- Tail -->
+                            <path d="M 0,20 Q 20,-10 40,20 T 80,20 T 120,20 T 160,20 T 200,20 T 240,20 L 260,20" 
+                                  fill="none" stroke="url(#grad-tail)" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M 0,20 Q 20,-10 40,20 T 80,20 T 120,20 T 160,20 T 200,20 T 240,20 L 260,20" 
+                                  fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="4" stroke-linecap="round"/>
+                            
+                            <!-- Benzene Ring approx -->
+                            <polygon points="270,5 290,-5 310,5 310,35 290,45 270,35" fill="rgba(113, 128, 150, 0.8)" stroke="#4a5568" stroke-width="3"/>
+                            
+                            <!-- Head -->
+                            <circle cx="340" cy="20" r="22" fill="url(#grad-hydrophilic-det)" filter="url(#glow)"/>
+                            <text x="340" y="25" fill="#000" font-size="14" font-weight="bold" text-anchor="middle">-SO₃⁻</text>
+                        </g>
+                    </svg>
+
+                    <!-- Absolutely Positioned Markers over the Canvas -->
+                    <!-- Coordinates relative to container, fine-tuned -->
+                    <div class="marker" data-target="legend-1" style="top: 30%; left: 15%;">1</div>
+                    <div class="marker" data-target="legend-2" data-color="yellow" style="top: 25%; left: 65%;">2</div>
+                    <div class="marker" data-target="legend-3" data-color="blue" style="top: 72%; left: 70%;">3</div>
+                </div>
+
+                <!-- Legend Flowing Naturally -->
+                <div class="diagram-legend">
+                    <div class="legend-item" id="legend-1" data-marker="1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Hydrophobic Tail</h4>
+                            <p>Non-polar hydrocarbon chain. Hates water, dissolves easily in oils and grease.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-2" data-marker="2">
+                        <div class="legend-badge" style="border-color: var(--accent-yellow); color: var(--accent-yellow);">2</div>
+                        <div class="legend-content">
+                            <h4>Soap Head (Carboxylate)</h4>
+                            <p>Polar end that bonds with water. Weak structure, reacts poorly with minerals.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-3" data-marker="3">
+                        <div class="legend-badge" style="border-color: var(--accent-blue); color: var(--accent-blue);">3</div>
+                        <div class="legend-content">
+                            <h4>Detergent Head (Sulfonate)</h4>
+                            <p>Synthetic polar end. Stronger structure, repels minerals in hard water.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: THE MECHANISM (Mandatory Structure) -->
+        <section class="glass-panel">
+            <h2>2. The Cleaning Mechanism: Micelle Formation</h2>
+            <p>Cleaning is a <span class="highlight">Linear Sequence</span>. Surfactants lower water's surface tension and use mechanical energy to pry dirt off surfaces, encasing it in a water-soluble sphere.</p>
+            
+            <div class="working-container">
+                <div class="canvas-wrapper">
+                    <canvas id="mechCanvas"></canvas>
+                </div>
+                
+                <div class="controls-bar">
+                    <button class="btn" id="btn-prev">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                    </button>
+                    
+                    <div class="progress-indicator" id="mech-progress">
+                        <div class="step-dot active" data-step="0"></div>
+                        <div class="step-dot" data-step="1"></div>
+                        <div class="step-dot" data-step="2"></div>
+                        <div class="step-dot" data-step="3"></div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary" id="btn-auto">Auto-Play</button>
+                        <button class="btn" id="btn-next">
+                            Next <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="stage-info">
+                    <div class="stage-title" id="stage-title">Stage 1: Application</div>
+                    <div class="stage-caption" id="stage-caption">Surfactant molecules enter the water above a greasy stain on fabric.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: INTERACTIVE SIMULATION -->
+        <section class="glass-panel">
+            <h2>3. The Hard Water Showdown</h2>
+            <p>Why did humans invent synthetic detergents when soap existed for millennia? The answer is groundwater minerals: <span class="highlight">Calcium (Ca²⁺)</span> and <span class="highlight">Magnesium (Mg²⁺)</span>.</p>
+            
+            <div class="grid-2">
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <label>Cleaner Type</label>
+                        <div class="toggle-group" id="cleaner-toggle">
+                            <div class="toggle-slider" id="toggle-bg"></div>
+                            <div class="toggle-btn active" data-val="soap">Soap</div>
+                            <div class="toggle-btn" data-val="detergent">Detergent</div>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>
+                            <span>Water Hardness (Ca²⁺/Mg²⁺ Ions)</span>
+                            <span class="value-display" id="hardness-val">Medium</span>
+                        </label>
+                        <input type="range" id="hardness-slider" min="0" max="100" value="50">
+                        <p style="font-size: 0.85rem; margin-top: 8px;">Higher hardness introduces more reactive minerals into the water.</p>
+                    </div>
+                    
+                    <div class="card" id="sim-result-card" style="margin-top: auto;">
+                        <h3 id="sim-result-title" style="color: var(--accent-yellow);">Scum Formation</h3>
+                        <p id="sim-result-text" style="font-size: 0.9rem;">Soap heads react with Calcium to form an insoluble precipitate (scum). The cleaning power is neutralized.</p>
+                    </div>
+                </div>
+                
+                <div class="canvas-wrapper">
+                    <canvas id="simCanvas"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 4: FACTS & SUMMARY -->
+        <div class="grid-2">
+            <section class="glass-panel">
+                <h2>Real-world Applications</h2>
+                <div class="feature-grid" style="grid-template-columns: 1fr;">
+                    <div class="card">
+                        <div class="card-icon">🧼</div>
+                        <h4>Personal Hygiene (Soap)</h4>
+                        <p>Soap is softer on human skin and fully biodegradable. We use treated (soft) water in homes, so scum isn't a massive issue for bodies.</p>
+                    </div>
+                    <div class="card">
+                        <div class="card-icon">🧺</div>
+                        <h4>Laundry & Dishes (Detergent)</h4>
+                        <p>Machines use varying water sources. Detergents ensure clothes don't get coated in grey mineral scum and machinery pipes don't clog.</p>
+                    </div>
+                </div>
+            </section>
+            
+            <section class="glass-panel">
+                <h2>Quick Science Facts</h2>
+                <ul style="list-style: none; display: flex; flex-direction: column; gap: var(--sp-sm);">
+                    <li class="card" style="display: flex; gap: 12px; align-items: center; padding: 12px;">
+                        <div style="font-size: 1.5rem;">🦠</div>
+                        <div><strong>Soap destroys viruses.</strong> The hydrophobic tail pries open the lipid bilayer (fatty outer shell) of viruses like SARS-CoV-2, destroying them completely.</div>
+                    </li>
+                    <li class="card" style="display: flex; gap: 12px; align-items: center; padding: 12px;">
+                        <div style="font-size: 1.5rem;">🔥</div>
+                        <div><strong>Ancient tech.</strong> Babylonians made soap in 2800 BC using animal fats and wood ash (alkali). Detergents were only invented in 1916 due to fat shortages in WWI.</div>
+                    </li>
+                    <li class="card" style="display: flex; gap: 12px; align-items: center; padding: 12px;">
+                        <div style="font-size: 1.5rem;">🦆</div>
+                        <div><strong>Environmental impact.</strong> Detergents are used to clean birds after oil spills because they work well in hard, cold ocean water without leaving residue.</div>
+                    </li>
+                </ul>
+            </section>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // ==========================================================================
+        // 1. DIAGRAM INTERACTION (Hover Logic)
+        // ==========================================================================
+        const markers = document.querySelectorAll('.marker');
+        const legends = document.querySelectorAll('.legend-item');
+
+        function activateDiagram(index) {
+            markers.forEach(m => m.classList.remove('active'));
+            legends.forEach(l => l.classList.remove('active'));
+            if(index !== null) {
+                document.querySelector(`.marker[data-target="legend-${index}"]`).classList.add('active');
+                document.getElementById(`legend-${index}`).classList.add('active');
+            }
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => activateDiagram(marker.dataset.target.split('-')[1]));
+            marker.addEventListener('mouseleave', () => activateDiagram(null));
+            // Mobile touch
+            marker.addEventListener('touchstart', (e) => { e.preventDefault(); activateDiagram(marker.dataset.target.split('-')[1]); });
+        });
+
+        legends.forEach(legend => {
+            legend.addEventListener('mouseenter', () => activateDiagram(legend.dataset.marker));
+            legend.addEventListener('mouseleave', () => activateDiagram(null));
+        });
+
+        // ==========================================================================
+        // UTILITY: Canvas Setup & Resize Loop
+        // ==========================================================================
+        function setupCanvas(canvasId) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d', { alpha: false }); // Optimize
+            
+            let width, height;
+            
+            function resize() {
+                const rect = canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                width = rect.width;
+                height = rect.height;
+                canvas.width = width * dpr;
+                canvas.height = height * dpr;
+                ctx.scale(dpr, dpr);
+            }
+            
+            window.addEventListener('resize', resize);
+            resize();
+            return { canvas, ctx, getW: () => width, getH: () => height };
+        }
+
+        // Vector Math Utility
+        class Vec2 {
+            constructor(x, y) { this.x = x; this.y = y; }
+            add(v) { return new Vec2(this.x + v.x, this.y + v.y); }
+            sub(v) { return new Vec2(this.x - v.x, this.y - v.y); }
+            mult(n) { return new Vec2(this.x * n, this.y * n); }
+            mag() { return Math.sqrt(this.x*this.x + this.y*this.y); }
+            normalize() { let m = this.mag(); return m === 0 ? new Vec2(0,0) : new Vec2(this.x/m, this.y/m); }
+        }
+
+        // ==========================================================================
+        // 2. WORKING PROCESS: MICELLE ANIMATION
+        // ==========================================================================
+        const mechSetup = setupCanvas('mechCanvas');
+        
+        const mechStages = [
+            { title: "Stage 1: Application", caption: "Surfactant molecules (blue heads, grey tails) enter the water above a greasy stain on the fabric." },
+            { title: "Stage 2: Orientation", caption: "Hydrophobic tails repel water and burrow into the grease. Hydrophilic heads remain in the water." },
+            { title: "Stage 3: Lifting (Roll-up)", caption: "Agitation (movement) pulls the water-loving heads, causing the grease to roll up and detach from the fabric." },
+            { title: "Stage 4: Micelle Formation", caption: "The dirt is fully encased in a sphere (micelle). Negatively charged heads repel each other, keeping dirt suspended." }
+        ];
+
+        let currentMechStep = 0;
+        let mechAnimProgress = 0; // 0.0 to 1.0 transition between steps
+        let isAutoPlaying = false;
+        let mechParticles = [];
+        
+        // Init Particles
+        for(let i=0; i<16; i++) {
+            mechParticles.push({
+                baseAngle: (i / 16) * Math.PI * 2,
+                offset: Math.random() * 20
+            });
+        }
+
+        function drawMolecule(ctx, x, y, angle, type="detergent") {
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(angle);
+            
+            // Tail
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            for(let i=1; i<=4; i++) {
+                ctx.lineTo(i * 10, i % 2 === 0 ? 3 : -3);
+            }
+            ctx.lineTo(50, 0);
+            ctx.strokeStyle = '#718096';
+            ctx.lineWidth = 3;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+
+            // Head
+            ctx.beginPath();
+            ctx.arc(0, 0, 8, 0, Math.PI*2);
+            ctx.fillStyle = type === "detergent" ? '#00f2fe' : '#f6d365';
+            ctx.fill();
+            
+            // Glow
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        function renderMechanism() {
+            const { ctx, getW, getH } = mechSetup;
+            const w = getW(); const h = getH();
+            
+            // Background
+            ctx.fillStyle = '#0a1020';
+            ctx.fillRect(0, 0, w, h);
+            
+            // Draw Fabric (Bottom)
+            ctx.fillStyle = '#1a202c';
+            ctx.fillRect(0, h * 0.8, w, h * 0.2);
+            ctx.beginPath();
+            for(let i=0; i<w; i+=20) {
+                ctx.moveTo(i, h*0.8); ctx.lineTo(i+10, h*0.8 - 5); ctx.lineTo(i+20, h*0.8);
+            }
+            ctx.strokeStyle = '#2d3748'; ctx.lineWidth = 2; ctx.stroke();
+
+            // Calculate state based on step and transition progress
+            // Total logical progress: step + animProgress (e.g. 1.5 means halfway between step 1 and 2)
+            let logicalProgress = currentMechStep + mechAnimProgress;
+            
+            let dirtX = w / 2;
+            let dirtY = h * 0.75; // Initial on fabric
+            let dirtScale = 1;
+            let dirtWidth = w * 0.3;
+            
+            if (logicalProgress > 1 && logicalProgress <= 2) {
+                // Morphing shape slightly
+                dirtWidth = w * 0.3 - ((logicalProgress - 1) * w * 0.1);
+            } else if (logicalProgress > 2 && logicalProgress <= 3) {
+                // Lifting off
+                let p = logicalProgress - 2;
+                // ease in out
+                p = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+                dirtY = h * 0.75 - (p * h * 0.3);
+                dirtWidth = w * 0.2 - (p * w * 0.05); // becomes circular
+                dirtScale = 1 - (p * 0.2);
+            } else if (logicalProgress > 3) {
+                // Fully suspended
+                dirtY = h * 0.45 + Math.sin(Date.now() / 500) * 10; // Floating hover
+                dirtWidth = w * 0.15;
+                dirtScale = 0.8;
+            }
+
+            // Draw Dirt
+            ctx.save();
+            ctx.translate(dirtX, dirtY);
+            ctx.scale(dirtScale, dirtScale);
+            ctx.beginPath();
+            ctx.ellipse(0, 0, dirtWidth/2, 30, 0, 0, Math.PI*2);
+            ctx.fillStyle = '#9c6644';
+            ctx.fill();
+            ctx.strokeStyle = '#7f4f24';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+            ctx.restore();
+
+            // Draw Molecules
+            mechParticles.forEach((p, i) => {
+                let targetX, targetY, targetAngle;
+                
+                if (logicalProgress <= 1) {
+                    // Stage 1: Randomly floating in top half
+                    let noise = Math.sin(Date.now()/1000 + i) * 20;
+                    targetX = (w * 0.1) + ((w * 0.8) * (i / 15)) + noise;
+                    targetY = h * 0.2 + (p.offset * 2) + Math.cos(Date.now()/800 + i) * 10;
+                    targetAngle = Math.PI / 2 + Math.sin(Date.now()/500 + i) * 0.2; // pointing down mostly
+                } 
+                else if (logicalProgress <= 2) {
+                    // Stage 2: Orienting onto the dirt
+                    let prog = logicalProgress - 1;
+                    // Interpolate between Stage 1 pos and Stage 2 pos
+                    let startX = (w * 0.1) + ((w * 0.8) * (i / 15));
+                    let startY = h * 0.2 + (p.offset * 2);
+                    
+                    // Target pos on the dirt ellipse
+                    let angleOnDirt = Math.PI + (i / 15) * Math.PI; // Top half of dirt
+                    let endX = dirtX + Math.cos(angleOnDirt) * (dirtWidth/2 - 10);
+                    let endY = dirtY + Math.sin(angleOnDirt) * (30 - 10);
+                    
+                    targetX = startX + (endX - startX) * prog;
+                    targetY = startY + (endY - startY) * prog;
+                    // Head points out, tail points in (away from center of dirt)
+                    targetAngle = Math.PI/2 + (angleOnDirt - Math.PI/2) * prog;
+                }
+                else if (logicalProgress <= 3) {
+                    // Stage 3: Lifting
+                    // Stick to dirt perimeter
+                    let prog = logicalProgress - 2;
+                    let baseAngle = Math.PI + (i / 15) * Math.PI;
+                    // As dirt lifts and becomes round, molecules wrap around
+                    let targetAngleWrap = baseAngle + (Math.PI/2) * prog * (i < 8 ? -1 : 1); // Wrap underneath
+                    
+                    targetX = dirtX + Math.cos(targetAngleWrap) * (dirtWidth/2 + 5);
+                    targetY = dirtY + Math.sin(targetAngleWrap) * (30 + 5 - (15 * prog)); // normalize height
+                    targetAngle = targetAngleWrap;
+                }
+                else {
+                    // Stage 4: Micelle
+                    let angleWrap = p.baseAngle + Date.now()/2000; // Rotating slowly
+                    targetX = dirtX + Math.cos(angleWrap) * (dirtWidth/2 + 10);
+                    targetY = dirtY + Math.sin(angleWrap) * (dirtWidth/2 + 10);
+                    targetAngle = angleWrap;
+                }
+
+                drawMolecule(ctx, targetX, targetY, targetAngle, "detergent");
+            });
+
+            // Update Animation Progress
+            if (mechAnimProgress > 0 && mechAnimProgress < 1) {
+                mechAnimProgress += 0.02; // Transition speed
+                if (mechAnimProgress >= 1) {
+                    mechAnimProgress = 0;
+                    currentMechStep++;
+                    updateMechUI();
+                    if(isAutoPlaying && currentMechStep < 3) {
+                        setTimeout(() => triggerMechStep(currentMechStep + 1), 1000);
+                    } else if (isAutoPlaying && currentMechStep === 3) {
+                        setTimeout(() => { currentMechStep = 0; triggerMechStep(0); }, 3000); // loop
+                    }
+                }
+            } else if (mechAnimProgress < 0) {
+                 mechAnimProgress -= 0.02;
+                 if (mechAnimProgress <= -1) {
+                    mechAnimProgress = 0;
+                    currentMechStep--;
+                    updateMechUI();
+                 }
+            }
+        }
+
+        function updateMechUI() {
+            document.querySelectorAll('.step-dot').forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentMechStep);
+            });
+            document.getElementById('stage-title').textContent = mechStages[currentMechStep].title;
+            document.getElementById('stage-caption').textContent = mechStages[currentMechStep].caption;
+            
+            document.getElementById('btn-prev').disabled = currentMechStep === 0 && mechAnimProgress === 0;
+            document.getElementById('btn-next').disabled = currentMechStep === 3 && mechAnimProgress === 0;
+        }
+
+        function triggerMechStep(targetStep) {
+            if(mechAnimProgress !== 0 || targetStep === currentMechStep) return;
+            if(targetStep > currentMechStep) {
+                mechAnimProgress = 0.01; // Start positive interpolation
+            } else {
+                mechAnimProgress = -0.01; // Start negative interpolation
+            }
+            // If skipping steps, just snap to previous for simplicity, then animate to target
+            if(Math.abs(targetStep - currentMechStep) > 1) {
+                currentMechStep = targetStep > currentMechStep ? targetStep - 1 : targetStep + 1;
+            }
+        }
+
+        document.getElementById('btn-next').addEventListener('click', () => { isAutoPlaying = false; triggerMechStep(currentMechStep + 1); });
+        document.getElementById('btn-prev').addEventListener('click', () => { isAutoPlaying = false; triggerMechStep(currentMechStep - 1); });
+        document.getElementById('btn-auto').addEventListener('click', (e) => {
+            isAutoPlaying = !isAutoPlaying;
+            e.target.textContent = isAutoPlaying ? 'Pause' : 'Auto-Play';
+            e.target.classList.toggle('btn-primary');
+            if(isAutoPlaying && mechAnimProgress === 0) {
+                triggerMechStep(currentMechStep === 3 ? 0 : currentMechStep + 1);
+            }
+        });
+        document.querySelectorAll('.step-dot').forEach((dot, idx) => {
+            dot.addEventListener('click', () => { isAutoPlaying = false; triggerMechStep(idx); });
+        });
+
+        // ==========================================================================
+        // 3. HARD WATER SIMULATION
+        // ==========================================================================
+        const simSetup = setupCanvas('simCanvas');
+        
+        let simConfig = {
+            type: 'soap', // 'soap' or 'detergent'
+            hardness: 50  // 0 to 100
+        };
+
+        // Physics Engine for Simulation
+        class Particle {
+            constructor(x, y, type) {
+                this.pos = new Vec2(x, y);
+                this.vel = new Vec2(Math.random()*2-1, Math.random()*2-1);
+                this.acc = new Vec2(0, 0);
+                this.type = type; // 'surfactant', 'ion', 'scum'
+                this.mass = type === 'scum' ? 5 : 1;
+                this.radius = type === 'ion' ? 4 : 8;
+                this.bound = false;
+            }
+            applyForce(f) { this.acc = this.acc.add(f.mult(1/this.mass)); }
+            update(w, h) {
+                this.vel = this.vel.add(this.acc);
+                // Terminal velocity & dampening
+                if(this.vel.mag() > 3) this.vel = this.vel.normalize().mult(3);
+                this.pos = this.pos.add(this.vel);
+                this.acc = new Vec2(0, 0);
+                
+                // Bounce edges
+                if(this.pos.x < 0 || this.pos.x > w) this.vel.x *= -0.8;
+                if(this.pos.y < 0 || this.pos.y > h) {
+                    this.vel.y *= -0.8;
+                    // If scum, stay at bottom
+                    if(this.type === 'scum') { this.pos.y = h-5; this.vel.y = 0; this.vel.x *= 0.5; }
+                }
+                // Keep in bounds
+                this.pos.x = Math.max(0, Math.min(this.pos.x, w));
+                this.pos.y = Math.max(0, Math.min(this.pos.y, h));
+            }
+        }
+
+        let simParticles = [];
+        
+        function resetSimulation() {
+            simParticles = [];
+            const { getW, getH } = simSetup;
+            const w = getW(), h = getH();
+            if(w===0 || h===0) return; // Not ready
+
+            // Add Surfactants (constant amount)
+            for(let i=0; i<30; i++) {
+                simParticles.push(new Particle(Math.random()*w, Math.random()*h*0.5, 'surfactant'));
+            }
+            // Add Ions based on hardness
+            let ionCount = Math.floor((simConfig.hardness / 100) * 40);
+            for(let i=0; i<ionCount; i++) {
+                simParticles.push(new Particle(Math.random()*w, h/2 + Math.random()*h/2, 'ion'));
+            }
+            updateSimUI();
+        }
+
+        function updateSimUI() {
+            const title = document.getElementById('sim-result-title');
+            const text = document.getElementById('sim-result-text');
+            const card = document.getElementById('sim-result-card');
+
+            if(simConfig.hardness < 20) {
+                title.textContent = "Soft Water: Perfect Cleaning";
+                title.style.color = "var(--accent-cyan)";
+                text.textContent = "Minimal minerals present. Both soap and detergent form micelles easily and clean perfectly.";
+                card.style.borderColor = "var(--accent-cyan)";
+            } else if (simConfig.type === 'soap') {
+                title.textContent = "Hard Water + Soap = Scum";
+                title.style.color = "var(--accent-yellow)";
+                text.textContent = "Calcium (red) strongly binds to Soap carboxylate heads. They clump together, become heavy, and precipitate out as useless 'scum'.";
+                card.style.borderColor = "var(--accent-yellow)";
+            } else {
+                title.textContent = "Hard Water + Detergent = Clean";
+                title.style.color = "var(--accent-blue)";
+                text.textContent = "Detergent sulfonate heads ignore the Calcium ions. They remain free to target dirt and form micelles despite the hard water.";
+                card.style.borderColor = "var(--accent-blue)";
+            }
+        }
+
+        function renderSimulation() {
+            const { ctx, getW, getH } = simSetup;
+            const w = getW(); const h = getH();
+            
+            // Background
+            ctx.fillStyle = '#050b14';
+            ctx.fillRect(0, 0, w, h);
+            
+            // Draw Water gradient
+            let gradient = ctx.createLinearGradient(0,0,0,h);
+            gradient.addColorStop(0, 'rgba(0, 242, 254, 0.05)');
+            gradient.addColorStop(1, 'rgba(0, 100, 200, 0.1)');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0,0,w,h);
+
+            // Physics interactions
+            for(let i=0; i<simParticles.length; i++) {
+                let p1 = simParticles[i];
+                
+                // Brownian motion
+                p1.applyForce(new Vec2(Math.random()*0.2-0.1, Math.random()*0.2-0.1));
+                
+                // Gravity for scum
+                if(p1.type === 'scum') p1.applyForce(new Vec2(0, 0.2)); // Fall down
+
+                for(let j=i+1; j<simParticles.length; j++) {
+                    let p2 = simParticles[j];
+                    let distVec = p1.pos.sub(p2.pos);
+                    let d = distVec.mag();
+                    
+                    // Collision avoidance (soft)
+                    if(d < 15 && p1.type !== 'scum') {
+                        let force = distVec.normalize().mult(0.5);
+                        p1.applyForce(force);
+                        p2.applyForce(force.mult(-1));
+                    }
+
+                    // Soap + Ion Reaction
+                    if (simConfig.type === 'soap') {
+                        if ((p1.type === 'surfactant' && p2.type === 'ion') || (p2.type === 'surfactant' && p1.type === 'ion')) {
+                            if (d < 40) {
+                                // Attraction
+                                let force = distVec.normalize().mult(-0.05);
+                                p1.applyForce(force);
+                                p2.applyForce(force.mult(-1));
+                            }
+                            if (d < 10 && !p1.bound && !p2.bound) {
+                                // Bind into scum
+                                p1.type = 'scum';
+                                p2.type = 'scum';
+                                p1.bound = true; p2.bound = true;
+                                // Visual burst
+                                ctx.beginPath(); ctx.arc(p1.pos.x, p1.pos.y, 15, 0, Math.PI*2);
+                                ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fill();
+                            }
+                        }
+                    }
+                    
+                    // Scum clumping
+                    if(p1.type === 'scum' && p2.type === 'scum' && d < 30) {
+                        let force = distVec.normalize().mult(-0.02); // pull together
+                        p1.applyForce(force);
+                        p2.applyForce(force.mult(-1));
+                    }
+                }
+                
+                p1.update(w, h);
+
+                // Draw Particle
+                ctx.save();
+                ctx.translate(p1.pos.x, p1.pos.y);
+                
+                if (p1.type === 'surfactant') {
+                    // Draw molecule looking towards velocity
+                    let angle = Math.atan2(p1.vel.y, p1.vel.x);
+                    drawMolecule(ctx, 0, 0, angle, simConfig.type);
+                } 
+                else if (p1.type === 'ion') {
+                    ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI*2);
+                    ctx.fillStyle = '#ff0844'; ctx.fill();
+                    ctx.shadowBlur = 10; ctx.shadowColor = '#ff0844'; ctx.fill();
+                    ctx.fillStyle = '#fff'; ctx.font = '6px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillText('Ca²', 0, 0);
+                }
+                else if (p1.type === 'scum') {
+                    ctx.beginPath();
+                    // Jagged shape for precipitate
+                    ctx.moveTo(-5, -5); ctx.lineTo(5, -2); ctx.lineTo(4, 6); ctx.lineTo(-6, 4);
+                    ctx.closePath();
+                    ctx.fillStyle = 'var(--scum-color)';
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff'; ctx.lineWidth = 0.5; ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+
+        // Sim Controls Logic
+        const toggles = document.querySelectorAll('.toggle-btn');
+        const sliderBg = document.getElementById('toggle-bg');
+        toggles.forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                toggles.forEach(t => t.classList.remove('active'));
+                btn.classList.add('active');
+                sliderBg.style.transform = `translateX(${index * 100}%)`;
+                simConfig.type = btn.dataset.val;
+                resetSimulation();
+            });
+        });
+
+        const hardSlider = document.getElementById('hardness-slider');
+        const hardVal = document.getElementById('hardness-val');
+        hardSlider.addEventListener('input', (e) => {
+            simConfig.hardness = parseInt(e.target.value);
+            let label = "Low";
+            if(simConfig.hardness > 33) label = "Medium";
+            if(simConfig.hardness > 66) label = "High";
+            hardVal.textContent = label;
+            resetSimulation();
+        });
+
+        // ==========================================================================
+        // MAIN RENDER LOOP
+        // ==========================================================================
+        function animate() {
+            renderMechanism();
+            renderSimulation();
+            requestAnimationFrame(animate);
+        }
+        
+        // Init
+        window.addEventListener('load', () => {
+            resetSimulation();
+            animate();
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>The Human Skeleton — Interactive Anatomy Lab</title>
+<style>
+/* ============================================================
+   ROOT TOKENS
+   ============================================================ */
+:root{
+  --bg-deep:#080b13;
+  --bg-mid:#0f1626;
+  --bg-panel: rgba(255,255,255,0.045);
+  --bg-panel-strong: rgba(255,255,255,0.08);
+  --border-soft: rgba(255,255,255,0.09);
+  --bone-light:#faf3df;
+  --bone-mid:#d9c7a0;
+  --bone-shadow:#8f7c58;
+  --joint-color:#eef7f6;
+  --joint-shadow:#9fb8b6;
+  --accent-amber:#e8a548;
+  --accent-amber-soft: rgba(232,165,72,0.35);
+  --accent-cyan:#4fd6c4;
+  --accent-cyan-soft: rgba(79,214,196,0.3);
+  --text-primary:#f3f1ea;
+  --text-muted:#9aa3b8;
+  --text-faint:#636d82;
+  --danger:#e2694f;
+  --good:#63c78a;
+  --font-display: Georgia, 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  --radius-lg: 22px;
+  --radius-md: 14px;
+  --radius-sm: 8px;
+  --blur-amt: 18px;
+  --section-pad: clamp(56px, 9vw, 120px);
+}
+
+@media (max-width: 767px){
+  :root{ --blur-amt: 8px; --section-pad: 40px; }
+}
+
+*,*::before,*::after{ box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+@media (prefers-reduced-motion: reduce){
+  html{ scroll-behavior:auto; }
+  *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
+}
+
+body{
+  margin:0;
+  background:var(--bg-deep);
+  color:var(--text-primary);
+  font-family:var(--font-body);
+  line-height:1.55;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+
+h1,h2,h3{ font-family:var(--font-display); font-weight:600; margin:0; letter-spacing:0.2px; }
+p{ margin:0; }
+button{ font-family:inherit; }
+
+::selection{ background:var(--accent-amber-soft); color:var(--text-primary); }
+
+/* ============================================================
+   AMBIENT BACKGROUND (canvas particles + gradient wash)
+   ============================================================ */
+#bg-canvas{
+  position:fixed; inset:0; width:100%; height:100%; z-index:0; pointer-events:none;
+}
+.bg-wash{
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(ellipse 60% 45% at 18% 8%, rgba(79,214,196,0.10), transparent 60%),
+    radial-gradient(ellipse 55% 50% at 85% 18%, rgba(232,165,72,0.10), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 50% 100%, rgba(120,100,180,0.08), transparent 60%),
+    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 45%, var(--bg-deep) 100%);
+  animation: washShift 26s ease-in-out infinite alternate;
+}
+@keyframes washShift{
+  0%{ filter:hue-rotate(0deg) brightness(1); }
+  100%{ filter:hue-rotate(6deg) brightness(1.04); }
+}
+
+main, header.topnav, footer{ position:relative; z-index:2; }
+
+/* ============================================================
+   NAV
+   ============================================================ */
+header.topnav{
+  position:sticky; top:0; z-index:50;
+  display:flex; align-items:center; gap:14px;
+  padding:12px clamp(16px,4vw,40px);
+  background:rgba(8,11,19,0.62);
+  backdrop-filter:blur(var(--blur-amt)); -webkit-backdrop-filter:blur(var(--blur-amt));
+  border-bottom:1px solid var(--border-soft);
+}
+.brand{
+  display:flex; align-items:center; gap:9px; font-family:var(--font-display);
+  font-size:clamp(0.95rem,1.6vw,1.15rem); white-space:nowrap; color:var(--text-primary);
+}
+.brand svg{ width:22px; height:22px; flex:none; }
+.navlinks{
+  display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; -ms-overflow-style:none;
+  flex:1; padding-bottom:2px;
+}
+.navlinks::-webkit-scrollbar{ display:none; }
+.navlinks button{
+  flex:none; border:1px solid transparent; background:transparent; color:var(--text-muted);
+  padding:8px 14px; border-radius:999px; font-size:0.82rem; cursor:pointer;
+  transition:all 0.25s ease; white-space:nowrap; min-height:36px;
+}
+.navlinks button:hover{ color:var(--text-primary); background:var(--bg-panel); }
+.navlinks button.active{
+  color:#0a0e17; background:var(--accent-amber); border-color:var(--accent-amber); font-weight:600;
+}
+
+/* ============================================================
+   SHARED LAYOUT
+   ============================================================ */
+.section{
+  padding:var(--section-pad) clamp(16px,5vw,60px);
+  max-width:1180px; margin:0 auto;
+}
+.eyebrow{
+  display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono);
+  font-size:clamp(0.68rem,1vw,0.78rem); letter-spacing:2.5px; text-transform:uppercase;
+  color:var(--accent-cyan); margin-bottom:14px;
+}
+.eyebrow::before{ content:''; width:18px; height:1px; background:var(--accent-cyan); }
+.section h2{ font-size:clamp(1.5rem,3.4vw,2.5rem); margin-bottom:12px; }
+.section .lede{
+  color:var(--text-muted); font-size:clamp(0.95rem,1.3vw,1.08rem); max-width:640px; margin-bottom:clamp(28px,4vw,48px);
+}
+
+.glass{
+  background:var(--bg-panel);
+  border:1px solid var(--border-soft);
+  border-radius:var(--radius-lg);
+  backdrop-filter:blur(var(--blur-amt)); -webkit-backdrop-filter:blur(var(--blur-amt));
+  box-shadow:0 20px 60px -30px rgba(0,0,0,0.6);
+}
+
+.reveal{ opacity:0; transform:translateY(28px); transition:opacity 0.8s ease, transform 0.8s ease; }
+.reveal.in{ opacity:1; transform:translateY(0); }
+
+/* ============================================================
+   HERO
+   ============================================================ */
+.hero{
+  min-height:calc(100vh - 60px);
+  display:grid; grid-template-columns:1.05fr 0.95fr; align-items:center; gap:clamp(20px,4vw,50px);
+  padding:clamp(30px,6vw,60px) clamp(16px,5vw,60px);
+  max-width:1280px; margin:0 auto;
+}
+.hero-copy h1{
+  font-size:clamp(2.3rem,6vw,4.4rem); line-height:1.03; letter-spacing:-0.5px;
+  background:linear-gradient(135deg, var(--bone-light) 0%, var(--bone-mid) 55%, var(--accent-amber) 100%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+}
+.hero-copy p.sub{
+  margin-top:20px; font-size:clamp(1rem,1.6vw,1.2rem); color:var(--text-muted); max-width:520px;
+}
+.hero-stats{ display:flex; gap:clamp(18px,3vw,34px); margin-top:34px; flex-wrap:wrap; }
+.hero-stat b{
+  display:block; font-family:var(--font-mono); font-size:clamp(1.5rem,3vw,2.1rem); color:var(--accent-amber);
+}
+.hero-stat span{ font-size:0.78rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:1px; }
+.scroll-cue{
+  margin-top:clamp(30px,5vw,52px); font-size:0.82rem; color:var(--text-faint);
+  display:inline-flex; align-items:center; gap:8px; animation:bob 2.2s ease-in-out infinite;
+}
+@keyframes bob{ 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(6px);} }
+
+.hero-visual{
+  position:relative; display:flex; align-items:center; justify-content:center;
+  min-height:320px;
+}
+.hero-visual svg{ width:100%; max-width:340px; height:auto; filter:drop-shadow(0 30px 60px rgba(0,0,0,0.55)); }
+
+/* bone rendering (shared across all diagrams) */
+.bone-shaft{ fill:url(#boneGrad); }
+.bone-bulb{ fill:url(#boneGrad); stroke:var(--bone-shadow); stroke-width:0.6; }
+.rib-line{ fill:none; stroke:url(#boneGradThin); stroke-width:4.2; stroke-linecap:round; }
+.vert-block{ fill:url(#boneGrad); stroke:var(--bone-shadow); stroke-width:0.4; rx:2.5; }
+.joint-dot{ fill:url(#jointGrad); stroke:var(--joint-shadow); stroke-width:0.7; }
+.skull-cap{ fill:url(#boneGrad); stroke:var(--bone-shadow); stroke-width:0.6; }
+.pelvis-shape{ fill:url(#boneGrad); stroke:var(--bone-shadow); stroke-width:0.6; }
+.bone-group{ transition: filter 0.4s ease; }
+.bone-group.glow .bone-shaft,
+.bone-group.glow .bone-bulb,
+.bone-group.glow .pelvis-shape,
+.bone-group.glow .skull-cap{ fill:url(#boneGradGlow); }
+.bone-group.glow{ filter:drop-shadow(0 0 10px var(--accent-amber-soft)); }
+
+.sweep-mask rect{ animation: sweepMove 6s ease-in-out infinite; }
+@keyframes sweepMove{
+  0%{ transform:translateY(-720px); }
+  50%{ transform:translateY(0px); }
+  100%{ transform:translateY(720px); }
+}
+.breathe{ animation: breathe 4.8s ease-in-out infinite; transform-origin:150px 360px; }
+@keyframes breathe{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.012);} }
+
+/* ============================================================
+   OVERVIEW
+   ============================================================ */
+.func-grid{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:18px;
+}
+.func-card{ padding:22px 20px; }
+.func-card .icn{ width:42px; height:42px; margin-bottom:14px; }
+.func-card h3{ font-size:1.02rem; margin-bottom:8px; color:var(--text-primary); }
+.func-card p{ font-size:0.88rem; color:var(--text-muted); }
+
+/* ============================================================
+   COMPONENTS (marker + legend pattern — mandatory rule)
+   ============================================================ */
+.components-layout{
+  display:grid; grid-template-columns: 1.1fr 0.9fr; gap:clamp(20px,3vw,40px); align-items:start;
+}
+@media (max-width:1023px){ .components-layout{ grid-template-columns:1fr; } }
+
+.diagram-frame{
+  position:relative; min-height:420px; display:flex; align-items:center; justify-content:center;
+  padding:18px; overflow:visible;
+}
+.diagram-frame svg{ width:100%; max-width:340px; height:auto; }
+.marker{
+  position:absolute; width:26px; height:26px; border-radius:50%;
+  background:var(--accent-amber); color:#0a0e17; font-family:var(--font-mono); font-weight:700; font-size:0.72rem;
+  display:flex; align-items:center; justify-content:center; cursor:pointer; border:2px solid rgba(255,255,255,0.7);
+  box-shadow:0 0 0 4px rgba(232,165,72,0.18), 0 0 14px rgba(232,165,72,0.5);
+  transform:translate(-50%,-50%); transition:transform 0.25s ease, background 0.25s ease;
+  min-width:26px; min-height:26px;
+}
+.marker:hover, .marker.active{ transform:translate(-50%,-50%) scale(1.18); background:var(--accent-cyan); box-shadow:0 0 0 5px rgba(79,214,196,0.22), 0 0 16px rgba(79,214,196,0.6); }
+
+.legend-list{ display:flex; flex-direction:column; gap:10px; }
+.legend-row{
+  display:flex; gap:14px; align-items:flex-start; padding:14px 16px; border-radius:var(--radius-md);
+  border:1px solid transparent; cursor:pointer; transition:background 0.25s ease, border-color 0.25s ease;
+}
+.legend-row:hover, .legend-row.active{ background:var(--bg-panel-strong); border-color:var(--border-soft); }
+.legend-badge{
+  flex:none; width:28px; height:28px; border-radius:50%; background:var(--accent-amber); color:#0a0e17;
+  font-family:var(--font-mono); font-weight:700; font-size:0.78rem; display:flex; align-items:center; justify-content:center;
+}
+.legend-row.active .legend-badge{ background:var(--accent-cyan); }
+.legend-text h4{ font-size:0.95rem; margin:0 0 4px; color:var(--text-primary); font-family:var(--font-body); font-weight:600; }
+.legend-text p{ font-size:0.84rem; color:var(--text-muted); }
+
+/* ============================================================
+   WORKING SECTION (mandatory mechanism stages)
+   ============================================================ */
+.working-panel{ padding:clamp(20px,3vw,36px); display:grid; grid-template-columns:1fr 1.1fr; gap:clamp(20px,3vw,40px); align-items:center; }
+@media (max-width:1023px){ .working-panel{ grid-template-columns:1fr; } }
+.working-visual{ display:flex; flex-direction:column; align-items:center; }
+.working-visual svg{ width:100%; max-width:300px; height:auto; }
+.stage-caption{
+  margin-top:16px; text-align:center; font-size:0.95rem; color:var(--text-primary); min-height:44px;
+}
+.stage-controls{ display:flex; align-items:center; justify-content:center; gap:14px; margin-top:18px; flex-wrap:wrap; }
+.ctrl-btn{
+  border:1px solid var(--border-soft); background:var(--bg-panel-strong); color:var(--text-primary);
+  padding:10px 18px; border-radius:999px; cursor:pointer; font-size:0.85rem; min-height:44px; transition:all 0.2s ease;
+}
+.ctrl-btn:hover{ border-color:var(--accent-amber); color:var(--accent-amber); }
+.ctrl-btn.play.on{ background:var(--accent-amber); color:#0a0e17; border-color:var(--accent-amber); }
+.progress-dots{ display:flex; gap:8px; }
+.progress-dots span{ width:9px; height:9px; border-radius:50%; background:var(--border-soft); cursor:pointer; transition:all 0.25s ease; }
+.progress-dots span.active{ background:var(--accent-amber); width:22px; border-radius:5px; }
+
+.stage-list{ display:flex; flex-direction:column; gap:10px; }
+.stage-item{
+  padding:14px 16px; border-radius:var(--radius-md); border:1px solid var(--border-soft); opacity:0.4;
+  transition:all 0.35s ease; display:flex; gap:12px; align-items:flex-start;
+}
+.stage-item.current{ opacity:1; background:var(--bg-panel-strong); border-color:var(--accent-amber-soft); }
+.stage-num{
+  flex:none; width:26px; height:26px; border-radius:50%; border:1px solid var(--border-soft);
+  display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:0.75rem; color:var(--text-muted);
+}
+.stage-item.current .stage-num{ background:var(--accent-amber); color:#0a0e17; border-color:var(--accent-amber); }
+.stage-item h4{ font-size:0.92rem; margin:0 0 3px; }
+.stage-item p{ font-size:0.82rem; color:var(--text-muted); }
+
+/* ============================================================
+   SIMULATION SECTION
+   ============================================================ */
+.sim-panel{ padding:clamp(20px,3vw,36px); display:grid; grid-template-columns:0.9fr 1.1fr; gap:clamp(24px,3vw,44px); align-items:center; }
+@media (max-width:1023px){ .sim-panel{ grid-template-columns:1fr; } }
+.joint-picker{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px; }
+.joint-btn{
+  border:1px solid var(--border-soft); background:var(--bg-panel-strong); color:var(--text-muted);
+  border-radius:var(--radius-md); padding:12px 10px; cursor:pointer; font-size:0.82rem; text-align:left; min-height:44px;
+  transition:all 0.2s ease;
+}
+.joint-btn b{ display:block; color:var(--text-primary); font-size:0.88rem; margin-bottom:2px; }
+.joint-btn:hover{ border-color:var(--accent-cyan); }
+.joint-btn.active{ border-color:var(--accent-cyan); background:rgba(79,214,196,0.12); color:var(--text-primary); }
+
+.angle-row{ display:flex; align-items:center; gap:14px; margin-top:8px; }
+.angle-readout{ font-family:var(--font-mono); font-size:1.4rem; color:var(--accent-cyan); min-width:76px; }
+input[type=range]{
+  -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:999px;
+  background:linear-gradient(90deg, var(--accent-cyan), var(--accent-amber)); outline:none; min-height:44px; padding:19px 0;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none; width:24px; height:24px; border-radius:50%; background:var(--text-primary);
+  border:3px solid var(--accent-cyan); cursor:pointer; box-shadow:0 0 10px rgba(0,0,0,0.4);
+}
+input[type=range]::-moz-range-thumb{
+  width:24px; height:24px; border-radius:50%; background:var(--text-primary); border:3px solid var(--accent-cyan); cursor:pointer;
+}
+.sim-note{ margin-top:16px; font-size:0.85rem; color:var(--text-muted); line-height:1.6; }
+.sim-note b{ color:var(--text-primary); }
+.sim-visual{ display:flex; align-items:center; justify-content:center; min-height:280px; }
+.sim-visual svg{ width:100%; max-width:280px; height:auto; }
+
+/* ============================================================
+   APPLICATIONS / FACTS
+   ============================================================ */
+.app-grid, .facts-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:18px; }
+.app-card, .fact-card{ padding:22px 20px; }
+.app-card .icn, .fact-card .icn{ width:38px; height:38px; margin-bottom:14px; }
+.app-card h3{ font-size:1rem; margin-bottom:8px; }
+.app-card p, .fact-card p{ font-size:0.87rem; color:var(--text-muted); }
+.fact-card{ position:relative; }
+.fact-num{ font-family:var(--font-mono); color:var(--accent-amber); font-size:0.78rem; margin-bottom:10px; display:block; }
+
+/* ============================================================
+   MISTAKES (flip cards)
+   ============================================================ */
+.mistake-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:20px; }
+.flip-card{ perspective:1200px; height:170px; cursor:pointer; }
+.flip-inner{ position:relative; width:100%; height:100%; transition:transform 0.6s cubic-bezier(.4,.2,.2,1); transform-style:preserve-3d; }
+.flip-card.flipped .flip-inner{ transform:rotateY(180deg); }
+.flip-face{
+  position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden;
+  border-radius:var(--radius-md); padding:18px; display:flex; flex-direction:column; justify-content:center;
+  border:1px solid var(--border-soft);
+}
+.flip-front{ background:rgba(226,105,79,0.08); }
+.flip-back{ background:rgba(99,199,138,0.1); transform:rotateY(180deg); }
+.flip-tag{ font-family:var(--font-mono); font-size:0.68rem; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px; }
+.flip-front .flip-tag{ color:var(--danger); }
+.flip-back .flip-tag{ color:var(--good); }
+.flip-face p{ font-size:0.9rem; color:var(--text-primary); }
+.flip-hint{ position:absolute; bottom:10px; right:14px; font-size:0.68rem; color:var(--text-faint); }
+
+/* ============================================================
+   REVISION
+   ============================================================ */
+.stat-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:16px; margin-bottom:36px; }
+.stat-box{ padding:20px 16px; text-align:center; }
+.stat-box b{ display:block; font-family:var(--font-mono); font-size:clamp(1.4rem,2.6vw,1.9rem); color:var(--accent-amber); }
+.stat-box span{ font-size:0.76rem; color:var(--text-faint); text-transform:uppercase; letter-spacing:0.8px; }
+.chip-row{ display:flex; flex-wrap:wrap; gap:10px; }
+.chip{
+  position:relative; padding:9px 16px; border-radius:999px; border:1px solid var(--border-soft);
+  background:var(--bg-panel); font-size:0.84rem; cursor:default; min-height:40px; display:flex; align-items:center;
+}
+.chip .tip{
+  position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%) translateY(6px);
+  background:#0a0e17; border:1px solid var(--border-soft); padding:8px 12px; border-radius:8px;
+  font-size:0.76rem; color:var(--text-muted); white-space:nowrap; opacity:0; pointer-events:none;
+  transition:all 0.2s ease; max-width:240px; white-space:normal; width:max-content;
+}
+.chip:hover .tip{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+footer{ text-align:center; padding:40px 20px 60px; color:var(--text-faint); font-size:0.8rem; }
+
+/* ============================================================
+   RESPONSIVE — MOBILE DISCIPLINE
+   ============================================================ */
+@media (max-width:1023px){
+  .hero{ grid-template-columns:1fr; text-align:center; min-height:auto; padding-top:40px; }
+  .hero-copy p.sub{ margin-left:auto; margin-right:auto; }
+  .hero-stats{ justify-content:center; }
+  .scroll-cue{ justify-content:center; display:none; }
+}
+@media (max-width:767px){
+  .section{ padding:var(--section-pad) 16px; }
+  .glass{ border-radius:var(--radius-md); }
+  .func-card,.app-card,.fact-card{ padding:16px 14px; }
+  .working-panel, .sim-panel{ padding:18px; gap:20px; }
+  .joint-picker{ grid-template-columns:1fr 1fr; }
+  header.topnav{ padding:10px 14px; gap:8px; }
+  .navlinks button{ padding:7px 12px; font-size:0.78rem; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div class="bg-wash" aria-hidden="true"></div>
+
+<!-- ============================================================
+     GLOBAL SVG DEFS (gradients reused by every diagram)
+     ============================================================ -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="boneGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fdf6e4"/>
+      <stop offset="55%" stop-color="#d9c7a0"/>
+      <stop offset="100%" stop-color="#a9976f"/>
+    </linearGradient>
+    <linearGradient id="boneGradThin" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f3e9cd"/>
+      <stop offset="100%" stop-color="#b8a578"/>
+    </linearGradient>
+    <linearGradient id="boneGradGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fff3d6"/>
+      <stop offset="60%" stop-color="#f0c477"/>
+      <stop offset="100%" stop-color="#e8a548"/>
+    </linearGradient>
+    <radialGradient id="jointGrad" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="60%" stop-color="#dcf2ef"/>
+      <stop offset="100%" stop-color="#a9c6c3"/>
+    </radialGradient>
+  </defs>
+</svg>
+
+<header class="topnav">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="5" r="3" fill="#e8a548"/><path d="M12 8v6M8 10l4 4 4-4M9 20l3-6 3 6" stroke="#d9c7a0" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Skeletal Lab
+  </div>
+  <nav class="navlinks" id="navlinks">
+    <button data-target="intro">Intro</button>
+    <button data-target="overview">Overview</button>
+    <button data-target="components">Components</button>
+    <button data-target="working">Working</button>
+    <button data-target="simulation">Simulate</button>
+    <button data-target="applications">Applications</button>
+    <button data-target="facts">Facts</button>
+    <button data-target="mistakes">Mistakes</button>
+    <button data-target="revision">Revision</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- ============================== INTRO / HERO ============================== -->
+  <section class="section hero" id="intro">
+    <div class="hero-copy">
+      <div class="eyebrow">Interactive Anatomy Lab</div>
+      <h1>The Human<br>Skeleton</h1>
+      <p class="sub">206 bones, one living framework — holding you upright, shielding your organs, and turning every thought into motion.</p>
+      <div class="hero-stats">
+        <div class="hero-stat"><b id="statBonesHero">206</b><span>Adult bones</span></div>
+        <div class="hero-stat"><b>33</b><span>Vertebrae</span></div>
+        <div class="hero-stat"><b>206→</b><span>from ~300 at birth</span></div>
+      </div>
+      <div class="scroll-cue">Scroll to explore <span>↓</span></div>
+    </div>
+    <div class="hero-visual">
+      <svg id="heroSkeleton" viewBox="0 0 300 700" class="breathe"></svg>
+    </div>
+  </section>
+
+  <!-- ============================== OVERVIEW ============================== -->
+  <section class="section" id="overview">
+    <div class="eyebrow">Topic Overview</div>
+    <h2 class="reveal">One Frame, Five Jobs</h2>
+    <p class="lede reveal">The skeleton isn't just a stack of bones stacked for shape — it's a living system doing five different jobs at once, every second of your life.</p>
+    <div class="func-grid" id="funcGrid"></div>
+  </section>
+
+  <!-- ============================== MAIN COMPONENTS ============================== -->
+  <section class="section" id="components">
+    <div class="eyebrow">Main Components</div>
+    <h2 class="reveal">Eight Building Blocks</h2>
+    <p class="lede reveal">Tap a glowing marker to see how each part contributes to the whole frame.</p>
+    <div class="components-layout glass" style="padding:clamp(16px,3vw,32px)">
+      <div class="diagram-frame">
+        <svg id="componentsSkeleton" viewBox="0 0 300 700"></svg>
+        <div id="markerLayer"></div>
+      </div>
+      <div class="legend-list" id="legendList"></div>
+    </div>
+  </section>
+
+  <!-- ============================== WORKING ============================== -->
+  <section class="section" id="working">
+    <div class="eyebrow">Working — Mechanism</div>
+    <h2 class="reveal">How a Joint Moves You</h2>
+    <p class="lede reveal">Follow the elbow as it bends. It's a linear, repeating sequence — the same lever principle every joint in your body relies on.</p>
+    <div class="working-panel glass">
+      <div class="working-visual">
+        <svg id="workingSvg" viewBox="0 0 260 300"></svg>
+        <p class="stage-caption" id="stageCaption"></p>
+        <div class="stage-controls">
+          <button class="ctrl-btn" id="prevStage">← Prev</button>
+          <button class="ctrl-btn play" id="playStage">▶ Auto-Play</button>
+          <button class="ctrl-btn" id="nextStage">Next →</button>
+        </div>
+        <div class="progress-dots" id="progressDots" style="margin-top:14px"></div>
+      </div>
+      <div class="stage-list" id="stageList"></div>
+    </div>
+  </section>
+
+  <!-- ============================== SIMULATION ============================== -->
+  <section class="section" id="simulation">
+    <div class="eyebrow">Interactive Simulation</div>
+    <h2 class="reveal">Joint Explorer</h2>
+    <p class="lede reveal">Every joint type moves differently. Pick one, then drag the angle to feel its real range of motion.</p>
+    <div class="sim-panel glass">
+      <div class="sim-controls">
+        <div class="joint-picker" id="jointPicker"></div>
+        <div class="angle-row">
+          <input type="range" id="angleSlider" min="0" max="150" value="60">
+          <span class="angle-readout" id="angleReadout">60°</span>
+        </div>
+        <p class="sim-note" id="jointNote"></p>
+      </div>
+      <div class="sim-visual">
+        <svg id="jointSvg" viewBox="0 0 260 260"></svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== APPLICATIONS ============================== -->
+  <section class="section" id="applications">
+    <div class="eyebrow">Applications</div>
+    <h2 class="reveal">Where This Matters</h2>
+    <p class="lede reveal">Understanding bones and joints shows up far outside the classroom.</p>
+    <div class="app-grid" id="appGrid"></div>
+  </section>
+
+  <!-- ============================== FACTS ============================== -->
+  <section class="section" id="facts">
+    <div class="eyebrow">Interesting Facts</div>
+    <h2 class="reveal">Bone Trivia Worth Knowing</h2>
+    <p class="lede reveal">A handful of surprising, genuinely true facts about the frame you live in.</p>
+    <div class="facts-grid" id="factsGrid"></div>
+  </section>
+
+  <!-- ============================== COMMON MISTAKES ============================== -->
+  <section class="section" id="mistakes">
+    <div class="eyebrow">Common Mistakes</div>
+    <h2 class="reveal">Myth vs. Fact</h2>
+    <p class="lede reveal">Tap a card to flip it and check the real answer.</p>
+    <div class="mistake-grid" id="mistakeGrid"></div>
+  </section>
+
+  <!-- ============================== QUICK REVISION ============================== -->
+  <section class="section" id="revision">
+    <div class="eyebrow">Quick Revision</div>
+    <h2 class="reveal">The Skeleton at a Glance</h2>
+    <div class="stat-grid" id="statGrid"></div>
+    <p class="lede" style="margin-bottom:16px">Key terms to remember:</p>
+    <div class="chip-row" id="chipRow"></div>
+  </section>
+
+</main>
+
+<footer>Interactive Anatomy Lab — built for visual, hands-on learning.</footer>
+
+<script>
+'use strict';
+const SVGNS = 'http://www.w3.org/2000/svg';
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ============================================================
+   1. AMBIENT PARTICLE BACKGROUND (calcium-dust motif)
+   ============================================================ */
+(function ambientParticles(){
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let w, h, dpr, particles = [];
+
+  function sizeCanvas(){
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = document.body.getBoundingClientRect();
+    w = window.innerWidth; h = window.innerHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const count = w < 768 ? 22 : 46;
+    particles = new Array(count).fill(0).map(() => ({
+      x: Math.random()*w, y: Math.random()*h,
+      r: Math.random()*1.6 + 0.4,
+      vy: Math.random()*0.15 + 0.03,
+      vx: (Math.random()-0.5)*0.06,
+      alpha: Math.random()*0.35 + 0.08,
+      hue: Math.random() > 0.5 ? '232,165,72' : '79,214,196'
+    }));
+  }
+  function tick(){
+    ctx.clearRect(0,0,w,h);
+    particles.forEach(p=>{
+      p.y -= p.vy; p.x += p.vx;
+      if(p.y < -10){ p.y = h + 10; p.x = Math.random()*w; }
+      ctx.beginPath();
+      ctx.fillStyle = `rgba(${p.hue},${p.alpha})`;
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fill();
+    });
+    if(!prefersReducedMotion) requestAnimationFrame(tick);
+  }
+  sizeCanvas();
+  window.addEventListener('resize', sizeCanvas);
+  window.addEventListener('orientationchange', sizeCanvas);
+  tick();
+})();
+
+/* ============================================================
+   2. SKELETON RENDERING ENGINE (shared by hero + components)
+   ============================================================ */
+const PTS = {
+  skullC:[150,55], skullR:[33,35],
+  jaw:[150,98],
+  neckTop:[150,96],
+  spine:[[150,108],[150,128],[150,148],[150,168],[150,188],[150,208],[150,228],
+         [150,248],[150,268],[149,288],[149,308],[150,326]],
+  sternumTop:[150,124], sternumBot:[150,232],
+  ribsL:[[150,132],[150,150],[150,168],[150,186],[150,204],[150,220]],
+  ribsR:[[150,132],[150,150],[150,168],[150,186],[150,204],[150,220]],
+  shoulderL:[92,150], shoulderR:[208,150],
+  elbowL:[78,238], elbowR:[222,238],
+  wristL:[68,322], wristR:[232,322],
+  hipL:[122,344], hipR:[178,344],
+  kneeL:[128,488], kneeR:[172,488],
+  ankleL:[123,618], ankleR:[177,618],
+  pelvisTop:[150,320]
+};
+
+function addBone(group,x1,y1,x2,y2,r1,r2,cls){
+  const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy)||1;
+  const ux=dx/len, uy=dy/len, px=-uy, py=ux;
+  const s1=r1*0.5, s2=r2*0.5;
+  const poly = document.createElementNS(SVGNS,'polygon');
+  poly.setAttribute('points',
+    `${x1+px*s1},${y1+py*s1} ${x2+px*s2},${y2+py*s2} ${x2-px*s2},${y2-py*s2} ${x1-px*s1},${y1-py*s1}`);
+  poly.setAttribute('class','bone-shaft');
+  group.appendChild(poly);
+  [[x1,y1,r1],[x2,y2,r2]].forEach(([cx,cy,r])=>{
+    const c = document.createElementNS(SVGNS,'circle');
+    c.setAttribute('cx',cx); c.setAttribute('cy',cy); c.setAttribute('r',r);
+    c.setAttribute('class','bone-bulb');
+    group.appendChild(c);
+  });
+}
+function addJoint(group,x,y,r){
+  const c = document.createElementNS(SVGNS,'circle');
+  c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',r);
+  c.setAttribute('class','joint-dot');
+  group.appendChild(c);
+}
+function addRib(group,sx,sy,ex,ey,side){
+  const path = document.createElementNS(SVGNS,'path');
+  const midX = side==='L' ? sx-38 : sx+38;
+  path.setAttribute('d',`M${sx},${sy} Q${midX},${sy+10} ${ex},${ey}`);
+  path.setAttribute('class','rib-line');
+  group.appendChild(path);
+}
+function makeGroup(svg,id){
+  const g = document.createElementNS(SVGNS,'g');
+  g.setAttribute('data-bone',id);
+  g.setAttribute('class','bone-group');
+  svg.appendChild(g);
+  return g;
+}
+function ns(tag,attrs){
+  const el = document.createElementNS(SVGNS,tag);
+  Object.entries(attrs).forEach(([k,v])=>el.setAttribute(k,v));
+  return el;
+}
+
+function buildFullSkeleton(svg){
+  svg.innerHTML = '';
+  // ---- SKULL ----
+  const skull = makeGroup(svg,'skull');
+  const cranium = ns('ellipse',{cx:PTS.skullC[0],cy:PTS.skullC[1],rx:PTS.skullR[0],ry:PTS.skullR[1],class:'skull-cap'});
+  skull.appendChild(cranium);
+  const jaw = ns('path',{d:'M122,72 Q150,108 178,72 L172,80 Q150,96 128,80 Z',class:'skull-cap'});
+  skull.appendChild(jaw);
+  const shadow = ns('ellipse',{cx:165,cy:50,rx:12,ry:20,fill:'rgba(140,120,80,0.35)'});
+  skull.appendChild(shadow);
+  const eye = ns('ellipse',{cx:138,cy:52,rx:5,ry:4,fill:'rgba(40,30,20,0.4)'});
+  skull.appendChild(eye);
+  const nose = ns('path',{d:'M148,58 L146,68 Q150,71 154,68 L152,58 Z',fill:'rgba(60,45,30,0.3)'});
+  skull.appendChild(nose);
+
+  // ---- SPINE ----
+  const spine = makeGroup(svg,'spine');
+  PTS.spine.forEach((p,i)=>{
+    const w = 12 + (i>7 ? (i-7)*1.6 : 0);
+    const rect = ns('rect',{x:p[0]-w/2, y:p[1]-6, width:w, height:11, rx:3.5, class:'vert-block'});
+    spine.appendChild(rect);
+  });
+
+  // ---- RIBCAGE (ribs + sternum) ----
+  const ribcage = makeGroup(svg,'ribcage');
+  const sternum = ns('rect',{x:145,y:PTS.sternumTop[1],width:10,height:PTS.sternumBot[1]-PTS.sternumTop[1],rx:4,class:'bone-shaft'});
+  ribcage.appendChild(sternum);
+  PTS.ribsL.forEach(p=>addRib(ribcage,150,p[1],112,p[1]+18,'L'));
+  PTS.ribsR.forEach(p=>addRib(ribcage,150,p[1],188,p[1]+18,'R'));
+
+  // ---- PECTORAL GIRDLE (clavicles) ----
+  const pect = makeGroup(svg,'pectoral');
+  addBone(pect,140,122,PTS.shoulderL[0],PTS.shoulderL[1],5,7,'');
+  addBone(pect,160,122,PTS.shoulderR[0],PTS.shoulderR[1],5,7,'');
+  addJoint(pect,PTS.shoulderL[0],PTS.shoulderL[1],10);
+  addJoint(pect,PTS.shoulderR[0],PTS.shoulderR[1],10);
+
+  // ---- PELVIS ----
+  const pelvis = makeGroup(svg,'pelvis');
+  const pelvisPath = ns('path',{
+    d:'M120,320 C86,328 82,358 112,372 L150,364 L188,372 C218,358 214,328 180,320 C168,332 132,332 120,320 Z',
+    class:'pelvis-shape'
+  });
+  pelvis.appendChild(pelvisPath);
+  addJoint(pelvis,PTS.hipL[0],PTS.hipL[1],8);
+  addJoint(pelvis,PTS.hipR[0],PTS.hipR[1],8);
+
+  // ---- ARMS (humerus + forearm + hand) ----
+  const humerus = makeGroup(svg,'humerus');
+  addBone(humerus,PTS.shoulderL[0],PTS.shoulderL[1],PTS.elbowL[0],PTS.elbowL[1],9,7.5,'');
+  addBone(humerus,PTS.shoulderR[0],PTS.shoulderR[1],PTS.elbowR[0],PTS.elbowR[1],9,7.5,'');
+  addJoint(humerus,PTS.elbowL[0],PTS.elbowL[1],7);
+  addJoint(humerus,PTS.elbowR[0],PTS.elbowR[1],7);
+
+  const forearm = makeGroup(svg,'forearm');
+  addBone(forearm,PTS.elbowL[0]-4,PTS.elbowL[1],PTS.wristL[0]-4,PTS.wristL[1],5.5,4.5,'');
+  addBone(forearm,PTS.elbowL[0]+4,PTS.elbowL[1]+2,PTS.wristL[0]+4,PTS.wristL[1]+2,5,4,'');
+  addBone(forearm,PTS.elbowR[0]+4,PTS.elbowR[1],PTS.wristR[0]+4,PTS.wristR[1],5.5,4.5,'');
+  addBone(forearm,PTS.elbowR[0]-4,PTS.elbowR[1]+2,PTS.wristR[0]-4,PTS.wristR[1]+2,5,4,'');
+  addJoint(forearm,PTS.wristL[0],PTS.wristL[1],5.5);
+  addJoint(forearm,PTS.wristR[0],PTS.wristR[1],5.5);
+  const handL = ns('ellipse',{cx:PTS.wristL[0]-4,cy:PTS.wristL[1]+16,rx:9,ry:13,class:'bone-shaft'});
+  const handR = ns('ellipse',{cx:PTS.wristR[0]+4,cy:PTS.wristR[1]+16,rx:9,ry:13,class:'bone-shaft'});
+  forearm.appendChild(handL); forearm.appendChild(handR);
+
+  // ---- LEGS (femur + tibia/fibula + foot) ----
+  const femur = makeGroup(svg,'femur');
+  addBone(femur,PTS.hipL[0],PTS.hipL[1],PTS.kneeL[0],PTS.kneeL[1],11,9,'');
+  addBone(femur,PTS.hipR[0],PTS.hipR[1],PTS.kneeR[0],PTS.kneeR[1],11,9,'');
+  addJoint(femur,PTS.kneeL[0],PTS.kneeL[1],7);
+  addJoint(femur,PTS.kneeR[0],PTS.kneeR[1],7);
+
+  const tibia = makeGroup(svg,'tibia');
+  addBone(tibia,PTS.kneeL[0]-2,PTS.kneeL[1],PTS.ankleL[0]-2,PTS.ankleL[1],7,5.5,'');
+  addBone(tibia,PTS.kneeL[0]+5,PTS.kneeL[1]+4,PTS.ankleL[0]+5,PTS.ankleL[1]+2,4,3.4,'');
+  addBone(tibia,PTS.kneeR[0]+2,PTS.kneeR[1],PTS.ankleR[0]+2,PTS.ankleR[1],7,5.5,'');
+  addBone(tibia,PTS.kneeR[0]-5,PTS.kneeR[1]+4,PTS.ankleR[0]-5,PTS.ankleR[1]+2,4,3.4,'');
+  addJoint(tibia,PTS.ankleL[0],PTS.ankleL[1],6);
+  addJoint(tibia,PTS.ankleR[0],PTS.ankleR[1],6);
+  const footL = ns('path',{d:`M${PTS.ankleL[0]-9},${PTS.ankleL[1]+8} q-4,10 2,20 q10,6 22,0 q4,-10 -2,-20 Z`,class:'bone-shaft'});
+  const footR = ns('path',{d:`M${PTS.ankleR[0]-13},${PTS.ankleR[1]+8} q-4,10 2,20 q10,6 22,0 q4,-10 -2,-20 Z`,class:'bone-shaft'});
+  tibia.appendChild(footL); tibia.appendChild(footR);
+}
+
+const heroSvg = document.getElementById('heroSkeleton');
+const compSvg = document.getElementById('componentsSkeleton');
+buildFullSkeleton(heroSvg);
+buildFullSkeleton(compSvg);
+
+// hero ambient sweep-glow: cycles a "spotlight" across bone groups to feel alive
+(function heroSweep(){
+  if(prefersReducedMotion) return;
+  const order = ['skull','pectoral','ribcage','spine','humerus','pelvis','femur','tibia','forearm'];
+  let i = 0;
+  setInterval(()=>{
+    order.forEach(id=>{
+      const g = heroSvg.querySelector(`[data-bone="${id}"]`);
+      if(g) g.classList.remove('glow');
+    });
+    const g = heroSvg.querySelector(`[data-bone="${order[i % order.length]}"]`);
+    if(g) g.classList.add('glow');
+    i++;
+  }, 850);
+})();
+
+/* ============================================================
+   3. MAIN COMPONENTS — marker + legend (never floating over art)
+   ============================================================ */
+const COMPONENTS = [
+  {id:'skull', pt:[150,50], name:'Skull', desc:'Protects the brain and shapes the face — built from 22 fused bones.'},
+  {id:'spine', pt:[150,264], name:'Vertebral Column', desc:'33 stacked vertebrae supporting the body and shielding the spinal cord.'},
+  {id:'ribcage', pt:[113,178], name:'Rib Cage', desc:'12 pairs of ribs plus the sternum, guarding the heart and lungs.'},
+  {id:'pectoral', pt:[205,142], name:'Pectoral Girdle', desc:'Clavicle and shoulder joint connect the arm to the skeleton.'},
+  {id:'pelvis', pt:[150,348], name:'Pelvis', desc:'A bowl-shaped bone that bears body weight and protects abdominal organs.'},
+  {id:'humerus', pt:[82,195], name:'Humerus', desc:'The long upper-arm bone that lets the elbow bend.'},
+  {id:'femur', pt:[128,415], name:'Femur', desc:'The longest, strongest bone in the body — hip to knee.'},
+  {id:'tibia', pt:[125,555], name:'Tibia & Fibula', desc:'The two lower-leg bones that bear weight and stabilize the ankle.'}
+];
+
+const markerLayer = document.getElementById('markerLayer');
+const legendList = document.getElementById('legendList');
+const diagramFrame = document.querySelector('.diagram-frame');
+
+function layoutMarkers(){
+  markerLayer.innerHTML = '';
+  const svgRect = compSvg.getBoundingClientRect();
+  const frameRect = diagramFrame.getBoundingClientRect();
+  const offX = svgRect.left - frameRect.left;
+  const offY = svgRect.top - frameRect.top;
+  COMPONENTS.forEach((c,idx)=>{
+    const px = offX + (c.pt[0]/300) * svgRect.width;
+    const py = offY + (c.pt[1]/700) * svgRect.height;
+    const m = document.createElement('div');
+    m.className = 'marker';
+    m.style.left = px+'px'; m.style.top = py+'px';
+    m.textContent = idx+1;
+    m.dataset.id = c.id;
+    m.addEventListener('click',()=>selectComponent(c.id));
+    markerLayer.appendChild(m);
+  });
+}
+markerLayer.style.position='absolute'; markerLayer.style.inset='0';
+
+legendList.innerHTML = COMPONENTS.map((c,idx)=>`
+  <div class="legend-row" data-id="${c.id}">
+    <div class="legend-badge">${idx+1}</div>
+    <div class="legend-text"><h4>${c.name}</h4><p>${c.desc}</p></div>
+  </div>`).join('');
+
+function selectComponent(id){
+  document.querySelectorAll('.marker').forEach(m=>m.classList.toggle('active', m.dataset.id===id));
+  document.querySelectorAll('.legend-row').forEach(r=>r.classList.toggle('active', r.dataset.id===id));
+  document.querySelectorAll('#componentsSkeleton .bone-group').forEach(g=>{
+    g.classList.toggle('glow', g.getAttribute('data-bone')===id);
+  });
+}
+legendList.querySelectorAll('.legend-row').forEach(row=>{
+  row.addEventListener('click',()=>selectComponent(row.dataset.id));
+});
+window.addEventListener('load', layoutMarkers);
+window.addEventListener('resize', ()=>{ clearTimeout(window._mrz); window._mrz=setTimeout(layoutMarkers,150); });
+setTimeout(layoutMarkers, 200);
+
+/* ============================================================
+   4. WORKING SECTION — elbow lever mechanism, staged
+   ============================================================ */
+const STAGES = [
+  {title:'Nerve Signal', caption:'The brain sends an electrical impulse down a motor neuron toward the bicep.', angle:8},
+  {title:'Muscle Contracts', caption:'Bicep muscle fibers shorten and bulge, generating pulling force.', angle:8},
+  {title:'Tendon Pulls', caption:'The tendon connecting muscle to bone goes taut, transmitting the force.', angle:35},
+  {title:'Joint Pivots', caption:'The elbow hinge rotates around its fixed pivot point — the fulcrum.', angle:95},
+  {title:'Arm Moves', caption:'Lever (forearm) + fulcrum (elbow) + effort (muscle) = motion at the hand.', angle:130}
+];
+let currentStage = 0, autoTimer = null;
+
+function buildWorkingSvg(){
+  const svg = document.getElementById('workingSvg');
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox','0 0 260 300');
+
+  // upper arm (fixed) — humerus
+  const upper = ns('g',{});
+  svg.appendChild(upper);
+  addBone(upper,130,20,130,150,13,11,'');
+  addJoint(upper,130,150,11);
+
+  // bicep muscle (behind/inside upper arm) — will "bulge" on stage>=1
+  const muscle = ns('ellipse',{cx:112,cy:95,rx:16,ry:40,fill:'rgba(226,105,79,0.55)', id:'bicepShape'});
+  svg.insertBefore(muscle, upper.nextSibling);
+
+  // nerve line + signal dot
+  const nerve = ns('path',{d:'M130,10 C118,30 108,55 108,80', stroke:'rgba(79,214,196,0.55)', 'stroke-width':'2', fill:'none','stroke-dasharray':'3 4'});
+  svg.appendChild(nerve);
+  const signalDot = ns('circle',{cx:130,cy:10,r:4,fill:'#4fd6c4', id:'signalDot'});
+  svg.appendChild(signalDot);
+
+  // rotating forearm group (pivots around elbow 130,150)
+  const forearmGroup = ns('g',{id:'forearmGroup', transform:'rotate(0 130 150)'});
+  svg.appendChild(forearmGroup);
+  addBone(forearmGroup,124,150,124,260,8,6.5,'');
+  addBone(forearmGroup,136,152,136,258,7,5.5,'');
+  const hand = ns('ellipse',{cx:130,cy:270,rx:13,ry:16,class:'bone-shaft'});
+  forearmGroup.appendChild(hand);
+
+  // tendon (from muscle bottom to forearm top) — stretches visually
+  const tendon = ns('line',{x1:112,y1:132,x2:126,y2:150,stroke:'#eef7f6','stroke-width':'3','stroke-linecap':'round', id:'tendonLine'});
+  svg.appendChild(tendon);
+}
+buildWorkingSvg();
+
+function renderStage(){
+  const s = STAGES[currentStage];
+  document.getElementById('stageCaption').textContent = s.caption;
+  document.getElementById('forearmGroup').setAttribute('transform', `rotate(-${s.angle} 130 150)`);
+  const muscle = document.getElementById('bicepShape');
+  const bulge = currentStage >= 1 ? 1 + (currentStage*0.06) : 1;
+  muscle.setAttribute('rx', 16*bulge);
+  muscle.setAttribute('fill', currentStage>=1 ? 'rgba(226,105,79,0.85)' : 'rgba(226,105,79,0.4)');
+  document.getElementById('signalDot').style.opacity = currentStage===0 ? 1 : 0;
+  document.getElementById('tendonLine').setAttribute('stroke-width', currentStage>=2 ? 4.5 : 2.5);
+
+  document.querySelectorAll('.stage-item').forEach((el,i)=>el.classList.toggle('current', i===currentStage));
+  document.querySelectorAll('#progressDots span').forEach((el,i)=>el.classList.toggle('active', i===currentStage));
+}
+
+const stageList = document.getElementById('stageList');
+stageList.innerHTML = STAGES.map((s,i)=>`
+  <div class="stage-item" data-i="${i}">
+    <div class="stage-num">${i+1}</div>
+    <div><h4>${s.title}</h4><p>${s.caption}</p></div>
+  </div>`).join('');
+stageList.querySelectorAll('.stage-item').forEach(el=>{
+  el.addEventListener('click',()=>{ currentStage = +el.dataset.i; renderStage(); });
+});
+
+const progressDots = document.getElementById('progressDots');
+progressDots.innerHTML = STAGES.map((_,i)=>`<span data-i="${i}"></span>`).join('');
+progressDots.querySelectorAll('span').forEach(el=>{
+  el.addEventListener('click',()=>{ currentStage = +el.dataset.i; renderStage(); });
+});
+
+document.getElementById('prevStage').addEventListener('click',()=>{
+  currentStage = (currentStage - 1 + STAGES.length) % STAGES.length; renderStage();
+});
+document.getElementById('nextStage').addEventListener('click',()=>{
+  currentStage = (currentStage + 1) % STAGES.length; renderStage();
+});
+const playBtn = document.getElementById('playStage');
+playBtn.addEventListener('click',()=>{
+  const on = playBtn.classList.toggle('on');
+  playBtn.textContent = on ? '⏸ Pause' : '▶ Auto-Play';
+  if(on){
+    autoTimer = setInterval(()=>{
+      currentStage = (currentStage + 1) % STAGES.length; renderStage();
+    }, 2200);
+  } else {
+    clearInterval(autoTimer);
+  }
+});
+renderStage();
+
+/* ============================================================
+   5. INTERACTIVE SIMULATION — joint explorer
+   ============================================================ */
+const JOINTS = [
+  {id:'hinge', name:'Hinge', example:'Elbow / Knee', min:0, max:150, note:'A <b>hinge joint</b> moves like a door — back and forth on a single plane. The elbow bends roughly 0°–150°.'},
+  {id:'ball', name:'Ball & Socket', example:'Shoulder / Hip', min:0, max:180, note:'A <b>ball-and-socket joint</b> rotates in almost every direction. The shoulder has the widest range of motion in the body.'},
+  {id:'pivot', name:'Pivot', example:'Neck (C1–C2)', min:-80, max:80, note:'A <b>pivot joint</b> lets one bone rotate around another — this is how your head turns side to side.'},
+  {id:'gliding', name:'Gliding', example:'Wrist', min:-30, max:30, note:'A <b>gliding joint</b> allows small sliding movements between flat bone surfaces, giving the wrist its subtle flexibility.'}
+];
+let activeJoint = JOINTS[0];
+
+const jointPicker = document.getElementById('jointPicker');
+jointPicker.innerHTML = JOINTS.map(j=>`
+  <button class="joint-btn ${j.id==='hinge'?'active':''}" data-id="${j.id}"><b>${j.name}</b>${j.example}</button>`).join('');
+
+function buildJointSvg(){
+  const svg = document.getElementById('jointSvg');
+  svg.innerHTML = '';
+  svg.setAttribute('viewBox','0 0 260 260');
+  addBone(svg,130,40,130,130,14,11,'');
+  addJoint(svg,130,130,12);
+  const range = ns('path',{id:'rangeArc', fill:'none', stroke:'rgba(79,214,196,0.25)', 'stroke-width':'26', 'stroke-linecap':'round'});
+  svg.insertBefore(range, svg.firstChild.nextSibling);
+  const moving = ns('g',{id:'movingBone', transform:'rotate(0 130 130)'});
+  svg.appendChild(moving);
+  addBone(moving,130,130,130,230,10,7,'');
+}
+buildJointSvg();
+
+function polarPoint(cx,cy,r,angleDeg){
+  const rad = (angleDeg-90) * Math.PI/180;
+  return [cx + r*Math.cos(rad), cy + r*Math.sin(rad)];
+}
+function updateRangeArc(){
+  const arc = document.getElementById('rangeArc');
+  const [x1,y1] = polarPoint(130,130,55, activeJoint.min);
+  const [x2,y2] = polarPoint(130,130,55, activeJoint.max);
+  const large = (activeJoint.max - activeJoint.min) > 180 ? 1 : 0;
+  arc.setAttribute('d', `M${x1},${y1} A55,55 0 ${large} 1 ${x2},${y2}`);
+}
+function applyAngle(val){
+  document.getElementById('movingBone').setAttribute('transform', `rotate(${val} 130 130)`);
+  document.getElementById('angleReadout').textContent = Math.round(val)+'°';
+}
+
+const angleSlider = document.getElementById('angleSlider');
+function setJoint(j){
+  activeJoint = j;
+  document.querySelectorAll('.joint-btn').forEach(b=>b.classList.toggle('active', b.dataset.id===j.id));
+  angleSlider.min = j.min; angleSlider.max = j.max;
+  const mid = Math.round((j.min+j.max)/2);
+  angleSlider.value = mid;
+  document.getElementById('jointNote').innerHTML = j.note;
+  updateRangeArc();
+  applyAngle(mid);
+}
+jointPicker.querySelectorAll('.joint-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const j = JOINTS.find(x=>x.id===btn.dataset.id);
+    setJoint(j);
+  });
+});
+angleSlider.addEventListener('input', e=>applyAngle(+e.target.value));
+setJoint(JOINTS[0]);
+
+/* ============================================================
+   6. DATA-DRIVEN CONTENT (overview / applications / facts / mistakes / revision)
+   ============================================================ */
+const ICONS = {
+  support: `<svg viewBox="0 0 48 48"><rect x="8" y="10" width="8" height="30" rx="2" fill="var(--bone-mid)"/><rect x="20" y="10" width="8" height="30" rx="2" fill="var(--bone-mid)"/><rect x="32" y="10" width="8" height="30" rx="2" fill="var(--bone-mid)"/><rect x="4" y="38" width="40" height="4" rx="2" fill="var(--accent-amber)"/></svg>`,
+  movement: `<svg viewBox="0 0 48 48"><circle cx="24" cy="10" r="6" fill="var(--accent-cyan)"/><path d="M24 18 L16 30 L20 44 M24 18 L34 26 L30 44 M16 30 L34 26" stroke="var(--bone-mid)" stroke-width="4" stroke-linecap="round" fill="none"/></svg>`,
+  protection: `<svg viewBox="0 0 48 48"><path d="M24 4 L42 12 V22 C42 34 34 42 24 46 C14 42 6 34 6 22 V12 Z" fill="var(--accent-amber)" opacity="0.85"/><path d="M24 12 V38 M17 18 Q24 24 31 18 M17 28 Q24 34 31 28" stroke="#0a0e17" stroke-width="2" fill="none" opacity="0.5"/></svg>`,
+  mineral: `<svg viewBox="0 0 48 48"><rect x="14" y="18" width="20" height="12" rx="6" fill="var(--bone-mid)"/><circle cx="10" cy="24" r="7" fill="var(--bone-mid)"/><circle cx="38" cy="24" r="7" fill="var(--bone-mid)"/><circle cx="24" cy="10" r="2.4" fill="var(--accent-cyan)"/><circle cx="30" cy="8" r="1.8" fill="var(--accent-cyan)"/><circle cx="18" cy="8" r="1.6" fill="var(--accent-cyan)"/></svg>`,
+  blood: `<svg viewBox="0 0 48 48"><path d="M24 6 C16 18 10 26 10 33 a14 14 0 0 0 28 0 C38 26 32 18 24 6 Z" fill="var(--danger)" opacity="0.85"/><circle cx="19" cy="32" r="2.4" fill="#fff" opacity="0.7"/></svg>`,
+  sports: `<svg viewBox="0 0 48 48"><circle cx="24" cy="10" r="5" fill="var(--accent-cyan)"/><path d="M24 16 L24 28 M24 20 L12 26 M24 20 L36 26 M24 28 L14 44 M24 28 L34 44" stroke="var(--bone-mid)" stroke-width="4" stroke-linecap="round" fill="none"/></svg>`,
+  medical: `<svg viewBox="0 0 48 48"><rect x="6" y="20" width="36" height="8" rx="3" fill="var(--accent-amber)"/><rect x="20" y="6" width="8" height="36" rx="3" fill="var(--accent-amber)"/></svg>`,
+  forensic: `<svg viewBox="0 0 48 48"><ellipse cx="24" cy="24" rx="18" ry="18" fill="none" stroke="var(--bone-mid)" stroke-width="3"/><circle cx="24" cy="24" r="4" fill="var(--accent-cyan)"/><path d="M8 24 h6 M34 24 h6 M24 8 v6 M24 34 v6" stroke="var(--bone-mid)" stroke-width="3"/></svg>`,
+  ergo: `<svg viewBox="0 0 48 48"><path d="M10 40 V24 a4 4 0 0 1 4-4 h8 M32 40 V20 M10 40 h30" stroke="var(--bone-mid)" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="14" cy="10" r="5" fill="var(--accent-cyan)"/></svg>`,
+  fact: `<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="18" fill="none" stroke="var(--accent-amber)" stroke-width="3"/><path d="M24 16 v10 M24 30 v.5" stroke="var(--accent-amber)" stroke-width="3" stroke-linecap="round"/></svg>`
+};
+
+const OVERVIEW_CARDS = [
+  {icon:'support', title:'Support', text:"Bones form a rigid frame that holds your body upright and gives every muscle something to pull against."},
+  {icon:'movement', title:'Movement', text:"Bones act as levers. Muscles pull on them across joints, turning small contractions into big movements."},
+  {icon:'protection', title:'Protection', text:"The skull, ribs, and spine form armor around the brain, heart, lungs, and spinal cord."},
+  {icon:'mineral', title:'Mineral Storage', text:"Bones bank calcium and phosphorus, releasing them into the blood whenever the body needs them."},
+  {icon:'blood', title:'Blood Production', text:"Soft marrow inside certain bones manufactures red cells, white cells, and platelets around the clock."}
+];
+document.getElementById('funcGrid').innerHTML = OVERVIEW_CARDS.map(c=>`
+  <div class="func-card glass reveal"><div class="icn">${ICONS[c.icon]}</div><h3>${c.title}</h3><p>${c.text}</p></div>`).join('');
+
+const APPLICATIONS = [
+  {icon:'sports', title:'Sports & Biomechanics', text:"Coaches study joint angles and lever lengths to improve technique and help prevent injury."},
+  {icon:'medical', title:'Medical Imaging', text:"X-rays and CT scans read bone density and alignment to diagnose fractures and disease."},
+  {icon:'forensic', title:'Forensic Anthropology', text:"Bone size and shape can reveal a person's age, sex, height, and even old injuries."},
+  {icon:'ergo', title:'Ergonomic Design', text:"Chairs, tools, and workstations are shaped around real joint ranges to reduce strain."}
+];
+document.getElementById('appGrid').innerHTML = APPLICATIONS.map(c=>`
+  <div class="app-card glass reveal"><div class="icn">${ICONS[c.icon]}</div><h3>${c.title}</h3><p>${c.text}</p></div>`).join('');
+
+const FACTS = [
+  "Babies are born with about 300 separate bone pieces — many fuse together by adulthood, leaving 206.",
+  "The femur is stronger, pound for pound, than a bar of steel of the same weight.",
+  "The smallest bone in the body, the stapes, sits inside your ear and is smaller than a grain of rice.",
+  "Bone is living tissue — it rebuilds itself almost completely roughly every ten years.",
+  "There's no bone in your nose or outer ears — that firm shape comes from flexible cartilage.",
+  "Your hands and feet together hold about half of all the bones in your entire body."
+];
+document.getElementById('factsGrid').innerHTML = FACTS.map((f,i)=>`
+  <div class="fact-card glass reveal"><span class="fact-num">FACT ${String(i+1).padStart(2,'0')}</span>${ICONS.fact}<p style="margin-top:10px">${f}</p></div>`).join('');
+
+const MISTAKES = [
+  {myth:"The skull is one solid bone.", fact:"It's actually about 22 separate bones, fused together at seams called sutures."},
+  {myth:"The backbone is a single long bone.", fact:"It's a stack of 33 small vertebrae, cushioned between by soft discs."},
+  {myth:"Bones are dry and lifeless.", fact:"Bone is living tissue with its own blood vessels and nerves running through it."},
+  {myth:"Teeth count as bones.", fact:"Teeth lack bone marrow and can't repair themselves the way real bone can."},
+  {myth:"Cartilage is a type of bone.", fact:"Cartilage is a softer, flexible tissue — a completely different material from bone."}
+];
+document.getElementById('mistakeGrid').innerHTML = MISTAKES.map(m=>`
+  <div class="flip-card reveal">
+    <div class="flip-inner">
+      <div class="flip-face flip-front"><span class="flip-tag">Myth</span><p>${m.myth}</p><span class="flip-hint">tap to flip</span></div>
+      <div class="flip-face flip-back"><span class="flip-tag">Fact</span><p>${m.fact}</p><span class="flip-hint">tap to flip</span></div>
+    </div>
+  </div>`).join('');
+document.querySelectorAll('.flip-card').forEach(card=>{
+  card.addEventListener('click',()=>card.classList.toggle('flipped'));
+});
+
+const STATS = [
+  {n:206, label:'Adult bones'},
+  {n:300, label:'Bones at birth'},
+  {n:33, label:'Vertebrae'},
+  {n:12, label:'Rib pairs'},
+  {n:10, label:'Yr renewal cycle'}
+];
+document.getElementById('statGrid').innerHTML = STATS.map(s=>`
+  <div class="stat-box glass reveal"><b data-count="${s.n}">0</b><span>${s.label}</span></div>`).join('');
+
+const GLOSSARY = [
+  {term:'Joint', def:'The point where two or more bones meet and (usually) move.'},
+  {term:'Ligament', def:'Tough tissue that connects bone to bone across a joint.'},
+  {term:'Tendon', def:'Tissue that connects muscle to bone, transmitting pulling force.'},
+  {term:'Marrow', def:'The soft tissue inside bones where blood cells are made.'},
+  {term:'Cartilage', def:'A flexible tissue that cushions joints and shapes the nose and ears.'},
+  {term:'Ossification', def:'The process by which cartilage or tissue turns into hard bone.'}
+];
+document.getElementById('chipRow').innerHTML = GLOSSARY.map(g=>`
+  <div class="chip">${g.term}<span class="tip">${g.def}</span></div>`).join('');
+
+/* ============================================================
+   7. SCROLL REVEAL + COUNTERS + SCROLLSPY
+   ============================================================ */
+const revealObserver = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{ if(e.isIntersecting) e.target.classList.add('in'); });
+},{threshold:0.15});
+document.querySelectorAll('.reveal').forEach(el=>revealObserver.observe(el));
+
+const countObserver = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(!e.isIntersecting) return;
+    const el = e.target;
+    const target = +el.dataset.count;
+    let start = null;
+    function step(ts){
+      if(!start) start = ts;
+      const progress = Math.min((ts-start)/1200, 1);
+      el.textContent = Math.floor(progress*target);
+      if(progress < 1) requestAnimationFrame(step); else el.textContent = target;
+    }
+    requestAnimationFrame(step);
+    countObserver.unobserve(el);
+  });
+},{threshold:0.4});
+document.querySelectorAll('[data-count]').forEach(el=>countObserver.observe(el));
+
+const navButtons = document.querySelectorAll('.navlinks button');
+navButtons.forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.getElementById(btn.dataset.target).scrollIntoView({behavior: prefersReducedMotion ? 'auto' : 'smooth', block:'start'});
+  });
+});
+const spyObserver = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      navButtons.forEach(b=>b.classList.toggle('active', b.dataset.target===e.target.id));
+    }
+  });
+},{ rootMargin:'-40% 0px -50% 0px', threshold:0 });
+['intro','overview','components','working','simulation','applications','facts','mistakes','revision'].forEach(id=>{
+  const el = document.getElementById(id);
+  if(el) spyObserver.observe(el);
+});
+</script>
+</body>
+</html>

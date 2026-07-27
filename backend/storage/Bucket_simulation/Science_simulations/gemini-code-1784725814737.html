@@ -1,0 +1,1222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Water Retention Simulation</title>
+    <style>
+        /* ==========================================================================
+           ROOT & TYPOGRAPHY
+           ========================================================================== */
+        :root {
+            /* Colors - Dark Premium Theme */
+            --bg-base: #060913;
+            --bg-surface: rgba(16, 22, 38, 0.6);
+            --bg-glass: rgba(255, 255, 255, 0.03);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            
+            --text-main: #f0f2f5;
+            --text-muted: #8b9bb4;
+            
+            --accent-blue: #00d2ff;
+            --accent-blue-glow: rgba(0, 210, 255, 0.4);
+            --accent-sand: #e1b12c;
+            --accent-loam: #44bd32;
+            --accent-clay: #c23616;
+            
+            /* Typography - Fluid */
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --h1-size: clamp(2rem, 5vw, 4rem);
+            --h2-size: clamp(1.5rem, 3vw, 2.5rem);
+            --h3-size: clamp(1.2rem, 2vw, 1.8rem);
+            --p-size: clamp(0.9rem, 1.2vw, 1.1rem);
+            
+            /* Spacing & Layout */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --spacing-section: clamp(40px, 8vw, 120px);
+            --spacing-card: clamp(16px, 3vw, 32px);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 210, 255, 0.05), transparent 25%),
+                radial-gradient(circle at 85% 30%, rgba(225, 177, 44, 0.05), transparent 25%);
+            background-attachment: fixed;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-base); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+
+        /* ==========================================================================
+           LAYOUT & UTILITIES
+           ========================================================================== */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 clamp(16px, 4vw, 48px);
+        }
+
+        section {
+            padding: var(--spacing-section) 0;
+            position: relative;
+        }
+
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-card);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .text-center { text-align: center; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-card); }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--spacing-card); }
+
+        h1, h2, h3 { font-weight: 600; letter-spacing: -0.02em; margin-bottom: 1rem; }
+        h1 { font-size: var(--h1-size); background: linear-gradient(135deg, #fff, #a5b4fc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--h2-size); }
+        h3 { font-size: var(--h3-size); }
+        p { font-size: var(--p-size); color: var(--text-muted); margin-bottom: 1rem; }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--border-glass);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+        .btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        .btn.primary { background: var(--accent-blue); color: #000; border: none; box-shadow: 0 0 15px var(--accent-blue-glow); }
+        .btn.primary:hover { background: #33dbff; box-shadow: 0 0 25px var(--accent-blue-glow); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* ==========================================================================
+           SECTION 1: HERO / INTRO
+           ========================================================================== */
+        #intro { min-height: 90vh; display: flex; align-items: center; justify-content: center; position: relative; }
+        .hero-content { z-index: 2; max-width: 800px; }
+        
+        /* Hero Background Canvas */
+        #bg-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.6; pointer-events: none; }
+
+        /* ==========================================================================
+           SECTION 2: COMPONENTS (MARKER PATTERN)
+           ========================================================================== */
+        .diagram-layout {
+            display: grid;
+            grid-template-columns: 3fr 2fr;
+            gap: 40px;
+            align-items: center;
+        }
+
+        .illustration-area {
+            position: relative;
+            width: 100%;
+            min-height: 400px;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* SVG Apparatus Styling */
+        .svg-apparatus { width: 100%; height: 100%; max-height: 500px; filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5)); }
+        .glass-body { fill: rgba(255,255,255,0.05); stroke: rgba(255,255,255,0.3); stroke-width: 2; }
+        .glass-highlight { fill: none; stroke: rgba(255,255,255,0.8); stroke-width: 4; stroke-linecap: round; filter: blur(2px); }
+        .water-fill { fill: rgba(0, 210, 255, 0.4); }
+        .soil-fill { fill: #8d6e63; } /* Default brown */
+
+        /* Markers */
+        .marker {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            background: var(--bg-surface);
+            border: 2px solid var(--accent-blue);
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 15px var(--accent-blue-glow);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+        }
+        .marker:hover, .marker.active { transform: scale(1.2); background: var(--accent-blue); color: #000; }
+
+        /* Legend */
+        .legend-area { display: flex; flex-direction: column; gap: 16px; }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .legend-item:hover, .legend-item.active { background: rgba(0, 210, 255, 0.05); border-color: rgba(0, 210, 255, 0.3); transform: translateX(8px); }
+        .legend-badge {
+            width: 28px; height: 28px;
+            background: rgba(0, 210, 255, 0.1);
+            color: var(--accent-blue);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; flex-shrink: 0;
+        }
+        .legend-text h4 { margin: 0; font-size: 1.1rem; color: #fff; }
+        .legend-text p { margin: 0; font-size: 0.9rem; margin-top: 4px; }
+
+        /* ==========================================================================
+           SECTION 3: WORKING PROCESS (STATE MACHINE)
+           ========================================================================== */
+        .working-container { display: flex; flex-direction: column; gap: 24px; }
+        
+        .stage-visual {
+            height: 450px;
+            position: relative;
+            background: #0a0d16;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid var(--border-glass);
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        #working-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+        .working-svg-base { position: absolute; width: 100%; height: 100%; z-index: 1; max-width: 400px; }
+
+        /* Dynamic Stage Info overlay inside visual (top left) */
+        .stage-overlay {
+            position: absolute; top: 24px; left: 24px; z-index: 10;
+            background: rgba(10,13,22,0.8); backdrop-filter: blur(10px);
+            padding: 16px 24px; border-radius: var(--radius-md); border: 1px solid var(--border-glass);
+            pointer-events: none;
+        }
+        .stage-overlay-title { font-size: 1.2rem; color: #fff; font-weight: 600; margin-bottom: 4px; }
+        .stage-overlay-desc { font-size: 0.95rem; color: var(--accent-blue); margin:0;}
+
+        /* Controls */
+        .working-controls {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--bg-glass); padding: 16px 24px; border-radius: 30px;
+        }
+        .progress-dots { display: flex; gap: 8px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: 0.3s; }
+        .dot.active { background: var(--accent-blue); box-shadow: 0 0 10px var(--accent-blue); transform: scale(1.3); }
+
+        /* ==========================================================================
+           SECTION 4: INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-layout { display: grid; grid-template-columns: 350px 1fr; gap: 32px; }
+        
+        .sim-controls { display: flex; flex-direction: column; gap: 24px; }
+        .control-group { background: rgba(0,0,0,0.2); padding: 20px; border-radius: var(--radius-md); border: 1px solid rgba(255,255,255,0.05); }
+        .control-group h4 { margin-top: 0; margin-bottom: 16px; color: #fff; font-size: 1.1rem; display: flex; justify-content: space-between;}
+        
+        /* Custom Radio Buttons for Soil */
+        .soil-options { display: flex; flex-direction: column; gap: 12px; }
+        .soil-label {
+            display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+            background: rgba(255,255,255,0.05); border: 1px solid transparent;
+            border-radius: var(--radius-sm); cursor: pointer; transition: 0.2s;
+        }
+        .soil-label input { display: none; }
+        .color-indicator { width: 16px; height: 16px; border-radius: 50%; }
+        .c-sand { background: var(--accent-sand); box-shadow: 0 0 10px rgba(225, 177, 44, 0.5); }
+        .c-loam { background: var(--accent-loam); box-shadow: 0 0 10px rgba(68, 189, 50, 0.5); }
+        .c-clay { background: var(--accent-clay); box-shadow: 0 0 10px rgba(194, 54, 22, 0.5); }
+        
+        .soil-label:hover { background: rgba(255,255,255,0.1); }
+        .soil-label input:checked + .color-indicator + span { font-weight: bold; color: #fff; }
+        .soil-label.active-sand { border-color: var(--accent-sand); background: rgba(225, 177, 44, 0.1); }
+        .soil-label.active-loam { border-color: var(--accent-loam); background: rgba(68, 189, 50, 0.1); }
+        .soil-label.active-clay { border-color: var(--accent-clay); background: rgba(194, 54, 22, 0.1); }
+
+        /* Range Slider */
+        input[type=range] {
+            -webkit-appearance: none; width: 100%; background: transparent; margin: 10px 0;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 6px; cursor: pointer; background: rgba(255,255,255,0.1); border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px; width: 20px; border-radius: 50%; background: var(--accent-blue);
+            cursor: pointer; -webkit-appearance: none; margin-top: -7px;
+            box-shadow: 0 0 10px var(--accent-blue-glow);
+        }
+
+        /* Realtime Data Board */
+        .data-board { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: auto; }
+        .data-stat { background: rgba(0, 210, 255, 0.05); padding: 16px; border-radius: var(--radius-sm); border: 1px solid rgba(0, 210, 255, 0.1); text-align: center; }
+        .stat-value { font-size: 2rem; font-weight: 700; color: #fff; display: block; font-variant-numeric: tabular-nums; }
+        .stat-label { font-size: 0.8rem; color: var(--accent-blue); text-transform: uppercase; letter-spacing: 1px; }
+
+        /* Simulation Canvas Area */
+        .sim-visual {
+            background: #03050a; border-radius: var(--radius-lg); position: relative;
+            border: 1px solid var(--border-glass); overflow: hidden; height: 600px;
+        }
+        #sim-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        /* Particle Size Visualization */
+        .particle-zoom {
+            position: absolute; top: 24px; right: 24px; width: 120px; height: 120px;
+            background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); border-radius: 50%;
+            border: 1px solid var(--border-glass); display: flex; justify-content: center; align-items: center;
+            flex-direction: column; pointer-events: none;
+        }
+        .particle-zoom span { font-size: 0.7rem; color: #fff; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px;}
+        #zoom-canvas { width: 80px; height: 80px; border-radius: 50%; }
+
+        /* ==========================================================================
+           SECTION 5: CARDS (Facts, Apps)
+           ========================================================================== */
+        .icon-card {
+            background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+            padding: 32px 24px; border-radius: var(--radius-md); text-align: center;
+            transition: all 0.3s ease;
+        }
+        .icon-card:hover { transform: translateY(-10px); background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.2); }
+        .icon-wrapper {
+            width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 50%;
+            background: rgba(0, 210, 255, 0.1); display: flex; justify-content: center; align-items: center;
+            color: var(--accent-blue);
+        }
+        .icon-wrapper svg { width: 32px; height: 32px; fill: currentColor; }
+
+        /* ==========================================================================
+           RESPONSIVE DESIGN (MANDATORY RULES)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .diagram-layout { grid-template-columns: 1fr; }
+            .sim-layout { grid-template-columns: 1fr; }
+            .sim-visual { height: 500px; }
+            .data-board { margin-top: 24px; }
+        }
+
+        @media (max-width: 768px) {
+            /* Sizing Discipline */
+            :root {
+                --spacing-section: 60px;
+                --spacing-card: 16px;
+            }
+            .container { padding: 0 16px; }
+            
+            /* Performance - Reduce blur */
+            .glass-panel { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+            
+            /* Layout stacking */
+            .grid-2 { grid-template-columns: 1fr; }
+            
+            /* Specific adjustments */
+            .working-controls { flex-wrap: wrap; justify-content: center; gap: 16px; }
+            .progress-dots { order: -1; width: 100%; justify-content: center; margin-bottom: 8px;}
+            
+            .stage-visual { height: 350px; }
+            .sim-visual { height: 400px; }
+            
+            .stage-overlay { top: 12px; left: 12px; padding: 12px; right: 12px; text-align: center; }
+            
+            .marker { width: 28px; height: 28px; font-size: 12px; }
+            .particle-zoom { top: 12px; right: 12px; width: 90px; height: 90px; }
+            #zoom-canvas { width: 60px; height: 60px; }
+            
+            /* Ensure UI elements don't touch edges */
+            .glass-panel { width: calc(100% - 2px); margin: 0 auto; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HERO BACKGROUND -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        <!-- ==========================================
+             INTRO SECTION
+             ========================================== -->
+        <section id="intro" class="text-center">
+            <div class="hero-content">
+                <div style="display:inline-block; padding: 8px 16px; background: rgba(0,210,255,0.1); color: var(--accent-blue); border-radius: 20px; font-size: 0.9rem; font-weight: bold; margin-bottom: 20px; letter-spacing: 1px;">SOIL PHYSICS LABORATORY</div>
+                <h1>Water Retention Test</h1>
+                <p style="font-size: clamp(1.1rem, 2vw, 1.4rem); max-width: 600px; margin: 0 auto 32px auto; color: #fff;">
+                    A visual exploration of permeability and porosity. Discover how different soil structures capture or release water at a microscopic and macroscopic level.
+                </p>
+                <button class="btn primary" onclick="document.getElementById('working').scrollIntoView({behavior:'smooth'})">
+                    Observe Mechanism <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             COMPONENTS (Strict Marker Pattern)
+             ========================================== -->
+        <section id="components">
+            <div class="text-center" style="margin-bottom: 48px;">
+                <h2>Laboratory Apparatus</h2>
+                <p>Standard setup for measuring gravimetric water content.</p>
+            </div>
+
+            <div class="glass-panel diagram-layout">
+                <!-- Visual Area -->
+                <div class="illustration-area" id="apparatus-area">
+                    <!-- High Quality SVG Background -->
+                    <svg class="svg-apparatus" viewBox="0 0 200 400" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="glassGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.1)" />
+                                <stop offset="15%" stop-color="rgba(255,255,255,0.3)" />
+                                <stop offset="50%" stop-color="rgba(255,255,255,0.0)" />
+                                <stop offset="85%" stop-color="rgba(255,255,255,0.1)" />
+                                <stop offset="100%" stop-color="rgba(255,255,255,0.2)" />
+                            </linearGradient>
+                            <linearGradient id="soilGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#a17b62" />
+                                <stop offset="100%" stop-color="#5c4332" />
+                            </linearGradient>
+                        </defs>
+                        
+                        <!-- Stand/Ring (Simplified for focus) -->
+                        <rect x="45" y="160" width="110" height="6" fill="#333" rx="3"/>
+                        <rect x="35" y="150" width="10" height="250" fill="#222"/>
+
+                        <!-- Beaker (Bottom) -->
+                        <path class="glass-body" d="M 70 250 L 70 360 Q 70 370 80 370 L 140 370 Q 150 370 150 360 L 150 250" fill="url(#glassGrad)"/>
+                        <ellipse cx="110" cy="370" rx="40" ry="10" fill="rgba(255,255,255,0.1)"/>
+                        <path class="glass-highlight" d="M 75 260 L 75 350"/>
+                        
+                        <!-- Beaker Ticks -->
+                        <line x1="140" y1="350" x2="150" y2="350" stroke="#fff" stroke-width="1"/>
+                        <line x1="145" y1="330" x2="150" y2="330" stroke="#fff" stroke-width="0.5"/>
+                        <line x1="140" y1="310" x2="150" y2="310" stroke="#fff" stroke-width="1"/>
+                        <line x1="145" y1="290" x2="150" y2="290" stroke="#fff" stroke-width="0.5"/>
+                        <line x1="140" y1="270" x2="150" y2="270" stroke="#fff" stroke-width="1"/>
+
+                        <!-- Funnel (Top) -->
+                        <path class="glass-body" d="M 60 50 L 160 50 L 115 150 L 115 220 L 105 220 L 105 150 Z" fill="url(#glassGrad)"/>
+                        <ellipse cx="110" cy="50" rx="50" ry="15" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.3)"/>
+                        <path class="glass-highlight" d="M 65 60 L 103 145"/>
+
+                        <!-- Filter Paper Inside Funnel -->
+                        <path d="M 70 60 L 150 60 L 110 140 Z" fill="rgba(255,255,255,0.8)" opacity="0.9"/>
+                        <path d="M 70 60 L 110 140 L 110 60 Z" fill="rgba(220,220,220,0.8)" opacity="0.9"/> <!-- Fold detail -->
+
+                        <!-- Soil in Filter Paper -->
+                        <path d="M 75 75 L 145 75 L 110 135 Z" fill="url(#soilGrad)"/>
+                        
+                        <!-- Pouring Beaker (Floating Top Right) -->
+                        <g transform="translate(130, 0) rotate(-30)">
+                            <path class="glass-body" d="M 0 0 L 0 60 Q 0 65 5 65 L 45 65 Q 50 65 50 60 L 50 0" fill="url(#glassGrad)"/>
+                            <path d="M 0 30 L 0 60 Q 0 65 5 65 L 45 65 Q 50 65 50 60 L 50 30 Z" class="water-fill"/>
+                            <ellipse cx="25" cy="30" rx="25" ry="5" class="water-fill"/>
+                        </g>
+
+                    </svg>
+
+                    <!-- Absolute Markers (Percentages for responsiveness) -->
+                    <div class="marker" style="top: 25%; left: 52%;" data-id="m-soil">1</div>
+                    <div class="marker" style="top: 32%; left: 63%;" data-id="m-filter">2</div>
+                    <div class="marker" style="top: 48%; left: 52%;" data-id="m-funnel">3</div>
+                    <div class="marker" style="top: 75%; left: 52%;" data-id="m-beaker">4</div>
+                    <div class="marker" style="top: -2%; left: 75%;" data-id="m-water">5</div>
+                </div>
+
+                <!-- Legend Area -->
+                <div class="legend-area">
+                    <div class="legend-item active" data-id="m-soil">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-text">
+                            <h4>Soil Sample (50g)</h4>
+                            <p>Dried and pulverized test material.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="m-filter">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-text">
+                            <h4>Filter Paper</h4>
+                            <p>Holds soil particles while allowing water passage.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="m-funnel">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-text">
+                            <h4>Glass Funnel</h4>
+                            <p>Channels percolated water downwards.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="m-beaker">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-text">
+                            <h4>Graduated Beaker</h4>
+                            <p>Measures the exact volume of drained water.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="m-water">
+                        <div class="legend-badge">5</div>
+                        <div class="legend-text">
+                            <h4>Input Water (50ml)</h4>
+                            <p>Known initial volume poured into the sample.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             WORKING MECHANISM (Stage-by-Stage)
+             ========================================== -->
+        <section id="working">
+            <div class="text-center" style="margin-bottom: 48px;">
+                <h2>Mechanism Sequence</h2>
+                <p>Observe the physical process of percolation and retention.</p>
+            </div>
+
+            <div class="glass-panel working-container">
+                <!-- Stage Info Overlay -->
+                <div class="stage-visual" id="working-visual-area">
+                    <div class="stage-overlay">
+                        <div class="stage-overlay-title" id="stg-title">1. Preparation</div>
+                        <p class="stage-overlay-desc" id="stg-desc">Filter paper placed in dry funnel.</p>
+                    </div>
+
+                    <!-- Base SVG to map coordinates -->
+                    <svg class="working-svg-base" viewBox="0 0 200 400" id="work-svg">
+                         <!-- Simplified Funnel & Beaker purely for visual anchor -->
+                         <path d="M 60 100 L 160 100 L 115 200 L 115 270 L 105 270 L 105 200 Z" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+                         <path d="M 70 300 L 70 380 Q 70 390 80 390 L 140 390 Q 150 390 150 380 L 150 300" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="2"/>
+                    </svg>
+
+                    <!-- Canvas for dynamic stage animations (soil falling, water pouring, dripping) -->
+                    <canvas id="working-canvas"></canvas>
+                </div>
+
+                <!-- Controls -->
+                <div class="working-controls">
+                    <button class="btn" id="btn-prev"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg> Prev</button>
+                    
+                    <div class="progress-dots" id="work-dots">
+                        <!-- Dots injected by JS -->
+                    </div>
+
+                    <div>
+                        <button class="btn" id="btn-next">Next <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+                        <button class="btn" id="btn-play" style="margin-left:8px; border-color:var(--accent-blue); color:var(--accent-blue)">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Auto
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             INTERACTIVE SIMULATION
+             ========================================== -->
+        <section id="simulation">
+            <div class="text-center" style="margin-bottom: 48px;">
+                <h2>Interactive Laboratory</h2>
+                <p>Run tests on different soil types and observe real-time capillary physics.</p>
+            </div>
+
+            <div class="glass-panel sim-layout">
+                
+                <!-- Controls Panel -->
+                <div class="sim-controls">
+                    
+                    <div class="control-group">
+                        <h4>1. Select Soil Matrix</h4>
+                        <div class="soil-options">
+                            <label class="soil-label active-sand" id="lbl-sand">
+                                <input type="radio" name="soilType" value="sand" checked>
+                                <div class="color-indicator c-sand"></div>
+                                <span>Sand (High Permeability)</span>
+                            </label>
+                            <label class="soil-label" id="lbl-loam">
+                                <input type="radio" name="soilType" value="loam">
+                                <div class="color-indicator c-loam"></div>
+                                <span>Loam (Balanced)</span>
+                            </label>
+                            <label class="soil-label" id="lbl-clay">
+                                <input type="radio" name="soilType" value="clay">
+                                <div class="color-indicator c-clay"></div>
+                                <span>Clay (High Retention)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="control-group">
+                        <h4>2. Initial Water Vol. <span id="val-water">50 mL</span></h4>
+                        <input type="range" id="input-water" min="20" max="100" value="50" step="5">
+                    </div>
+
+                    <button class="btn primary" id="btn-run-sim" style="width: 100%; justify-content: center; padding: 16px;">
+                        Commence Test
+                    </button>
+
+                    <!-- Realtime Output -->
+                    <div class="data-board">
+                        <div class="data-stat">
+                            <span class="stat-value" id="out-drained">0</span>
+                            <span class="stat-label">Drained (mL)</span>
+                        </div>
+                        <div class="data-stat">
+                            <span class="stat-value" id="out-retained" style="color: var(--accent-blue)">0</span>
+                            <span class="stat-label">Retained (%)</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Simulation Visual -->
+                <div class="sim-visual" id="sim-visual-area">
+                    <canvas id="sim-canvas"></canvas>
+                    
+                    <!-- Microscopic View Overlay -->
+                    <div class="particle-zoom">
+                        <span>Pore Size</span>
+                        <canvas id="zoom-canvas"></canvas>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ==========================================
+             APPLICATIONS & FACTS
+             ========================================== -->
+        <section id="applications">
+            <h2 class="text-center" style="margin-bottom: 48px;">Why This Matters</h2>
+            
+            <div class="grid-3">
+                <div class="icon-card">
+                    <div class="icon-wrapper">
+                        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                    </div>
+                    <h3>Agriculture</h3>
+                    <p>Farmers test soil to determine irrigation schedules. Sandy soils need frequent, light watering, while clay soils need infrequent, deep watering to prevent rot.</p>
+                </div>
+                <div class="icon-card">
+                    <div class="icon-wrapper">
+                        <svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 21v-4a2 2 0 012-2h2a2 2 0 012 2v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                    </div>
+                    <h3>Civil Engineering</h3>
+                    <p>High water retention (clay) causes soil to expand and contract dramatically, which can crack building foundations and destroy road surfaces.</p>
+                </div>
+                <div class="icon-card">
+                    <div class="icon-wrapper">
+                        <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+                    </div>
+                    <h3>Flood Mitigation</h3>
+                    <p>Urban planners rely on porous soils (like loam/sand mixtures) in drainage zones to rapidly absorb stormwater and prevent flash flooding.</p>
+                </div>
+            </div>
+        </section>
+
+    </div> <!-- End Container -->
+
+    <script>
+        /**
+         * UTILITY FUNCTIONS
+         */
+        const mapRange = (value, in_min, in_max, out_min, out_max) => {
+            return (value - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+        };
+
+        const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
+
+        /**
+         * APP LOGIC: COMPONENT LABELS (Marker System)
+         */
+        class ComponentLabeller {
+            constructor() {
+                this.markers = document.querySelectorAll('.marker');
+                this.legends = document.querySelectorAll('.legend-item');
+                this.bindEvents();
+            }
+
+            bindEvents() {
+                this.markers.forEach(m => {
+                    m.addEventListener('mouseenter', () => this.activate(m.dataset.id));
+                    m.addEventListener('click', () => this.activate(m.dataset.id));
+                });
+                this.legends.forEach(l => {
+                    l.addEventListener('mouseenter', () => this.activate(l.dataset.id));
+                    l.addEventListener('click', () => this.activate(l.dataset.id));
+                });
+            }
+
+            activate(id) {
+                this.markers.forEach(m => m.classList.remove('active'));
+                this.legends.forEach(l => l.classList.remove('active'));
+                
+                document.querySelector(`.marker[data-id="${id}"]`).classList.add('active');
+                document.querySelector(`.legend-item[data-id="${id}"]`).classList.add('active');
+            }
+        }
+        new ComponentLabeller();
+
+
+        /**
+         * PHYSICS & RENDERING ENGINE CORE
+         */
+        class FluidEngine {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d', { alpha: true });
+                this.width = 0;
+                this.height = 0;
+                this.particles = [];
+                this.dpr = window.devicePixelRatio || 1;
+                
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                this.width = rect.width;
+                this.height = rect.height;
+                this.canvas.width = this.width * this.dpr;
+                this.canvas.height = this.height * this.dpr;
+                this.ctx.scale(this.dpr, this.dpr);
+            }
+
+            clear() {
+                this.ctx.clearRect(0, 0, this.width, this.height);
+            }
+        }
+
+        /**
+         * APP LOGIC: WORKING SEQUENCE (State Machine Canvas)
+         */
+        class WorkingSequence {
+            constructor() {
+                this.engine = new FluidEngine('working-canvas');
+                this.stages = [
+                    { t: "1. Empty Apparatus", d: "Dry filter paper in glass funnel.", action: "idle" },
+                    { t: "2. Add Sample", d: "50g of pulverized dry soil added.", action: "pour_soil" },
+                    { t: "3. Add Water", d: "50ml distilled water poured over soil.", action: "pour_water" },
+                    { t: "4. Percolation", d: "Gravity pulls water through pore spaces.", action: "percolate" },
+                    { t: "5. Drainage", d: "Free water drips into collection beaker.", action: "drain" },
+                    { t: "6. Measurement", d: "Volume recorded when dripping ceases.", action: "measure" }
+                ];
+                this.currentStage = 0;
+                this.isPlaying = false;
+                
+                // State variables for drawing
+                this.soilLevel = 0; // 0 to 1
+                this.waterTop = 0; // 0 to 1 (water sitting on soil)
+                this.soilWetness = 0; // 0 to 1 (color transition)
+                this.beakerLevel = 0; // 0 to 1
+                
+                this.particles = [];
+                
+                this.initDOM();
+                this.updateUI();
+                this.animate();
+            }
+
+            initDOM() {
+                const dotsContainer = document.getElementById('work-dots');
+                this.stages.forEach((_, i) => {
+                    const dot = document.createElement('div');
+                    dot.className = `dot ${i === 0 ? 'active' : ''}`;
+                    dot.onclick = () => this.goToStage(i);
+                    dotsContainer.appendChild(dot);
+                });
+
+                document.getElementById('btn-prev').onclick = () => this.goToStage(this.currentStage - 1);
+                document.getElementById('btn-next').onclick = () => this.goToStage(this.currentStage + 1);
+                document.getElementById('btn-play').onclick = () => this.togglePlay();
+            }
+
+            goToStage(index) {
+                if (index < 0 || index >= this.stages.length) return;
+                this.currentStage = index;
+                this.updateUI();
+                this.particles = []; // Clear particles on stage switch
+                
+                // Hardset states for non-animating stages if jumped
+                if (index === 0) { this.soilLevel=0; this.waterTop=0; this.beakerLevel=0; this.soilWetness=0; }
+                if (index > 1) this.soilLevel = 1;
+                if (index > 2) this.waterTop = 1;
+                if (index > 3) this.soilWetness = 1;
+                if (index > 4) { this.waterTop = 0; this.beakerLevel = 1; }
+            }
+
+            togglePlay() {
+                this.isPlaying = !this.isPlaying;
+                document.getElementById('btn-play').innerHTML = this.isPlaying ? 
+                    'Pause' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg> Auto';
+                
+                if (this.isPlaying && this.currentStage === this.stages.length - 1) {
+                    this.goToStage(0);
+                }
+            }
+
+            updateUI() {
+                document.getElementById('stg-title').innerText = this.stages[this.currentStage].t;
+                document.getElementById('stg-desc').innerText = this.stages[this.currentStage].d;
+                
+                const dots = document.querySelectorAll('#work-dots .dot');
+                dots.forEach((d, i) => d.classList.toggle('active', i === this.currentStage));
+                
+                document.getElementById('btn-prev').disabled = this.currentStage === 0;
+                document.getElementById('btn-next').disabled = this.currentStage === this.stages.length - 1;
+            }
+
+            // Centralized coordinates mapping to the SVG
+            getCoords() {
+                const w = this.engine.width;
+                const h = this.engine.height;
+                // Base coordinate system is 200x400 from SVG viewbox
+                // We need to scale these to canvas center
+                const scale = Math.min(w/200, h/400) * 0.8;
+                const cx = w/2;
+                const cy = h/2;
+                
+                return {
+                    scale, cx, cy,
+                    funnelTop: cy - 100 * scale,
+                    funnelMidY: cy,
+                    funnelBottom: cy + 70 * scale,
+                    beakerBottom: cy + 190 * scale,
+                    funnelWidthAt(y) {
+                        // linear interpolation for funnel cone
+                        if (y < cy) return mapRange(y, cy-100*scale, cy, 100*scale, 20*scale);
+                        return 10*scale; // stem
+                    }
+                };
+            }
+
+            drawApparatus(c) {
+                const ctx = this.engine.ctx;
+                
+                // Draw Soil
+                if (this.soilLevel > 0) {
+                    const topY = lerp(c.funnelMidY, c.funnelMidY - 40*c.scale, this.soilLevel);
+                    ctx.beginPath();
+                    ctx.moveTo(c.cx - c.funnelWidthAt(topY), topY);
+                    ctx.lineTo(c.cx + c.funnelWidthAt(topY), topY);
+                    ctx.lineTo(c.cx + c.funnelWidthAt(c.funnelMidY), c.funnelMidY);
+                    ctx.lineTo(c.cx - c.funnelWidthAt(c.funnelMidY), c.funnelMidY);
+                    
+                    // Color transitions from dry (brown) to wet (dark brown)
+                    const r = lerp(161, 92, this.soilWetness);
+                    const g = lerp(123, 67, this.soilWetness);
+                    const b = lerp(98, 50, this.soilWetness);
+                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    ctx.fill();
+                }
+
+                // Draw Water on top
+                if (this.waterTop > 0) {
+                    const baseLevel = c.funnelMidY - 40*c.scale;
+                    const topY = lerp(baseLevel, c.funnelTop + 20*c.scale, this.waterTop);
+                    ctx.beginPath();
+                    ctx.moveTo(c.cx - c.funnelWidthAt(topY), topY);
+                    ctx.lineTo(c.cx + c.funnelWidthAt(topY), topY);
+                    ctx.lineTo(c.cx + c.funnelWidthAt(baseLevel), baseLevel);
+                    ctx.lineTo(c.cx - c.funnelWidthAt(baseLevel), baseLevel);
+                    ctx.fillStyle = 'rgba(0, 210, 255, 0.4)';
+                    ctx.fill();
+                }
+
+                // Draw Beaker Water
+                if (this.beakerLevel > 0) {
+                    const topY = lerp(c.beakerBottom, c.beakerBottom - 80*c.scale, this.beakerLevel);
+                    ctx.beginPath();
+                    ctx.rect(c.cx - 38*c.scale, topY, 76*c.scale, c.beakerBottom - topY);
+                    ctx.fillStyle = 'rgba(0, 210, 255, 0.5)';
+                    ctx.fill();
+                }
+            }
+
+            animate = () => {
+                const e = this.engine;
+                const c = this.getCoords();
+                e.clear();
+
+                const action = this.stages[this.currentStage].action;
+
+                // State logic & Transitions
+                if (action === "pour_soil" && this.soilLevel < 1) this.soilLevel += 0.02;
+                if (action === "pour_water" && this.waterTop < 1) this.waterTop += 0.02;
+                if (action === "percolate") {
+                    if (this.soilWetness < 1) this.soilWetness += 0.01;
+                    if (this.waterTop > 0.5) this.waterTop -= 0.005;
+                }
+                if (action === "drain") {
+                    if (this.waterTop > 0) this.waterTop -= 0.01;
+                    if (this.beakerLevel < 1) this.beakerLevel += 0.005;
+                }
+
+                // Draw static elements (Soil, pooled water)
+                this.drawApparatus(c);
+
+                // Particle systems based on state
+                if (action === "pour_soil" && this.soilLevel < 0.9) {
+                    this.particles.push({ x: c.cx + (Math.random()-0.5)*20, y: c.funnelTop - 20, vy: 5, color: '#8d6e63' });
+                }
+                if (action === "pour_water" && this.waterTop < 0.9) {
+                    this.particles.push({ x: c.cx + (Math.random()-0.5)*20, y: c.funnelTop - 20, vy: 5, color: 'rgba(0,210,255,0.6)' });
+                }
+                if ((action === "drain" || action === "percolate") && Math.random() < 0.3 && this.beakerLevel < 1) {
+                    this.particles.push({ x: c.cx + (Math.random()-0.5)*5, y: c.funnelBottom, vy: 2, type: 'drip', color: 'rgba(0,210,255,0.8)' });
+                }
+
+                // Update & draw particles
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    let p = this.particles[i];
+                    p.y += p.vy;
+                    p.vy += 0.2; // gravity
+                    
+                    e.ctx.fillStyle = p.color;
+                    e.ctx.beginPath();
+                    e.ctx.arc(p.x, p.y, 2, 0, Math.PI*2);
+                    e.ctx.fill();
+
+                    // Kill particles based on destination
+                    if (p.color === '#8d6e63' && p.y > c.funnelMidY - 20) this.particles.splice(i, 1);
+                    else if (p.color === 'rgba(0,210,255,0.6)' && p.y > c.funnelMidY - 40) this.particles.splice(i, 1);
+                    else if (p.type === 'drip' && p.y > c.beakerBottom - (80*c.scale*this.beakerLevel)) {
+                        this.particles.splice(i, 1);
+                        // Add ripple effect logic here if desired
+                    }
+                }
+
+                // Auto-play logic
+                if (this.isPlaying) {
+                    let stageComplete = false;
+                    if (action === "idle") stageComplete = true;
+                    if (action === "pour_soil" && this.soilLevel >= 1) stageComplete = true;
+                    if (action === "pour_water" && this.waterTop >= 1) stageComplete = true;
+                    if (action === "percolate" && this.soilWetness >= 1) stageComplete = true;
+                    if (action === "drain" && this.beakerLevel >= 1) stageComplete = true;
+                    if (action === "measure") { setTimeout(()=> {if(this.isPlaying) this.goToStage(0)}, 2000); this.isPlaying=false; } // hacky pause at end
+
+                    if (stageComplete && action !== "measure" && this.particles.length === 0) {
+                        setTimeout(() => { if(this.isPlaying) this.goToStage(this.currentStage + 1); }, 500);
+                        this.isPlaying = false; // Prevent multi-triggers
+                        setTimeout(() => { this.isPlaying = true; }, 510);
+                    }
+                }
+
+                requestAnimationFrame(this.animate);
+            }
+        }
+        new WorkingSequence();
+
+
+        /**
+         * APP LOGIC: INTERACTIVE SIMULATION
+         */
+        class InteractiveSim {
+            constructor() {
+                this.engine = new FluidEngine('sim-canvas');
+                this.zoomCtx = document.getElementById('zoom-canvas').getContext('2d');
+                
+                // Properties defined by soil type
+                this.soilData = {
+                    sand: { porosity: 0.4, retentionRate: 0.15, permeability: 8, color: '#e1b12c', pSize: 8 },
+                    loam: { porosity: 0.5, retentionRate: 0.45, permeability: 4, color: '#44bd32', pSize: 5 },
+                    clay: { porosity: 0.6, retentionRate: 0.85, permeability: 1, color: '#c23616', pSize: 2 }
+                };
+
+                this.currentSoil = 'sand';
+                this.initialWater = 50; // mL
+                
+                // Sim State
+                this.isRunning = false;
+                this.waterInTop = 0;
+                this.waterInSoil = 0;
+                this.waterInBeaker = 0;
+                this.drips = [];
+                
+                this.bindUI();
+                this.drawZoom();
+                this.animate();
+            }
+
+            bindUI() {
+                // Soil Selection
+                document.querySelectorAll('input[name="soilType"]').forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        this.currentSoil = e.target.value;
+                        document.querySelectorAll('.soil-label').forEach(l => {
+                            l.className = 'soil-label'; // reset
+                            if(l.control.checked) l.classList.add(`active-${this.currentSoil}`);
+                        });
+                        this.drawZoom();
+                        this.resetSim();
+                    });
+                });
+
+                // Water Slider
+                const slider = document.getElementById('input-water');
+                slider.addEventListener('input', (e) => {
+                    this.initialWater = parseInt(e.target.value);
+                    document.getElementById('val-water').innerText = `${this.initialWater} mL`;
+                    this.resetSim();
+                });
+
+                // Run Button
+                document.getElementById('btn-run-sim').addEventListener('click', () => {
+                    this.resetSim();
+                    this.isRunning = true;
+                    this.waterInTop = this.initialWater;
+                });
+            }
+
+            resetSim() {
+                this.isRunning = false;
+                this.waterInTop = 0;
+                this.waterInSoil = 0;
+                this.waterInBeaker = 0;
+                this.drips = [];
+                this.updateOutputs();
+            }
+
+            drawZoom() {
+                const zc = document.getElementById('zoom-canvas');
+                const ctx = this.zoomCtx;
+                zc.width = 80; zc.height = 80;
+                ctx.clearRect(0,0,80,80);
+                
+                const s = this.soilData[this.currentSoil];
+                ctx.fillStyle = s.color;
+                
+                // Draw packing based on particle size
+                for(let y = 0; y < 80; y += s.pSize*2.2) {
+                    for(let x = 0; x < 80; x += s.pSize*2.2) {
+                        const ox = (y/s.pSize)%2 === 0 ? 0 : s.pSize; // hex packing offset
+                        ctx.beginPath();
+                        ctx.arc(x + ox + 5, y + 5, s.pSize, 0, Math.PI*2);
+                        ctx.fill();
+                    }
+                }
+            }
+
+            updateOutputs() {
+                document.getElementById('out-drained').innerText = this.waterInBeaker.toFixed(1);
+                const retainedPercent = this.initialWater > 0 ? ((this.waterInSoil / this.initialWater) * 100) : 0;
+                document.getElementById('out-retained').innerText = retainedPercent.toFixed(0) + '%';
+            }
+
+            // Coordinates for sim visual
+            getCoords() {
+                const w = this.engine.width; const h = this.engine.height;
+                return {
+                    cx: w/2, cy: h/2,
+                    fTop: h*0.2, fMid: h*0.45, fBot: h*0.6,
+                    bBot: h*0.9, fWidth: 100
+                };
+            }
+
+            drawApparatus(c) {
+                const ctx = this.engine.ctx;
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                // Funnel
+                ctx.beginPath();
+                ctx.moveTo(c.cx - c.fWidth, c.fTop);
+                ctx.lineTo(c.cx + c.fWidth, c.fTop);
+                ctx.lineTo(c.cx + 20, c.fMid);
+                ctx.lineTo(c.cx + 20, c.fBot);
+                ctx.lineTo(c.cx - 20, c.fBot);
+                ctx.lineTo(c.cx - 20, c.fMid);
+                ctx.closePath();
+                ctx.stroke();
+
+                // Beaker
+                ctx.beginPath();
+                ctx.moveTo(c.cx - 80, c.fBot + 30);
+                ctx.lineTo(c.cx - 80, c.bBot);
+                ctx.lineTo(c.cx + 80, c.bBot);
+                ctx.lineTo(c.cx + 80, c.fBot + 30);
+                ctx.stroke();
+
+                // Draw Soil (Static block)
+                const sData = this.soilData[this.currentSoil];
+                ctx.fillStyle = sData.color;
+                ctx.globalAlpha = 0.8;
+                ctx.beginPath();
+                ctx.moveTo(c.cx - c.fWidth*0.8, c.fTop + 30);
+                ctx.lineTo(c.cx + c.fWidth*0.8, c.fTop + 30);
+                ctx.lineTo(c.cx + 20, c.fMid);
+                ctx.lineTo(c.cx - 20, c.fMid);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+
+                // Wetness indicator
+                if (this.waterInSoil > 0) {
+                    ctx.fillStyle = 'rgba(0, 100, 255, 0.4)';
+                    const wetHeight = (this.waterInSoil / (this.initialWater * sData.retentionRate)) * (c.fMid - (c.fTop+30));
+                    // Simplified rect covering for performance over precise polygon masking
+                    ctx.fillRect(c.cx - c.fWidth*0.8, c.fMid - wetHeight, c.fWidth*1.6, wetHeight);
+                }
+
+                // Draw Top Water Pool
+                if (this.waterInTop > 0) {
+                    const poolH = (this.waterInTop / 100) * 50;
+                    ctx.fillStyle = 'rgba(0, 210, 255, 0.6)';
+                    ctx.fillRect(c.cx - c.fWidth*0.8 + 10, c.fTop + 30 - poolH, c.fWidth*1.6 - 20, poolH);
+                }
+
+                // Draw Beaker Water
+                if (this.waterInBeaker > 0) {
+                    const beakH = (this.waterInBeaker / 100) * (c.bBot - (c.fBot+40));
+                    ctx.fillStyle = 'rgba(0, 210, 255, 0.7)';
+                    ctx.fillRect(c.cx - 78, c.bBot - beakH, 156, beakH);
+                }
+            }
+
+            animate = () => {
+                const e = this.engine;
+                const c = this.getCoords();
+                const sData = this.soilData[this.currentSoil];
+                
+                e.clear();
+
+                if (this.isRunning) {
+                    const maxRetention = this.initialWater * sData.retentionRate;
+                    const transferRate = sData.permeability * 0.1;
+
+                    // Water moves from Top -> Soil
+                    if (this.waterInTop > 0) {
+                        const move = Math.min(this.waterInTop, transferRate);
+                        this.waterInTop -= move;
+                        this.waterInSoil += move;
+                    }
+
+                    // Water moves from Soil -> Beaker (if capacity exceeded)
+                    if (this.waterInSoil > maxRetention) {
+                        const excess = this.waterInSoil - maxRetention;
+                        const dripAmt = Math.min(excess, transferRate * 0.8);
+                        this.waterInSoil -= dripAmt;
+                        this.waterInBeaker += dripAmt;
+                        
+                        // Visual Drips
+                        if (Math.random() < sData.permeability * 0.2) {
+                            this.drips.push({ x: c.cx + (Math.random()-0.5)*30, y: c.fBot, vy: 2 + Math.random()*2 });
+                        }
+                    }
+
+                    // End condition
+                    if (this.waterInTop <= 0.1 && this.waterInSoil <= maxRetention + 0.1 && this.drips.length === 0) {
+                        this.isRunning = false;
+                        // Snap values for clean math
+                        this.waterInSoil = maxRetention;
+                        this.waterInBeaker = this.initialWater - maxRetention;
+                    }
+
+                    this.updateOutputs();
+                }
+
+                this.drawApparatus(c);
+
+                // Draw Drips
+                e.ctx.fillStyle = '#00d2ff';
+                for (let i = this.drips.length - 1; i >= 0; i--) {
+                    let d = this.drips[i];
+                    d.y += d.vy;
+                    d.vy += 0.4; // G
+                    e.ctx.beginPath();
+                    e.ctx.arc(d.x, d.y, 3, 0, Math.PI*2);
+                    e.ctx.fill();
+                    
+                    const beakLevelY = c.bBot - ((this.waterInBeaker / 100) * (c.bBot - (c.fBot+40)));
+                    if (d.y > beakLevelY) {
+                        this.drips.splice(i, 1);
+                    }
+                }
+
+                requestAnimationFrame(this.animate);
+            }
+        }
+        new InteractiveSim();
+
+
+        /**
+         * AMBIENT BACKGROUND ANIMATION (Hero Section)
+         */
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let bgDrops = [];
+
+        function initBg() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = document.getElementById('intro').offsetHeight;
+            for(let i=0; i<50; i++) {
+                bgDrops.push({
+                    x: Math.random() * bgCanvas.width,
+                    y: Math.random() * bgCanvas.height,
+                    r: Math.random() * 2 + 1,
+                    vy: Math.random() * 1 + 0.5,
+                    o: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+        initBg();
+        window.addEventListener('resize', initBg);
+
+        function animBg() {
+            bgCtx.clearRect(0,0,bgCanvas.width, bgCanvas.height);
+            bgCtx.fillStyle = 'rgba(0, 210, 255, 1)';
+            bgDrops.forEach(d => {
+                d.y += d.vy;
+                if(d.y > bgCanvas.height) d.y = -10;
+                bgCtx.globalAlpha = d.o;
+                bgCtx.beginPath();
+                bgCtx.arc(d.x, d.y, d.r, 0, Math.PI*2);
+                bgCtx.fill();
+            });
+            bgCtx.globalAlpha = 1.0;
+            requestAnimationFrame(animBg);
+        }
+        animBg();
+
+    </script>
+</body>
+</html>

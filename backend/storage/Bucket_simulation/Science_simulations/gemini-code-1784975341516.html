@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleming's Left-Hand Rule | Interactive Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME
+           ========================================================================== */
+        :root {
+            /* Core Colors */
+            --bg-base: #05050a;
+            --bg-surface: #0a0a16;
+            --glass-bg: rgba(20, 20, 35, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            
+            /* Theme Accents based on FBI (Force, B-Field, I-Current) */
+            --color-force: #00e676; /* Green for Force (Motion) */
+            --color-force-glow: rgba(0, 230, 118, 0.4);
+            
+            --color-mag: #ff3d00;   /* Red/Orange for Magnetic Field (B) */
+            --color-mag-glow: rgba(255, 61, 0, 0.4);
+            
+            --color-curr: #00b0ff;  /* Blue for Current (I) */
+            --color-curr-glow: rgba(0, 176, 255, 0.4);
+            
+            /* Typography */
+            --text-primary: #ffffff;
+            --text-secondary: #a0aabf;
+            --text-muted: #606a80;
+            
+            /* Fluid Typography (Clamp) */
+            --text-xs: clamp(0.75rem, 1vw, 0.875rem);
+            --text-sm: clamp(0.875rem, 1.5vw, 1rem);
+            --text-md: clamp(1rem, 2vw, 1.125rem);
+            --text-lg: clamp(1.25rem, 3vw, 1.5rem);
+            --text-xl: clamp(1.5rem, 4vw, 2.5rem);
+            --text-xxl: clamp(2rem, 5vw, 3.5rem);
+            
+            /* Layout & Spacing */
+            --space-xs: 0.5rem;
+            --space-sm: 1rem;
+            --space-md: 2rem;
+            --space-lg: 4rem;
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            
+            /* Transitions */
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* ==========================================================================
+           RESET & GLOBAL STYLES
+           ========================================================================== */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Ambient Background Canvas */
+        #ambient-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Global Layout Containers */
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: var(--space-md);
+        }
+
+        section {
+            margin-bottom: var(--space-lg);
+            position: relative;
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-md);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Typography Styles */
+        h1, h2, h3 {
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: var(--space-sm);
+        }
+
+        h1 { font-size: var(--text-xxl); background: linear-gradient(to right, #fff, #a0aabf); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: var(--text-xl); border-left: 4px solid var(--color-curr); padding-left: var(--space-sm); }
+        h3 { font-size: var(--text-lg); }
+        p { font-size: var(--text-md); color: var(--text-secondary); margin-bottom: var(--space-sm); }
+        
+        .highlight-f { color: var(--color-force); font-weight: bold; }
+        .highlight-b { color: var(--color-mag); font-weight: bold; }
+        .highlight-i { color: var(--color-curr); font-weight: bold; }
+
+        /* ==========================================================================
+           COMPONENTS: DIAGRAM MARKERS & LEGENDS (STRICT RULE COMPLIANCE)
+           ========================================================================== */
+        .diagram-container {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+        }
+
+        .illustration-wrapper {
+            position: relative;
+            width: 100%;
+            min-height: 280px;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.03) 0%, transparent 70%);
+            border-radius: var(--radius-md);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .illustration-wrapper svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+            object-fit: contain;
+        }
+
+        /* Numbered Markers on SVG */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            z-index: 10;
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            transform: translate(-50%, -50%); /* Center on coordinate */
+        }
+        
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            animation: pulse-ring 2s infinite;
+            z-index: -1;
+        }
+
+        .marker[data-target="force"] { background: var(--color-force); color: #000; }
+        .marker[data-target="force"]::before { box-shadow: 0 0 10px var(--color-force); }
+        
+        .marker[data-target="mag"] { background: var(--color-mag); color: #fff; }
+        .marker[data-target="mag"]::before { box-shadow: 0 0 10px var(--color-mag); }
+        
+        .marker[data-target="curr"] { background: var(--color-curr); color: #000; }
+        .marker[data-target="curr"]::before { box-shadow: 0 0 10px var(--color-curr); }
+
+        .marker:hover, .marker.active { transform: translate(-50%, -50%) scale(1.2); }
+
+        /* Legend List (Flows naturally, never overlaps) */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+            width: 100%;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            padding: var(--space-sm);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 12px;
+            margin-right: var(--space-sm);
+            flex-shrink: 0;
+        }
+
+        .legend-item[data-id="force"] .legend-badge { background: var(--color-force); color: #000; }
+        .legend-item[data-id="mag"] .legend-badge { background: var(--color-mag); color: #fff; }
+        .legend-item[data-id="curr"] .legend-badge { background: var(--color-curr); color: #000; }
+        
+        .legend-item[data-id="force"].active { border-color: var(--color-force); box-shadow: inset 0 0 20px rgba(0, 230, 118, 0.1); }
+        .legend-item[data-id="mag"].active { border-color: var(--color-mag); box-shadow: inset 0 0 20px rgba(255, 61, 0, 0.1); }
+        .legend-item[data-id="curr"].active { border-color: var(--color-curr); box-shadow: inset 0 0 20px rgba(0, 176, 255, 0.1); }
+
+        .legend-content h4 { margin-bottom: 2px; font-size: var(--text-sm); }
+        .legend-content p { margin: 0; font-size: var(--text-xs); color: var(--text-muted); }
+
+        /* ==========================================================================
+           WORKING SECTION (STAGE-BY-STAGE)
+           ========================================================================== */
+        .working-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-md);
+        }
+
+        .stage-visual {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #020205;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        .stage-visual svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .stage-controls {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+            background: rgba(0,0,0,0.3);
+            padding: var(--space-sm);
+            border-radius: var(--radius-md);
+        }
+
+        .stage-info {
+            min-height: 80px;
+        }
+        
+        .stage-info h4 {
+            color: var(--text-primary);
+            font-size: var(--text-md);
+            margin-bottom: 4px;
+        }
+
+        .progress-bar {
+            display: flex;
+            gap: 4px;
+            margin-bottom: var(--space-sm);
+        }
+
+        .progress-dot {
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            transition: var(--transition-smooth);
+        }
+        .progress-dot.active { background: var(--color-curr); box-shadow: 0 0 10px var(--color-curr); }
+
+        .control-buttons {
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        button {
+            flex: 1;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            padding: 10px 15px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-weight: 600;
+            transition: var(--transition-smooth);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover { background: rgba(255,255,255,0.2); }
+        button:active { transform: scale(0.98); }
+        button.primary { background: var(--color-curr); color: #000; border: none; }
+        button.primary:hover { background: #33bbff; box-shadow: 0 0 15px var(--color-curr-glow); }
+
+        /* SVG Animation Classes for Working Stages */
+        .anim-element { transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1); opacity: 0.1; }
+        .anim-element.active { opacity: 1; }
+        
+        .mag-line { stroke-dasharray: 10; stroke-dashoffset: 100; opacity: 0; }
+        .mag-line.active { opacity: 1; animation: flow-lines 2s linear infinite; }
+        
+        .curr-particle { opacity: 0; }
+        .curr-particle.active { opacity: 1; animation: flow-particles 1.5s linear infinite; }
+        
+        .wire-group { transform: translateY(0); transition: transform 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .wire-group.active { transform: translateY(-30px); }
+
+        .force-arrow { transform: scaleY(0); transform-origin: bottom center; opacity: 0; transition: all 0.5s ease; }
+        .force-arrow.active { transform: scaleY(1); opacity: 1; }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-md);
+        }
+
+        .sim-view {
+            width: 100%;
+            height: 400px;
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
+            border-radius: var(--radius-md);
+            position: relative;
+            border: 1px solid var(--glass-border);
+            overflow: hidden;
+        }
+
+        .sim-panel {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-sm);
+        }
+
+        .toggle-group {
+            background: rgba(0,0,0,0.4);
+            padding: var(--space-sm);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--glass-border);
+        }
+        
+        .toggle-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .toggle-title { font-weight: bold; font-size: var(--text-sm); }
+        
+        /* Custom Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255,255,255,0.1);
+            transition: .4s;
+            border-radius: 30px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 22px; width: 22px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--color-curr); }
+        input:focus + .slider { box-shadow: 0 0 1px var(--color-curr); }
+        input:checked + .slider:before { transform: translateX(30px); }
+        
+        /* Sim dynamic classes */
+        .sim-mag-n { transition: transform 0.6s ease; }
+        .sim-mag-s { transition: transform 0.6s ease; }
+        .sim-b-arrows { transition: transform 0.6s ease; }
+        .sim-wire { transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        
+        /* ==========================================================================
+           GRID CARDS (APPLICATIONS, FACTS, MISTAKES)
+           ========================================================================== */
+        .card-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-sm);
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-md);
+            padding: var(--space-sm);
+            transition: var(--transition-smooth);
+        }
+
+        .info-card:hover {
+            background: rgba(255,255,255,0.06);
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: var(--space-xs);
+            display: inline-block;
+        }
+
+        /* ==========================================================================
+           ANIMATIONS
+           ========================================================================== */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            80%, 100% { transform: scale(1.8); opacity: 0; }
+        }
+
+        @keyframes flow-lines {
+            from { stroke-dashoffset: 100; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        @keyframes flow-particles {
+            0% { transform: translateX(-50px) translateY(25px); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateX(50px) translateY(-25px); opacity: 0; }
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        /* ==========================================================================
+           MEDIA QUERIES (RESPONSIVE RULES)
+           ========================================================================== */
+        @media (min-width: 768px) {
+            /* Tablet & Desktop */
+            .diagram-container { flex-direction: row; align-items: center; }
+            .illustration-wrapper { flex: 2; min-height: 400px; }
+            .legend-list { flex: 1; }
+            
+            .working-layout { grid-template-columns: 2fr 1fr; align-items: center; }
+            .sim-layout { grid-template-columns: 2fr 1fr; align-items: stretch; }
+            .sim-view { height: 100%; min-height: 400px; }
+            
+            .card-grid { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+            
+            /* Reduce backdrop filter on mobile, enable on larger screens */
+            .glass-panel { backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+        }
+
+        @media (max-width: 767px) {
+            /* Mobile specific adjustments to meet strict criteria */
+            .container { padding: 16px; }
+            .glass-panel { padding: 16px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); } /* Performance */
+            section { margin-bottom: 32px; }
+            
+            /* Ensure tap targets are large enough */
+            button, .legend-item, .marker { min-height: 44px; min-width: 44px; }
+            .marker { width: 32px; height: 32px; } /* Slightly larger on mobile */
+            
+            /* Stack elements */
+            .stage-visual { margin-bottom: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="ambient-canvas"></canvas>
+
+    <div class="container">
+        
+        <!-- INTRO -->
+        <header class="glass-panel" style="text-align: center; margin-bottom: var(--space-lg); padding: var(--space-lg) var(--space-md);">
+            <div style="display: inline-block; padding: 4px 12px; background: rgba(0, 176, 255, 0.1); border: 1px solid var(--color-curr); border-radius: 20px; color: var(--color-curr); font-weight: bold; font-size: var(--text-xs); margin-bottom: var(--space-sm); text-transform: uppercase; letter-spacing: 1px;">Electromagnetism Principle</div>
+            <h1>Fleming's Left-Hand Rule</h1>
+            <p style="max-width: 600px; margin: 0 auto;">A simple way to predict the direction of force generated when a current flows through a magnetic field. The fundamental principle behind electric motors.</p>
+        </header>
+
+        <!-- COMPONENTS (THE HAND) -->
+        <section class="glass-panel" id="components">
+            <h2>The FBI Mnemonic</h2>
+            <p>Hold your left hand so the Thumb, Index, and Middle fingers are at right angles (mutually perpendicular) to each other.</p>
+            
+            <div class="diagram-container">
+                <div class="illustration-wrapper">
+                    <!-- Tech/Holo Left Hand SVG -->
+                    <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="holoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.2)" />
+                                <stop offset="100%" stop-color="rgba(255,255,255,0.05)" />
+                            </linearGradient>
+                            <filter id="glowForce"><feGaussianBlur stdDeviation="5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                            <filter id="glowMag"><feGaussianBlur stdDeviation="5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                            <filter id="glowCurr"><feGaussianBlur stdDeviation="5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                        </defs>
+                        
+                        <!-- Base Hand Outline (Stylized geometry) -->
+                        <g opacity="0.3" stroke="#fff" stroke-width="2" fill="url(#holoGrad)">
+                            <!-- Palm/Wrist -->
+                            <path d="M150,350 L250,350 L270,250 L130,250 Z" />
+                            <!-- Folded fingers (Ring & Pinky) -->
+                            <path d="M220,250 L270,200 L290,220 L270,250 Z" />
+                            <path d="M240,250 L300,180 L320,200 L270,250 Z" />
+                        </g>
+
+                        <!-- The 3 Axes (Fingers) -->
+                        <!-- Middle Finger (Current - Inward/Right-ish) -->
+                        <g class="hover-target" data-target="curr">
+                            <path d="M180,240 L300,320" stroke="rgba(255,255,255,0.2)" stroke-width="15" stroke-linecap="round"/>
+                            <line x1="180" y1="240" x2="330" y2="340" stroke="var(--color-curr)" stroke-width="4" filter="url(#glowCurr)" />
+                            <polygon points="340,346 320,330 335,325" fill="var(--color-curr)" filter="url(#glowCurr)"/>
+                        </g>
+
+                        <!-- Index Finger (B-Field - Right) -->
+                        <g class="hover-target" data-target="mag">
+                            <path d="M180,220 L320,150" stroke="rgba(255,255,255,0.2)" stroke-width="15" stroke-linecap="round"/>
+                            <line x1="180" y1="220" x2="350" y2="135" stroke="var(--color-mag)" stroke-width="4" filter="url(#glowMag)" />
+                            <polygon points="360,130 340,135 345,145" fill="var(--color-mag)" filter="url(#glowMag)"/>
+                        </g>
+
+                        <!-- Thumb (Force - Up) -->
+                        <g class="hover-target" data-target="force">
+                            <path d="M150,220 L150,80" stroke="rgba(255,255,255,0.2)" stroke-width="18" stroke-linecap="round"/>
+                            <line x1="150" y1="220" x2="150" y2="50" stroke="var(--color-force)" stroke-width="4" filter="url(#glowForce)" />
+                            <polygon points="150,40 140,55 160,55" fill="var(--color-force)" filter="url(#glowForce)"/>
+                        </g>
+                        
+                        <!-- Core Node -->
+                        <circle cx="165" cy="235" r="15" fill="rgba(255,255,255,0.8)" />
+                    </svg>
+
+                    <!-- Absolute positioned markers for interaction -->
+                    <div class="marker" data-target="force" style="top: 15%; left: 37.5%;" aria-label="Thumb">1</div>
+                    <div class="marker" data-target="mag" style="top: 35%; left: 85%;" aria-label="Index Finger">2</div>
+                    <div class="marker" data-target="curr" style="top: 85%; left: 80%;" aria-label="Middle Finger">3</div>
+                </div>
+                
+                <div class="legend-list">
+                    <div class="legend-item" data-id="force">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4><span class="highlight-f">F</span>orce (Motion)</h4>
+                            <p>Thumb points in direction of resulting thrust.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="mag">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4><span class="highlight-b">B</span>-Field</h4>
+                            <p>Index finger points from North to South pole.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" data-id="curr">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4><span class="highlight-i">I</span>-Current</h4>
+                            <p>Middle finger points in conventional current flow (+ to -).</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING PROCESS (THE MOTOR EFFECT) -->
+        <section class="glass-panel">
+            <h2>The Motor Effect Mechanism</h2>
+            <p>How a magnetic field and an electric current interact to create physical motion (a linear sequence).</p>
+            
+            <div class="working-layout">
+                <div class="stage-visual">
+                    <!-- Isometric Setup SVG -->
+                    <svg viewBox="0 0 600 350" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="copper" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#b87333" />
+                                <stop offset="50%" stop-color="#f4a460" />
+                                <stop offset="100%" stop-color="#8b4513" />
+                            </linearGradient>
+                            <linearGradient id="n-pole" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#aa0000" />
+                                <stop offset="100%" stop-color="#ff3d00" />
+                            </linearGradient>
+                            <linearGradient id="s-pole" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#0000aa" />
+                                <stop offset="100%" stop-color="#0055ff" />
+                            </linearGradient>
+                        </defs>
+                        
+                        <!-- Base Grid/Stand (Aesthetic) -->
+                        <path d="M100,300 L500,300 L450,200 L150,200 Z" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.1)"/>
+
+                        <!-- Stage 1 Elements: Magnetic Field -->
+                        <g id="work-mag-group" class="anim-element">
+                            <!-- N Pole (Left) -->
+                            <path d="M50,150 L150,100 L150,200 L50,250 Z" fill="url(#n-pole)" />
+                            <text x="85" y="185" fill="#fff" font-size="24" font-weight="bold" transform="skewY(-26)">N</text>
+                            
+                            <!-- S Pole (Right) -->
+                            <path d="M450,100 L550,150 L550,250 L450,200 Z" fill="url(#s-pole)" />
+                            <text x="485" y="185" fill="#fff" font-size="24" font-weight="bold" transform="skewY(26)">S</text>
+                            
+                            <!-- B-Field Lines (N to S) -->
+                            <g stroke="var(--color-mag)" stroke-width="2" opacity="0.6">
+                                <line x1="150" y1="130" x2="450" y2="130" class="mag-line" />
+                                <line x1="150" y1="160" x2="450" y2="160" class="mag-line" />
+                                <line x1="150" y1="190" x2="450" y2="190" class="mag-line" />
+                            </g>
+                        </g>
+
+                        <!-- Stage 2 Elements: Wire & Current -->
+                        <g id="work-wire-group" class="anim-element wire-group">
+                            <!-- Conductor Wire (Perspective front-to-back) -->
+                            <path d="M300,50 L310,50 L310,320 L300,320 Z" fill="url(#copper)" />
+                            <ellipse cx="305" cy="50" rx="5" ry="3" fill="#f4a460" />
+                            <ellipse cx="305" cy="320" rx="5" ry="3" fill="#8b4513" />
+                            
+                            <!-- Current Particles -->
+                            <circle cx="305" cy="80" r="4" fill="var(--color-curr)" class="curr-particle" />
+                            <circle cx="305" cy="140" r="4" fill="var(--color-curr)" class="curr-particle" style="animation-delay: 0.5s;" />
+                            <circle cx="305" cy="200" r="4" fill="var(--color-curr)" class="curr-particle" style="animation-delay: 1.0s;" />
+                            
+                            <!-- Current Label Vector -->
+                            <g id="work-curr-vector" class="anim-element" stroke="var(--color-curr)" stroke-width="3">
+                                <line x1="330" y1="120" x2="330" y2="200" />
+                                <polygon points="330,210 325,195 335,195" fill="var(--color-curr)" />
+                                <text x="345" y="170" fill="var(--color-curr)" font-family="sans-serif" font-weight="bold">I</text>
+                            </g>
+                        </g>
+
+                        <!-- Stage 3/4 Elements: Force Vector -->
+                        <g id="work-force-group" class="anim-element force-arrow" transform="translate(305, 160)">
+                            <!-- Arrow pointing UP -->
+                            <line x1="0" y1="0" x2="0" y2="-80" stroke="var(--color-force)" stroke-width="5" />
+                            <polygon points="0,-90 -8,-75 8,-75" fill="var(--color-force)" />
+                            <text x="-25" y="-45" fill="var(--color-force)" font-family="sans-serif" font-weight="bold" font-size="20">F</text>
+                        </g>
+                    </svg>
+                </div>
+                
+                <div class="stage-controls">
+                    <div class="progress-bar">
+                        <div class="progress-dot" id="dot-1"></div>
+                        <div class="progress-dot" id="dot-2"></div>
+                        <div class="progress-dot" id="dot-3"></div>
+                        <div class="progress-dot" id="dot-4"></div>
+                    </div>
+                    
+                    <div class="stage-info">
+                        <h4 id="stage-title">Stage 1: Magnetic Field Setup</h4>
+                        <p id="stage-desc">A strong permanent magnet provides a uniform magnetic field (B) flowing from North to South.</p>
+                    </div>
+                    
+                    <div class="control-buttons">
+                        <button id="btn-prev">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg>
+                        </button>
+                        <button class="primary" id="btn-play">Auto-Play</button>
+                        <button id="btn-next">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION -->
+        <section class="glass-panel">
+            <h2>Interactive Laboratory</h2>
+            <p>Toggle the direction of the Current or the Magnetic Poles to observe how the Force direction changes according to Fleming's rule.</p>
+            
+            <div class="sim-layout">
+                <div class="sim-view">
+                    <!-- Dynamic Sim SVG -->
+                    <svg viewBox="0 0 500 400" preserveAspectRatio="xMidYMid meet">
+                        <!-- Poles -->
+                        <g id="sim-pole-left" class="sim-mag-n">
+                            <rect x="20" y="100" width="80" height="200" fill="url(#n-pole)" rx="5"/>
+                            <text x="50" y="210" fill="#fff" font-size="30" font-weight="bold">N</text>
+                        </g>
+                        <g id="sim-pole-right" class="sim-mag-s">
+                            <rect x="400" y="100" width="80" height="200" fill="url(#s-pole)" rx="5"/>
+                            <text x="430" y="210" fill="#fff" font-size="30" font-weight="bold">S</text>
+                        </g>
+
+                        <!-- B Field Lines (Dynamic) -->
+                        <g id="sim-b-lines" class="sim-b-arrows" stroke="var(--color-mag)" stroke-width="2" stroke-dasharray="8 4" opacity="0.6">
+                            <line x1="110" y1="150" x2="390" y2="150" />
+                            <polygon points="250,150 240,145 240,155" fill="var(--color-mag)" id="b-arrow-1"/>
+                            
+                            <line x1="110" y1="200" x2="390" y2="200" />
+                            <polygon points="250,200 240,195 240,205" fill="var(--color-mag)" id="b-arrow-2"/>
+                            
+                            <line x1="110" y1="250" x2="390" y2="250" />
+                            <polygon points="250,250 240,245 240,255" fill="var(--color-mag)" id="b-arrow-3"/>
+                        </g>
+
+                        <!-- The Wire & Vectors -->
+                        <g id="sim-wire-group" class="sim-wire" transform="translate(0,0)">
+                            <!-- Wire Body -->
+                            <rect x="235" y="20" width="30" height="360" fill="url(#copper)" rx="15" />
+                            
+                            <!-- Current Direction Indicator -->
+                            <g id="sim-curr-indicator" transform="translate(250, 80)">
+                                <!-- Cross (Into Page) -->
+                                <circle cx="0" cy="0" r="12" fill="var(--bg-surface)" stroke="var(--color-curr)" stroke-width="2"/>
+                                <path d="M-6,-6 L6,6 M-6,6 L6,-6" stroke="var(--color-curr)" stroke-width="2" id="sim-curr-mark"/>
+                            </g>
+                            
+                            <!-- Force Vector (Dynamic) -->
+                            <g id="sim-force-vector" stroke="var(--color-force)" stroke-width="6" transform="translate(250, 200)">
+                                <line x1="0" y1="0" x2="0" y2="-90" id="sim-f-line" />
+                                <polygon points="0,-100 -10,-80 10,-80" fill="var(--color-force)" id="sim-f-head" />
+                                <text x="15" y="-50" fill="var(--color-force)" font-family="sans-serif" font-weight="bold" font-size="24" stroke="none">F</text>
+                            </g>
+                        </g>
+                    </svg>
+                </div>
+                
+                <div class="sim-panel">
+                    <div class="toggle-group">
+                        <div class="toggle-header">
+                            <span class="toggle-title highlight-b">Magnetic Field (B)</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-mag">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <p style="font-size: var(--text-xs); margin:0;">Swaps North and South poles.</p>
+                    </div>
+                    
+                    <div class="toggle-group">
+                        <div class="toggle-header">
+                            <span class="toggle-title highlight-i">Current (I)</span>
+                            <label class="switch">
+                                <input type="checkbox" id="toggle-curr">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <p style="font-size: var(--text-xs); margin:0;">Reverses battery polarity (In/Out of screen).</p>
+                    </div>
+
+                    <div style="margin-top: auto; padding: 10px; background: rgba(0, 230, 118, 0.1); border-radius: var(--radius-sm); border: 1px solid rgba(0, 230, 118, 0.3);">
+                        <p style="font-size: var(--text-sm); margin:0; color: #fff;">
+                            <strong>Observation:</strong> <br>
+                            Force direction: <span id="sim-result-text" class="highlight-f">UP</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- INFO GRIDS -->
+        <div class="card-grid">
+            <div class="info-card glass-panel">
+                <div class="card-icon">⚡</div>
+                <h3>Applications</h3>
+                <ul style="padding-left: 20px; font-size: var(--text-sm); color: var(--text-secondary);">
+                    <li><strong>Electric Motors:</strong> The primary application. Electrical energy converts to mechanical motion.</li>
+                    <li><strong>Loudspeakers:</strong> Varying current in a magnetic field causes a cone to vibrate, creating sound.</li>
+                    <li><strong>Galvanometers:</strong> Measures small electrical currents via deflection.</li>
+                </ul>
+            </div>
+            
+            <div class="info-card glass-panel">
+                <div class="card-icon">🧠</div>
+                <h3>Common Mistakes</h3>
+                <ul style="padding-left: 20px; font-size: var(--text-sm); color: var(--text-secondary);">
+                    <li>Using the <strong>Right Hand</strong> instead of Left. (Right hand is for generators/induction).</li>
+                    <li>Pointing current (I) in the direction of electron flow. Always use <strong>conventional current</strong> (+ to -).</li>
+                    <li>Not keeping fingers at <strong>90 degrees</strong> to each other.</li>
+                </ul>
+            </div>
+
+            <div class="info-card glass-panel">
+                <div class="card-icon">💡</div>
+                <h3>Quick Fact</h3>
+                <p style="font-size: var(--text-sm); color: var(--text-secondary);">
+                    Discovered by John Ambrose Fleming in the late 19th century as a simple mnemonic for his students at University College London to easily understand the motor effect.
+                </p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 1. AMBIENT BACKGROUND CANVAS ---
+            const canvas = document.getElementById('ambient-canvas');
+            const ctx = canvas.getContext('2d');
+            let particles = [];
+            
+            function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            class Particle {
+                constructor() {
+                    this.x = Math.random() * canvas.width;
+                    this.y = Math.random() * canvas.height;
+                    this.size = Math.random() * 2;
+                    this.speedX = (Math.random() - 0.5) * 0.5;
+                    this.speedY = (Math.random() - 0.5) * 0.5;
+                    this.color = Math.random() > 0.5 ? 'rgba(0, 230, 118, 0.2)' : 'rgba(0, 176, 255, 0.2)';
+                }
+                update() {
+                    this.x += this.speedX;
+                    this.y += this.speedY;
+                    if (this.x > canvas.width) this.x = 0;
+                    if (this.x < 0) this.x = canvas.width;
+                    if (this.y > canvas.height) this.y = 0;
+                    if (this.y < 0) this.y = canvas.height;
+                }
+                draw() {
+                    ctx.fillStyle = this.color;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            function initParticles() {
+                particles = [];
+                let count = window.innerWidth < 768 ? 30 : 100; // less particles on mobile
+                for (let i = 0; i < count; i++) {
+                    particles.push(new Particle());
+                }
+            }
+            initParticles();
+
+            function animateParticles() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach(p => { p.update(); p.draw(); });
+                requestAnimationFrame(animateParticles);
+            }
+            animateParticles();
+
+            // --- 2. DIAGRAM INTERACTION (MARKERS & LEGEND) ---
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+            const hoverTargets = document.querySelectorAll('.hover-target');
+
+            function highlightComponent(targetId) {
+                // Reset all
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+                hoverTargets.forEach(h => h.style.opacity = '0.3');
+
+                // Activate specific
+                if(targetId) {
+                    const marker = document.querySelector(`.marker[data-target="${targetId}"]`);
+                    const legend = document.querySelector(`.legend-item[data-id="${targetId}"]`);
+                    const svgGroup = document.querySelector(`.hover-target[data-target="${targetId}"]`);
+                    
+                    if(marker) marker.classList.add('active');
+                    if(legend) legend.classList.add('active');
+                    if(svgGroup) svgGroup.style.opacity = '1';
+                } else {
+                    // Reset opacity to default if nothing selected
+                     hoverTargets.forEach(h => h.style.opacity = '1');
+                }
+            }
+
+            // Default state
+            hoverTargets.forEach(h => h.style.transition = 'opacity 0.3s ease');
+
+            // Event Listeners for Legend
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => highlightComponent(item.dataset.id));
+                item.addEventListener('mouseleave', () => highlightComponent(null));
+                // For mobile tap
+                item.addEventListener('click', () => highlightComponent(item.dataset.id));
+            });
+
+            // Event Listeners for Markers
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => highlightComponent(marker.dataset.target));
+                marker.addEventListener('mouseleave', () => highlightComponent(null));
+                marker.addEventListener('click', () => highlightComponent(marker.dataset.target));
+            });
+
+            // --- 3. WORKING PROCESS STAGE LOGIC ---
+            const stages = [
+                {
+                    title: "Stage 1: Magnetic Field Setup",
+                    desc: "A permanent magnet establishes a uniform magnetic field (B) directed from North to South.",
+                    setup: () => {
+                        document.getElementById('work-mag-group').classList.add('active');
+                        document.getElementById('work-wire-group').classList.remove('active');
+                        document.getElementById('work-wire-group').classList.remove('active'); // reset transform class
+                        document.getElementById('work-curr-vector').classList.remove('active');
+                        document.getElementById('work-force-group').classList.remove('active');
+                        // Stop mag lines and particles
+                        document.querySelectorAll('.mag-line').forEach(el => el.classList.remove('active'));
+                        document.querySelectorAll('.curr-particle').forEach(el => el.classList.remove('active'));
+                    }
+                },
+                {
+                    title: "Stage 2: Introducing Current",
+                    desc: "The circuit is closed. Conventional current (I) begins flowing through the copper wire.",
+                    setup: () => {
+                        document.getElementById('work-mag-group').classList.add('active');
+                        document.getElementById('work-wire-group').classList.add('active');
+                        document.getElementById('work-wire-group').classList.remove('active'); // keep static position
+                        document.getElementById('work-curr-vector').classList.add('active');
+                        document.getElementById('work-force-group').classList.remove('active');
+                        
+                        document.querySelectorAll('.mag-line').forEach(el => el.classList.add('active'));
+                        document.querySelectorAll('.curr-particle').forEach(el => el.classList.add('active'));
+                    }
+                },
+                {
+                    title: "Stage 3: Interaction (Motor Effect)",
+                    desc: "The magnetic field of the wire interacts with the permanent magnet's field, generating a Force (F).",
+                    setup: () => {
+                        // Keep previous active
+                        document.getElementById('work-force-group').classList.add('active');
+                        // Reset wire position if coming back from 4
+                        document.getElementById('work-wire-group').classList.remove('active');
+                    }
+                },
+                {
+                    title: "Stage 4: Physical Motion",
+                    desc: "The resulting upward force physically deflects the wire, creating mechanical motion.",
+                    setup: () => {
+                        document.getElementById('work-wire-group').classList.add('active'); // Triggers translateY
+                    }
+                }
+            ];
+
+            let currentStage = 0;
+            let autoPlayInterval = null;
+
+            function updateStage(index) {
+                currentStage = index;
+                
+                // Update UI text
+                document.getElementById('stage-title').textContent = stages[currentStage].title;
+                document.getElementById('stage-desc').textContent = stages[currentStage].desc;
+                
+                // Update dots
+                for(let i=1; i<=4; i++) {
+                    document.getElementById(`dot-${i}`).classList.toggle('active', i-1 <= currentStage);
+                }
+
+                // Execute stage visual logic
+                stages[currentStage].setup();
+            }
+
+            document.getElementById('btn-next').addEventListener('click', () => {
+                stopAutoPlay();
+                if(currentStage < 3) updateStage(currentStage + 1);
+            });
+
+            document.getElementById('btn-prev').addEventListener('click', () => {
+                stopAutoPlay();
+                if(currentStage > 0) updateStage(currentStage - 1);
+            });
+
+            function startAutoPlay() {
+                document.getElementById('btn-play').textContent = "Stop Auto";
+                document.getElementById('btn-play').style.background = "#ff3366";
+                document.getElementById('btn-play').style.boxShadow = "0 0 15px rgba(255, 51, 102, 0.4)";
+                
+                updateStage(0); // Start from beginning
+                let step = 0;
+                autoPlayInterval = setInterval(() => {
+                    step++;
+                    if(step > 3) step = 0;
+                    updateStage(step);
+                }, 3000); // 3 seconds per stage
+            }
+
+            function stopAutoPlay() {
+                if(autoPlayInterval) {
+                    clearInterval(autoPlayInterval);
+                    autoPlayInterval = null;
+                    document.getElementById('btn-play').textContent = "Auto-Play";
+                    document.getElementById('btn-play').style.background = "var(--color-curr)";
+                    document.getElementById('btn-play').style.boxShadow = "none";
+                }
+            }
+
+            document.getElementById('btn-play').addEventListener('click', () => {
+                if(autoPlayInterval) {
+                    stopAutoPlay();
+                } else {
+                    startAutoPlay();
+                }
+            });
+
+            // Initialize working section
+            updateStage(0);
+
+            // --- 4. INTERACTIVE SIMULATION LOGIC ---
+            const toggleMag = document.getElementById('toggle-mag');
+            const toggleCurr = document.getElementById('toggle-curr');
+            const simResultText = document.getElementById('sim-result-text');
+            
+            const pLeft = document.getElementById('sim-pole-left');
+            const pRight = document.getElementById('sim-pole-right');
+            const bArrows = document.getElementById('sim-b-lines');
+            const currMark = document.getElementById('sim-curr-mark');
+            const wireGroup = document.getElementById('sim-wire-group');
+            const fLine = document.getElementById('sim-f-line');
+            const fHead = document.getElementById('sim-f-head');
+            
+            function updateSimulation() {
+                // State: false = default, true = flipped
+                const isMagFlipped = toggleMag.checked;
+                const isCurrFlipped = toggleCurr.checked;
+                
+                // 1. Update Magnet Visuals
+                if (isMagFlipped) {
+                    // Swap N and S positions
+                    pLeft.setAttribute('transform', 'translate(380, 0)');
+                    pLeft.querySelector('text').textContent = 'S';
+                    pLeft.querySelector('rect').setAttribute('fill', 'url(#s-pole)');
+                    
+                    pRight.setAttribute('transform', 'translate(-380, 0)');
+                    pRight.querySelector('text').textContent = 'N';
+                    pRight.querySelector('rect').setAttribute('fill', 'url(#n-pole)');
+                    
+                    // Flip B arrows visually (scaleX -1 roughly from center 250)
+                    bArrows.setAttribute('transform', 'translate(500, 0) scale(-1, 1)');
+                } else {
+                    // Default
+                    pLeft.setAttribute('transform', 'translate(0, 0)');
+                    pLeft.querySelector('text').textContent = 'N';
+                    pLeft.querySelector('rect').setAttribute('fill', 'url(#n-pole)');
+                    
+                    pRight.setAttribute('transform', 'translate(0, 0)');
+                    pRight.querySelector('text').textContent = 'S';
+                    pRight.querySelector('rect').setAttribute('fill', 'url(#s-pole)');
+                    
+                    bArrows.setAttribute('transform', 'translate(0, 0) scale(1, 1)');
+                }
+
+                // 2. Update Current Visuals (Into/Out of page)
+                if (isCurrFlipped) {
+                    // Out of page (Dot)
+                    currMark.setAttribute('d', 'M0,0 L0.1,0.1'); // Tiny dot hack
+                    currMark.setAttribute('stroke-width', '8');
+                    currMark.setAttribute('stroke-linecap', 'round');
+                } else {
+                    // Into page (Cross)
+                    currMark.setAttribute('d', 'M-6,-6 L6,6 M-6,6 L6,-6');
+                    currMark.setAttribute('stroke-width', '2');
+                }
+
+                // 3. Calculate Force Direction based on Fleming's Left Hand Rule
+                // Let B: Right = +1, Left = -1
+                // Let I: Into page = -1, Out of page = +1
+                // Force (F) = I x B.
+                // Default: B is Right (+1), I is Into page (-1) -> Thumb (F) is Down.
+                // Wait, standard convention: I into page (-z), B right (+x). Cross product: (-k) x (i) = -j (Down). Correct.
+                
+                let bDir = isMagFlipped ? -1 : 1;
+                let iDir = isCurrFlipped ? 1 : -1;
+                let fDir = bDir * iDir * -1; // -1 multiplier because SVG Y axis is inverted (down is positive)
+                
+                // Determine physical text output based on real world coordinates (UP/DOWN relative to screen)
+                // Real world: bRight(+1), iInto(-1) -> fDown. So b*i = -1. fDir calculation gives 1 (down in SVG).
+                // Let's simplify visual mapping directly.
+                let fIsUp = false;
+                
+                if (!isMagFlipped && !isCurrFlipped) { fIsUp = false; } // N left, I in -> F down
+                else if (isMagFlipped && !isCurrFlipped) { fIsUp = true; } // S left, I in -> F up
+                else if (!isMagFlipped && isCurrFlipped) { fIsUp = true; } // N left, I out -> F up
+                else if (isMagFlipped && isCurrFlipped) { fIsUp = false; } // S left, I out -> F down
+
+                // 4. Animate Force Vector and Wire
+                if (fIsUp) {
+                    simResultText.textContent = "UP (towards viewer top)";
+                    // Vector points UP
+                    fLine.setAttribute('y2', '-90');
+                    fHead.setAttribute('points', '0,-100 -10,-80 10,-80');
+                    fHead.setAttribute('transform', 'translate(0,0)');
+                    // Move wire UP
+                    wireGroup.style.transform = 'translateY(-20px)';
+                } else {
+                    simResultText.textContent = "DOWN (towards viewer bottom)";
+                    // Vector points DOWN
+                    fLine.setAttribute('y2', '90');
+                    fHead.setAttribute('points', '0,100 -10,80 10,80');
+                    fHead.setAttribute('transform', 'translate(0,0)');
+                    // Move wire DOWN
+                    wireGroup.style.transform = 'translateY(20px)';
+                }
+            }
+
+            toggleMag.addEventListener('change', updateSimulation);
+            toggleCurr.addEventListener('change', updateSimulation);
+            
+            // Initial render
+            updateSimulation();
+
+        });
+    </script>
+</body>
+</html>

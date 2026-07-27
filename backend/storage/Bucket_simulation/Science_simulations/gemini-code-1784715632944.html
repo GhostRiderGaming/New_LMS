@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Water Treatment Plant Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-color: #050a15;
+            --surface-color: rgba(16, 28, 56, 0.6);
+            --surface-color-hover: rgba(24, 42, 82, 0.8);
+            --glass-border: rgba(140, 190, 255, 0.15);
+            --text-main: #f0f6fc;
+            --text-muted: #8b9bb4;
+            --accent-cyan: #00f0ff;
+            --accent-blue: #0077ff;
+            --accent-green: #00ff88;
+            --accent-warning: #ffaa00;
+            
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --spacing-section: clamp(40px, 8vw, 80px);
+            --spacing-card: clamp(16px, 3vw, 32px);
+            
+            --glow-cyan: 0 0 20px rgba(0, 240, 255, 0.4);
+            --glow-blue: 0 0 30px rgba(0, 119, 255, 0.4);
+            
+            --trans-smooth: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 119, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(0, 240, 255, 0.08) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Typography */
+        h1 { font-size: clamp(2rem, 5vw, 4rem); font-weight: 800; letter-spacing: -1px; line-height: 1.1; margin-bottom: 0.5em; background: linear-gradient(135deg, #fff, var(--accent-cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 700; margin-bottom: 1em; display: flex; align-items: center; gap: 12px; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); font-weight: 600; margin-bottom: 0.5em; color: var(--accent-cyan); }
+        p { font-size: clamp(0.95rem, 1.2vw, 1.1rem); color: var(--text-muted); margin-bottom: 1em; }
+        strong { color: var(--text-main); font-weight: 600; }
+
+        /* ==========================================================================
+           UTILITIES & LAYOUT
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 clamp(16px, 4vw, 40px);
+        }
+
+        .glass-panel {
+            background: var(--surface-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-card);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            transition: var(--trans-smooth);
+        }
+
+        .section {
+            padding-top: var(--spacing-section);
+            padding-bottom: var(--spacing-section);
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+            gap: 24px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+            gap: 24px;
+        }
+
+        /* Tags & Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: rgba(0, 240, 255, 0.1);
+            color: var(--accent-cyan);
+            border: 1px solid rgba(0, 240, 255, 0.3);
+        }
+
+        /* ==========================================================================
+           COMPONENTS SECTION (DIAGRAM & LEGEND)
+           ========================================================================== */
+        .diagram-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .diagram-container {
+                flex-direction: row;
+                align-items: stretch;
+            }
+        }
+
+        .diagram-visual {
+            flex: 1 1 65%;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .diagram-visual svg {
+            width: 100%;
+            height: 100%;
+            max-height: 600px;
+            filter: drop-shadow(0 10px 20px rgba(0,0,0,0.5));
+        }
+
+        /* Diagram Animations */
+        .water-flow { stroke-dasharray: 10 10; animation: flowAnim 1s linear infinite; }
+        .mixer-blade { transform-origin: center; animation: spin 2s linear infinite; }
+        .bubble { animation: rise var(--dur, 2s) ease-in infinite; transform-origin: bottom; opacity: 0;}
+        
+        @keyframes flowAnim { to { stroke-dashoffset: -20; } }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes rise {
+            0% { transform: translateY(10px) scale(0.5); opacity: 0; }
+            50% { opacity: 0.8; }
+            100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+
+        /* Interactive Markers */
+        .svg-marker {
+            cursor: pointer;
+            transition: var(--trans-smooth);
+        }
+        .svg-marker circle.outer { fill: rgba(0, 240, 255, 0.2); stroke: var(--accent-cyan); stroke-width: 2; transition: all 0.3s ease; }
+        .svg-marker circle.inner { fill: var(--accent-cyan); }
+        .svg-marker text { fill: #000; font-weight: bold; font-family: sans-serif; font-size: 14px; text-anchor: middle; dominant-baseline: central; pointer-events: none;}
+        
+        .svg-marker:hover circle.outer, .svg-marker.active circle.outer {
+            r: 20;
+            fill: rgba(0, 240, 255, 0.4);
+            filter: drop-shadow(0 0 10px var(--accent-cyan));
+        }
+        .svg-marker.active circle.inner { fill: #fff; }
+
+        /* Legend Sidebar */
+        .diagram-legend {
+            flex: 1 1 35%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid transparent;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: var(--trans-smooth);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.05);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(4px);
+        }
+
+        .legend-num {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: var(--trans-smooth);
+        }
+
+        .legend-item:hover .legend-num, .legend-item.active .legend-num {
+            background: var(--accent-cyan);
+            color: #000;
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+
+        .legend-content h4 { font-size: 1.1rem; color: #fff; margin-bottom: 4px; }
+        .legend-content p { font-size: 0.9rem; margin-bottom: 0; line-height: 1.4; }
+
+        /* ==========================================================================
+           WORKING PROCESS SECTION (STEP-BY-STEP)
+           ========================================================================== */
+        .process-container {
+            display: flex;
+            flex-direction: column;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--glass-border);
+        }
+
+        .process-visual {
+            width: 100%;
+            height: clamp(300px, 40vw, 500px);
+            position: relative;
+            background: radial-gradient(circle at center, #101c38 0%, #050a15 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Abstract step visualizations */
+        .step-view {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.6s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .step-view.active { opacity: 1; pointer-events: auto; }
+
+        /* Step 1: Intake */
+        .intake-pipe { width: 60%; height: 80px; background: linear-gradient(90deg, #333, #555); border-radius: 40px; position: relative; overflow: hidden; border: 2px solid #222;}
+        .intake-water { position: absolute; inset: 0; background: rgba(0, 150, 255, 0.4); width: 0%; transition: width 1s ease; }
+        .step-view.active .intake-water { width: 100%; animation: pulseWater 2s infinite alternate; }
+        .debris { position: absolute; width: 10px; height: 10px; background: #6b523f; border-radius: 50%; top: 50%; transform: translateY(-50%); opacity: 0; }
+        
+        /* Step 2: Coagulation */
+        .tank-circle { width: 200px; height: 200px; border-radius: 50%; border: 4px solid var(--glass-border); position: relative; background: rgba(0, 150, 255, 0.2); display: flex; align-items: center; justify-content: center; }
+        .chemical-drop { position: absolute; top: -50px; width: 20px; height: 20px; background: var(--accent-green); border-radius: 50% 50% 50% 0; transform: rotate(-45deg); opacity: 0;}
+        .step-view.active .chemical-drop { animation: dropIn 2s infinite; }
+        .floc-particles { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; width: 100px; opacity: 0; transition: opacity 1s 1s; }
+        .step-view.active .floc-particles { opacity: 1; }
+        .f-part { width: 12px; height: 12px; background: #a39485; border-radius: 50%; animation: clump 2s infinite alternate; }
+
+        /* Step 3: Sedimentation */
+        .sed-tank { width: 70%; height: 180px; border: 2px solid var(--glass-border); border-top: none; background: rgba(0, 150, 255, 0.15); position: relative; }
+        .sed-particle { position: absolute; width: 15px; height: 15px; background: #7a6652; border-radius: 50%; opacity: 0; }
+        .step-view.active .sed-particle { animation: settle 3s forwards; }
+
+        /* Step 4: Filtration */
+        .filter-layers { width: 200px; height: 250px; border: 2px solid var(--glass-border); border-top: none; display: flex; flex-direction: column; position: relative;}
+        .layer { width: 100%; }
+        .layer-anthracite { height: 30%; background: #222; }
+        .layer-sand { height: 40%; background: #d4b886; }
+        .layer-gravel { height: 30%; background: #777; }
+        .filter-drop { position: absolute; top: -20px; width: 10px; height: 10px; background: rgba(0, 200, 255, 0.8); border-radius: 50%; opacity: 0;}
+        .step-view.active .filter-drop { animation: filterDown 2.5s infinite; }
+
+        /* Step 5: Disinfection */
+        .uv-chamber { width: 250px; height: 100px; border: 2px solid var(--accent-cyan); border-radius: 10px; background: rgba(0, 240, 255, 0.1); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; box-shadow: var(--glow-cyan); }
+        .uv-light { width: 100%; height: 4px; background: #fff; box-shadow: 0 0 20px 10px rgba(0, 240, 255, 0.8); opacity: 0.5;}
+        .step-view.active .uv-light { animation: uvFlicker 0.1s infinite alternate; }
+        .bacteria { position: absolute; font-size: 20px; opacity: 0; }
+        .step-view.active .bacteria { animation: dieBact 2s forwards; }
+
+        /* Keyframes for process */
+        @keyframes pulseWater { from { opacity: 0.6; } to { opacity: 1; } }
+        @keyframes dropIn { 0% { top: -50px; opacity: 1; } 50% { top: 50%; opacity: 0; transform: rotate(-45deg) scale(2); } 100% { opacity: 0; } }
+        @keyframes clump { from { transform: scale(0.8) translateX(-5px); } to { transform: scale(1.2) translateX(5px); } }
+        @keyframes settle { 0% { top: 10%; opacity: 1; } 100% { top: 85%; opacity: 1; } }
+        @keyframes filterDown { 0% { top: -20px; opacity: 1; background: #888;} 50% { opacity: 1; background: rgba(0,200,255,0.8); } 100% { top: 260px; opacity: 0; } }
+        @keyframes uvFlicker { from { opacity: 0.5; } to { opacity: 1; } }
+        @keyframes dieBact { 0% { left: 10%; opacity: 1; color: #ff5555; } 50% { opacity: 1; transform: scale(1.5); } 100% { left: 90%; opacity: 0; transform: scale(0); color: #fff;} }
+
+        /* Process Info & Controls */
+        .process-bottom {
+            padding: var(--spacing-card);
+            background: rgba(255,255,255,0.02);
+            border-top: 1px solid var(--glass-border);
+        }
+
+        .process-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .process-title {
+            font-size: 1.5rem;
+            color: var(--accent-cyan);
+            margin: 0;
+        }
+
+        .process-progress {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--trans-smooth);
+        }
+        .dot.active { background: var(--accent-cyan); box-shadow: var(--glow-cyan); }
+
+        .process-desc { min-height: 60px; margin-bottom: 24px; }
+
+        .process-controls {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .btn-ctrl {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: var(--trans-smooth);
+        }
+
+        .btn-ctrl:hover:not(:disabled) {
+            background: rgba(0, 240, 255, 0.15);
+            border-color: var(--accent-cyan);
+            box-shadow: var(--glow-cyan);
+        }
+        .btn-ctrl:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-play { background: rgba(0, 240, 255, 0.1); color: var(--accent-cyan); border-color: var(--accent-cyan); }
+
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (CANVAS)
+           ========================================================================== */
+        .sim-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .canvas-wrapper {
+            width: 100%;
+            height: clamp(300px, 40vw, 450px);
+            background: #02050a;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Overlay UI for Canvas */
+        .sim-overlay-labels {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 40px;
+            pointer-events: none;
+        }
+        .sim-label {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: rgba(255,255,255,0.5);
+            font-weight: bold;
+        }
+
+        .sim-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            background: rgba(255,255,255,0.03);
+            padding: 24px;
+            border-radius: var(--radius-md);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: var(--glow-cyan);
+        }
+        
+        /* Specific slider colors */
+        #flowRate::-webkit-slider-thumb { background: var(--accent-blue); box-shadow: var(--glow-blue); }
+
+        /* ==========================================================================
+           MISC SECTIONS (FACTS, MISTAKES)
+           ========================================================================== */
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 16px;
+            display: inline-block;
+        }
+        
+        .fact-card { border-top: 3px solid var(--accent-cyan); }
+        .mistake-card { border-top: 3px solid var(--accent-warning); }
+        .app-card { border-top: 3px solid var(--accent-blue); }
+
+        /* ==========================================================================
+           RESPONSIVE TWEAKS
+           ========================================================================== */
+        @media (max-width: 768px) {
+            .glass-panel { padding: 20px; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+            .legend-item { padding: 12px; }
+            .process-controls { flex-wrap: wrap; }
+            .sim-overlay-labels { padding: 0 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <!-- INTRODUCTION -->
+    <section class="section">
+        <div class="badge">Environmental Engineering</div>
+        <h1>Water Treatment Plant</h1>
+        <p style="font-size: clamp(1.1rem, 1.5vw, 1.3rem); max-width: 800px;">
+            The invisible infrastructure that sustains cities. Discover how civil engineering, chemistry, and fluid dynamics combine to transform contaminated raw water into crystal-clear, safe drinking water through a continuous, multi-stage purification process.
+        </p>
+    </section>
+
+    <!-- COMPONENTS DIAGRAM -->
+    <section class="section glass-panel">
+        <h2><span style="color: var(--accent-cyan);">01.</span> Anatomy of a Plant</h2>
+        <p>Explore the primary infrastructure. Select a marker to understand its function in the sequence.</p>
+        
+        <div class="diagram-container">
+            <!-- Visual -->
+            <div class="diagram-visual">
+                <!-- Premium SVG Illustration -->
+                <svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                        <!-- Gradients -->
+                        <linearGradient id="pipeGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#4a5d7c"/>
+                            <stop offset="50%" stop-color="#7289b0"/>
+                            <stop offset="100%" stop-color="#34435e"/>
+                        </linearGradient>
+                        <linearGradient id="waterRaw" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="rgba(107, 122, 106, 0.8)"/>
+                            <stop offset="100%" stop-color="rgba(69, 117, 128, 0.8)"/>
+                        </linearGradient>
+                        <linearGradient id="waterClean" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stop-color="rgba(0, 150, 255, 0.4)"/>
+                            <stop offset="100%" stop-color="rgba(0, 240, 255, 0.6)"/>
+                        </linearGradient>
+                        <linearGradient id="tankBg" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stop-color="rgba(255,255,255,0.1)"/>
+                            <stop offset="100%" stop-color="rgba(0,0,0,0.4)"/>
+                        </linearGradient>
+                        <filter id="glow">
+                            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+
+                    <!-- Background structural lines -->
+                    <path d="M 0 350 L 800 350" stroke="rgba(255,255,255,0.1)" stroke-width="2" />
+                    
+                    <!-- Pipes connecting everything -->
+                    <path d="M -20 200 L 100 200" stroke="url(#pipeGrad)" stroke-width="20" stroke-linecap="round"/>
+                    <path d="M 160 200 L 220 200" stroke="url(#pipeGrad)" stroke-width="16" />
+                    <path d="M 320 200 L 380 200" stroke="url(#pipeGrad)" stroke-width="16" />
+                    <path d="M 480 300 L 530 300" stroke="url(#pipeGrad)" stroke-width="16" />
+                    <path d="M 610 300 L 670 300" stroke="url(#pipeGrad)" stroke-width="16" />
+                    <path d="M 730 300 L 820 300" stroke="url(#pipeGrad)" stroke-width="20" />
+
+                    <!-- Water Flow Animations (Dashed lines inside pipes) -->
+                    <path class="water-flow" d="M -20 200 L 100 200" stroke="#a3c4a2" stroke-width="4" fill="none" />
+                    <path class="water-flow" d="M 320 200 L 380 200" stroke="#89bdf0" stroke-width="4" fill="none" />
+                    <path class="water-flow" d="M 730 300 L 820 300" stroke="#00f0ff" stroke-width="6" fill="none" filter="url(#glow)"/>
+
+                    <!-- 1. Intake Pump Station -->
+                    <g transform="translate(40, 150)">
+                        <rect x="0" y="0" width="80" height="200" fill="url(#tankBg)" stroke="#5a7094" stroke-width="2" rx="4"/>
+                        <path d="M 0 50 L 80 50" stroke="url(#waterRaw)" stroke-width="100"/>
+                        <rect x="-10" y="-20" width="100" height="40" fill="#2a354a" rx="2"/>
+                        <!-- Motor icon -->
+                        <circle cx="40" cy="0" r="15" fill="#4a5d7c"/>
+                        <!-- Marker -->
+                        <g class="svg-marker" data-id="1" transform="translate(40, -40)">
+                            <circle class="outer" cx="0" cy="0" r="14"/>
+                            <circle class="inner" cx="0" cy="0" r="10"/>
+                            <text x="0" y="1">1</text>
+                        </g>
+                    </g>
+
+                    <!-- 2. Coagulation/Flocculation Basin -->
+                    <g transform="translate(180, 120)">
+                        <path d="M 0 0 L 160 0 L 140 230 L 20 230 Z" fill="url(#tankBg)" stroke="#5a7094" stroke-width="2"/>
+                        <path d="M 10 80 L 150 80" stroke="url(#waterRaw)" stroke-width="150" opacity="0.8"/>
+                        <!-- Mixers -->
+                        <line x1="40" y1="-20" x2="40" y2="150" stroke="#8b9bb4" stroke-width="4"/>
+                        <g transform="translate(40, 150)" class="mixer-blade">
+                            <rect x="-20" y="-4" width="40" height="8" fill="#fff" rx="2"/>
+                        </g>
+                        <line x1="120" y1="-20" x2="120" y2="150" stroke="#8b9bb4" stroke-width="4"/>
+                        <g transform="translate(120, 150)" class="mixer-blade" style="animation-direction: reverse; animation-duration: 3s;">
+                            <rect x="-25" y="-4" width="50" height="8" fill="#fff" rx="2"/>
+                        </g>
+                        <!-- Marker -->
+                        <g class="svg-marker" data-id="2" transform="translate(80, -30)">
+                            <circle class="outer" cx="0" cy="0" r="14"/>
+                            <circle class="inner" cx="0" cy="0" r="10"/>
+                            <text x="0" y="1">2</text>
+                        </g>
+                    </g>
+
+                    <!-- 3. Sedimentation Basin -->
+                    <g transform="translate(360, 150)">
+                        <rect x="0" y="0" width="140" height="200" fill="url(#tankBg)" stroke="#5a7094" stroke-width="2" rx="4"/>
+                        <path d="M 0 50 L 140 50" stroke="url(#waterClean)" stroke-width="100"/>
+                        <!-- Sludge layer -->
+                        <rect x="5" y="180" width="130" height="15" fill="#4a3e35" rx="2"/>
+                        <!-- Sloped bottom -->
+                        <polygon points="0,200 70,230 140,200" fill="#2a354a"/>
+                        <!-- Marker -->
+                        <g class="svg-marker" data-id="3" transform="translate(70, -20)">
+                            <circle class="outer" cx="0" cy="0" r="14"/>
+                            <circle class="inner" cx="0" cy="0" r="10"/>
+                            <text x="0" y="1">3</text>
+                        </g>
+                    </g>
+
+                    <!-- 4. Filtration Unit -->
+                    <g transform="translate(520, 170)">
+                        <rect x="0" y="0" width="100" height="180" fill="url(#tankBg)" stroke="#5a7094" stroke-width="2"/>
+                        <rect x="5" y="30" width="90" height="40" fill="#222" opacity="0.8"/> <!-- Anthracite -->
+                        <rect x="5" y="70" width="90" height="50" fill="#d4b886" opacity="0.8"/> <!-- Sand -->
+                        <rect x="5" y="120" width="90" height="40" fill="#666" opacity="0.8"/> <!-- Gravel -->
+                        <path d="M 0 15 L 100 15" stroke="url(#waterClean)" stroke-width="30"/>
+                        <!-- Marker -->
+                        <g class="svg-marker" data-id="4" transform="translate(50, -30)">
+                            <circle class="outer" cx="0" cy="0" r="14"/>
+                            <circle class="inner" cx="0" cy="0" r="10"/>
+                            <text x="0" y="1">4</text>
+                        </g>
+                    </g>
+
+                    <!-- 5. Disinfection Chamber -->
+                    <g transform="translate(640, 250)">
+                        <rect x="0" y="0" width="80" height="100" fill="url(#tankBg)" stroke="#5a7094" stroke-width="2" rx="4"/>
+                        <rect x="5" y="5" width="70" height="90" fill="rgba(0, 240, 255, 0.2)"/>
+                        <!-- UV Lamps -->
+                        <line x1="25" y1="20" x2="25" y2="80" stroke="#fff" stroke-width="4" filter="url(#glow)"/>
+                        <line x1="55" y1="20" x2="55" y2="80" stroke="#fff" stroke-width="4" filter="url(#glow)"/>
+                        <!-- Marker -->
+                        <g class="svg-marker" data-id="5" transform="translate(40, -30)">
+                            <circle class="outer" cx="0" cy="0" r="14"/>
+                            <circle class="inner" cx="0" cy="0" r="10"/>
+                            <text x="0" y="1">5</text>
+                        </g>
+                    </g>
+
+                </svg>
+            </div>
+
+            <!-- Legend List -->
+            <div class="diagram-legend" id="legendList">
+                <div class="legend-item" data-id="1">
+                    <div class="legend-num">1</div>
+                    <div class="legend-content">
+                        <h4>Intake & Screens</h4>
+                        <p>Draws raw water from source. Large screens block fish, debris, and logs.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="2">
+                    <div class="legend-num">2</div>
+                    <div class="legend-content">
+                        <h4>Flocculation Basin</h4>
+                        <p>Chemicals are added and gently mixed. Dirt particles stick together to form heavy "floc".</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="3">
+                    <div class="legend-num">3</div>
+                    <div class="legend-content">
+                        <h4>Sedimentation Tank</h4>
+                        <p>Water flow slows down. Heavy floc particles sink to the bottom as sludge.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="4">
+                    <div class="legend-num">4</div>
+                    <div class="legend-content">
+                        <h4>Multimedia Filter</h4>
+                        <p>Water trickles through anthracite coal, sand, and gravel, trapping microscopic impurities.</p>
+                    </div>
+                </div>
+                <div class="legend-item" data-id="5">
+                    <div class="legend-num">5</div>
+                    <div class="legend-content">
+                        <h4>Disinfection</h4>
+                        <p>Chlorine, Ozone, or UV light is applied to neutralize bacteria and viruses.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING MECHANISM SECTION -->
+    <section class="section">
+        <h2><span style="color: var(--accent-cyan);">02.</span> Mechanism: Stage by Stage</h2>
+        <p>Observe the continuous linear sequence that transforms physical and biological properties.</p>
+        
+        <div class="process-container">
+            <div class="process-visual">
+                
+                <!-- Step 1 View -->
+                <div class="step-view active" id="step-view-0">
+                    <div class="intake-pipe">
+                        <div class="intake-water"></div>
+                        <div class="debris" style="left: 10%; animation: moveRight 3s linear infinite;"></div>
+                        <div class="debris" style="left: 30%; top: 30%; animation: moveRight 2.5s linear infinite;"></div>
+                        <!-- Screen graphic -->
+                        <div style="position: absolute; right: 20%; top:0; width: 10px; height: 100%; border-left: 2px dashed #fff;"></div>
+                    </div>
+                </div>
+
+                <!-- Step 2 View -->
+                <div class="step-view" id="step-view-1">
+                    <div class="tank-circle">
+                        <div class="chemical-drop"></div>
+                        <div class="floc-particles">
+                            <div class="f-part"></div><div class="f-part" style="animation-delay: 0.2s"></div>
+                            <div class="f-part" style="animation-delay: 0.4s"></div><div class="f-part"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3 View -->
+                <div class="step-view" id="step-view-2">
+                    <div class="sed-tank">
+                        <div class="sed-particle" style="left: 20%; animation-delay: 0s;"></div>
+                        <div class="sed-particle" style="left: 40%; animation-delay: 0.5s;"></div>
+                        <div class="sed-particle" style="left: 60%; animation-delay: 1s;"></div>
+                        <div class="sed-particle" style="left: 80%; animation-delay: 0.2s;"></div>
+                    </div>
+                </div>
+
+                <!-- Step 4 View -->
+                <div class="step-view" id="step-view-3">
+                    <div class="filter-layers">
+                        <div class="filter-drop" style="left: 30%;"></div>
+                        <div class="filter-drop" style="left: 70%; animation-delay: 1.2s"></div>
+                        <div class="layer layer-anthracite"></div>
+                        <div class="layer layer-sand"></div>
+                        <div class="layer layer-gravel"></div>
+                    </div>
+                </div>
+
+                <!-- Step 5 View -->
+                <div class="step-view" id="step-view-4">
+                    <div class="uv-chamber">
+                        <div class="uv-light" style="position: absolute; top: 30%;"></div>
+                        <div class="uv-light" style="position: absolute; top: 70%;"></div>
+                        <div class="bacteria" style="top: 20%;">🦠</div>
+                        <div class="bacteria" style="top: 60%; animation-delay: 0.5s;">🦠</div>
+                    </div>
+                </div>
+
+                <style>
+                    @keyframes moveRight { from { transform: translateX(0) translateY(-50%); } to { transform: translateX(300px) translateY(-50%); opacity: 0; } }
+                </style>
+            </div>
+
+            <div class="process-bottom">
+                <div class="process-header">
+                    <h3 class="process-title" id="processTitle">1. Intake & Screening</h3>
+                    <div class="process-progress" id="processDots">
+                        <!-- Dots injected via JS -->
+                    </div>
+                </div>
+                <div class="process-desc">
+                    <p id="processDesc">Raw water is pumped from the source. Metal screens physically block large debris like sticks and fish from entering the system.</p>
+                </div>
+                <div class="process-controls">
+                    <button class="btn-ctrl" id="btnPrev">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                    </button>
+                    <button class="btn-ctrl btn-play" id="btnPlay">
+                        Autoplay
+                    </button>
+                    <button class="btn-ctrl" id="btnNext">
+                        Next <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION -->
+    <section class="section glass-panel">
+        <h2><span style="color: var(--accent-cyan);">03.</span> Physics Simulation: Filtration Efficiency</h2>
+        <p>Adjust the flow dynamics and incoming pollution level to see how the filtration layers manage the load in real-time. (Particle System)</p>
+        
+        <div class="sim-container">
+            <div class="canvas-wrapper">
+                <div class="sim-overlay-labels">
+                    <span class="sim-label">Raw Intake</span>
+                    <span class="sim-label">Filter Media</span>
+                    <span class="sim-label">Clean Output</span>
+                </div>
+                <canvas id="simCanvas"></canvas>
+            </div>
+
+            <div class="sim-controls">
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Pollution Load (Turbidity)</span>
+                        <span id="valTurbidity">Medium</span>
+                    </div>
+                    <input type="range" id="turbiditySlider" min="1" max="10" value="5">
+                </div>
+                
+                <div class="control-group">
+                    <div class="control-header">
+                        <span>Water Flow Rate</span>
+                        <span id="valFlow">Normal</span>
+                    </div>
+                    <input type="range" id="flowSlider" min="1" max="8" value="3">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- KNOWLEDGE BASE -->
+    <section class="section">
+        <h2><span style="color: var(--accent-cyan);">04.</span> Knowledge Base</h2>
+        
+        <div class="grid-3" style="margin-bottom: 24px;">
+            <div class="glass-panel fact-card">
+                <div class="card-icon">💧</div>
+                <h3>Did you know?</h3>
+                <p>Ozone gas ($O_3$) is often used instead of chlorine for disinfection. It's much faster, leaves no chemical taste, and breaks down back into oxygen naturally.</p>
+            </div>
+            
+            <div class="glass-panel app-card">
+                <div class="card-icon">🏙️</div>
+                <h3>Scale of Operation</h3>
+                <p>A typical municipal plant processes anywhere from 10 million to over 1 billion gallons of water <strong>per day</strong>, requiring massive concrete basins and constant flow.</p>
+            </div>
+
+            <div class="glass-panel mistake-card">
+                <div class="card-icon">❌</div>
+                <h3>Common Misconception</h3>
+                <p><strong>"Filters remove everything."</strong> False. Physical filters remove particles and some microbes, but dissolved chemicals and heavy metals require advanced reverse osmosis or chemical precipitation.</p>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<!-- ==========================================================================
+     JAVASCRIPT APPLICATION LOGIC
+     ========================================================================== -->
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        
+        /* ----------------------------------------------------------------------
+           1. COMPONENT DIAGRAM LOGIC (Hover / Click Sync)
+           ---------------------------------------------------------------------- */
+        const markers = document.querySelectorAll('.svg-marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function clearActive() {
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+        }
+
+        function setActive(id) {
+            clearActive();
+            document.querySelector(`.svg-marker[data-id="${id}"]`).classList.add('active');
+            
+            const legendItem = document.querySelector(`.legend-item[data-id="${id}"]`);
+            legendItem.classList.add('active');
+            
+            // Scroll legend into view if on mobile
+            if (window.innerWidth < 1024) {
+                legendItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        }
+
+        markers.forEach(marker => {
+            marker.addEventListener('mouseenter', () => setActive(marker.dataset.id));
+            marker.addEventListener('click', () => setActive(marker.dataset.id));
+        });
+
+        legendItems.forEach(item => {
+            item.addEventListener('mouseenter', () => setActive(item.dataset.id));
+            item.addEventListener('click', () => setActive(item.dataset.id));
+        });
+
+
+        /* ----------------------------------------------------------------------
+           2. WORKING PROCESS LOGIC (State Machine)
+           ---------------------------------------------------------------------- */
+        const steps = [
+            {
+                title: "1. Intake & Screening",
+                desc: "Raw water is drawn in. Large metal screens physically block debris like sticks, leaves, and aquatic life from damaging the pumps.",
+                inputs: "Raw water, Debris",
+                outputs: "Screened water"
+            },
+            {
+                title: "2. Coagulation & Flocculation",
+                desc: "Alum (Aluminum sulfate) is added. Rapid mixing causes tiny, repelling dirt particles to neutralize and stick together, forming larger clumps called 'floc'.",
+                inputs: "Screened water, Coagulant",
+                outputs: "Water with Floc"
+            },
+            {
+                title: "3. Sedimentation",
+                desc: "Water flows very slowly through large basins. Gravity causes the heavy floc clumps to settle to the bottom as sludge, clearing the water above.",
+                inputs: "Water with Floc",
+                outputs: "Clarified water, Sludge (bottom)"
+            },
+            {
+                title: "4. Filtration",
+                desc: "The clarified water trickles downward through layers of crushed anthracite coal, silica sand, and gravel. This traps microscopic impurities and remaining floc.",
+                inputs: "Clarified water",
+                outputs: "Filtered clean water"
+            },
+            {
+                title: "5. Disinfection",
+                desc: "Chemicals (Chlorine/Chloramine) or physical processes (UV light/Ozone) are applied to destroy the DNA of any remaining bacteria or viruses.",
+                inputs: "Filtered water, Disinfectant",
+                outputs: "Safe potable water"
+            }
+        ];
+
+        let currentStep = 0;
+        let isPlaying = false;
+        let playInterval;
+
+        const elTitle = document.getElementById('processTitle');
+        const elDesc = document.getElementById('processDesc');
+        const elDots = document.getElementById('processDots');
+        const btnPrev = document.getElementById('btnPrev');
+        const btnNext = document.getElementById('btnNext');
+        const btnPlay = document.getElementById('btnPlay');
+        const views = document.querySelectorAll('.step-view');
+
+        // Init dots
+        steps.forEach((_, i) => {
+            const dot = document.createElement('div');
+            dot.className = 'dot';
+            elDots.appendChild(dot);
+        });
+        const dots = document.querySelectorAll('.dot');
+
+        function updateProcessUI() {
+            // Update Text
+            elTitle.textContent = steps[currentStep].title;
+            elDesc.innerHTML = `${steps[currentStep].desc}<br><br><span style="font-size:0.85em; color:var(--text-muted)"><strong>In:</strong> ${steps[currentStep].inputs} | <strong>Out:</strong> ${steps[currentStep].outputs}</span>`;
+            
+            // Update Dots
+            dots.forEach((d, i) => d.classList.toggle('active', i === currentStep));
+            
+            // Update Visuals
+            views.forEach((v, i) => v.classList.toggle('active', i === currentStep));
+
+            // Update Buttons
+            btnPrev.disabled = currentStep === 0;
+            btnNext.disabled = currentStep === steps.length - 1;
+        }
+
+        function nextStep() {
+            if (currentStep < steps.length - 1) {
+                currentStep++;
+                updateProcessUI();
+            } else if (isPlaying) {
+                currentStep = 0; // Loop in autoplay
+                updateProcessUI();
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 0) {
+                currentStep--;
+                updateProcessUI();
+            }
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                btnPlay.innerHTML = 'Pause';
+                btnPlay.style.background = 'rgba(255, 170, 0, 0.2)';
+                btnPlay.style.borderColor = 'var(--accent-warning)';
+                btnPlay.style.color = 'var(--accent-warning)';
+                
+                // If at end, restart
+                if(currentStep === steps.length -1) {
+                    currentStep = 0;
+                    updateProcessUI();
+                }
+                playInterval = setInterval(nextStep, 3500);
+            } else {
+                btnPlay.innerHTML = 'Autoplay';
+                btnPlay.style = ''; // Reset to CSS class styles
+                clearInterval(playInterval);
+            }
+        }
+
+        btnNext.addEventListener('click', () => { if(isPlaying) togglePlay(); nextStep(); });
+        btnPrev.addEventListener('click', () => { if(isPlaying) togglePlay(); prevStep(); });
+        btnPlay.addEventListener('click', togglePlay);
+
+        updateProcessUI(); // Initial call
+
+
+        /* ----------------------------------------------------------------------
+           3. INTERACTIVE SIMULATION (Canvas Particle System)
+           ---------------------------------------------------------------------- */
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        
+        const sliderTurbidity = document.getElementById('turbiditySlider');
+        const sliderFlow = document.getElementById('flowSlider');
+        const valTurbidity = document.getElementById('valTurbidity');
+        const valFlow = document.getElementById('valFlow');
+
+        let particles = [];
+        let canvasWidth, canvasHeight;
+        
+        // Settings
+        let flowSpeedMultiplier = 1;
+        let spawnRate = 5;
+        let filterLineX = 0;
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            // Handle high DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            canvasWidth = rect.width;
+            canvasHeight = rect.height;
+            
+            canvas.width = canvasWidth * dpr;
+            canvas.height = canvasHeight * dpr;
+            
+            ctx.scale(dpr, dpr);
+            filterLineX = canvasWidth * 0.5; // Filter is in the middle
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        // Also handle orientation change on mobile
+        window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+        resizeCanvas();
+
+        class Particle {
+            constructor(yPos, type) {
+                this.x = -10;
+                this.y = yPos;
+                this.type = type; // 'water' or 'dirt'
+                
+                if (type === 'dirt') {
+                    this.size = Math.random() * 3 + 2;
+                    this.color = `rgba(${100 + Math.random()*50}, ${80 + Math.random()*40}, ${50}, ${Math.random() * 0.5 + 0.5})`;
+                    this.vy = (Math.random() - 0.5) * 0.5;
+                } else {
+                    this.size = Math.random() * 2 + 1;
+                    this.color = `rgba(0, ${150 + Math.random()*100}, 255, ${Math.random() * 0.4 + 0.2})`;
+                    this.vy = (Math.random() - 0.5) * 0.2;
+                }
+                
+                // Base velocity
+                this.vx = (Math.random() * 1 + 0.5);
+                this.passedFilter = false;
+            }
+
+            update(flowSpeed) {
+                this.x += this.vx * flowSpeed;
+                this.y += this.vy;
+
+                // Wiggle effect
+                this.y += Math.sin(this.x * 0.05) * 0.5;
+
+                // Collision with filter (middle of screen)
+                if (!this.passedFilter && this.x > filterLineX - 20 && this.x < filterLineX + 20) {
+                    
+                    // High flow = less efficient filtering. High turbidity = filter gets overwhelmed.
+                    const flowPenalty = parseInt(sliderFlow.value) > 5 ? 0.2 : 0; // 20% chance dirt gets through if fast
+                    const overloadPenalty = parseInt(sliderTurbidity.value) > 7 ? 0.1 : 0;
+
+                    if (this.type === 'dirt') {
+                        // Chance to get trapped
+                        if (Math.random() > (flowPenalty + overloadPenalty)) {
+                            this.vx = 0; // Trapped
+                            this.vy = 0;
+                        }
+                    }
+                    this.passedFilter = true;
+                }
+
+                // If a dirt particle makes it through but flow is normal, sometimes it turns to water (treated)
+                if(this.passedFilter && this.type === 'dirt' && this.vx > 0) {
+                    // It snuck through, leave it as dirt to show inefficiency
+                }
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+        }
+
+        function spawnParticles() {
+            const turbidityLvl = parseInt(sliderTurbidity.value);
+            
+            // Always spawn water
+            for(let i=0; i<3; i++) {
+                particles.push(new Particle(Math.random() * canvasHeight, 'water'));
+            }
+
+            // Spawn dirt based on turbidity slider
+            const dirtToSpawn = Math.floor(Math.random() * turbidityLvl);
+            for(let i=0; i<dirtToSpawn; i++) {
+                particles.push(new Particle(Math.random() * canvasHeight, 'dirt'));
+            }
+        }
+
+        function updateUIValues() {
+            const tVal = parseInt(sliderTurbidity.value);
+            if(tVal <= 3) valTurbidity.textContent = "Low";
+            else if(tVal <= 7) valTurbidity.textContent = "Medium";
+            else valTurbidity.textContent = "High (Overload)";
+
+            const fVal = parseInt(sliderFlow.value);
+            if(fVal <= 3) valFlow.textContent = "Slow (Optimal)";
+            else if(fVal <= 6) valFlow.textContent = "Normal";
+            else valFlow.textContent = "Fast (Risk)";
+            
+            flowSpeedMultiplier = fVal * 0.8;
+        }
+
+        sliderTurbidity.addEventListener('input', updateUIValues);
+        sliderFlow.addEventListener('input', updateUIValues);
+        
+        // Touch support for sliders
+        [sliderTurbidity, sliderFlow].forEach(slider => {
+            slider.addEventListener('touchstart', (e) => e.stopPropagation(), {passive: true});
+            slider.addEventListener('touchmove', (e) => e.stopPropagation(), {passive: true});
+        });
+
+        updateUIValues();
+
+        function animateCanvas() {
+            // Dark background with slight trail effect
+            ctx.fillStyle = 'rgba(2, 5, 10, 0.3)';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+            // Draw Filter Block
+            ctx.fillStyle = 'rgba(50, 50, 50, 0.5)';
+            ctx.fillRect(filterLineX - 20, 0, 40, canvasHeight);
+            
+            // Filter texture details
+            ctx.fillStyle = 'rgba(200, 200, 200, 0.1)';
+            for(let i=0; i<canvasHeight; i+=10) {
+                ctx.fillRect(filterLineX - 15, i, 30, 2);
+            }
+
+            // Spawn
+            spawnParticles();
+
+            // Update & Draw
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.update(flowSpeedMultiplier);
+                p.draw();
+
+                // Remove off-screen or long-trapped particles
+                if (p.x > canvasWidth || (p.vx === 0 && Math.random() < 0.01)) {
+                    particles.splice(i, 1);
+                }
+            }
+
+            // Cap array size for performance
+            if (particles.length > 2000) {
+                particles.splice(0, particles.length - 2000);
+            }
+
+            requestAnimationFrame(animateCanvas);
+        }
+
+        animateCanvas();
+
+    });
+</script>
+</body>
+</html>

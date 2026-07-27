@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Solution, Colloid & Suspension Explorer</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-base: #030712;
+            --bg-surface: rgba(17, 24, 39, 0.6);
+            --bg-surface-light: rgba(31, 41, 55, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            
+            --accent-solution: #3b82f6; /* Blue */
+            --accent-colloid: #8b5cf6;  /* Purple */
+            --accent-suspension: #f59e0b; /* Amber */
+            --accent-laser: #10b981;    /* Emerald */
+            
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            
+            --font-main: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            /* Fluid Typography */
+            --fs-h1: clamp(2rem, 5vw, 4rem);
+            --fs-h2: clamp(1.5rem, 3vw, 2.5rem);
+            --fs-h3: clamp(1.1rem, 2vw, 1.5rem);
+            --fs-body: clamp(0.875rem, 1.2vw, 1.125rem);
+            --fs-small: clamp(0.75rem, 1vw, 0.875rem);
+
+            --spacing-section: clamp(3rem, 6vw, 6rem);
+            --spacing-card: clamp(1rem, 2vw, 2rem);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* Ambient Background Canvas */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.4;
+        }
+
+        /* ==========================================================================
+           UTILITIES & GLASSMORPHISM
+           ========================================================================== */
+        .glass-panel {
+            background: var(--bg-surface);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4), inset 0 1px 0 var(--glass-highlight);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .text-gradient {
+            background: linear-gradient(to right, #60a5fa, #c084fc, #fca5a5);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            display: inline-block;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 clamp(16px, 4vw, 40px);
+        }
+
+        section {
+            padding: var(--spacing-section) 0;
+            position: relative;
+        }
+
+        h1, h2, h3 { font-weight: 700; line-height: 1.2; margin-bottom: 1rem; }
+        h1 { font-size: var(--fs-h1); letter-spacing: -1px; }
+        h2 { font-size: var(--fs-h2); }
+        h3 { font-size: var(--fs-h3); }
+        p { font-size: var(--fs-body); color: var(--text-muted); margin-bottom: 1rem; }
+
+        /* ==========================================================================
+           HERO SECTION
+           ========================================================================== */
+        .hero {
+            min-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            position: relative;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 16px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 30px;
+            font-size: var(--fs-small);
+            color: #93c5fd;
+            margin-bottom: 2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.2);
+        }
+
+        /* ==========================================================================
+           INTERACTIVE EXPLORER (CORE SIMULATION)
+           ========================================================================== */
+        .explorer-grid {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        @media (max-width: 1024px) {
+            .explorer-grid { grid-template-columns: 1fr; }
+        }
+
+        .visual-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            background: radial-gradient(circle at center, rgba(31, 41, 55, 0.5) 0%, rgba(3, 7, 18, 0) 70%);
+            border-radius: 32px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        @media (max-width: 768px) {
+            .visual-container { height: 400px; }
+        }
+
+        #main-sim-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Controls Panel */
+        .controls-panel {
+            padding: var(--spacing-card);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .type-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .btn-select {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            border-radius: 12px;
+            color: var(--text-main);
+            font-size: var(--fs-body);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: left;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .btn-select span.dot {
+            width: 12px; height: 12px; border-radius: 50%;
+        }
+
+        .btn-select.active[data-type="solution"] { 
+            background: rgba(59, 130, 246, 0.15); border-color: var(--accent-solution); box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+        }
+        .btn-select.active[data-type="colloid"] { 
+            background: rgba(139, 92, 246, 0.15); border-color: var(--accent-colloid); box-shadow: 0 0 15px rgba(139, 92, 246, 0.3);
+        }
+        .btn-select.active[data-type="suspension"] { 
+            background: rgba(245, 158, 11, 0.15); border-color: var(--accent-suspension); box-shadow: 0 0 15px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-select:hover:not(.active) { background: rgba(255, 255, 255, 0.08); }
+
+        /* Custom Slider */
+        .slider-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--fs-small);
+            color: var(--text-muted);
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+
+        /* Toggle Switch */
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.2);
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 28px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider-toggle {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(255,255,255,0.2);
+            transition: .4s; border-radius: 34px;
+        }
+        .slider-toggle:before {
+            position: absolute; content: ""; height: 20px; width: 20px;
+            left: 4px; bottom: 4px; background-color: white;
+            transition: .4s; border-radius: 50%;
+        }
+        input:checked + .slider-toggle { background-color: var(--accent-laser); box-shadow: 0 0 15px var(--accent-laser); }
+        input:checked + .slider-toggle:before { transform: translateX(22px); }
+
+        /* ==========================================================================
+           MANDATORY LABELS & MARKERS SYSTEM
+           ========================================================================== */
+        .diagram-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            background: rgba(17, 24, 39, 0.8);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            box-shadow: 0 0 15px rgba(255,255,255,0.4);
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .marker::after {
+            content: ''; position: absolute; top: -4px; left: -4px; right: -4px; bottom: -4px;
+            border-radius: 50%; border: 1px solid rgba(255,255,255,0.5);
+            animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--accent-solution);
+            border-color: #fff;
+        }
+
+        .legend-container {
+            margin-top: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 8px;
+            border: 1px solid transparent;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .legend-num {
+            width: 24px; height: 24px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 12px; font-weight: bold;
+        }
+        
+        .legend-item.active .legend-num {
+            background: var(--accent-solution);
+            color: white;
+            box-shadow: 0 0 10px var(--accent-solution);
+        }
+
+        .legend-text { display: flex; flex-direction: column; }
+        .legend-title { font-weight: 600; font-size: var(--fs-small); color: var(--text-main); }
+        .legend-desc { font-size: 0.75rem; color: var(--text-muted); }
+
+        /* ==========================================================================
+           WORKING PROCESS (MANDATORY DEDICATED SECTION)
+           ========================================================================== */
+        .process-section {
+            background: radial-gradient(ellipse at bottom, rgba(16, 185, 129, 0.05) 0%, transparent 70%);
+        }
+
+        .process-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        .process-visual {
+            height: 450px;
+            border-radius: 24px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--glass-border);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+        
+        #process-canvas { width: 100%; height: 100%; display: block; }
+
+        .process-ui {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .stage-indicator {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .stage-dot {
+            flex: 1;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            transition: all 0.3s ease;
+        }
+        .stage-dot.active { background: var(--accent-laser); box-shadow: 0 0 10px var(--accent-laser); }
+        .stage-dot.completed { background: rgba(16, 185, 129, 0.5); }
+
+        .stage-content {
+            min-height: 120px;
+        }
+
+        .stage-title {
+            font-size: var(--fs-h2);
+            color: var(--accent-laser);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .stage-num-badge {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--accent-laser);
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1rem;
+            border: 1px solid var(--accent-laser);
+        }
+
+        .process-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 12px;
+            border: none;
+            font-size: var(--fs-body);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .btn:hover { background: rgba(255,255,255,0.15); transform: translateY(-2px); }
+        .btn:active { transform: translateY(0); }
+        
+        .btn-primary {
+            background: var(--accent-laser);
+            color: #000;
+            border: none;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+        }
+        .btn-primary:hover { background: #34d399; }
+
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* ==========================================================================
+           INFO GRIDS & TABLES
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: var(--spacing-card);
+            margin-top: 2rem;
+        }
+
+        .info-card {
+            padding: var(--spacing-card);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .icon-box {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 24px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 2rem;
+            background: var(--bg-surface);
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+        
+        .comparison-table th, .comparison-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .comparison-table th {
+            background: rgba(0,0,0,0.3);
+            font-weight: 600;
+            color: var(--text-main);
+        }
+        
+        .comparison-table tr:last-child td { border-bottom: none; }
+        .comparison-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+        @media (max-width: 768px) {
+            .comparison-table { display: block; overflow-x: auto; white-space: nowrap; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- Header / Hero -->
+    <section class="hero">
+        <div class="container" style="z-index: 1;">
+            <div class="hero-badge">Interactive Chemistry Module</div>
+            <h1>Mixtures <span class="text-gradient">Revealed</span></h1>
+            <p style="max-width: 600px; margin: 1rem auto 2rem; font-size: var(--fs-h3);">
+                Explore the microscopic world of Solutions, Colloids, and Suspensions. Understand how particle size dictates physical properties.
+            </p>
+        </div>
+    </section>
+
+    <!-- Main Explorer Section -->
+    <section id="explorer" class="container">
+        <div class="glass-panel" style="padding: var(--spacing-card);">
+            <h2>Interactive Particle Inspector</h2>
+            <p>Select a mixture type and interact with the environment to observe behaviors like gravity settling and light scattering.</p>
+            
+            <div class="explorer-grid">
+                
+                <!-- Left: Visual Simulation -->
+                <div class="visual-container diagram-wrapper" id="sim-container">
+                    <canvas id="main-sim-canvas"></canvas>
+                    
+                    <!-- Mandatory Markers -->
+                    <div class="marker" data-target="leg-particle" style="top: 45%; left: 50%;">1</div>
+                    <div class="marker" data-target="leg-solvent" style="top: 75%; left: 35%;">2</div>
+                    <div class="marker" data-target="leg-beam" id="marker-laser" style="top: 50%; left: 80%; display: none;">3</div>
+                </div>
+
+                <!-- Right: Controls & Legend -->
+                <div class="controls-panel">
+                    <h3>Substance Type</h3>
+                    <div class="type-selector">
+                        <button class="btn-select active" data-type="solution">
+                            <span>True Solution</span>
+                            <span class="dot" style="background: var(--accent-solution);"></span>
+                        </button>
+                        <button class="btn-select" data-type="colloid">
+                            <span>Colloid</span>
+                            <span class="dot" style="background: var(--accent-colloid);"></span>
+                        </button>
+                        <button class="btn-select" data-type="suspension">
+                            <span>Suspension</span>
+                            <span class="dot" style="background: var(--accent-suspension);"></span>
+                        </button>
+                    </div>
+
+                    <div style="height: 1px; background: rgba(255,255,255,0.1); margin: 1rem 0;"></div>
+
+                    <h3>Environment</h3>
+                    
+                    <div class="toggle-group">
+                        <div>
+                            <div style="font-weight: 600;">Laser (Tyndall Effect)</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">Pass light through mixture</div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="laser-toggle">
+                            <span class="slider-toggle"></span>
+                        </label>
+                    </div>
+
+                    <div class="slider-group" style="margin-top: 1rem;">
+                        <div class="slider-header">
+                            <span>Time (Gravity Effect)</span>
+                            <span id="time-val">0s</span>
+                        </div>
+                        <input type="range" id="time-slider" min="0" max="100" value="0">
+                    </div>
+
+                    <!-- Mandatory Legend -->
+                    <div class="legend-container">
+                        <div class="legend-item" id="leg-particle" data-marker="1">
+                            <div class="legend-num">1</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Solute Particles</span>
+                                <span class="legend-desc" id="desc-particle">Size: < 1nm. Invisible to naked eye.</span>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="leg-solvent" data-marker="2">
+                            <div class="legend-num">2</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Dispersion Medium (Water)</span>
+                                <span class="legend-desc">Continuous liquid phase suspending particles.</span>
+                            </div>
+                        </div>
+                        <div class="legend-item" id="leg-beam" data-marker="3" style="opacity: 0.3; pointer-events: none;">
+                            <div class="legend-num">3</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Light Path</span>
+                                <span class="legend-desc" id="desc-beam">Laser is off.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Working Process Section -->
+    <section id="process" class="process-section">
+        <div class="container">
+            <h2 style="text-align: center;">Mechanism: The Tyndall Effect</h2>
+            <p style="text-align: center; max-width: 600px; margin: 0 auto 3rem;">
+                Why does a car headlight show a beam in fog, but not in clear air? Let's break down how particle size interacts with light photons.
+            </p>
+
+            <div class="glass-panel" style="padding: var(--spacing-card);">
+                <div class="process-container">
+                    
+                    <div class="process-visual diagram-wrapper" id="process-container">
+                        <canvas id="process-canvas"></canvas>
+                        <!-- Process Markers -->
+                        <div class="marker" data-target="leg-p-light" style="top: 50%; left: 15%;">1</div>
+                        <div class="marker" data-target="leg-p-interaction" style="top: 50%; left: 50%;">2</div>
+                    </div>
+
+                    <div class="process-ui">
+                        <div class="stage-indicator" id="stage-dots">
+                            <div class="stage-dot active"></div>
+                            <div class="stage-dot"></div>
+                            <div class="stage-dot"></div>
+                            <div class="stage-dot"></div>
+                        </div>
+
+                        <div class="stage-content">
+                            <h3 class="stage-title">
+                                <span class="stage-num-badge" id="stg-num">1</span>
+                                <span id="stg-title">Light Emission</span>
+                            </h3>
+                            <p id="stg-desc">A concentrated beam of light (photons) is emitted from the source towards the container.</p>
+                            
+                            <!-- Process Legend (Contextual) -->
+                            <div class="legend-container" style="margin-top: 1rem; flex-direction: row; flex-wrap: wrap;">
+                                <div class="legend-item" id="leg-p-light" style="flex: 1; min-width: 200px;">
+                                    <div class="legend-num">1</div>
+                                    <div class="legend-text">
+                                        <span class="legend-title">Light Source</span>
+                                        <span class="legend-desc">Emits coherent photons</span>
+                                    </div>
+                                </div>
+                                <div class="legend-item" id="leg-p-interaction" style="flex: 1; min-width: 200px;">
+                                    <div class="legend-num">2</div>
+                                    <div class="legend-text">
+                                        <span class="legend-title">Interaction Zone</span>
+                                        <span class="legend-desc" id="desc-p-interaction">Awaiting light</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="process-controls">
+                            <button class="btn" id="btn-prev" disabled>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                                Prev
+                            </button>
+                            <button class="btn" id="btn-next">
+                                Next
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                            </button>
+                            <div style="flex-grow: 1;"></div>
+                            <button class="btn btn-primary" id="btn-autoplay">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="icon-play"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                <span id="lbl-autoplay">Auto-Play</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Applications & Facts -->
+    <section class="container">
+        <h2>Real World Context</h2>
+        <div class="info-grid">
+            <div class="glass-panel info-card">
+                <div class="icon-box" style="color: var(--accent-solution);">💧</div>
+                <h3>True Solutions</h3>
+                <p><strong>Examples:</strong> Saltwater, Air, Brass.</p>
+                <p><strong>Fact:</strong> Medical IV fluids must be true solutions to enter the bloodstream without causing blockages. Particles are reduced to individual ions.</p>
+            </div>
+            <div class="glass-panel info-card">
+                <div class="icon-box" style="color: var(--accent-colloid);">🥛</div>
+                <h3>Colloids</h3>
+                <p><strong>Examples:</strong> Milk, Fog, Blood, Gelatin.</p>
+                <p><strong>Fact:</strong> Colloidal particles are kept suspended by constant microscopic collisions with solvent molecules—a phenomenon known as <em>Brownian Motion</em>.</p>
+            </div>
+            <div class="glass-panel info-card">
+                <div class="icon-box" style="color: var(--accent-suspension);">☕</div>
+                <h3>Suspensions</h3>
+                <p><strong>Examples:</strong> Muddy water, Liquid medicines (antibiotics), Freshly squeezed orange juice.</p>
+                <p><strong>Fact:</strong> "Shake well before use" labels exist specifically for suspensions, as the active ingredients sink to the bottom over time.</p>
+            </div>
+        </div>
+
+        <h2 style="margin-top: 4rem;">Quick Revision</h2>
+        <div class="glass-panel" style="padding: 1rem;">
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Property</th>
+                        <th>True Solution</th>
+                        <th>Colloid</th>
+                        <th>Suspension</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Particle Size</strong></td>
+                        <td>< 1 nm (Ions/Molecules)</td>
+                        <td>1 nm - 1000 nm</td>
+                        <td>> 1000 nm</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Appearance</strong></td>
+                        <td>Clear, Transparent</td>
+                        <td>Translucent / Opaque</td>
+                        <td>Opaque</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Settles via Gravity?</strong></td>
+                        <td>No</td>
+                        <td>No</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Tyndall Effect?</strong></td>
+                        <td>No (Beam invisible)</td>
+                        <td>Yes (Scatters light)</td>
+                        <td>Yes (Initially), then blocks</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Filterability</strong></td>
+                        <td>Passes through filter</td>
+                        <td>Passes through filter</td>
+                        <td>Caught by filter paper</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <footer style="text-align: center; padding: 2rem; color: var(--text-muted); margin-top: 4rem; border-top: 1px solid var(--glass-border);">
+        Premium Educational Visualization Module
+    </footer>
+
+    <!-- ==========================================================================
+         JAVASCRIPT ENGINE
+         ========================================================================== -->
+    <script>
+        // --- Utility: Retina Canvas Resizer ---
+        function resizeCanvas(canvas, container) {
+            const rect = container.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+            return { width: rect.width, height: rect.height, ctx: ctx };
+        }
+
+        // --- Ambient Background ---
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let bgParticles = [];
+
+        function initBg() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+            bgParticles = [];
+            const count = window.innerWidth < 768 ? 30 : 100;
+            for(let i=0; i<count; i++) {
+                bgParticles.push({
+                    x: Math.random() * bgCanvas.width,
+                    y: Math.random() * bgCanvas.height,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    r: Math.random() * 2 + 0.5,
+                    a: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        function drawBg() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgCtx.fillStyle = 'white';
+            bgParticles.forEach(p => {
+                p.x += p.vx; p.y += p.vy;
+                if(p.x < 0) p.x = bgCanvas.width;
+                if(p.x > bgCanvas.width) p.x = 0;
+                if(p.y < 0) p.y = bgCanvas.height;
+                if(p.y > bgCanvas.height) p.y = 0;
+                
+                bgCtx.globalAlpha = p.a;
+                bgCtx.beginPath();
+                bgCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                bgCtx.fill();
+            });
+            requestAnimationFrame(drawBg);
+        }
+        initBg(); drawBg();
+        window.addEventListener('resize', initBg);
+
+        // --- Core Simulation Engine (Beaker & Particles) ---
+        class BeakerSim {
+            constructor(canvasId, containerId) {
+                this.canvas = document.getElementById(canvasId);
+                this.container = document.getElementById(containerId);
+                this.type = 'solution';
+                this.laserOn = false;
+                this.time = 0; // 0 to 1
+                this.particles = [];
+                
+                this.colors = {
+                    solution: { liquid: 'rgba(59, 130, 246, 0.15)', part: 'rgba(255,255,255,0.4)', beam: 'rgba(16, 185, 129, 0.05)' },
+                    colloid:  { liquid: 'rgba(139, 92, 246, 0.2)', part: 'rgba(237, 233, 254, 0.7)', beam: 'rgba(16, 185, 129, 0.6)' },
+                    suspension:{ liquid: 'rgba(245, 158, 11, 0.3)', part: 'rgba(217, 119, 6, 0.9)', beam: 'rgba(16, 185, 129, 0.9)' }
+                };
+
+                this.initParams();
+                window.addEventListener('resize', () => this.handleResize());
+                this.handleResize();
+                this.animate();
+            }
+
+            handleResize() {
+                const dims = resizeCanvas(this.canvas, this.container);
+                this.w = dims.width;
+                this.h = dims.height;
+                this.ctx = dims.ctx;
+                
+                // Define Beaker Geometry
+                this.cw = Math.min(this.w * 0.6, 300);
+                this.ch = Math.min(this.h * 0.7, 400);
+                this.cx = this.w / 2;
+                this.cy = this.h / 2;
+                
+                this.liqY = this.cy - this.ch/2 + 50; // Liquid top level
+                this.bottomY = this.cy + this.ch/2;
+                
+                this.initParticles();
+            }
+
+            initParams() {
+                // Setup particles based on type
+                this.particles = [];
+                let count, rMin, rMax, isSuspension;
+                
+                if(this.type === 'solution') { count = 300; rMin = 0.5; rMax = 1.5; isSuspension = false; }
+                else if(this.type === 'colloid') { count = 150; rMin = 2; rMax = 4; isSuspension = false; }
+                else { count = 80; rMin = 6; rMax = 12; isSuspension = true; }
+
+                // Reduce particles on mobile for perf
+                if(window.innerWidth < 768) count = Math.floor(count * 0.6);
+
+                const widthSpread = this.cw - 40;
+                
+                for(let i=0; i<count; i++) {
+                    this.particles.push({
+                        x: this.cx + (Math.random() - 0.5) * widthSpread,
+                        y: this.liqY + 10 + Math.random() * (this.bottomY - this.liqY - 30),
+                        baseY: 0, // for suspension
+                        r: Math.random() * (rMax - rMin) + rMin,
+                        vx: (Math.random() - 0.5) * (this.type==='solution'?2:1),
+                        vy: (Math.random() - 0.5) * (this.type==='solution'?2:1),
+                        isSuspension: isSuspension
+                    });
+                }
+                
+                // Assign baseY for suspensions to pile up at bottom
+                if(isSuspension) {
+                    this.particles.forEach((p, i) => {
+                        // Stack them roughly at bottom
+                        p.baseY = p.y;
+                        p.targetY = this.bottomY - 10 - (p.r * 1.5) - (Math.random() * 20) - ((i%10)*3);
+                    });
+                }
+            }
+
+            drawBeaker() {
+                const ctx = this.ctx;
+                const topY = this.cy - this.ch/2;
+                const botY = this.cy + this.ch/2;
+                const left = this.cx - this.cw/2;
+                const right = this.cx + this.cw/2;
+                const rx = this.cw/2;
+                const ry = 20; // ellipse y radius
+
+                // --- Liquid Body ---
+                ctx.fillStyle = this.colors[this.type].liquid;
+                ctx.beginPath();
+                ctx.ellipse(this.cx, this.liqY, rx-4, ry-2, 0, 0, Math.PI); // top curve of liquid
+                ctx.lineTo(right-4, botY - ry);
+                ctx.ellipse(this.cx, botY - ry, rx-4, ry-2, 0, 0, Math.PI); // bot curve
+                ctx.lineTo(left+4, this.liqY);
+                ctx.fill();
+
+                // --- Laser Beam (Under glass, in liquid) ---
+                if (this.laserOn) {
+                    ctx.save();
+                    // Clip to liquid area
+                    ctx.beginPath();
+                    ctx.ellipse(this.cx, this.liqY, rx-4, ry-2, 0, Math.PI, Math.PI*2, true);
+                    ctx.lineTo(right-4, botY - ry);
+                    ctx.ellipse(this.cx, botY - ry, rx-4, ry-2, 0, 0, Math.PI);
+                    ctx.clip();
+
+                    const laserY = this.cy;
+                    const beamColor = this.colors[this.type].beam;
+                    
+                    // Beam core
+                    ctx.fillStyle = beamColor;
+                    ctx.shadowColor = '#10b981';
+                    ctx.shadowBlur = this.type === 'solution' ? 5 : (this.type === 'colloid' ? 20 : 30);
+                    
+                    if (this.type === 'suspension') {
+                        // Gradient fade out for suspension (blocks light)
+                        let grad = ctx.createLinearGradient(left, 0, right, 0);
+                        grad.addColorStop(0, 'rgba(16, 185, 129, 0.9)');
+                        grad.addColorStop(0.3, 'rgba(16, 185, 129, 0.2)');
+                        grad.addColorStop(1, 'rgba(16, 185, 129, 0)');
+                        ctx.fillStyle = grad;
+                    }
+
+                    ctx.fillRect(left-50, laserY - (this.type==='colloid'?15:25), this.cw+100, this.type==='colloid'?30:50);
+                    ctx.restore();
+                }
+
+                // --- Particles ---
+                ctx.fillStyle = this.colors[this.type].part;
+                const widthLim = this.cw/2 - 10;
+                
+                this.particles.forEach(p => {
+                    // Update pos
+                    if (this.type === 'colloid') {
+                        // Brownian motion jitter
+                        p.x += (Math.random() - 0.5) * 1.5;
+                        p.y += (Math.random() - 0.5) * 1.5;
+                    } else if (this.type === 'solution') {
+                        p.x += p.vx; p.y += p.vy;
+                    }
+
+                    // Gravity logic for suspension based on slider `this.time` (0 to 1)
+                    if (p.isSuspension) {
+                        // Interpolate between original random Y and target bottom Y based on time curve
+                        const easeTime = Math.pow(this.time, 2); // Accelerate falling
+                        p.y = p.baseY + (p.targetY - p.baseY) * easeTime;
+                        
+                        // Add slight jitter if not fully settled
+                        if(this.time < 0.9) {
+                            p.x += (Math.random() - 0.5) * 0.5;
+                        }
+                    }
+
+                    // Constrain X
+                    if(p.x < this.cx - widthLim) { p.x = this.cx - widthLim; p.vx *= -1; }
+                    if(p.x > this.cx + widthLim) { p.x = this.cx + widthLim; p.vx *= -1; }
+                    // Constrain Y (for non-suspension)
+                    if(!p.isSuspension) {
+                        if(p.y < this.liqY + 10) { p.y = this.liqY + 10; p.vy *= -1; }
+                        if(p.y > this.bottomY - ry - 10) { p.y = this.bottomY - ry - 10; p.vy *= -1; }
+                    }
+
+                    // Draw
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                    ctx.fill();
+
+                    // Tyndall highlight on particles in beam path
+                    if(this.laserOn && Math.abs(p.y - this.cy) < 30) {
+                        ctx.fillStyle = '#fff';
+                        ctx.beginPath(); ctx.arc(p.x, p.y, p.r*0.6, 0, Math.PI*2); ctx.fill();
+                        ctx.fillStyle = this.colors[this.type].part;
+                    }
+                });
+
+                // --- Glass Beaker Structure (Front) ---
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 3;
+                
+                // Back lip
+                ctx.beginPath();
+                ctx.ellipse(this.cx, topY, rx, ry, 0, Math.PI, Math.PI*2);
+                ctx.stroke();
+
+                // Sides
+                ctx.beginPath();
+                ctx.moveTo(left, topY); ctx.lineTo(left, botY - ry);
+                ctx.moveTo(right, topY); ctx.lineTo(right, botY - ry);
+                ctx.stroke();
+
+                // Front bottom curve
+                ctx.beginPath();
+                ctx.ellipse(this.cx, botY - ry, rx, ry, 0, 0, Math.PI);
+                ctx.stroke();
+                
+                // Front lip
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.beginPath();
+                ctx.ellipse(this.cx, topY, rx, ry, 0, 0, Math.PI);
+                ctx.stroke();
+
+                // Glass Highlights
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.beginPath();
+                ctx.moveTo(left + 10, topY);
+                ctx.lineTo(left + 30, topY);
+                ctx.lineTo(left + 30, botY - ry);
+                ctx.lineTo(left + 10, botY - ry);
+                ctx.fill();
+            }
+
+            animate() {
+                this.ctx.clearRect(0, 0, this.w, this.h);
+                this.drawBeaker();
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+
+        // Initialize Main Sim
+        const mainSim = new BeakerSim('main-sim-canvas', 'sim-container');
+
+        // --- Main Controls Logic ---
+        const typeBtns = document.querySelectorAll('.btn-select');
+        const timeSlider = document.getElementById('time-slider');
+        const timeVal = document.getElementById('time-val');
+        const laserToggle = document.getElementById('laser-toggle');
+        
+        // Legends
+        const descParticle = document.getElementById('desc-particle');
+        const descBeam = document.getElementById('desc-beam');
+        const markerLaser = document.getElementById('marker-laser');
+        const legBeam = document.getElementById('leg-beam');
+
+        const descriptions = {
+            solution: "Size: < 1nm. Invisible to naked eye. Do not settle.",
+            colloid: "Size: 1nm - 1000nm. Large enough to scatter light. Brownian motion prevents settling.",
+            suspension: "Size: > 1000nm. Visible particles. Heavy enough for gravity to pull them down."
+        };
+
+        typeBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // UI update
+                typeBtns.forEach(b => b.classList.remove('active'));
+                const target = e.currentTarget;
+                target.classList.add('active');
+                
+                // Sim update
+                const type = target.getAttribute('data-type');
+                mainSim.type = type;
+                mainSim.initParams();
+                
+                // Text update
+                descParticle.innerText = descriptions[type];
+                
+                // Reset slider if changing type
+                timeSlider.value = 0;
+                mainSim.time = 0;
+                timeVal.innerText = '0s';
+
+                updateLaserText();
+            });
+        });
+
+        // Touch & Mouse handling for slider
+        timeSlider.addEventListener('input', (e) => {
+            const val = e.target.value;
+            mainSim.time = val / 100;
+            timeVal.innerText = val + 's';
+            
+            // Visual feedback - if suspension, show it settling
+            if(mainSim.type === 'suspension') {
+                if(val > 80) descParticle.innerText = "Particles have settled at the bottom (Precipitate).";
+                else descParticle.innerText = descriptions['suspension'];
+            }
+        });
+
+        laserToggle.addEventListener('change', (e) => {
+            mainSim.laserOn = e.target.checked;
+            markerLaser.style.display = mainSim.laserOn ? 'flex' : 'none';
+            legBeam.style.opacity = mainSim.laserOn ? '1' : '0.3';
+            updateLaserText();
+        });
+
+        function updateLaserText() {
+            if(!mainSim.laserOn) {
+                descBeam.innerText = "Laser is off.";
+                return;
+            }
+            if(mainSim.type === 'solution') descBeam.innerText = "Beam passes straight through. (No Tyndall Effect)";
+            if(mainSim.type === 'colloid') descBeam.innerText = "Beam path is clearly visible as particles scatter photons. (Tyndall Effect)";
+            if(mainSim.type === 'suspension') descBeam.innerText = "Beam is scattered and rapidly blocked by large particles.";
+        }
+
+
+        // --- Labels & Legend Interaction Logic ---
+        function setupMarkers() {
+            const markers = document.querySelectorAll('.marker');
+            const legends = document.querySelectorAll('.legend-item');
+
+            markers.forEach(m => {
+                const targetId = m.getAttribute('data-target');
+                const targetLeg = document.getElementById(targetId);
+                
+                const activate = () => {
+                    markers.forEach(x => x.classList.remove('active'));
+                    legends.forEach(x => x.classList.remove('active'));
+                    m.classList.add('active');
+                    if(targetLeg) targetLeg.classList.add('active');
+                };
+
+                const deactivate = () => {
+                    m.classList.remove('active');
+                    if(targetLeg) targetLeg.classList.remove('active');
+                };
+
+                m.addEventListener('mouseenter', activate);
+                m.addEventListener('mouseleave', deactivate);
+                m.addEventListener('touchstart', (e) => { e.preventDefault(); activate(); }, {passive: false});
+                
+                if(targetLeg) {
+                    targetLeg.addEventListener('mouseenter', activate);
+                    targetLeg.addEventListener('mouseleave', deactivate);
+                }
+            });
+        }
+        setupMarkers();
+
+
+        // --- Working Process Engine (Mechanism) ---
+        class ProcessEngine {
+            constructor() {
+                this.canvas = document.getElementById('process-canvas');
+                this.container = document.getElementById('process-container');
+                this.stage = 0; // 0, 1, 2, 3
+                this.isAutoPlaying = false;
+                this.autoPlayInterval = null;
+                
+                // UI Elements
+                this.stgNum = document.getElementById('stg-num');
+                this.stgTitle = document.getElementById('stg-title');
+                this.stgDesc = document.getElementById('stg-desc');
+                this.dots = document.querySelectorAll('.stage-dot');
+                this.btnPrev = document.getElementById('btn-prev');
+                this.btnNext = document.getElementById('btn-next');
+                this.btnAuto = document.getElementById('btn-autoplay');
+                this.lblAuto = document.getElementById('lbl-autoplay');
+                this.iconPlay = document.getElementById('icon-play');
+                
+                this.descInteraction = document.getElementById('desc-p-interaction');
+
+                this.stages = [
+                    {
+                        title: "Light Emission",
+                        desc: "A flashlight or laser emits a concentrated beam of photons. Before hitting the mixture, the light travels through clear air.",
+                        interaction: "Awaiting light source.",
+                        draw: (ctx, w, h, time) => this.drawStage1(ctx, w, h, time)
+                    },
+                    {
+                        title: "True Solution (No Scatter)",
+                        desc: "Light enters a salt solution. Particles (<1nm) are too small to interact with the light wave. The beam passes through invisibly.",
+                        interaction: "Photons bypass tiny ions undisturbed.",
+                        draw: (ctx, w, h, time) => this.drawStage2(ctx, w, h, time)
+                    },
+                    {
+                        title: "Colloid (Tyndall Effect)",
+                        desc: "Light enters milk (colloid). Particles (1-1000nm) are large enough to deflect photons into our eyes. The beam path illuminates.",
+                        interaction: "Photons ricochet off medium particles.",
+                        draw: (ctx, w, h, time) => this.drawStage3(ctx, w, h, time)
+                    },
+                    {
+                        title: "Suspension (Blocking)",
+                        desc: "Light enters muddy water. Massive particles (>1000nm) scatter light wildly but also absorb and block it from passing through completely.",
+                        interaction: "Light is blocked/absorbed by massive particles.",
+                        draw: (ctx, w, h, time) => this.drawStage4(ctx, w, h, time)
+                    }
+                ];
+
+                this.animTime = 0;
+                window.addEventListener('resize', () => this.handleResize());
+                this.handleResize();
+                this.bindEvents();
+                this.updateUI();
+                this.animate();
+            }
+
+            handleResize() {
+                const dims = resizeCanvas(this.canvas, this.container);
+                this.w = dims.width;
+                this.h = dims.height;
+                this.ctx = dims.ctx;
+            }
+
+            bindEvents() {
+                this.btnNext.addEventListener('click', () => { this.stopAuto(); this.next(); });
+                this.btnPrev.addEventListener('click', () => { this.stopAuto(); this.prev(); });
+                this.btnAuto.addEventListener('click', () => this.toggleAuto());
+            }
+
+            next() { if(this.stage < 3) { this.stage++; this.animTime = 0; this.updateUI(); } }
+            prev() { if(this.stage > 0) { this.stage--; this.animTime = 0; this.updateUI(); } }
+
+            toggleAuto() {
+                if(this.isAutoPlaying) {
+                    this.stopAuto();
+                } else {
+                    this.isAutoPlaying = true;
+                    this.lblAuto.innerText = "Pause";
+                    this.iconPlay.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+                    // If at end, loop to start
+                    if(this.stage === 3) { this.stage = 0; this.updateUI(); }
+                    this.autoPlayInterval = setInterval(() => {
+                        if(this.stage < 3) {
+                            this.stage++;
+                            this.animTime = 0;
+                            this.updateUI();
+                        } else {
+                            this.stopAuto(); // Auto stop at end
+                        }
+                    }, 4000); // 4 seconds per stage
+                }
+            }
+
+            stopAuto() {
+                this.isAutoPlaying = false;
+                clearInterval(this.autoPlayInterval);
+                this.lblAuto.innerText = "Auto-Play";
+                this.iconPlay.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+            }
+
+            updateUI() {
+                const s = this.stages[this.stage];
+                this.stgNum.innerText = this.stage + 1;
+                this.stgTitle.innerText = s.title;
+                this.stgDesc.innerText = s.desc;
+                this.descInteraction.innerText = s.interaction;
+
+                this.dots.forEach((d, i) => {
+                    d.className = 'stage-dot';
+                    if(i === this.stage) d.classList.add('active');
+                    else if (i < this.stage) d.classList.add('completed');
+                });
+
+                this.btnPrev.disabled = this.stage === 0;
+                this.btnNext.disabled = this.stage === 3;
+            }
+
+            // Shared drawing helpers
+            drawFlashlight(ctx, x, y) {
+                ctx.fillStyle = '#4b5563'; // gray body
+                ctx.beginPath();
+                ctx.moveTo(x, y - 15);
+                ctx.lineTo(x + 40, y - 20);
+                ctx.lineTo(x + 40, y + 20);
+                ctx.lineTo(x, y + 15);
+                ctx.fill();
+                
+                ctx.fillStyle = '#9ca3af'; // light head
+                ctx.fillRect(x + 40, y - 25, 10, 50);
+                
+                // Glow
+                ctx.shadowColor = '#fde047';
+                ctx.shadowBlur = 10;
+                ctx.fillStyle = '#fef08a';
+                ctx.beginPath();
+                ctx.ellipse(x+50, y, 4, 20, 0, 0, Math.PI*2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            drawContainer(ctx, x, y, type) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y-100, 150, 200); // glass box
+                
+                let fill = 'transparent';
+                if(type==='solution') fill = 'rgba(59, 130, 246, 0.1)';
+                if(type==='colloid') fill = 'rgba(139, 92, 246, 0.2)';
+                if(type==='suspension') fill = 'rgba(245, 158, 11, 0.4)';
+                
+                ctx.fillStyle = fill;
+                ctx.fillRect(x+2, y-90, 146, 188); // liquid
+            }
+
+            drawPhotons(ctx, startX, endX, y, spread, isScattered, t) {
+                ctx.fillStyle = '#fde047';
+                ctx.shadowColor = '#fde047';
+                ctx.shadowBlur = 5;
+                
+                for(let i=0; i<30; i++) {
+                    // Photon movement logic based on time 't'
+                    let px = startX + ((t * 200 + i*15) % (endX - startX));
+                    let py = y + (Math.sin(i*123) * spread);
+                    
+                    if(isScattered && px > startX + 50) {
+                        // Deviate path
+                        py += (Math.sin(px*0.1 + i) * 30);
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.arc(px, py, 2, 0, Math.PI*2);
+                    ctx.fill();
+                }
+                ctx.shadowBlur = 0;
+            }
+
+            // Stage specific drawing
+            drawStage1(ctx, w, h, t) {
+                const cx = w/2; const cy = h/2;
+                this.drawFlashlight(ctx, cx - 150, cy);
+                
+                // Beam fading out in air
+                let grad = ctx.createLinearGradient(cx-100, 0, cx, 0);
+                grad.addColorStop(0, 'rgba(253, 224, 71, 0.5)');
+                grad.addColorStop(1, 'rgba(253, 224, 71, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.moveTo(cx-100, cy-20);
+                ctx.lineTo(cx, cy-40);
+                ctx.lineTo(cx, cy+40);
+                ctx.lineTo(cx-100, cy+20);
+                ctx.fill();
+                
+                this.drawPhotons(ctx, cx-100, cx, cy, 15, false, t);
+            }
+
+            drawStage2(ctx, w, h, t) {
+                const cx = w/2; const cy = h/2;
+                this.drawFlashlight(ctx, cx - 200, cy);
+                this.drawContainer(ctx, cx - 50, cy, 'solution');
+                
+                // Photons passing straight through
+                this.drawPhotons(ctx, cx-150, cx+150, cy, 10, false, t);
+                
+                // No visible beam block inside container
+            }
+
+            drawStage3(ctx, w, h, t) {
+                const cx = w/2; const cy = h/2;
+                this.drawFlashlight(ctx, cx - 200, cy);
+                this.drawContainer(ctx, cx - 50, cy, 'colloid');
+                
+                // Visible Beam inside container
+                ctx.fillStyle = 'rgba(253, 224, 71, 0.3)';
+                ctx.filter = 'blur(4px)';
+                ctx.fillRect(cx-50, cy-15, 150, 30);
+                ctx.filter = 'none';
+
+                // Photons scattering
+                this.drawPhotons(ctx, cx-150, cx+150, cy, 10, true, t);
+
+                // Draw medium particles
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                for(let i=0; i<15; i++) {
+                    ctx.beginPath();
+                    ctx.arc(cx - 30 + (i*10), cy + (Math.sin(i*3)*40), 3, 0, Math.PI*2);
+                    ctx.fill();
+                }
+            }
+
+            drawStage4(ctx, w, h, t) {
+                const cx = w/2; const cy = h/2;
+                this.drawFlashlight(ctx, cx - 200, cy);
+                this.drawContainer(ctx, cx - 50, cy, 'suspension');
+                
+                // Blocked Beam inside container
+                let grad = ctx.createLinearGradient(cx-50, 0, cx+50, 0);
+                grad.addColorStop(0, 'rgba(253, 224, 71, 0.6)');
+                grad.addColorStop(1, 'rgba(253, 224, 71, 0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(cx-50, cy-20, 100, 40);
+
+                // Photons get blocked (endX is shorter)
+                this.drawPhotons(ctx, cx-150, cx+30, cy, 10, true, t*1.5);
+
+                // Draw large chunks
+                ctx.fillStyle = '#b45309';
+                for(let i=0; i<10; i++) {
+                    ctx.beginPath();
+                    let px = cx - 40 + (Math.random()*130);
+                    let py = cy - 80 + (Math.random()*160);
+                    // jagged shape
+                    ctx.moveTo(px, py);
+                    ctx.lineTo(px+8, py-4);
+                    ctx.lineTo(px+12, py+6);
+                    ctx.lineTo(px-4, py+10);
+                    ctx.fill();
+                }
+            }
+
+            animate() {
+                this.ctx.clearRect(0, 0, this.w, this.h);
+                this.animTime += 0.016; // roughly 60fps
+                
+                // Draw current stage
+                this.stages[this.stage].draw(this.ctx, this.w, this.h, this.animTime);
+
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+
+        // Initialize Process Engine
+        const processEngine = new ProcessEngine();
+
+    </script>
+</body>
+</html>

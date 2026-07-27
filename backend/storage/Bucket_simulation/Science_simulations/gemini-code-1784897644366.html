@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neutralization Reaction Simulation</title>
+    <style>
+        /* ==========================================================================
+           GLOBAL VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-base: #050508;
+            --acid-color: #ff2a5f;
+            --acid-glow: rgba(255, 42, 95, 0.4);
+            --base-color: #00d2ff;
+            --base-glow: rgba(0, 210, 255, 0.4);
+            --neutral-color: #9d4edd;
+            --neutral-glow: rgba(157, 78, 221, 0.4);
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f0f0f5;
+            --text-muted: #9ba1a6;
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            /* Fluid Typography */
+            --step--1: clamp(0.83rem, calc(0.78rem + 0.26vw), 0.96rem);
+            --step-0: clamp(1.00rem, calc(0.91rem + 0.43vw), 1.25rem);
+            --step-1: clamp(1.20rem, calc(1.07rem + 0.65vw), 1.58rem);
+            --step-2: clamp(1.44rem, calc(1.24rem + 0.98vw), 2.00rem);
+            --step-3: clamp(1.73rem, calc(1.44rem + 1.45vw), 2.53rem);
+            --step-4: clamp(2.07rem, calc(1.66rem + 2.08vw), 3.20rem);
+            --step-5: clamp(2.49rem, calc(1.90rem + 2.94vw), 4.05rem);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Animated Background Ambient Glows */
+        .ambient-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: -1;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 50%, #0a0a12 0%, #000 100%);
+        }
+        
+        .blob {
+            position: absolute;
+            filter: blur(80px);
+            opacity: 0.4;
+            border-radius: 50%;
+            animation: float 20s infinite ease-in-out alternate;
+        }
+        
+        .blob-acid {
+            background: var(--acid-color);
+            width: 40vw; height: 40vw;
+            top: -10%; left: -10%;
+        }
+        
+        .blob-base {
+            background: var(--base-color);
+            width: 45vw; height: 45vw;
+            bottom: -10%; right: -10%;
+            animation-delay: -10s;
+        }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(10vw, 15vh) scale(1.2); }
+            100% { transform: translate(-10vw, 20vh) scale(0.9); }
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: clamp(1.5rem, 3vw, 2.5rem);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(1rem, 5vw, 4rem);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(2rem, 6vw, 6rem);
+        }
+
+        h1, h2, h3 { line-height: 1.2; font-weight: 600; }
+        h1 { font-size: var(--step-5); text-align: center; margin-bottom: 0.5rem; letter-spacing: -0.02em; }
+        h2 { font-size: var(--step-4); margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem; }
+        h3 { font-size: var(--step-2); margin-bottom: 1rem; color: var(--text-main); }
+        p { font-size: var(--step-0); color: var(--text-muted); }
+
+        .gradient-text {
+            background: linear-gradient(90deg, var(--acid-color), var(--base-color));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ==========================================================================
+           SECTION 1: HERO & OVERVIEW
+           ========================================================================== */
+        .hero {
+            text-align: center;
+            padding-top: 10vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .hero-subtitle {
+            font-size: var(--step-1);
+            color: var(--text-muted);
+            max-width: 800px;
+        }
+
+        .equation-box {
+            display: inline-flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            margin-top: 3rem;
+            padding: 1.5rem 3rem;
+            background: rgba(0,0,0,0.4);
+            border-radius: 100px;
+            border: 1px solid var(--glass-border);
+            font-size: var(--step-2);
+            font-weight: bold;
+        }
+
+        .eq-acid { color: var(--acid-color); text-shadow: 0 0 10px var(--acid-glow); }
+        .eq-base { color: var(--base-color); text-shadow: 0 0 10px var(--base-glow); }
+        .eq-salt { color: var(--neutral-color); text-shadow: 0 0 10px var(--neutral-glow); }
+        .eq-water { color: #4facfe; }
+        .eq-heat { color: #ff9a44; }
+        .eq-plus, .eq-arrow { color: var(--text-muted); font-weight: normal; }
+
+        /* ==========================================================================
+           SECTION 2: COMPONENTS (MANDATORY LABEL RULES)
+           ========================================================================== */
+        .components-layout {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 3rem;
+            align-items: center;
+        }
+
+        .svg-container {
+            position: relative;
+            width: 100%;
+            min-height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            max-height: 600px;
+            overflow: visible;
+        }
+
+        /* Glowing Markers on SVG */
+        .marker {
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .marker circle {
+            fill: rgba(255,255,255,0.1);
+            stroke: var(--text-muted);
+            stroke-width: 2;
+            transition: all 0.3s;
+        }
+        .marker text {
+            fill: var(--text-main);
+            font-family: var(--font-main);
+            font-weight: bold;
+            font-size: 16px;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+        
+        .marker:hover circle, .marker.active circle {
+            fill: rgba(255,255,255,0.9);
+            stroke: #fff;
+            filter: drop-shadow(0 0 8px rgba(255,255,255,0.8));
+        }
+        .marker:hover text, .marker.active text {
+            fill: #000;
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: 16px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255,255,255,0.02);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: var(--glass-border);
+            transform: translateX(10px);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+
+        .legend-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            flex-shrink: 0;
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+
+        .legend-item.active .legend-badge {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 15px rgba(255,255,255,0.5);
+        }
+
+        .legend-content h4 {
+            font-size: var(--step-0);
+            margin-bottom: 0.2rem;
+            color: var(--text-main);
+        }
+        .legend-content p {
+            font-size: var(--step--1);
+            margin: 0;
+        }
+
+        /* ==========================================================================
+           SECTION 3: WORKING PROCESS (MOLECULAR MECHANISM)
+           ========================================================================== */
+        .mechanism-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            height: 50vh;
+            min-height: 400px;
+            border-radius: 20px;
+            overflow: hidden;
+            background: #000;
+            border: 1px solid var(--glass-border);
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Mechanism Controls */
+        .mech-controls {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.3);
+            padding: 1rem 2rem;
+            border-radius: 100px;
+            border: 1px solid var(--glass-border);
+            gap: 1rem;
+        }
+
+        .mech-nav {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 0.6rem 1.2rem;
+            border-radius: 50px;
+            cursor: pointer;
+            font-size: var(--step--1);
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: rgba(255,255,255,0.2);
+            transform: scale(1.05);
+        }
+        .btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--neutral-color);
+            border-color: transparent;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: #b87aff;
+            box-shadow: 0 0 15px var(--neutral-glow);
+        }
+
+        /* Progress Dots */
+        .mech-progress {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+        .dot.active {
+            background: var(--neutral-color);
+            box-shadow: 0 0 10px var(--neutral-glow);
+            transform: scale(1.3);
+        }
+
+        /* Stage Info Overlay */
+        .stage-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            max-width: 300px;
+            background: rgba(10,10,15,0.8);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            border-radius: 16px;
+            border: 1px solid var(--glass-border);
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .stage-title {
+            color: var(--neutral-color);
+            font-size: var(--step-1);
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+        .stage-desc {
+            font-size: var(--step--1);
+            color: var(--text-main);
+        }
+
+        /* ==========================================================================
+           SECTION 4: INTERACTIVE TITRATION SIMULATION
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .sim-visual {
+            position: relative;
+            height: 450px;
+            background: linear-gradient(180deg, #1a1a24 0%, #0a0a12 100%);
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 40px;
+            overflow: hidden;
+        }
+
+        /* CSS-drawn Beaker */
+        .sim-beaker {
+            width: 160px;
+            height: 200px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: none;
+            border-radius: 0 0 20px 20px;
+            position: relative;
+            z-index: 2;
+            box-shadow: inset 0 -10px 20px rgba(0,0,0,0.5);
+        }
+        .sim-beaker::before { /* Rim */
+            content: '';
+            position: absolute;
+            top: -4px; left: -10px; right: -10px; height: 8px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.3);
+        }
+
+        /* Liquid with dynamic color and height */
+        .sim-liquid {
+            position: absolute;
+            bottom: 0; left: 0; width: 100%;
+            height: 30%; /* Dynamic */
+            background: var(--acid-color); /* Dynamic */
+            border-radius: 0 0 16px 16px;
+            transition: all 0.5s ease;
+            box-shadow: inset 0 10px 20px rgba(0,0,0,0.2), 0 0 30px var(--acid-glow); /* Dynamic */
+        }
+        
+        .sim-liquid-surface {
+            position: absolute;
+            top: -5px; left: 0; width: 100%; height: 10px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+        }
+
+        /* Droplet animation */
+        .drop {
+            position: absolute;
+            top: -150px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 18px;
+            background: var(--base-color);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            box-shadow: 0 0 10px var(--base-glow);
+            opacity: 0;
+        }
+        @keyframes dropFall {
+            0% { top: -150px; opacity: 1; transform: translateX(-50%) scale(1); }
+            80% { top: 40px; opacity: 1; transform: translateX(-50%) scale(1); }
+            100% { top: 60px; opacity: 0; transform: translateX(-50%) scale(2); }
+        }
+
+        /* Burette Tip */
+        .burette-tip {
+            position: absolute;
+            top: 0; left: 50%;
+            transform: translateX(-50%);
+            width: 10px; height: 80px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.1), rgba(255,255,255,0.5), rgba(255,255,255,0.1));
+            border-radius: 0 0 5px 5px;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--step--1);
+            font-weight: 600;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: var(--glass-border);
+            border-radius: 2px;
+        }
+        #slider-acid::-webkit-slider-runnable-track { background: linear-gradient(90deg, #333, var(--acid-color)); }
+        #slider-base::-webkit-slider-runnable-track { background: linear-gradient(90deg, #333, var(--base-color)); }
+
+        .ph-meter {
+            background: #000;
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        .ph-value {
+            font-size: var(--step-3);
+            font-family: monospace;
+            font-weight: bold;
+            color: var(--acid-color); /* Dynamic */
+            text-shadow: 0 0 15px var(--acid-glow); /* Dynamic */
+        }
+        
+        /* pH Scale indicator strip */
+        .ph-scale {
+            width: 100%; height: 8px; border-radius: 4px;
+            background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #9400d3);
+            position: relative;
+            margin-top: 0.5rem;
+        }
+        .ph-marker {
+            position: absolute;
+            top: -6px; left: 0%; /* Dynamic */
+            width: 4px; height: 20px;
+            background: #fff;
+            border-radius: 2px;
+            box-shadow: 0 0 5px #fff;
+            transition: left 0.3s ease;
+        }
+
+        /* ==========================================================================
+           SECTION 5: GRID INFO (Apps, Facts, Mistakes)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .info-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2rem;
+            transition: transform 0.3s ease;
+        }
+        .info-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255,255,255,0.05);
+        }
+        .info-icon {
+            width: 50px; height: 50px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 1.5rem;
+            font-size: 24px;
+        }
+
+        /* ==========================================================================
+           RESPONSIVE DESIGN (MANDATORY RULES)
+           ========================================================================== */
+        @media (max-width: 1024px) {
+            .components-layout {
+                grid-template-columns: 1fr;
+            }
+            .sim-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: clamp(16px, 4vw, 24px);
+                gap: 3rem;
+            }
+            
+            .glass-panel {
+                padding: 1.5rem 1rem;
+                border-radius: 16px;
+                backdrop-filter: blur(8px); /* Performance */
+            }
+
+            .equation-box {
+                padding: 1rem;
+                flex-direction: column;
+                gap: 0.2rem;
+                border-radius: 20px;
+            }
+
+            .mech-controls {
+                flex-direction: column;
+                padding: 1rem;
+                border-radius: 20px;
+                gap: 1rem;
+            }
+            
+            .stage-info {
+                position: relative;
+                top: 0; left: 0;
+                width: 100%; max-width: none;
+                margin-top: 1rem;
+                background: rgba(0,0,0,0.5);
+            }
+
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+        <div class="blob blob-acid"></div>
+        <div class="blob blob-base"></div>
+    </div>
+
+    <main class="container">
+        
+        <!-- 1. HERO / OVERVIEW -->
+        <section class="hero glass-panel">
+            <h1>Neutralization Reaction</h1>
+            <p class="hero-subtitle">The fundamental chemical process where an acid and a base annihilate each other's properties, resulting in a neutral state, creating salt and water, and releasing energy.</p>
+            
+            <div class="equation-box">
+                <span class="eq-acid">Acid</span>
+                <span class="eq-plus">+</span>
+                <span class="eq-base">Base</span>
+                <span class="eq-arrow">⟶</span>
+                <span class="eq-salt">Salt</span>
+                <span class="eq-plus">+</span>
+                <span class="eq-water">Water</span>
+                <span class="eq-plus">+</span>
+                <span class="eq-heat">Heat</span>
+            </div>
+        </section>
+
+        <!-- 2. COMPONENTS (LABORATORY SETUP) -->
+        <section class="glass-panel" id="components">
+            <h2>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v2"/><path d="M15 2v2"/><path d="M12 17v-6"/><path d="M10 4h4a2 2 0 0 1 2 2v10a6 6 0 0 1-12 0V6a2 2 0 0 1 2-2z"/></svg>
+                Laboratory Setup (Titration)
+            </h2>
+            <p style="margin-bottom: 2rem;">Hover or tap the numbers on the illustration to understand the equipment used to observe neutralization.</p>
+            
+            <div class="components-layout">
+                <!-- SVG Illustration -->
+                <div class="svg-container">
+                    <svg viewBox="0 0 400 500" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <linearGradient id="glassGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.1)" />
+                                <stop offset="20%" stop-color="rgba(255,255,255,0.4)" />
+                                <stop offset="50%" stop-color="rgba(255,255,255,0.05)" />
+                                <stop offset="80%" stop-color="rgba(255,255,255,0.3)" />
+                                <stop offset="100%" stop-color="rgba(255,255,255,0.1)" />
+                            </linearGradient>
+                            <linearGradient id="acidGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#ff2a5f" stop-opacity="0.8"/>
+                                <stop offset="100%" stop-color="#ff0040" stop-opacity="0.9"/>
+                            </linearGradient>
+                            <linearGradient id="baseGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#00d2ff" stop-opacity="0.6"/>
+                                <stop offset="100%" stop-color="#3a7bd5" stop-opacity="0.8"/>
+                            </linearGradient>
+                        </defs>
+
+                        <!-- Stand -->
+                        <rect x="80" y="50" width="10" height="400" fill="#333" rx="5"/>
+                        <rect x="30" y="440" width="120" height="20" fill="#222" rx="5"/>
+                        
+                        <!-- Clamp -->
+                        <path d="M90 200 L180 200" stroke="#444" stroke-width="8" stroke-linecap="round"/>
+                        <circle cx="180" cy="200" r="15" fill="none" stroke="#555" stroke-width="6"/>
+
+                        <!-- Burette (Acid) -->
+                        <rect x="170" y="50" width="20" height="250" fill="url(#glassGrad)" rx="2" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+                        <rect x="172" y="100" width="16" height="190" fill="url(#acidGrad)"/>
+                        <!-- Burette markings -->
+                        <path d="M170 120 h5 M170 140 h10 M170 160 h5 M170 180 h10 M170 200 h5 M170 220 h10 M170 240 h5" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>
+                        <!-- Stopcock -->
+                        <rect x="165" y="300" width="30" height="8" fill="#111" rx="2"/>
+                        <path d="M175 300 L185 330" stroke="url(#glassGrad)" stroke-width="6" stroke-linecap="round"/>
+
+                        <!-- Flask (Base) -->
+                        <path d="M170 360 L190 360 L210 440 L150 440 Z" fill="url(#glassGrad)" stroke="rgba(255,255,255,0.4)" stroke-width="2" stroke-linejoin="round"/>
+                        <path d="M160 400 L200 400 L208 438 L152 438 Z" fill="url(#baseGrad)"/>
+                        <!-- Flask Neck -->
+                        <rect x="172" y="335" width="16" height="25" fill="url(#glassGrad)"/>
+
+                        <!-- Thermometer -->
+                        <rect x="230" y="340" width="6" height="90" fill="rgba(255,255,255,0.3)" rx="3"/>
+                        <circle cx="233" cy="435" r="6" fill="#ff4444"/>
+                        <rect x="232" y="380" width="2" height="50" fill="#ff4444"/>
+
+                        <!-- Interactive Markers -->
+                        <g class="marker" data-target="item-1" transform="translate(180, 150)">
+                            <circle cx="0" cy="0" r="14"/>
+                            <text>1</text>
+                        </g>
+                        <g class="marker" data-target="item-2" transform="translate(180, 420)">
+                            <circle cx="0" cy="0" r="14"/>
+                            <text>2</text>
+                        </g>
+                        <g class="marker" data-target="item-3" transform="translate(180, 304)">
+                            <circle cx="0" cy="0" r="14"/>
+                            <text>3</text>
+                        </g>
+                        <g class="marker" data-target="item-4" transform="translate(245, 380)">
+                            <circle cx="0" cy="0" r="14"/>
+                            <text>4</text>
+                        </g>
+                        <g class="marker" data-target="item-5" transform="translate(145, 410)">
+                            <circle cx="0" cy="0" r="14"/>
+                            <text>5</text>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Legend List -->
+                <div class="legend-list">
+                    <div class="legend-item" id="item-1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-content">
+                            <h4>Acid Solution (H⁺)</h4>
+                            <p>Contained in the burette. Provides Hydrogen ions.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-2">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-content">
+                            <h4>Base Solution (OH⁻)</h4>
+                            <p>In the conical flask. Provides Hydroxide ions.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-3">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-content">
+                            <h4>Stopcock</h4>
+                            <p>Precisely controls the flow of acid into the base.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-4">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-content">
+                            <h4>Thermometer</h4>
+                            <p>Measures the temperature rise (exothermic reaction).</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="item-5">
+                        <div class="legend-badge">5</div>
+                        <div class="legend-content">
+                            <h4>pH Indicator</h4>
+                            <p>Chemical dye mixed in base that changes color at neutral pH.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. WORKING PROCESS (MOLECULAR CANVAS) -->
+        <section class="glass-panel" id="mechanism">
+            <h2>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                Molecular Mechanism
+            </h2>
+            <p style="margin-bottom: 1.5rem;">Observe how ions interact step-by-step at the microscopic level to form water and release heat.</p>
+            
+            <div class="mechanism-layout">
+                <div class="canvas-wrapper">
+                    <canvas id="mechCanvas"></canvas>
+                    <div class="stage-info" id="stageInfo">
+                        <div class="stage-title" id="stageTitle">1. Reactants Introduced</div>
+                        <div class="stage-desc" id="stageDesc">Acid (Red H⁺) and Base (Blue OH⁻) ions float freely in the solution.</div>
+                    </div>
+                </div>
+                
+                <div class="mech-controls">
+                    <div class="mech-progress" id="mechProgress">
+                        <!-- Dots injected by JS -->
+                    </div>
+                    <div class="mech-nav">
+                        <button class="btn" id="btnPrev">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                        </button>
+                        <button class="btn btn-primary" id="btnPlayPause">
+                            <svg id="iconPlay" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" style="display:none;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            <svg id="iconPause" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                            Auto-Play
+                        </button>
+                        <button class="btn" id="btnNext">
+                            Next <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. INTERACTIVE SIMULATION -->
+        <section class="glass-panel" id="simulation">
+            <h2>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+                Titration Simulator
+            </h2>
+            
+            <div class="sim-layout">
+                <div class="sim-visual">
+                    <div class="burette-tip"></div>
+                    <div id="simDrop" class="drop"></div>
+                    <div class="sim-beaker">
+                        <div id="simLiquid" class="sim-liquid">
+                            <div class="sim-liquid-surface"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="sim-controls">
+                    <div class="ph-meter">
+                        <div>
+                            <div style="font-size: var(--step--1); color: var(--text-muted);">Current pH</div>
+                            <div id="phValue" class="ph-value">14.0</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: var(--step--1); color: var(--text-muted);">Status</div>
+                            <div id="phStatus" style="font-weight: bold; color: var(--base-color);">Strong Base</div>
+                        </div>
+                    </div>
+                    <div class="ph-scale">
+                        <div id="phMarker" class="ph-marker" style="left: 100%;"></div>
+                    </div>
+
+                    <div style="margin-top: 2rem;">
+                        <p style="font-size: var(--step--1); margin-bottom: 1rem;">The flask contains a strong base (NaOH). Add strong acid (HCl) to neutralize it.</p>
+                        
+                        <div class="control-group" style="margin-bottom: 1.5rem;">
+                            <div class="control-header">
+                                <span>Volume of Acid Added</span>
+                                <span id="volDisplay">0 mL</span>
+                            </div>
+                            <input type="range" id="sliderVol" min="0" max="100" value="0">
+                        </div>
+
+                        <button class="btn btn-primary" id="btnAddDrop" style="width: 100%; justify-content: center; padding: 1rem; font-size: var(--step-0);">
+                            Add Acid Drop (+1 mL)
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. GRID INFO -->
+        <section class="info-grid">
+            <div class="info-card glass-panel">
+                <div class="info-icon" style="color: #ffb703;">⚡</div>
+                <h3>Real-World Application</h3>
+                <p><strong>Antacids for Indigestion:</strong> Your stomach produces Hydrochloric acid (HCl). When overproduced, it causes acidity. Antacids contain mild bases like Magnesium Hydroxide which neutralize the excess acid, relieving pain.</p>
+            </div>
+            
+            <div class="info-card glass-panel">
+                <div class="info-icon" style="color: #4facfe;">💡</div>
+                <h3>Interesting Fact</h3>
+                <p><strong>Bee vs. Wasp Stings:</strong> A bee sting is acidic, so treating it with a weak base like baking soda helps. A wasp sting is alkaline (basic), so treating it with a weak acid like vinegar neutralizes the venom!</p>
+            </div>
+            
+            <div class="info-card glass-panel">
+                <div class="info-icon" style="color: #ff4d4d;">⚠️</div>
+                <h3>Common Mistake</h3>
+                <p><strong>"Neutralization always results in pH 7"</strong> - False! If you mix a strong acid with a weak base, the resulting salt solution will be slightly acidic. True pH 7 only occurs with strong acid + strong base.</p>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        /* ==========================================================================
+           UTILITIES
+           ========================================================================== */
+        const lerp = (start, end, amt) => (1 - amt) * start + amt * end;
+        const rand = (min, max) => Math.random() * (max - min) + min;
+
+        /* ==========================================================================
+           SECTION 2: COMPONENTS INTERACTION
+           ========================================================================== */
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function activateComponent(id) {
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+            
+            const marker = document.querySelector(`.marker[data-target="${id}"]`);
+            const legend = document.getElementById(id);
+            
+            if (marker) marker.classList.add('active');
+            if (legend) legend.classList.add('active');
+        }
+
+        markers.forEach(marker => {
+            ['mouseenter', 'touchstart'].forEach(evt => {
+                marker.addEventListener(evt, (e) => {
+                    e.preventDefault();
+                    activateComponent(marker.getAttribute('data-target'));
+                });
+            });
+        });
+
+        legendItems.forEach(item => {
+            ['mouseenter', 'touchstart'].forEach(evt => {
+                item.addEventListener(evt, (e) => {
+                    e.preventDefault();
+                    activateComponent(item.id);
+                });
+            });
+        });
+
+
+        /* ==========================================================================
+           SECTION 3: CANVAS MOLECULAR MECHANISM
+           ========================================================================== */
+        const canvas = document.getElementById('mechCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        let cw, ch;
+        let particles = [];
+        let animationId;
+        
+        // Stages definition
+        const stages = [
+            {
+                title: "1. Reactants Separate",
+                desc: "Acid (H⁺) and Base (OH⁻) ions exist in separate spaces before mixing.",
+                state: 'separate'
+            },
+            {
+                title: "2. Mixing & Collision",
+                desc: "Solutions combine. Ions move randomly, colliding with each other.",
+                state: 'mixing'
+            },
+            {
+                title: "3. Bond Formation",
+                desc: "H⁺ and OH⁻ ions strongly attract each other, forming a new bond.",
+                state: 'bonding'
+            },
+            {
+                title: "4. Neutralization (H₂O)",
+                desc: "Water molecules are formed. Energy (heat) is released during bond formation.",
+                state: 'neutral'
+            }
+        ];
+        
+        let currentStageIdx = 0;
+        let isAutoPlay = true;
+        let stageTimer = 0;
+        const STAGE_DURATION = 200; // frames
+
+        class Particle {
+            constructor(type, x, y) {
+                this.type = type; // 'H', 'OH', 'Na', 'Cl', 'H2O'
+                this.x = x;
+                this.y = y;
+                this.vx = rand(-1, 1);
+                this.vy = rand(-1, 1);
+                this.targetX = x;
+                this.targetY = y;
+                this.isBonding = false;
+                this.partner = null;
+                this.energyRing = 0;
+                
+                this.setProperties();
+            }
+
+            setProperties() {
+                switch(this.type) {
+                    case 'H':
+                        this.r = 8;
+                        this.color = '#ff2a5f'; // Acid Red
+                        this.glow = 'rgba(255, 42, 95, 0.6)';
+                        break;
+                    case 'OH':
+                        this.r = 12;
+                        this.color = '#00d2ff'; // Base Blue
+                        this.glow = 'rgba(0, 210, 255, 0.6)';
+                        break;
+                    case 'Na':
+                    case 'Cl':
+                        this.r = 10;
+                        this.color = 'rgba(255,255,255,0.2)'; // Spectator ions
+                        this.glow = 'transparent';
+                        break;
+                    case 'H2O':
+                        this.r = 14;
+                        this.color = '#9d4edd'; // Neutral Purple
+                        this.glow = 'rgba(157, 78, 221, 0.6)';
+                        break;
+                }
+            }
+
+            draw(ctx) {
+                if (this.energyRing > 0) {
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.r + this.energyRing, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(255, 154, 68, ${1 - this.energyRing/30})`; // Heat color
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    this.energyRing += 1;
+                    if (this.energyRing > 30) this.energyRing = 0;
+                }
+
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = this.glow;
+                ctx.fill();
+                ctx.shadowBlur = 0; // reset
+                
+                // Label
+                ctx.fillStyle = '#fff';
+                ctx.font = '10px monospace';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                let txt = this.type;
+                if (txt === 'H') txt = 'H⁺';
+                if (txt === 'OH') txt = 'OH⁻';
+                ctx.fillText(txt, this.x, this.y);
+            }
+
+            update(state) {
+                // Bounds
+                const padding = 20;
+                if (this.x < padding || this.x > cw - padding) this.vx *= -1;
+                if (this.y < padding || this.y > ch - padding) this.vy *= -1;
+
+                if (state === 'separate') {
+                    // Force H to left, OH to right
+                    if (this.type === 'H' || this.type === 'Cl') {
+                        if (this.x > cw/2 - 20) this.vx -= 0.5;
+                    } else {
+                        if (this.x < cw/2 + 20) this.vx += 0.5;
+                    }
+                    this.x += this.vx;
+                    this.y += this.vy;
+                } 
+                else if (state === 'mixing') {
+                    // Random walk, faster
+                    this.vx += rand(-0.2, 0.2);
+                    this.vy += rand(-0.2, 0.2);
+                    // limit speed
+                    const speed = Math.sqrt(this.vx*this.vx + this.vy*this.vy);
+                    if(speed > 3) { this.vx = (this.vx/speed)*3; this.vy = (this.vy/speed)*3; }
+                    this.x += this.vx;
+                    this.y += this.vy;
+                }
+                else if (state === 'bonding' && !this.isBonding && (this.type === 'H' || this.type === 'OH')) {
+                    // Find a partner
+                    if (!this.partner) {
+                        const targetType = this.type === 'H' ? 'OH' : 'H';
+                        for (let p of particles) {
+                            if (p.type === targetType && !p.partner) {
+                                this.partner = p;
+                                p.partner = this;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (this.partner) {
+                        // Move towards partner
+                        const dx = this.partner.x - this.x;
+                        const dy = this.partner.y - this.y;
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if (dist > this.r * 2) {
+                            this.vx = (dx / dist) * 2;
+                            this.vy = (dy / dist) * 2;
+                            this.x += this.vx;
+                            this.y += this.vy;
+                        } else {
+                            this.isBonding = true;
+                            if (this.type === 'H') {
+                                // Morph into H2O, remove partner
+                                this.type = 'H2O';
+                                this.setProperties();
+                                this.energyRing = 1; // trigger burst
+                                const idx = particles.indexOf(this.partner);
+                                if (idx > -1) particles.splice(idx, 1);
+                            }
+                        }
+                    } else {
+                        this.x += this.vx; this.y += this.vy;
+                    }
+                }
+                else {
+                    // Neutral / Spectators / H2O slow movement
+                    this.x += this.vx * 0.5;
+                    this.y += this.vy * 0.5;
+                }
+            }
+        }
+
+        function initParticles() {
+            particles = [];
+            const numPairs = cw < 600 ? 15 : 30; // Responsive count
+            
+            for (let i = 0; i < numPairs; i++) {
+                particles.push(new Particle('H', rand(50, cw/2 - 50), rand(50, ch - 50)));
+                particles.push(new Particle('Cl', rand(50, cw/2 - 50), rand(50, ch - 50)));
+                particles.push(new Particle('OH', rand(cw/2 + 50, cw - 50), rand(50, ch - 50)));
+                particles.push(new Particle('Na', rand(cw/2 + 50, cw - 50), rand(50, ch - 50)));
+            }
+        }
+
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            // Handle high DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            cw = rect.width;
+            ch = rect.height;
+            canvas.width = cw * dpr;
+            canvas.height = ch * dpr;
+            ctx.scale(dpr, dpr);
+            
+            if(particles.length === 0) initParticles();
+        }
+
+        function buildProgressDots() {
+            const container = document.getElementById('mechProgress');
+            container.innerHTML = '';
+            stages.forEach((_, idx) => {
+                const dot = document.createElement('div');
+                dot.className = `dot ${idx === 0 ? 'active' : ''}`;
+                container.appendChild(dot);
+            });
+        }
+
+        function updateStageUI() {
+            const stage = stages[currentStageIdx];
+            document.getElementById('stageTitle').innerText = stage.title;
+            document.getElementById('stageDesc').innerText = stage.desc;
+            
+            document.querySelectorAll('.mech-progress .dot').forEach((dot, idx) => {
+                dot.classList.toggle('active', idx === currentStageIdx);
+            });
+            
+            // Re-init particles if going back to start
+            if (currentStageIdx === 0 && particles.some(p => p.type === 'H2O')) {
+                initParticles();
+            }
+        }
+
+        function animateMech() {
+            ctx.fillStyle = '#0a0a0f'; // Dark background
+            ctx.fillRect(0, 0, cw, ch);
+            
+            // Draw barrier in separate state
+            if (stages[currentStageIdx].state === 'separate') {
+                ctx.beginPath();
+                ctx.moveTo(cw/2, 0);
+                ctx.lineTo(cw/2, ch);
+                ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                ctx.setLineDash([10, 10]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            particles.forEach(p => {
+                p.update(stages[currentStageIdx].state);
+                p.draw(ctx);
+            });
+
+            if (isAutoPlay) {
+                stageTimer++;
+                if (stageTimer > STAGE_DURATION) {
+                    stageTimer = 0;
+                    currentStageIdx = (currentStageIdx + 1) % stages.length;
+                    updateStageUI();
+                }
+            }
+
+            animationId = requestAnimationFrame(animateMech);
+        }
+
+        // Mech Controls Logic
+        document.getElementById('btnNext').addEventListener('click', () => {
+            currentStageIdx = (currentStageIdx + 1) % stages.length;
+            stageTimer = 0;
+            updateStageUI();
+        });
+        document.getElementById('btnPrev').addEventListener('click', () => {
+            currentStageIdx = (currentStageIdx - 1 + stages.length) % stages.length;
+            stageTimer = 0;
+            updateStageUI();
+        });
+        const btnPlay = document.getElementById('btnPlayPause');
+        btnPlay.addEventListener('click', () => {
+            isAutoPlay = !isAutoPlay;
+            document.getElementById('iconPlay').style.display = isAutoPlay ? 'none' : 'block';
+            document.getElementById('iconPause').style.display = isAutoPlay ? 'block' : 'none';
+        });
+
+        /* ==========================================================================
+           SECTION 4: SIMULATION (TITRATION) LOGIC
+           ========================================================================== */
+        const sliderVol = document.getElementById('sliderVol');
+        const volDisplay = document.getElementById('volDisplay');
+        const phValue = document.getElementById('phValue');
+        const phStatus = document.getElementById('phStatus');
+        const phMarker = document.getElementById('phMarker');
+        const simLiquid = document.getElementById('simLiquid');
+        const simDrop = document.getElementById('simDrop');
+        const btnAddDrop = document.getElementById('btnAddDrop');
+
+        // Initial state: 50mL of 0.1M NaOH (Base) in flask. Adding 0.1M HCl.
+        const vBase = 50; // mL
+        const mBase = 0.1; // Molarity
+        const mAcid = 0.1; // Molarity
+        
+        function calculatePH(vAcid) {
+            let molesBase = vBase * mBase;
+            let molesAcid = vAcid * mAcid;
+            let totalVol = vBase + vAcid;
+            
+            let ph;
+            if (molesBase > molesAcid) {
+                // Excess Base
+                let excessOH = (molesBase - molesAcid) / totalVol;
+                let pOH = -Math.log10(excessOH);
+                ph = 14 - pOH;
+            } else if (molesAcid > molesBase) {
+                // Excess Acid
+                let excessH = (molesAcid - molesBase) / totalVol;
+                ph = -Math.log10(excessH);
+            } else {
+                // Equivalence point
+                ph = 7.0;
+            }
+            return Math.max(0, Math.min(14, ph)); // Clamp 0-14
+        }
+
+        function getColorForPH(ph) {
+            // Mapping pH 0-14 to Universal Indicator colors
+            // 0: Red, 3: Orange, 6: Yellow, 7: Green, 10: Blue, 14: Purple
+            const colors = [
+                {p: 0, r: 255, g: 0, b: 0},       // Red
+                {p: 3, r: 255, g: 127, b: 0},     // Orange
+                {p: 6, r: 255, g: 255, b: 0},     // Yellow
+                {p: 7, r: 0, g: 255, b: 0},       // Green (Neutral)
+                {p: 10, r: 0, g: 0, b: 255},      // Blue
+                {p: 14, r: 148, g: 0, b: 211}     // Purple
+            ];
+            
+            let lower = colors[0], upper = colors[colors.length-1];
+            for (let i = 0; i < colors.length - 1; i++) {
+                if (ph >= colors[i].p && ph <= colors[i+1].p) {
+                    lower = colors[i];
+                    upper = colors[i+1];
+                    break;
+                }
+            }
+            
+            const range = upper.p - lower.p;
+            const amt = range === 0 ? 0 : (ph - lower.p) / range;
+            
+            const r = Math.round(lerp(lower.r, upper.r, amt));
+            const g = Math.round(lerp(lower.g, upper.g, amt));
+            const b = Math.round(lerp(lower.b, upper.b, amt));
+            
+            return `rgb(${r},${g},${b})`;
+        }
+
+        function updateSimulation() {
+            const vAdded = parseFloat(sliderVol.value);
+            volDisplay.innerText = `${vAdded} mL`;
+            
+            const ph = calculatePH(vAdded);
+            phValue.innerText = ph.toFixed(1);
+            
+            // Visual Updates
+            const color = getColorForPH(ph);
+            simLiquid.style.background = color;
+            simLiquid.style.boxShadow = `inset 0 10px 20px rgba(0,0,0,0.2), 0 0 30px ${color}`;
+            phValue.style.color = color;
+            phValue.style.textShadow = `0 0 15px ${color}`;
+            
+            // Volume visual (starts at 30% height, goes to 80%)
+            const heightPercent = 30 + (vAdded / 100) * 50;
+            simLiquid.style.height = `${heightPercent}%`;
+            
+            // pH Marker pos
+            phMarker.style.left = `${(ph / 14) * 100}%`;
+            
+            // Status Text
+            if (ph > 11) { phStatus.innerText = "Strong Base"; phStatus.style.color = "#00d2ff"; }
+            else if (ph > 7.5) { phStatus.innerText = "Weak Base"; phStatus.style.color = "#3a7bd5"; }
+            else if (ph >= 6.5 && ph <= 7.5) { phStatus.innerText = "NEUTRAL 🎯"; phStatus.style.color = "#00ff00"; }
+            else if (ph > 3) { phStatus.innerText = "Weak Acid"; phStatus.style.color = "#ff7f00"; }
+            else { phStatus.innerText = "Strong Acid"; phStatus.style.color = "#ff2a5f"; }
+        }
+
+        sliderVol.addEventListener('input', updateSimulation);
+
+        btnAddDrop.addEventListener('click', () => {
+            if (parseFloat(sliderVol.value) >= 100) return;
+            
+            // Trigger animation
+            simDrop.style.animation = 'none';
+            simDrop.offsetHeight; // trigger reflow
+            simDrop.style.animation = 'dropFall 0.5s ease-in forwards';
+            
+            setTimeout(() => {
+                let currentVal = parseFloat(sliderVol.value);
+                // Make the step smaller near equivalence point (50mL) for better visual
+                let step = (currentVal > 45 && currentVal < 55) ? 0.5 : 2;
+                sliderVol.value = Math.min(100, currentVal + step);
+                updateSimulation();
+            }, 400); // sync with animation hit
+        });
+
+        /* ==========================================================================
+           INITIALIZATION & EVENT LISTENERS
+           ========================================================================== */
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+        });
+
+        // Init everything
+        document.addEventListener('DOMContentLoaded', () => {
+            resizeCanvas();
+            buildProgressDots();
+            updateStageUI();
+            animateMech();
+            updateSimulation(); // Set initial state
+            
+            // Optional: Intersection Observer to trigger canvas animation only when visible
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        if (!animationId) animateMech();
+                    }
+                });
+            }, { threshold: 0.1 });
+            observer.observe(document.getElementById('mechanism'));
+        });
+
+    </script>
+</body>
+</html>

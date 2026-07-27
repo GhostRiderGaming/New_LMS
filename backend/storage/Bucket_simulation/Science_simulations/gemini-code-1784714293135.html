@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seismograph: Interactive Scientific Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & BASE SETUP
+           ========================================================================== */
+        :root {
+            /* Premium Dark Theme Palette */
+            --bg-base: #060913;
+            --bg-glass: rgba(16, 23, 40, 0.6);
+            --bg-glass-hover: rgba(25, 35, 60, 0.8);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            
+            --accent-cyan: #00f0ff;
+            --accent-cyan-glow: rgba(0, 240, 255, 0.4);
+            --accent-magenta: #ff0055;
+            --accent-orange: #ffaa00;
+            --text-main: #f0f4f8;
+            --text-muted: #8a9bb2;
+            
+            /* Fluid Typography */
+            --font-title: clamp(2rem, 5vw, 4rem);
+            --font-h2: clamp(1.5rem, 3vw, 2.5rem);
+            --font-h3: clamp(1.2rem, 2vw, 1.8rem);
+            --font-body: clamp(0.9rem, 1.5vw, 1.1rem);
+            --font-small: clamp(0.8rem, 1vw, 0.95rem);
+
+            /* Layout */
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            --spacing-section: clamp(3rem, 8vw, 6rem);
+            --spacing-content: clamp(1rem, 3vw, 2rem);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(255, 0, 85, 0.03) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* ==========================================================================
+           2. UTILITIES & GLASSMORPHISM
+           ========================================================================== */
+        .glass-panel {
+            background: var(--bg-glass);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 var(--spacing-content);
+        }
+
+        .text-cyan { color: var(--accent-cyan); }
+        .text-magenta { color: var(--accent-magenta); }
+        
+        .glow-text {
+            text-shadow: 0 0 10px var(--accent-cyan-glow);
+        }
+
+        .section-title {
+            font-size: var(--font-h2);
+            font-weight: 700;
+            margin-bottom: var(--spacing-content);
+            text-align: center;
+            letter-spacing: -0.02em;
+        }
+
+        .btn {
+            background: rgba(0, 240, 255, 0.1);
+            border: 1px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            padding: 0.8rem 1.5rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: var(--font-body);
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: var(--accent-cyan);
+            color: var(--bg-base);
+            box-shadow: 0 0 20px var(--accent-cyan-glow);
+        }
+
+        /* ==========================================================================
+           3. HEADER & INTRO
+           ========================================================================== */
+        header {
+            min-height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+            text-align: center;
+            padding: var(--spacing-section) 0;
+        }
+
+        .hero-bg {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            opacity: 0.4;
+        }
+
+        .hero-content {
+            z-index: 1;
+            max-width: 800px;
+        }
+
+        .hero-title {
+            font-size: var(--font-title);
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff, var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-subtitle {
+            font-size: var(--font-h3);
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+            font-weight: 300;
+        }
+
+        /* Background animated waves */
+        .wave-circle {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            border: 1px solid var(--accent-magenta);
+            opacity: 0;
+            animation: pulse-wave 4s linear infinite;
+        }
+        .wave-circle:nth-child(2) { animation-delay: 1s; }
+        .wave-circle:nth-child(3) { animation-delay: 2s; }
+        .wave-circle:nth-child(4) { animation-delay: 3s; }
+
+        @keyframes pulse-wave {
+            0% { width: 0; height: 0; opacity: 0.8; border-width: 2px; }
+            100% { width: 100vw; height: 100vw; opacity: 0; border-width: 0.5px; }
+        }
+
+        /* ==========================================================================
+           4. COMPONENTS SECTION (MANDATORY LABELING SYSTEM)
+           ========================================================================== */
+        .components-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+            align-items: center;
+        }
+
+        @media (min-width: 1024px) {
+            .components-layout { grid-template-columns: 2fr 1fr; }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            aspect-ratio: 16/10;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.02) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #seismograph-svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 20px 30px rgba(0,0,0,0.5));
+        }
+
+        /* Markers on Illustration */
+        .marker {
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-origin: center;
+        }
+        
+        .marker circle.bg {
+            fill: var(--bg-glass);
+            stroke: var(--accent-cyan);
+            stroke-width: 2;
+            transition: all 0.3s ease;
+        }
+        
+        .marker text {
+            fill: #fff;
+            font-size: 14px;
+            font-weight: bold;
+            font-family: sans-serif;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+
+        .marker:hover circle.bg, .marker.active circle.bg {
+            fill: var(--accent-cyan);
+            box-shadow: 0 0 15px var(--accent-cyan);
+        }
+        
+        .marker:hover text, .marker.active text {
+            fill: var(--bg-base);
+        }
+
+        .marker:hover, .marker.active {
+            transform: scale(1.2);
+        }
+
+        /* Legend List */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(0, 240, 255, 0.05);
+            border-color: rgba(0, 240, 255, 0.3);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-base);
+            border: 2px solid var(--accent-cyan);
+            color: var(--accent-cyan);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item:hover .legend-badge, .legend-item.active .legend-badge {
+            background: var(--accent-cyan);
+            color: var(--bg-base);
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+        }
+
+        .legend-text h4 {
+            color: #fff;
+            margin-bottom: 0.2rem;
+            font-size: var(--font-body);
+        }
+
+        .legend-text p {
+            color: var(--text-muted);
+            font-size: var(--font-small);
+            margin: 0;
+        }
+
+        /* ==========================================================================
+           5. WORKING MECHANISM (STEP-BY-STEP)
+           ========================================================================== */
+        .working-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .mechanism-visual {
+            width: 100%;
+            height: 400px;
+            background: #02040a;
+            border-radius: var(--radius-lg);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        #mechanism-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .mechanism-overlay {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            right: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            pointer-events: none;
+        }
+
+        .stage-info {
+            background: rgba(6, 9, 19, 0.85);
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius-md);
+            border-left: 4px solid var(--accent-cyan);
+            max-width: 60%;
+            pointer-events: auto;
+            backdrop-filter: blur(10px);
+        }
+
+        .stage-title {
+            font-size: var(--font-h3);
+            color: var(--accent-cyan);
+            margin-bottom: 0.5rem;
+        }
+
+        .stage-desc {
+            font-size: var(--font-body);
+            color: var(--text-main);
+        }
+
+        .stage-io {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.5rem;
+            font-size: var(--font-small);
+            color: var(--accent-orange);
+            font-weight: 600;
+        }
+
+        .controls-bar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(255,255,255,0.02);
+            padding: 1rem;
+            border-radius: var(--radius-md);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+            margin: 0 1rem;
+        }
+
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .dot.active {
+            background: var(--accent-cyan);
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+            transform: scale(1.2);
+        }
+
+        /* ==========================================================================
+           6. INTERACTIVE SIMULATION
+           ========================================================================== */
+        .simulation-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 1024px) {
+            .simulation-grid { grid-template-columns: 1fr 300px; }
+        }
+
+        .sim-view {
+            height: 500px;
+            background: radial-gradient(circle at center, #0a1128 0%, #03050a 100%);
+            border-radius: var(--radius-lg);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        #sim-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            padding: 2rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .control-label {
+            font-size: var(--font-small);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .control-value {
+            font-family: monospace;
+            color: var(--accent-cyan);
+            font-size: var(--font-body);
+            background: rgba(0,240,255,0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus { outline: none; }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px var(--accent-cyan-glow);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:active {
+            transform: scale(1.3);
+        }
+
+        .seismogram-readout {
+            margin-top: auto;
+            background: rgba(0,0,0,0.4);
+            padding: 1rem;
+            border-radius: var(--radius-sm);
+            border-left: 3px solid var(--accent-magenta);
+        }
+
+        .readout-title {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+        .readout-data {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fff;
+            font-family: monospace;
+        }
+        .readout-status {
+            color: var(--accent-cyan);
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        .status-alert { color: var(--accent-magenta); animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
+
+        /* ==========================================================================
+           7. INFO GRID (Facts, Applications)
+           ========================================================================== */
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .info-card {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .info-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 4px;
+            background: linear-gradient(90deg, var(--accent-cyan), transparent);
+        }
+
+        .info-card.magenta::before {
+            background: linear-gradient(90deg, var(--accent-magenta), transparent);
+        }
+
+        .info-icon {
+            width: 48px;
+            height: 48px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .info-title {
+            font-size: var(--font-h3);
+            color: #fff;
+        }
+
+        .info-text {
+            color: var(--text-muted);
+            font-size: var(--font-body);
+        }
+
+        /* ==========================================================================
+           8. RESPONSIVE UTILITIES
+           ========================================================================== */
+        section {
+            padding: var(--spacing-section) 0;
+        }
+
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(8px); /* Performance on mobile */
+                -webkit-backdrop-filter: blur(8px);
+            }
+            .stage-info {
+                max-width: 100%;
+                margin-bottom: 1rem;
+            }
+            .mechanism-overlay {
+                position: relative;
+                bottom: 0; left: 0; right: 0;
+                padding: 1rem;
+            }
+            .mechanism-visual {
+                height: 250px;
+                border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- HERO SECTION -->
+    <header>
+        <div class="hero-bg">
+            <div class="wave-circle"></div>
+            <div class="wave-circle"></div>
+            <div class="wave-circle"></div>
+            <div class="wave-circle"></div>
+        </div>
+        <div class="container hero-content">
+            <div style="display: inline-block; padding: 4px 12px; background: rgba(0,240,255,0.1); border: 1px solid var(--accent-cyan); border-radius: 20px; color: var(--accent-cyan); font-size: 0.9rem; font-weight: bold; margin-bottom: 1.5rem; letter-spacing: 1px;">INTERACTIVE SIMULATION</div>
+            <h1 class="hero-title">Seismograph Working</h1>
+            <p class="hero-subtitle">Discover how a simple principle of physics allows us to capture, measure, and analyze the invisible forces shaking the Earth.</p>
+            <a href="#components" class="btn">Explore Mechanism <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M19 12l-7 7-7-7"/></svg></a>
+        </div>
+    </header>
+
+    <!-- COMPONENTS SECTION (Mandatory Labeling) -->
+    <section id="components">
+        <div class="container">
+            <h2 class="section-title">Anatomy of a Seismograph</h2>
+            <p style="text-align: center; color: var(--text-muted); max-width: 700px; margin: 0 auto 3rem auto;">A traditional horizontal pendulum seismograph relies on inertia. While the earth moves, the heavy mass tries to remain perfectly still.</p>
+            
+            <div class="components-layout">
+                <!-- High-Quality Premium SVG Illustration -->
+                <div class="glass-panel illustration-container">
+                    <svg id="seismograph-svg" viewBox="0 0 800 500" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <!-- Gradients for realistic metallic and 3D look -->
+                            <linearGradient id="metal-base" x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" stop-color="#4a5568" />
+                                <stop offset="50%" stop-color="#2d3748" />
+                                <stop offset="100%" stop-color="#1a202c" />
+                            </linearGradient>
+                            <linearGradient id="metal-pillar" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#718096" />
+                                <stop offset="20%" stop-color="#e2e8f0" />
+                                <stop offset="50%" stop-color="#4a5568" />
+                                <stop offset="80%" stop-color="#a0aec0" />
+                                <stop offset="100%" stop-color="#2d3748" />
+                            </linearGradient>
+                            <radialGradient id="mass-gradient" cx="30%" cy="30%" r="70%">
+                                <stop offset="0%" stop-color="#ffd700" />
+                                <stop offset="40%" stop-color="#b8860b" />
+                                <stop offset="90%" stop-color="#8b6508" />
+                                <stop offset="100%" stop-color="#3a2a03" />
+                            </radialGradient>
+                            <linearGradient id="drum-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#e2e8f0" />
+                                <stop offset="15%" stop-color="#ffffff" />
+                                <stop offset="85%" stop-color="#cbd5e1" />
+                                <stop offset="100%" stop-color="#94a3b8" />
+                            </linearGradient>
+                            <linearGradient id="paper-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%" stop-color="#f8fafc" />
+                                <stop offset="100%" stop-color="#e2e8f0" />
+                            </linearGradient>
+                            <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="5" dy="15" stdDeviation="10" flood-color="#000" flood-opacity="0.6"/>
+                            </filter>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+
+                        <!-- Bedrock / Ground -->
+                        <path d="M 50 450 L 750 450 L 780 490 L 20 490 Z" fill="#111827" />
+                        <rect x="50" y="440" width="700" height="10" fill="url(#metal-base)" />
+                        
+                        <!-- Main Support Pillar -->
+                        <rect x="150" y="100" width="40" height="340" fill="url(#metal-pillar)" filter="url(#drop-shadow)" />
+                        <path d="M 140 430 L 200 430 L 190 440 L 150 440 Z" fill="#2d3748" />
+                        <path d="M 150 100 L 190 100 L 190 110 L 150 110 Z" fill="#718096" />
+
+                        <!-- Suspension Wire -->
+                        <line x1="190" y1="120" x2="380" y2="280" stroke="#a0aec0" stroke-width="2" />
+                        
+                        <!-- Hinge / Pivot -->
+                        <circle cx="190" cy="380" r="12" fill="#4a5568" />
+                        <circle cx="190" cy="380" r="6" fill="#1a202c" />
+
+                        <!-- Boom Arm -->
+                        <rect x="190" y="375" width="220" height="10" fill="url(#metal-pillar)" transform="rotate(-25, 190, 380)" filter="url(#drop-shadow)"/>
+                        
+                        <!-- Heavy Mass (Inertial weight) -->
+                        <circle cx="390" cy="285" r="55" fill="url(#mass-gradient)" filter="url(#drop-shadow)" />
+                        
+                        <!-- Extended Arm (Stylus holder) -->
+                        <rect x="420" y="283" width="180" height="4" fill="#a0aec0" filter="url(#drop-shadow)" />
+                        
+                        <!-- Stylus / Pen -->
+                        <path d="M 600 285 L 610 320 L 590 320 Z" fill="#e53e3e" />
+                        <circle cx="600" cy="320" r="3" fill="#1a202c" />
+
+                        <!-- Rotating Drum Base -->
+                        <rect x="550" y="420" width="100" height="20" fill="url(#metal-base)" />
+                        <rect x="595" y="380" width="10" height="40" fill="url(#metal-pillar)" />
+
+                        <!-- The Drum & Paper -->
+                        <g filter="url(#drop-shadow)">
+                            <!-- Drum Back/Inside -->
+                            <ellipse cx="600" cy="320" rx="40" ry="15" fill="#94a3b8" />
+                            <!-- Drum Body -->
+                            <path d="M 560 320 L 560 390 A 40 15 0 0 0 640 390 L 640 320 Z" fill="url(#drum-grad)" />
+                            <!-- Paper wrapping -->
+                            <path d="M 561 325 L 561 385 A 39 14 0 0 0 639 385 L 639 325 Z" fill="url(#paper-grad)" />
+                            <!-- Paper coming out -->
+                            <path d="M 600 395 L 750 410 L 750 480 L 600 380 Z" fill="url(#paper-grad)" opacity="0.9" />
+                            <!-- Seismogram trace on paper -->
+                            <path d="M 600 360 Q 620 360, 640 370 T 680 375 T 710 360 T 730 380 T 750 370" fill="none" stroke="#e53e3e" stroke-width="2" />
+                            <!-- Drum Top -->
+                            <ellipse cx="600" cy="320" rx="40" ry="15" fill="url(#drum-grad)" />
+                        </g>
+
+                        <!-- INTERACTIVE MARKERS (Rule: Circular, non-overlapping, maps to legend) -->
+                        <!-- 1. Support Frame -->
+                        <g class="marker" data-target="legend-1" transform="translate(140, 220)">
+                            <circle class="bg" cx="0" cy="0" r="16" />
+                            <text x="0" y="0">1</text>
+                        </g>
+                        <!-- 2. Heavy Mass -->
+                        <g class="marker" data-target="legend-2" transform="translate(390, 285)">
+                            <circle class="bg" cx="0" cy="0" r="16" />
+                            <text x="0" y="0">2</text>
+                        </g>
+                        <!-- 3. Suspension/Hinge -->
+                        <g class="marker" data-target="legend-3" transform="translate(260, 180)">
+                            <circle class="bg" cx="0" cy="0" r="16" />
+                            <text x="0" y="0">3</text>
+                        </g>
+                        <!-- 4. Pen/Stylus -->
+                        <g class="marker" data-target="legend-4" transform="translate(590, 260)">
+                            <circle class="bg" cx="0" cy="0" r="16" />
+                            <text x="0" y="0">4</text>
+                        </g>
+                        <!-- 5. Rotating Drum -->
+                        <g class="marker" data-target="legend-5" transform="translate(660, 310)">
+                            <circle class="bg" cx="0" cy="0" r="16" />
+                            <text x="0" y="0">5</text>
+                        </g>
+                        <!-- 6. Bedrock -->
+                        <g class="marker" data-target="legend-6" transform="translate(400, 465)">
+                            <circle class="bg" cx="0" cy="0" r="16" />
+                            <text x="0" y="0">6</text>
+                        </g>
+                    </svg>
+                </div>
+
+                <!-- Legend List (Normal Document Flow) -->
+                <div class="legend-list">
+                    <div class="legend-item" id="legend-1" data-target="1">
+                        <div class="legend-badge">1</div>
+                        <div class="legend-text">
+                            <h4>Support Frame</h4>
+                            <p>Anchored firmly to the bedrock. Moves exactly as the earth shakes.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-2" data-target="2">
+                        <div class="legend-badge">2</div>
+                        <div class="legend-text">
+                            <h4>Heavy Mass (Pendulum)</h4>
+                            <p>Due to high inertia, it resists motion and stays stationary while the frame moves around it.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-3" data-target="3">
+                        <div class="legend-badge">3</div>
+                        <div class="legend-text">
+                            <h4>Suspension System</h4>
+                            <p>Wire and hinge that allow the mass to hang freely with minimal friction.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-4" data-target="4">
+                        <div class="legend-badge">4</div>
+                        <div class="legend-text">
+                            <h4>Stylus / Pen</h4>
+                            <p>Attached to the stationary mass. Records relative movement onto the paper.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-5" data-target="5">
+                        <div class="legend-badge">5</div>
+                        <div class="legend-text">
+                            <h4>Rotating Drum</h4>
+                            <p>Driven by a clockwork motor. Provides a continuous timeline (X-axis) for the data.</p>
+                        </div>
+                    </div>
+                    <div class="legend-item" id="legend-6" data-target="6">
+                        <div class="legend-badge">6</div>
+                        <div class="legend-text">
+                            <h4>Bedrock Anchor</h4>
+                            <p>Direct connection to the earth's crust to capture authentic seismic waves.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING PROCESS (MANDATORY STRUCTURE) -->
+    <section id="working" class="glass-panel" style="margin: var(--spacing-section) var(--spacing-content); border-radius: 0; border-left: none; border-right: none;">
+        <div class="container">
+            <h2 class="section-title">The Mechanism: Step-by-Step</h2>
+            <p style="text-align: center; color: var(--text-muted); margin-bottom: 2rem;">A linear sequence demonstrating how physical shaking converts into recorded data.</p>
+            
+            <div class="working-container">
+                <!-- Visual Area -->
+                <div class="mechanism-visual">
+                    <canvas id="mechanism-canvas"></canvas>
+                    
+                    <div class="mechanism-overlay">
+                        <div class="stage-info">
+                            <h3 class="stage-title" id="stage-title">1. Standby Mode</h3>
+                            <p class="stage-desc" id="stage-desc">The earth is quiet. The drum rotates steadily, and the pen draws a straight baseline.</p>
+                            <div class="stage-io" id="stage-io">
+                                <span>IN: Clock Time</span> ➜ <span>OUT: Straight Line</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls Area -->
+                <div class="controls-bar">
+                    <button class="btn" id="btn-prev" style="padding: 0.5rem 1rem;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg> Prev
+                    </button>
+                    
+                    <div class="progress-dots" id="stage-dots">
+                        <div class="dot active"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                    </div>
+                    
+                    <button class="btn" id="btn-next" style="padding: 0.5rem 1rem;">
+                        Next <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                    
+                    <div style="width: 2px; height: 24px; background: rgba(255,255,255,0.2); margin: 0 1rem;"></div>
+                    
+                    <button class="btn" id="btn-auto" style="padding: 0.5rem 1rem; border-color: var(--accent-magenta); color: var(--accent-magenta);">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Auto-Play
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION -->
+    <section id="simulation">
+        <div class="container">
+            <h2 class="section-title">Live Seismograph Simulation</h2>
+            <p style="text-align: center; color: var(--text-muted); margin-bottom: 2rem;">Adjust the earthquake properties and observe how the instrument reacts in real-time.</p>
+            
+            <div class="glass-panel simulation-grid">
+                <!-- Canvas View -->
+                <div class="sim-view">
+                    <canvas id="sim-canvas"></canvas>
+                </div>
+
+                <!-- Controls Side Panel -->
+                <div class="sim-controls">
+                    <div>
+                        <h3 style="color: #fff; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px;">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+                            Tectonic Controls
+                        </h3>
+                        
+                        <div class="control-group" style="margin-bottom: 1.5rem;">
+                            <div class="control-header">
+                                <span class="control-label">Magnitude (Energy)</span>
+                                <span class="control-value" id="val-mag">5.0 M</span>
+                            </div>
+                            <input type="range" id="slider-mag" min="1" max="9" step="0.1" value="5">
+                        </div>
+
+                        <div class="control-group" style="margin-bottom: 2rem;">
+                            <div class="control-header">
+                                <span class="control-label">Distance (Epicenter)</span>
+                                <span class="control-value" id="val-dist">100 km</span>
+                            </div>
+                            <input type="range" id="slider-dist" min="10" max="500" step="10" value="100">
+                        </div>
+
+                        <button class="btn" id="btn-trigger" style="width: 100%; background: rgba(255, 0, 85, 0.1); border-color: var(--accent-magenta); color: var(--accent-magenta);">
+                            TRIGGER EARTHQUAKE
+                        </button>
+                    </div>
+
+                    <div class="seismogram-readout">
+                        <div class="readout-title">Live Trace Amplitude</div>
+                        <div class="readout-data" id="readout-amp">0.00 mm</div>
+                        <div class="readout-status" id="readout-status">Monitoring...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INFO GRID -->
+    <section id="info">
+        <div class="container">
+            <div class="info-grid">
+                <div class="glass-panel info-card">
+                    <div class="info-icon text-cyan">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    </div>
+                    <h3 class="info-title">P-Waves vs S-Waves</h3>
+                    <p class="info-text">Primary (P) waves travel faster and arrive first, causing a small initial jiggle. Secondary (S) waves are slower but cause massive up-and-down shaking, producing the large spikes on the seismogram.</p>
+                </div>
+
+                <div class="glass-panel info-card magenta">
+                    <div class="info-icon text-magenta">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                    </div>
+                    <h3 class="info-title">The "Still" Mass Fallacy</h3>
+                    <p class="info-text">A common mistake is thinking the mass remains perfectly still forever. In reality, a damper (like a magnet or oil bath) is used to slowly bring the mass back to center, preventing it from swinging indefinitely like a grandfather clock.</p>
+                </div>
+
+                <div class="glass-panel info-card">
+                    <div class="info-icon text-cyan">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    </div>
+                    <h3 class="info-title">Modern Evolution</h3>
+                    <p class="info-text">Today's seismometers don't use heavy physical masses and pens. They use micro-electromechanical systems (MEMS) or force-feedback coils where electronic sensors measure the tiny amount of electricity needed to hold a small mass in place.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer style="text-align: center; padding: 2rem; color: var(--text-muted); font-size: var(--font-small); border-top: 1px solid var(--border-glass); margin-top: var(--spacing-section);">
+        Interactive Scientific Visualizer • HTML/CSS/JS Simulation Environment
+    </footer>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 1. COMPONENT LABELING SYSTEM (SVG & Legend) ---
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function clearActiveLabels() {
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+            }
+
+            function activateLabel(index) {
+                clearActiveLabels();
+                document.querySelector(`.marker[data-target="legend-${index}"]`).classList.add('active');
+                document.getElementById(`legend-${index}`).classList.add('active');
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => activateLabel(marker.dataset.target.replace('legend-', '')));
+                // Touch support
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); activateLabel(marker.dataset.target.replace('legend-', '')); });
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => activateLabel(item.dataset.target));
+                item.addEventListener('touchstart', (e) => { e.preventDefault(); activateLabel(item.dataset.target); });
+            });
+
+            // --- 2. WORKING MECHANISM ENGINE (Canvas + State) ---
+            const mechCanvas = document.getElementById('mechanism-canvas');
+            const mechCtx = mechCanvas.getContext('2d', { alpha: false });
+            
+            // DOM Elements for Working section
+            const stageTitle = document.getElementById('stage-title');
+            const stageDesc = document.getElementById('stage-desc');
+            const stageIo = document.getElementById('stage-io');
+            const dots = document.querySelectorAll('.dot');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnAuto = document.getElementById('btn-auto');
+
+            const stages = [
+                {
+                    title: "1. Standby Mode",
+                    desc: "The earth is quiet. Frame is solid. The drum rotates steadily, and the pen draws a straight baseline.",
+                    io: "IN: Constant Time ➜ OUT: Straight Line",
+                    intensity: 0,
+                    highlight: 'drum'
+                },
+                {
+                    title: "2. Primary Wave Arrival",
+                    desc: "Fast, compressional P-waves hit. The bedrock and frame jolt slightly. The heavy mass's inertia keeps it relatively still.",
+                    io: "IN: Small Ground Shift ➜ OUT: Minor Wiggles",
+                    intensity: 0.2,
+                    highlight: 'frame'
+                },
+                {
+                    title: "3. Inertial Resistance",
+                    desc: "As the frame moves rapidly, the flexible suspension allows the heavy mass to lag behind, creating relative motion between pen and drum.",
+                    io: "IN: Kinetic Energy ➜ OUT: Relative Displacement",
+                    intensity: 0.5,
+                    highlight: 'mass'
+                },
+                {
+                    title: "4. Secondary Wave Strike",
+                    desc: "Slower, destructive S-waves arrive. Maximum lateral shaking occurs. The pen swings widely across the rotating paper.",
+                    io: "IN: Severe Shaking ➜ OUT: High Amplitude Trace",
+                    intensity: 1.0,
+                    highlight: 'pen'
+                },
+                {
+                    title: "5. Damping & Decay",
+                    desc: "The earthquake passes. A damping mechanism slowly brings the swinging mass back to center to prevent infinite oscillation.",
+                    io: "IN: Dissipating Energy ➜ OUT: Return to Baseline",
+                    intensity: 0.1,
+                    highlight: 'mass'
+                }
+            ];
+
+            let currentStage = 0;
+            let autoPlayInt = null;
+            let mechTime = 0;
+            let currentMechAmp = 0; // For smooth transitioning of vibration amplitude
+
+            function updateStageUI() {
+                const stage = stages[currentStage];
+                stageTitle.textContent = stage.title;
+                stageDesc.textContent = stage.desc;
+                stageIo.innerHTML = `<span>${stage.io.split('➜')[0]}</span> <span style="color:#fff">➜</span> <span>${stage.io.split('➜')[1]}</span>`;
+                
+                dots.forEach((dot, idx) => {
+                    dot.classList.toggle('active', idx === currentStage);
+                });
+            }
+
+            function setStage(index) {
+                currentStage = (index + stages.length) % stages.length;
+                updateStageUI();
+            }
+
+            btnPrev.addEventListener('click', () => { setStage(currentStage - 1); stopAuto(); });
+            btnNext.addEventListener('click', () => { setStage(currentStage + 1); stopAuto(); });
+            btnAuto.addEventListener('click', () => {
+                if (autoPlayInt) stopAuto();
+                else {
+                    btnAuto.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
+                    btnAuto.style.background = 'rgba(255,0,85,0.2)';
+                    autoPlayInt = setInterval(() => setStage(currentStage + 1), 3000);
+                }
+            });
+
+            function stopAuto() {
+                clearInterval(autoPlayInt);
+                autoPlayInt = null;
+                btnAuto.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg> Auto-Play`;
+                btnAuto.style.background = 'transparent';
+            }
+
+            function resizeMechCanvas() {
+                const rect = mechCanvas.parentElement.getBoundingClientRect();
+                mechCanvas.width = rect.width * window.devicePixelRatio;
+                mechCanvas.height = rect.height * window.devicePixelRatio;
+                mechCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+            }
+
+            // Mechanism Render Loop
+            function drawMechanism() {
+                const w = mechCanvas.width / window.devicePixelRatio;
+                const h = mechCanvas.height / window.devicePixelRatio;
+                
+                // Clear bg
+                mechCtx.fillStyle = '#02040a';
+                mechCtx.fillRect(0, 0, w, h);
+
+                mechTime += 0.05;
+                const targetAmp = stages[currentStage].intensity * 30;
+                // Smooth easing for amplitude
+                currentMechAmp += (targetAmp - currentMechAmp) * 0.05;
+
+                // Physics base variables
+                const noise = Math.sin(mechTime * 2) * currentMechAmp + Math.sin(mechTime * 5) * (currentMechAmp * 0.3);
+                const frameX = w/3 + noise; // Frame moves
+                const massX = w/3;          // Mass tries to stay at w/3 (simplified horizontal view)
+                const relativePenX = massX - frameX;
+
+                // Draw Grid
+                mechCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+                mechCtx.lineWidth = 1;
+                for(let i=0; i<w; i+=40) { mechCtx.beginPath(); mechCtx.moveTo(i,0); mechCtx.lineTo(i,h); mechCtx.stroke(); }
+
+                // 1. Draw Bedrock & Frame (Moves)
+                mechCtx.fillStyle = '#111827';
+                mechCtx.fillRect(0, h-40, w, 40);
+                
+                mechCtx.save();
+                mechCtx.translate(noise, 0); // Apply earth movement
+                
+                // Base
+                mechCtx.fillStyle = '#2d3748';
+                mechCtx.fillRect(w/3 - 50, h-50, 100, 20);
+                // Pillar
+                mechCtx.fillStyle = '#4a5568';
+                mechCtx.fillRect(w/3 - 10, h/2 - 100, 20, h/2 + 50);
+                
+                // Highlight Frame?
+                if(stages[currentStage].highlight === 'frame') {
+                    mechCtx.shadowColor = '#00f0ff';
+                    mechCtx.shadowBlur = 20;
+                    mechCtx.strokeStyle = '#00f0ff';
+                    mechCtx.lineWidth = 2;
+                    mechCtx.strokeRect(w/3 - 10, h/2 - 100, 20, h/2 + 50);
+                    mechCtx.shadowBlur = 0;
+                }
+                mechCtx.restore(); // Stop applying noise to world
+
+                // 2. Draw Mass & Arm (Stays relatively still)
+                // Suspension wire
+                mechCtx.beginPath();
+                mechCtx.moveTo(frameX, h/2 - 90); // Top of moving pillar
+                mechCtx.lineTo(massX, h/2 + 20);  // Center of stationary mass
+                mechCtx.strokeStyle = '#a0aec0';
+                mechCtx.lineWidth = 2;
+                mechCtx.stroke();
+
+                // Heavy Mass
+                mechCtx.beginPath();
+                mechCtx.arc(massX, h/2 + 20, 30, 0, Math.PI * 2);
+                const massGrad = mechCtx.createRadialGradient(massX-10, h/2+10, 5, massX, h/2+20, 30);
+                massGrad.addColorStop(0, '#ffd700');
+                massGrad.addColorStop(1, '#8b6508');
+                mechCtx.fillStyle = massGrad;
+                mechCtx.fill();
+                
+                if(stages[currentStage].highlight === 'mass') {
+                    mechCtx.beginPath();
+                    mechCtx.arc(massX, h/2 + 20, 35, 0, Math.PI * 2);
+                    mechCtx.strokeStyle = '#00f0ff';
+                    mechCtx.lineWidth = 2;
+                    mechCtx.stroke();
+                }
+
+                // Arm to pen
+                mechCtx.fillStyle = '#a0aec0';
+                mechCtx.fillRect(massX, h/2 + 18, 120, 4);
+
+                // Pen tip
+                const penBaseX = massX + 120;
+                const penBaseY = h/2 + 20;
+                mechCtx.fillStyle = '#e53e3e';
+                mechCtx.beginPath();
+                mechCtx.moveTo(penBaseX, penBaseY - 5);
+                mechCtx.lineTo(penBaseX + 20, penBaseY);
+                mechCtx.lineTo(penBaseX, penBaseY + 5);
+                mechCtx.fill();
+
+                if(stages[currentStage].highlight === 'pen') {
+                    mechCtx.shadowColor = '#e53e3e';
+                    mechCtx.shadowBlur = 15;
+                    mechCtx.fill();
+                    mechCtx.shadowBlur = 0;
+                }
+
+                // 3. Draw Drum (Attached to Frame, so it moves with noise)
+                mechCtx.save();
+                mechCtx.translate(noise, 0);
+                const drumX = w/3 + 140;
+                
+                // Drum shadow
+                mechCtx.fillStyle = 'rgba(0,0,0,0.5)';
+                mechCtx.fillRect(drumX-10, h/2-30, 80, 110);
+
+                // Drum cylinder
+                const drumGrad = mechCtx.createLinearGradient(0, h/2-40, 0, h/2+60);
+                drumGrad.addColorStop(0, '#cbd5e1');
+                drumGrad.addColorStop(0.5, '#ffffff');
+                drumGrad.addColorStop(1, '#94a3b8');
+                mechCtx.fillStyle = drumGrad;
+                mechCtx.fillRect(drumX, h/2-40, 60, 100);
+
+                if(stages[currentStage].highlight === 'drum') {
+                    mechCtx.strokeStyle = '#00f0ff';
+                    mechCtx.lineWidth = 3;
+                    mechCtx.strokeRect(drumX, h/2-40, 60, 100);
+                }
+
+                // Draw paper trace (Relative motion!)
+                // The pen is drawing on the drum. The drum is at drumX (relative to frame).
+                // So the line drawn represents relativePenX.
+                mechCtx.beginPath();
+                mechCtx.moveTo(drumX, h/2 + 20); // Center line
+                mechCtx.strokeStyle = 'rgba(255,0,0,0.3)';
+                mechCtx.lineTo(drumX + 60, h/2 + 20);
+                mechCtx.stroke();
+                
+                // Draw a squiggly line representing the data
+                mechCtx.beginPath();
+                mechCtx.strokeStyle = '#e53e3e';
+                mechCtx.lineWidth = 2;
+                mechCtx.moveTo(drumX, h/2 + 20 - relativePenX);
+                
+                // Simulate previous trace on paper
+                for(let i=0; i<60; i+=2) {
+                    // Back calculate what relative Pen X was
+                    const pastTime = mechTime - (i*0.1);
+                    const pastNoise = Math.sin(pastTime * 2) * currentMechAmp;
+                    mechCtx.lineTo(drumX + i, h/2 + 20 + pastNoise); 
+                }
+                mechCtx.stroke();
+                mechCtx.restore(); // Stop frame translate
+
+                requestAnimationFrame(drawMechanism);
+            }
+
+            // Initialize Working section
+            updateStageUI();
+            
+            // --- 3. INTERACTIVE SIMULATION ENGINE ---
+            const simCanvas = document.getElementById('sim-canvas');
+            const simCtx = simCanvas.getContext('2d', { alpha: false });
+            
+            const sliderMag = document.getElementById('slider-mag');
+            const sliderDist = document.getElementById('slider-dist');
+            const valMag = document.getElementById('val-mag');
+            const valDist = document.getElementById('val-dist');
+            const btnTrigger = document.getElementById('btn-trigger');
+            
+            const readoutAmp = document.getElementById('readout-amp');
+            const readoutStatus = document.getElementById('readout-status');
+
+            let simTime = 0;
+            let isQuakeActive = false;
+            let quakeStartTimer = 0;
+            let quakePhase = 0; // 0=none, 1=P-wave, 2=S-wave, 3=decay
+            let traceHistory = []; // Array of {y: val}
+            
+            // Sim parameters
+            let settings = {
+                magnitude: parseFloat(sliderMag.value),
+                distance: parseInt(sliderDist.value)
+            };
+
+            function resizeSimCanvas() {
+                const rect = simCanvas.parentElement.getBoundingClientRect();
+                simCanvas.width = rect.width * window.devicePixelRatio;
+                simCanvas.height = rect.height * window.devicePixelRatio;
+                simCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                
+                // Initialize flat history based on new width
+                const w = rect.width;
+                traceHistory = new Array(Math.floor(w)).fill(0);
+            }
+
+            // UI Listeners
+            sliderMag.addEventListener('input', (e) => {
+                settings.magnitude = parseFloat(e.target.value);
+                valMag.textContent = settings.magnitude.toFixed(1) + ' M';
+            });
+
+            sliderDist.addEventListener('input', (e) => {
+                settings.distance = parseInt(e.target.value);
+                valDist.textContent = settings.distance + ' km';
+            });
+
+            btnTrigger.addEventListener('click', () => {
+                if(isQuakeActive) return;
+                isQuakeActive = true;
+                quakeStartTimer = simTime;
+                quakePhase = 1; // Start P-Wave
+                readoutStatus.innerHTML = '<span class="status-alert">● SEISMIC EVENT DETECTED</span>';
+                readoutStatus.classList.add('status-alert');
+            });
+
+            function getEarthquakeDisplacement(t) {
+                if (!isQuakeActive) return 0;
+                
+                const elapsed = t - quakeStartTimer;
+                const pWaveArrival = 10; // Fast
+                const sWaveArrival = pWaveArrival + (settings.distance * 0.5); // Slower, gap depends on distance
+                
+                let displacement = 0;
+
+                // Base amplitude mapping based on exponential magnitude scale (simplified for visual)
+                const baseAmp = Math.pow(1.5, settings.magnitude) * 0.2; 
+                // Attenuation over distance
+                const attenuation = Math.max(0.1, 1 - (settings.distance / 1000));
+                
+                const finalAmp = baseAmp * attenuation;
+
+                // P-Wave (High freq, low amp)
+                if (elapsed > pWaveArrival && elapsed < sWaveArrival) {
+                    quakePhase = 1;
+                    // Envelope building up
+                    const envelope = Math.min(1, (elapsed - pWaveArrival) / 20);
+                    displacement = Math.sin(elapsed * 0.8) * (finalAmp * 0.2) * envelope;
+                }
+                // S-Wave (Lower freq, high amp)
+                else if (elapsed >= sWaveArrival && elapsed < sWaveArrival + 100) {
+                    if(quakePhase === 1) {
+                        quakePhase = 2; // Transitioned
+                    }
+                    // Coda (decay envelope)
+                    const decay = Math.max(0, 1 - ((elapsed - sWaveArrival) / 100));
+                    // Complex wave: Main frequency + harmonics
+                    displacement = (Math.sin(elapsed * 0.4) + 0.5 * Math.sin(elapsed * 0.9)) * finalAmp * decay;
+                }
+                // End Quake
+                else if (elapsed >= sWaveArrival + 100) {
+                    isQuakeActive = false;
+                    quakePhase = 0;
+                    readoutStatus.innerHTML = '<span style="color:var(--text-muted)">Monitoring...</span>';
+                    readoutStatus.classList.remove('status-alert');
+                }
+
+                return displacement;
+            }
+
+            function drawSimulation() {
+                const w = simCanvas.width / window.devicePixelRatio;
+                const h = simCanvas.height / window.devicePixelRatio;
+                
+                simCtx.fillStyle = '#0a1128';
+                simCtx.fillRect(0, 0, w, h);
+
+                // Draw Grid (Paper style)
+                simCtx.strokeStyle = 'rgba(0, 240, 255, 0.1)';
+                simCtx.lineWidth = 1;
+                for(let i=0; i<h; i+=20) {
+                    simCtx.beginPath(); simCtx.moveTo(0, i); simCtx.lineTo(w, i); simCtx.stroke();
+                }
+                for(let i=0; i<w; i+=20) {
+                    // Shift vertical lines to simulate paper moving left
+                    const x = (i - (simTime % 20) + w) % w;
+                    simCtx.beginPath(); simCtx.moveTo(x, 0); simCtx.lineTo(x, h); simCtx.stroke();
+                }
+
+                // Physics calculation
+                simTime++;
+                const groundDisp = getEarthquakeDisplacement(simTime);
+                
+                // Add new data point to history (Paper moves left, so new data is at right edge)
+                traceHistory.push(groundDisp);
+                if (traceHistory.length > w) {
+                    traceHistory.shift(); // Remove oldest
+                }
+
+                // Update UI Readout
+                readoutAmp.textContent = Math.abs(groundDisp).toFixed(2) + ' mm';
+
+                // Draw Trace Line
+                simCtx.beginPath();
+                simCtx.strokeStyle = isQuakeActive ? (quakePhase === 2 ? '#ff0055' : '#ffaa00') : '#00f0ff';
+                simCtx.lineWidth = isQuakeActive ? 3 : 2;
+                simCtx.lineJoin = 'round';
+
+                const centerY = h / 2;
+                
+                // We draw from left to right.
+                // traceHistory[0] is the oldest (leftmost), traceHistory[end] is newest (rightmost)
+                for (let i = 0; i < traceHistory.length; i++) {
+                    const x = i;
+                    const y = centerY - traceHistory[i]; // -y because canvas y is down
+                    
+                    if (i === 0) simCtx.moveTo(x, y);
+                    else simCtx.lineTo(x, y);
+                }
+                
+                simCtx.stroke();
+
+                // Draw "Pen" Head at the rightmost edge
+                const currentY = centerY - traceHistory[traceHistory.length - 1];
+                const penX = traceHistory.length - 1;
+                
+                simCtx.fillStyle = '#fff';
+                simCtx.beginPath();
+                simCtx.arc(penX, currentY, 4, 0, Math.PI*2);
+                simCtx.fill();
+                
+                // Pen arm
+                simCtx.strokeStyle = '#4a5568';
+                simCtx.lineWidth = 4;
+                simCtx.beginPath();
+                simCtx.moveTo(penX + 50, currentY); // Arm comes from right
+                simCtx.lineTo(penX, currentY);
+                simCtx.stroke();
+
+                requestAnimationFrame(drawSimulation);
+            }
+
+            // --- INIT & RESIZE HANDLERS ---
+            function handleResize() {
+                resizeMechCanvas();
+                resizeSimCanvas();
+            }
+
+            window.addEventListener('resize', () => {
+                // Debounce resize
+                clearTimeout(window.resizeTimer);
+                window.resizeTimer = setTimeout(handleResize, 100);
+            });
+            window.addEventListener('orientationchange', handleResize);
+
+            // Initial setup
+            handleResize();
+            drawMechanism(); // Start loop 1
+            drawSimulation(); // Start loop 2
+        });
+    </script>
+</body>
+</html>

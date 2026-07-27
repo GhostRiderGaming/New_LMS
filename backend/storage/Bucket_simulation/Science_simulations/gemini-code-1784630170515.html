@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fuel Efficiency & Energy Flow Simulator</title>
+    <style>
+        /* ════════════════════════════════════════════════════════════
+           ROOT VARIABLES & RESET
+           ════════════════════════════════════════════════════════════ */
+        :root {
+            --bg-base: #090a0f;
+            --bg-panel: rgba(18, 22, 35, 0.5);
+            --bg-panel-hover: rgba(25, 30, 48, 0.7);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            
+            --text-main: #ffffff;
+            --text-muted: #9499ab;
+            
+            --color-ice: #ff7300;     /* Internal Combustion */
+            --color-hev: #00ff88;     /* Hybrid */
+            --color-bev: #00d2ff;     /* Battery Electric */
+            --color-loss: #ff2a2a;    /* Heat/Loss */
+            
+            --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --transition-smooth: 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            overflow-x: hidden;
+            line-height: 1.6;
+            font-size: clamp(14px, 1.5vw, 16px);
+        }
+
+        /* ════════════════════════════════════════════════════════════
+           TYPOGRAPHY (Fluid)
+           ════════════════════════════════════════════════════════════ */
+        h1 { font-size: clamp(2rem, 5vw, 4rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 1rem; }
+        h3 { font-size: clamp(1.1rem, 2vw, 1.5rem); font-weight: 600; }
+        p { margin-bottom: 1rem; color: var(--text-muted); }
+        .gradient-text {
+            background: linear-gradient(135deg, #ffffff 0%, #a0a5b5 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ════════════════════════════════════════════════════════════
+           LAYOUT & GLASSMORPHISM
+           ════════════════════════════════════════════════════════════ */
+        #bg-canvas {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 4vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(30px, 6vw, 80px);
+        }
+
+        .glass-panel {
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-lg);
+            padding: clamp(20px, 4vw, 40px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05);
+            transition: transform var(--transition-smooth), border-color var(--transition-smooth);
+        }
+
+        @media (max-width: 768px) {
+            .glass-panel {
+                backdrop-filter: blur(10px); /* Performance on mobile */
+                -webkit-backdrop-filter: blur(10px);
+                padding: clamp(16px, 3vw, 20px);
+                border-radius: var(--radius-md);
+            }
+        }
+
+        .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: clamp(16px, 3vw, 32px); }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: clamp(16px, 3vw, 24px); }
+
+        /* ════════════════════════════════════════════════════════════
+           HERO SECTION
+           ════════════════════════════════════════════════════════════ */
+        .hero {
+            text-align: center;
+            padding: 10vh 0 5vh;
+            position: relative;
+        }
+        
+        .hero-subtitle {
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--color-bev);
+            font-size: clamp(0.8rem, 1.2vw, 1rem);
+            font-weight: 700;
+            display: block;
+            margin-bottom: 1rem;
+        }
+
+        /* ════════════════════════════════════════════════════════════
+           DIAGRAM LABELS (MANDATORY RULE IMPLEMENTATION)
+           ════════════════════════════════════════════════════════════ */
+        .diagram-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        @media (min-width: 1024px) {
+            .diagram-container {
+                flex-direction: row;
+                align-items: center;
+            }
+            .diagram-visual { flex: 1.5; }
+            .diagram-legend-wrapper { flex: 1; }
+        }
+
+        .diagram-visual {
+            position: relative;
+            width: 100%;
+            min-height: 240px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .diagram-visual svg {
+            width: 100%;
+            height: 100%;
+            max-height: 400px;
+            object-fit: contain;
+        }
+
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            background: rgba(20, 25, 40, 0.8);
+            border: 2px solid var(--marker-color, #fff);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+            color: #fff;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px var(--marker-color, rgba(255,255,255,0.5));
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+        
+        .marker::before {
+            content: '';
+            position: absolute;
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            background: var(--marker-color, #fff);
+            opacity: 0.3;
+            animation: pulse 2s infinite;
+        }
+
+        .marker:hover, .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--marker-color, #fff);
+            color: #000;
+        }
+
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            list-style: none;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.05);
+            border-color: var(--marker-color, #fff);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            flex-shrink: 0;
+            background: var(--marker-color, #fff);
+            color: #000;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .legend-text { display: flex; flex-direction: column; }
+        .legend-title { font-weight: 600; color: #fff; font-size: 1rem; }
+        .legend-desc { font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.5; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+
+        /* ════════════════════════════════════════════════════════════
+           WORKING MECHANISM (MANDATORY RULE IMPLEMENTATION)
+           ════════════════════════════════════════════════════════════ */
+        .working-section {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .working-visual {
+            width: 100%;
+            height: clamp(300px, 40vw, 450px);
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border-glass);
+        }
+
+        .working-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.2);
+            padding: 16px;
+            border-radius: var(--radius-sm);
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .btn {
+            background: rgba(255,255,255,0.1);
+            border: 1px solid var(--border-glass);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 600;
+            font-family: inherit;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
+        .btn:active { transform: translateY(0); }
+        .btn.primary { background: var(--color-bev); color: #000; border: none; }
+        .btn.primary:hover { box-shadow: 0 0 15px var(--color-bev); }
+
+        .progress-indicator {
+            display: flex;
+            gap: 8px;
+        }
+
+        .progress-dot {
+            width: 10px; height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s;
+        }
+        .progress-dot.active {
+            background: var(--color-bev);
+            box-shadow: 0 0 10px var(--color-bev);
+            transform: scale(1.2);
+        }
+
+        .stage-info {
+            min-height: 80px;
+            padding: 16px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-sm);
+            border-left: 4px solid var(--color-bev);
+        }
+        
+        .stage-title { color: var(--color-bev); font-weight: 700; margin-bottom: 4px; }
+
+        /* SVG Working Animation specific classes */
+        .wk-node { transition: all 0.5s ease; opacity: 0.3; }
+        .wk-node.active { opacity: 1; filter: drop-shadow(0 0 15px currentColor); }
+        .wk-path { stroke: rgba(255,255,255,0.1); stroke-width: 4; fill: none; }
+        .wk-flow { stroke: var(--color-bev); stroke-width: 4; fill: none; stroke-dasharray: 10 10; animation: flowAnim 1s linear infinite; opacity: 0; transition: opacity 0.3s; }
+        .wk-flow.active { opacity: 1; }
+        @keyframes flowAnim { to { stroke-dashoffset: -20; } }
+
+        /* ════════════════════════════════════════════════════════════
+           INTERACTIVE SIMULATION (Energy Flow Sankey)
+           ════════════════════════════════════════════════════════════ */
+        .sim-container {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .sim-container { grid-template-columns: 1fr; }
+        }
+
+        .sim-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            padding: 24px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+        }
+
+        .control-group { display: flex; flex-direction: column; gap: 8px; }
+        .control-header { display: flex; justify-content: space-between; font-size: 0.9rem; font-weight: 600; }
+        .val-display { color: var(--color-bev); font-family: var(--font-mono); }
+
+        /* Custom Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 20px; width: 20px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.2);
+            border-radius: 2px;
+        }
+        input[type=range]:focus { outline: none; }
+
+        .sim-visual {
+            position: relative;
+            background: rgba(0,0,0,0.3);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-glass);
+            overflow: hidden;
+            min-height: 400px;
+        }
+
+        #sankey-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .vehicle-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .v-sel-btn {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-glass);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        .v-sel-btn[data-type="ice"].active { background: rgba(255, 115, 0, 0.2); border-color: var(--color-ice); color: var(--color-ice); box-shadow: 0 0 15px rgba(255,115,0,0.3); }
+        .v-sel-btn[data-type="bev"].active { background: rgba(0, 210, 255, 0.2); border-color: var(--color-bev); color: var(--color-bev); box-shadow: 0 0 15px rgba(0,210,255,0.3); }
+
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: var(--radius-sm);
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-val { font-size: 2rem; font-weight: 800; font-family: var(--font-mono); margin: 8px 0; }
+        .stat-label { font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+
+        /* ════════════════════════════════════════════════════════════
+           CARDS & MISC
+           ════════════════════════════════════════════════════════════ */
+        .fact-card {
+            border-left: 4px solid var(--color-bev);
+            background: linear-gradient(90deg, rgba(0, 210, 255, 0.1) 0%, transparent 100%);
+        }
+        .mistake-card {
+            border-left: 4px solid var(--color-loss);
+            background: linear-gradient(90deg, rgba(255, 42, 42, 0.1) 0%, transparent 100%);
+        }
+        
+        .pill {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            background: rgba(255,255,255,0.1);
+            margin-bottom: 12px;
+        }
+
+        /* SVG Definitions internal classes */
+        .svg-glow-ice { filter: drop-shadow(0 0 8px var(--color-ice)); }
+        .svg-glow-bev { filter: drop-shadow(0 0 8px var(--color-bev)); }
+        
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Animated Background -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        <!-- 1. INTRODUCTION -->
+        <header class="hero">
+            <span class="hero-subtitle">Premium Interactive Simulation</span>
+            <h1>The Physics of <span class="gradient-text">Fuel Efficiency</span></h1>
+            <p style="max-width: 600px; margin: 1.5rem auto; font-size: 1.1rem;">
+                Explore how energy is stored, converted, and lost in modern vehicles. Discover visually why internal combustion engines generate more heat than motion, and how electric drivetrains achieve superior efficiency.
+            </p>
+        </header>
+
+        <!-- 2. TOPIC OVERVIEW -->
+        <section class="grid-3">
+            <div class="glass-panel stat-card">
+                <div class="stat-label">Energy Density (Gasoline)</div>
+                <div class="stat-val" style="color: var(--color-ice)">33.6</div>
+                <div class="stat-label">kWh per Gallon</div>
+                <p style="font-size:0.8rem; margin-top:8px;">Gasoline holds massive potential energy, but extracting it is messy.</p>
+            </div>
+            <div class="glass-panel stat-card">
+                <div class="stat-label">Average ICE Efficiency</div>
+                <div class="stat-val" style="color: var(--color-loss)">20%</div>
+                <div class="stat-label">Energy to Wheels</div>
+                <p style="font-size:0.8rem; margin-top:8px;">80% of fuel energy is lost primarily as waste heat in the engine.</p>
+            </div>
+            <div class="glass-panel stat-card">
+                <div class="stat-label">Average EV Efficiency</div>
+                <div class="stat-val" style="color: var(--color-bev)">85%</div>
+                <div class="stat-label">Energy to Wheels</div>
+                <p style="font-size:0.8rem; margin-top:8px;">Electric motors convert electricity directly to rotational force with minimal heat.</p>
+            </div>
+        </section>
+
+        <!-- 3. MAIN COMPONENTS (Strict Label Rule Applied) -->
+        <section class="glass-panel">
+            <h2>Powertrain Anatomy</h2>
+            <p>Comparing the core components of Internal Combustion and Battery Electric architectures.</p>
+            
+            <div style="margin-top: 32px;">
+                <h3 style="color: var(--color-bev); margin-bottom: 16px;">Battery Electric Vehicle (BEV) Drivetrain</h3>
+                <div class="diagram-container" id="bev-diagram" style="--marker-color: var(--color-bev)">
+                    
+                    <div class="diagram-visual">
+                        <!-- Premium SVG Vector Illustration -->
+                        <svg viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet">
+                            <defs>
+                                <linearGradient id="battGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stop-color="#1a2035"/>
+                                    <stop offset="100%" stop-color="#0a0c14"/>
+                                </linearGradient>
+                                <linearGradient id="motorGrad" x1="0" y1="0" x2="1" y2="1">
+                                    <stop offset="0%" stop-color="#e0e0e0"/>
+                                    <stop offset="100%" stop-color="#7a7a7a"/>
+                                </linearGradient>
+                                <linearGradient id="coilGrad" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stop-color="#b87333"/>
+                                    <stop offset="50%" stop-color="#f4a460"/>
+                                    <stop offset="100%" stop-color="#8b4513"/>
+                                </linearGradient>
+                            </defs>
+                            
+                            <!-- Chassis Base -->
+                            <rect x="100" y="250" width="600" height="20" rx="10" fill="rgba(255,255,255,0.1)"/>
+                            
+                            <!-- 1. Battery Pack -->
+                            <g id="svg-comp-battery">
+                                <rect x="150" y="230" width="400" height="40" rx="5" fill="url(#battGrad)" stroke="#00d2ff" stroke-width="2"/>
+                                <!-- Battery Cells Detail -->
+                                <pattern id="cells" width="20" height="40" patternUnits="userSpaceOnUse">
+                                    <rect x="2" y="2" width="16" height="36" rx="2" fill="rgba(0, 210, 255, 0.1)" stroke="rgba(0, 210, 255, 0.3)"/>
+                                </pattern>
+                                <rect x="150" y="230" width="400" height="40" rx="5" fill="url(#cells)"/>
+                                <path d="M 150 230 L 170 210 L 570 210 L 550 230 Z" fill="rgba(255,255,255,0.05)"/>
+                            </g>
+
+                            <!-- 2. Inverter -->
+                            <g id="svg-comp-inverter">
+                                <rect x="580" y="160" width="80" height="60" rx="4" fill="#2a2f45" stroke="#a0a5b5" stroke-width="1"/>
+                                <rect x="590" y="170" width="60" height="10" fill="#00d2ff" opacity="0.5"/>
+                                <rect x="590" y="190" width="60" height="10" fill="#00d2ff" opacity="0.5"/>
+                                <!-- Wires -->
+                                <path d="M 550 230 Q 600 230 600 220" fill="none" stroke="#00d2ff" stroke-width="6" class="svg-glow-bev"/>
+                                <path d="M 530 230 Q 580 230 580 220" fill="none" stroke="#ff0055" stroke-width="6"/>
+                            </g>
+
+                            <!-- 3. Electric Motor -->
+                            <g id="svg-comp-motor">
+                                <circle cx="680" cy="220" r="45" fill="url(#motorGrad)" stroke="#555" stroke-width="2"/>
+                                <circle cx="680" cy="220" r="35" fill="url(#coilGrad)"/>
+                                <circle cx="680" cy="220" r="15" fill="#333"/>
+                                <!-- Cooling ribs -->
+                                <path d="M 640 190 L 630 180 M 650 180 L 640 170 M 670 175 L 670 165" stroke="#aaa" stroke-width="3"/>
+                                <!-- Wires from inverter to motor -->
+                                <path d="M 660 190 Q 670 220 670 220" fill="none" stroke="#ffaa00" stroke-width="4"/>
+                            </g>
+
+                            <!-- 4. Wheels/Drivetrain -->
+                            <g id="svg-comp-wheel">
+                                <circle cx="150" cy="260" r="40" fill="#111" stroke="#333" stroke-width="8"/>
+                                <circle cx="150" cy="260" r="20" fill="#444"/>
+                                <circle cx="700" cy="260" r="40" fill="#111" stroke="#333" stroke-width="8"/>
+                                <circle cx="700" cy="260" r="20" fill="#444"/>
+                                <!-- Axle connecting motor to wheel -->
+                                <line x1="680" y1="220" x2="700" y2="260" stroke="#888" stroke-width="8"/>
+                            </g>
+                        </svg>
+                        
+                        <!-- Dynamic Markers injected via JS -->
+                    </div>
+
+                    <div class="diagram-legend-wrapper">
+                        <ul class="legend-list" id="bev-legend">
+                            <!-- Injected via JS -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. WORKING PROCESS (Strict Mechanism Rule Applied) -->
+        <section class="glass-panel working-section">
+            <h2>Mechanism: Linear Energy Flow</h2>
+            <p>How energy transforms from static storage into kinetic motion. This linear sequence highlights where efficiencies differ.</p>
+            
+            <div class="working-visual">
+                <!-- SVG Pipeline representing the state machine -->
+                <svg viewBox="0 0 1000 300" preserveAspectRatio="xMidYMid meet" style="width: 100%; height: 100%;">
+                    
+                    <!-- Background Grid -->
+                    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="1"/>
+                    </pattern>
+                    <rect width="1000" height="300" fill="url(#grid)" />
+
+                    <!-- Connections (Paths) -->
+                    <path d="M 200 150 L 400 150" class="wk-path" id="path-1"/>
+                    <path d="M 200 150 L 400 150" class="wk-flow" id="flow-1"/>
+                    
+                    <path d="M 500 150 L 700 150" class="wk-path" id="path-2"/>
+                    <path d="M 500 150 L 700 150" class="wk-flow" id="flow-2"/>
+                    
+                    <path d="M 800 150 L 900 150" class="wk-path" id="path-3"/>
+                    <path d="M 800 150 L 900 150" class="wk-flow" id="flow-3"/>
+
+                    <!-- Heat Loss Arrow (Appears in stage 2/3) -->
+                    <g id="heat-loss" style="opacity: 0; transition: opacity 0.5s;">
+                        <path d="M 450 100 Q 450 50 500 30" fill="none" stroke="var(--color-loss)" stroke-width="4" stroke-dasharray="5 5" style="animation: flowAnim 1s linear infinite reverse;"/>
+                        <text x="510" y="35" fill="var(--color-loss)" font-size="14" font-weight="bold">Waste Heat</text>
+                    </g>
+
+                    <!-- Nodes -->
+                    <!-- Stage 1: Storage -->
+                    <g class="wk-node" id="node-1" transform="translate(100, 100)" style="color: var(--color-bev)">
+                        <rect x="0" y="0" width="100" height="100" rx="10" fill="rgba(0,0,0,0.8)" stroke="currentColor" stroke-width="3"/>
+                        <text x="50" y="55" fill="#fff" text-anchor="middle" font-weight="bold" font-size="16">Energy</text>
+                        <text x="50" y="75" fill="#aaa" text-anchor="middle" font-size="12">Storage</text>
+                    </g>
+
+                    <!-- Stage 2: Converter -->
+                    <g class="wk-node" id="node-2" transform="translate(400, 100)" style="color: var(--color-ice)">
+                        <circle cx="50" cy="50" r="50" fill="rgba(0,0,0,0.8)" stroke="currentColor" stroke-width="3"/>
+                        <path d="M 30 50 L 45 70 L 70 30" fill="none" stroke="#fff" stroke-width="4"/>
+                        <text x="50" y="120" fill="#fff" text-anchor="middle" font-weight="bold" font-size="14">Converter</text>
+                    </g>
+
+                    <!-- Stage 3: Drivetrain -->
+                    <g class="wk-node" id="node-3" transform="translate(700, 110)" style="color: #a0a5b5">
+                        <rect x="0" y="0" width="100" height="80" rx="40" fill="rgba(0,0,0,0.8)" stroke="currentColor" stroke-width="3"/>
+                        <circle cx="25" cy="40" r="15" fill="none" stroke="#fff" stroke-width="2"/>
+                        <circle cx="75" cy="40" r="15" fill="none" stroke="#fff" stroke-width="2"/>
+                        <line x1="25" y1="40" x2="75" y2="40" stroke="#fff" stroke-width="2"/>
+                        <text x="50" y="100" fill="#fff" text-anchor="middle" font-weight="bold" font-size="14">Transmission</text>
+                    </g>
+                    
+                    <!-- Stage 4: Output -->
+                    <g class="wk-node" id="node-4" transform="translate(900, 130)" style="color: #00ff88">
+                        <circle cx="20" cy="20" r="30" fill="rgba(0,0,0,0.8)" stroke="currentColor" stroke-width="3"/>
+                        <text x="20" y="25" fill="#fff" text-anchor="middle" font-weight="bold" font-size="20">M</text>
+                        <text x="20" y="70" fill="#fff" text-anchor="middle" font-weight="bold" font-size="14">Motion</text>
+                    </g>
+
+                </svg>
+                
+                <!-- Particle Overlay Container (Absolute) -->
+                <div id="particle-container" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+            </div>
+
+            <div class="working-controls">
+                <div class="progress-indicator" id="wk-progress">
+                    <div class="progress-dot active"></div>
+                    <div class="progress-dot"></div>
+                    <div class="progress-dot"></div>
+                    <div class="progress-dot"></div>
+                </div>
+                
+                <div style="flex: 1; min-width: 200px; margin: 0 20px;" class="stage-info">
+                    <div class="stage-title" id="wk-title">1. Energy Storage</div>
+                    <div class="legend-desc" id="wk-desc">Chemical energy rests in the fuel tank or battery pack, waiting to be drawn.</div>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn" id="wk-prev">← Prev</button>
+                    <button class="btn" id="wk-next">Next →</button>
+                    <button class="btn primary" id="wk-auto">Auto-Play ⏵</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. INTERACTIVE SIMULATION -->
+        <section class="glass-panel">
+            <h2>Interactive Efficiency Simulation</h2>
+            <p>Adjust inputs to see how energy translates into useful motion versus waste heat. Observe the Sankey flow diagram updating in real-time.</p>
+            
+            <div class="vehicle-selector">
+                <div class="v-sel-btn active" data-type="ice">Gasoline (ICE)</div>
+                <div class="v-sel-btn" data-type="bev">Electric (BEV)</div>
+            </div>
+
+            <div class="sim-container">
+                <div class="sim-controls">
+                    <div class="control-group">
+                        <div class="control-header">
+                            <span>Input Energy (kWh)</span>
+                            <span class="val-display" id="val-energy">100</span>
+                        </div>
+                        <input type="range" id="sim-energy" min="10" max="200" value="100">
+                    </div>
+                    
+                    <div class="control-group" style="margin-top: 20px;">
+                        <div class="control-header">
+                            <span>Driving Condition</span>
+                            <span class="val-display" id="val-cond">Mixed</span>
+                        </div>
+                        <input type="range" id="sim-cond" min="0" max="2" value="1" step="1">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">
+                            <span>City</span>
+                            <span>Mixed</span>
+                            <span>Highway</span>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: auto; border-top: 1px solid var(--border-glass); padding-top: 16px;">
+                        <h4 style="margin-bottom: 12px;">Simulation Output</h4>
+                        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+                            <span style="color: var(--color-loss);">Lost to Heat</span>
+                            <strong id="out-loss">80 kWh</strong>
+                        </div>
+                        <div style="display:flex; justify-content:space-between;">
+                            <span style="color: var(--color-bev);">Useful Motion</span>
+                            <strong id="out-motion">20 kWh</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sim-visual">
+                    <!-- High Performance HTML5 Canvas for Fluid Sankey Diagram -->
+                    <canvas id="sankey-canvas"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6-9. INSIGHTS, FACTS, MISTAKES, REVISION -->
+        <section class="grid-2">
+            <div class="glass-panel fact-card">
+                <span class="pill">Interesting Fact</span>
+                <h3 style="margin-bottom: 12px;">What is MPGe?</h3>
+                <p>Miles Per Gallon Equivalent (MPGe) is a metric created by the EPA. It calculates how far a vehicle can travel on <strong>33.7 kilowatt-hours (kWh)</strong> of electricity—which is the exact amount of heat energy contained in one gallon of gasoline. Because EVs waste so little energy as heat, they routinely achieve over 100 MPGe.</p>
+            </div>
+            
+            <div class="glass-panel mistake-card">
+                <span class="pill" style="background: rgba(255, 42, 42, 0.1); color: var(--color-loss)">Common Mistake</span>
+                <h3 style="margin-bottom: 12px;">"Idling uses zero fuel"</h3>
+                <p>An internal combustion engine must continuously burn fuel just to overcome internal friction and keep running, even at zero RPMs. This is 0% efficient. Electric vehicles use practically zero energy when stopped, giving them a massive efficiency advantage in stop-and-go city traffic.</p>
+            </div>
+        </section>
+
+        <section class="glass-panel" style="background: linear-gradient(135deg, rgba(0, 210, 255, 0.05), rgba(0, 255, 136, 0.05));">
+            <h2>Quick Revision</h2>
+            <ul style="list-style: none; display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+                <li style="display: flex; gap: 12px; align-items: center;">
+                    <div class="legend-badge" style="--marker-color: var(--color-bev)">✓</div>
+                    <strong>Efficiency</strong> is the ratio of useful work (motion) to total energy input.
+                </li>
+                <li style="display: flex; gap: 12px; align-items: center;">
+                    <div class="legend-badge" style="--marker-color: var(--color-loss)">!</div>
+                    <strong>Internal Combustion Engines (ICE)</strong> lose ~80% of energy mostly as heat via exhaust and radiator.
+                </li>
+                <li style="display: flex; gap: 12px; align-items: center;">
+                    <div class="legend-badge" style="--marker-color: var(--color-bev)">⚡</div>
+                    <strong>Battery Electric Vehicles (BEV)</strong> convert over 85% of electrical energy directly to wheel motion.
+                </li>
+            </ul>
+        </section>
+        
+        <footer style="text-align: center; padding: 2rem 0; color: var(--text-muted); font-size: 0.9rem;">
+            Educational Interactive Simulation Architecture
+        </footer>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════════════
+         JAVASCRIPT LOGIC
+         ════════════════════════════════════════════════════════════ -->
+    <script>
+        /**
+         * Core Application Architecture
+         * Structured cleanly into functional controllers.
+         */
+        const App = {
+            init() {
+                this.AmbientBackground.init();
+                this.DiagramController.init();
+                this.WorkingProcess.init();
+                this.Simulation.init();
+                
+                // Handle global resize for canvases
+                window.addEventListener('resize', this.debounce(() => {
+                    this.AmbientBackground.resize();
+                    this.Simulation.resize();
+                }, 250));
+            },
+            
+            debounce(func, wait) {
+                let timeout;
+                return function executedFunction(...args) {
+                    const later = () => { clearTimeout(timeout); func(...args); };
+                    clearTimeout(timeout);
+                    timeout = setTimeout(later, wait);
+                };
+            }
+        };
+
+        // ---------------------------------------------------------
+        // 1. Ambient Background (Subtle particle flow)
+        // ---------------------------------------------------------
+        App.AmbientBackground = {
+            canvas: document.getElementById('bg-canvas'),
+            ctx: null,
+            particles: [],
+            
+            init() {
+                this.ctx = this.canvas.getContext('2d');
+                this.resize();
+                this.createParticles();
+                this.animate();
+            },
+            
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            },
+            
+            createParticles() {
+                this.particles = [];
+                for(let i=0; i<30; i++) {
+                    this.particles.push({
+                        x: Math.random() * this.canvas.width,
+                        y: Math.random() * this.canvas.height,
+                        vx: (Math.random() - 0.5) * 0.5,
+                        vy: (Math.random() - 0.5) * 0.5 - 0.2, // Drift up
+                        size: Math.random() * 2 + 0.5,
+                        opacity: Math.random() * 0.3
+                    });
+                }
+            },
+            
+            animate() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 1)';
+                
+                this.particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    
+                    if(p.y < 0) p.y = this.canvas.height;
+                    if(p.x < 0) p.x = this.canvas.width;
+                    if(p.x > this.canvas.width) p.x = 0;
+                    
+                    this.ctx.globalAlpha = p.opacity;
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+                
+                requestAnimationFrame(this.animate.bind(this));
+            }
+        };
+
+        // ---------------------------------------------------------
+        // 2. Diagram Controller (Mandatory Non-Overlapping Rule)
+        // ---------------------------------------------------------
+        App.DiagramController = {
+            components: [
+                { id: 'battery', x: '35%', y: '55%', title: 'Battery Pack', desc: 'Stores chemical energy. High energy density but extremely heavy.', color: 'var(--color-bev)' },
+                { id: 'inverter', x: '77%', y: '47%', title: 'Inverter', desc: 'Converts DC power from battery to AC power for the motor.', color: '#a0a5b5' },
+                { id: 'motor', x: '85%', y: '55%', title: 'Electric Motor', desc: 'Uses electromagnetic fields to create rotation. >90% efficient.', color: '#ffaa00' },
+                { id: 'wheel', x: '18%', y: '65%', title: 'Direct Drivetrain', desc: 'Transfers rotation to wheels often without complex gears.', color: '#ffffff' }
+            ],
+            
+            init() {
+                const visual = document.querySelector('#bev-diagram .diagram-visual');
+                const legend = document.getElementById('bev-legend');
+                
+                this.components.forEach((comp, index) => {
+                    const num = index + 1;
+                    
+                    // Create Marker
+                    const marker = document.createElement('div');
+                    marker.className = 'marker';
+                    marker.style.left = comp.x;
+                    marker.style.top = comp.y;
+                    marker.style.setProperty('--marker-color', comp.color);
+                    marker.innerText = num;
+                    marker.dataset.id = comp.id;
+                    visual.appendChild(marker);
+                    
+                    // Create Legend Item
+                    const li = document.createElement('li');
+                    li.className = 'legend-item';
+                    li.dataset.id = comp.id;
+                    li.style.setProperty('--marker-color', comp.color);
+                    li.innerHTML = `
+                        <div class="legend-badge">${num}</div>
+                        <div class="legend-text">
+                            <span class="legend-title">${comp.title}</span>
+                            <span class="legend-desc">${comp.desc}</span>
+                        </div>
+                    `;
+                    legend.appendChild(li);
+                    
+                    // Interaction Logic
+                    const activate = () => {
+                        document.querySelectorAll('.marker, .legend-item').forEach(el => el.classList.remove('active'));
+                        marker.classList.add('active');
+                        li.classList.add('active');
+                        // Glow SVG component
+                        document.querySelectorAll('[id^="svg-comp-"]').forEach(el => {
+                            el.style.opacity = '0.3';
+                            el.style.filter = 'none';
+                        });
+                        const targetSvg = document.getElementById(`svg-comp-${comp.id}`);
+                        if(targetSvg) {
+                            targetSvg.style.opacity = '1';
+                            targetSvg.style.filter = `drop-shadow(0 0 10px ${comp.color})`;
+                        }
+                    };
+                    
+                    const deactivate = () => {
+                        marker.classList.remove('active');
+                        li.classList.remove('active');
+                        document.querySelectorAll('[id^="svg-comp-"]').forEach(el => {
+                            el.style.opacity = '1';
+                            el.style.filter = 'none';
+                        });
+                    };
+                    
+                    marker.addEventListener('mouseenter', activate);
+                    marker.addEventListener('mouseleave', deactivate);
+                    li.addEventListener('mouseenter', activate);
+                    li.addEventListener('mouseleave', deactivate);
+                    
+                    // Touch support
+                    marker.addEventListener('touchstart', (e) => { e.preventDefault(); activate(); });
+                    li.addEventListener('touchstart', (e) => { e.preventDefault(); activate(); });
+                });
+            }
+        };
+
+        // ---------------------------------------------------------
+        // 3. Working Process Controller (Mechanism Rule)
+        // ---------------------------------------------------------
+        App.WorkingProcess = {
+            currentStage: 0,
+            autoPlayInterval: null,
+            stages: [
+                {
+                    title: "1. Energy Storage",
+                    desc: "Potential energy waits in the source. Gasoline holds chemical energy, batteries hold electrochemical energy.",
+                    activeNodes: ['node-1'],
+                    activePaths: [],
+                    color: "var(--color-bev)"
+                },
+                {
+                    title: "2. Extraction & Flow",
+                    desc: "Fuel is pumped or electrons flow from the storage to the conversion unit.",
+                    activeNodes: ['node-1', 'node-2'],
+                    activePaths: ['flow-1'],
+                    color: "#fff"
+                },
+                {
+                    title: "3. Conversion & Heat Loss",
+                    desc: "The Engine combusts fuel (massive heat loss). The Inverter/Motor creates magnetic fields (minimal loss).",
+                    activeNodes: ['node-2'],
+                    activePaths: [],
+                    showHeat: true,
+                    color: "var(--color-ice)"
+                },
+                {
+                    title: "4. Transmission to Motion",
+                    desc: "Rotational force is sent through the drivetrain to spin the wheels, completing the work.",
+                    activeNodes: ['node-3', 'node-4'],
+                    activePaths: ['flow-2', 'flow-3'],
+                    color: "var(--color-bev)"
+                }
+            ],
+            
+            init() {
+                this.btnPrev = document.getElementById('wk-prev');
+                this.btnNext = document.getElementById('wk-next');
+                this.btnAuto = document.getElementById('wk-auto');
+                
+                this.btnPrev.addEventListener('click', () => this.setStage(this.currentStage - 1));
+                this.btnNext.addEventListener('click', () => this.setStage(this.currentStage + 1));
+                this.btnAuto.addEventListener('click', () => this.toggleAutoPlay());
+                
+                this.setStage(0);
+            },
+            
+            setStage(index) {
+                if(index < 0) index = this.stages.length - 1;
+                if(index >= this.stages.length) index = 0;
+                this.currentStage = index;
+                
+                const stage = this.stages[this.currentStage];
+                
+                // Update UI Text
+                document.getElementById('wk-title').innerText = stage.title;
+                document.getElementById('wk-title').style.color = stage.color;
+                document.getElementById('wk-desc').innerText = stage.desc;
+                
+                // Update Dots
+                document.querySelectorAll('.progress-dot').forEach((dot, i) => {
+                    dot.classList.toggle('active', i === this.currentStage);
+                });
+                
+                // SVG Manipulation
+                document.querySelectorAll('.wk-node').forEach(node => node.classList.remove('active'));
+                stage.activeNodes.forEach(id => document.getElementById(id).classList.add('active'));
+                
+                document.querySelectorAll('.wk-flow').forEach(path => path.classList.remove('active'));
+                stage.activePaths.forEach(id => document.getElementById(id).classList.add('active'));
+                
+                const heatGroup = document.getElementById('heat-loss');
+                heatGroup.style.opacity = stage.showHeat ? '1' : '0';
+                
+                // Create particle burst effect for transition
+                this.createParticleBurst(stage.activeNodes[0]);
+            },
+            
+            createParticleBurst(nodeId) {
+                if(!nodeId) return;
+                const node = document.getElementById(nodeId);
+                const rect = node.getBoundingClientRect();
+                const visualRect = document.querySelector('.working-visual').getBoundingClientRect();
+                
+                // Calculate relative position
+                const x = rect.left - visualRect.left + rect.width/2;
+                const y = rect.top - visualRect.top + rect.height/2;
+                
+                const container = document.getElementById('particle-container');
+                for(let i=0; i<10; i++) {
+                    const p = document.createElement('div');
+                    p.style.position = 'absolute';
+                    p.style.left = x + 'px';
+                    p.style.top = y + 'px';
+                    p.style.width = '6px';
+                    p.style.height = '6px';
+                    p.style.background = 'white';
+                    p.style.borderRadius = '50%';
+                    p.style.boxShadow = '0 0 10px white';
+                    p.style.transition = 'all 0.8s cubic-bezier(0.1, 0.8, 0.2, 1)';
+                    
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = Math.random() * 50 + 20;
+                    
+                    container.appendChild(p);
+                    
+                    // Trigger animation
+                    requestAnimationFrame(() => {
+                        p.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px) scale(0)`;
+                        p.style.opacity = '0';
+                    });
+                    
+                    setTimeout(() => p.remove(), 800);
+                }
+            },
+            
+            toggleAutoPlay() {
+                if(this.autoPlayInterval) {
+                    clearInterval(this.autoPlayInterval);
+                    this.autoPlayInterval = null;
+                    this.btnAuto.innerHTML = 'Auto-Play ⏵';
+                    this.btnAuto.classList.remove('active');
+                } else {
+                    this.autoPlayInterval = setInterval(() => this.setStage(this.currentStage + 1), 2500);
+                    this.btnAuto.innerHTML = 'Pause ⏸';
+                    this.btnAuto.classList.add('active');
+                    this.setStage(this.currentStage + 1);
+                }
+            }
+        };
+
+        // ---------------------------------------------------------
+        // 4. Interactive Simulation (Sankey Flow Canvas)
+        // ---------------------------------------------------------
+        App.Simulation = {
+            canvas: document.getElementById('sankey-canvas'),
+            ctx: null,
+            
+            state: {
+                type: 'ice', // 'ice' or 'bev'
+                energyIn: 100, // kWh
+                condition: 1, // 0: City, 1: Mixed, 2: Hwy
+                
+                // Simulation targets
+                lossPct: 0.8,
+                motionPct: 0.2,
+                
+                // Animation values for smooth interpolation
+                animLossPct: 0.8,
+                animMotionPct: 0.2,
+                particles: []
+            },
+            
+            config: {
+                ice: { baseEff: 0.20, cityMod: -0.05, hwyMod: 0.05, color: '#ff7300' },
+                bev: { baseEff: 0.85, cityMod: 0.05, hwyMod: -0.05, color: '#00d2ff' },
+                lossColor: '#ff2a2a'
+            },
+            
+            init() {
+                this.ctx = this.canvas.getContext('2d', { alpha: false });
+                
+                // Bind Inputs
+                document.querySelectorAll('.v-sel-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.v-sel-btn').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        this.state.type = e.target.dataset.type;
+                        this.updateMath();
+                    });
+                });
+                
+                document.getElementById('sim-energy').addEventListener('input', (e) => {
+                    this.state.energyIn = parseInt(e.target.value);
+                    document.getElementById('val-energy').innerText = this.state.energyIn;
+                    this.updateMath();
+                });
+                
+                document.getElementById('sim-cond').addEventListener('input', (e) => {
+                    this.state.condition = parseInt(e.target.value);
+                    const labels = ['City (Stop/Go)', 'Mixed', 'Highway (Cruise)'];
+                    document.getElementById('val-cond').innerText = labels[this.state.condition];
+                    this.updateMath();
+                });
+                
+                this.resize();
+                this.updateMath();
+                this.animate();
+            },
+            
+            resize() {
+                const rect = this.canvas.parentElement.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                this.canvas.width = rect.width * dpr;
+                this.canvas.height = rect.height * dpr;
+                this.ctx.scale(dpr, dpr);
+                this.width = rect.width;
+                this.height = rect.height;
+            },
+            
+            updateMath() {
+                const typeData = this.config[this.state.type];
+                let eff = typeData.baseEff;
+                
+                // Apply condition modifiers
+                if(this.state.condition === 0) eff += typeData.cityMod; // City
+                if(this.state.condition === 2) eff += typeData.hwyMod; // Hwy
+                
+                this.state.motionPct = eff;
+                this.state.lossPct = 1 - eff;
+                
+                // Update DOM numbers
+                const lossVal = (this.state.energyIn * this.state.lossPct).toFixed(1);
+                const motionVal = (this.state.energyIn * this.state.motionPct).toFixed(1);
+                
+                document.getElementById('out-loss').innerText = lossVal + ' kWh';
+                document.getElementById('out-motion').innerText = motionVal + ' kWh';
+            },
+            
+            lerp(start, end, amt) {
+                return (1 - amt) * start + amt * end;
+            },
+            
+            animate() {
+                // Smooth value interpolation
+                this.state.animLossPct = this.lerp(this.state.animLossPct, this.state.lossPct, 0.05);
+                this.state.animMotionPct = this.lerp(this.state.animMotionPct, this.state.motionPct, 0.05);
+                
+                this.drawSankey();
+                requestAnimationFrame(this.animate.bind(this));
+            },
+            
+            drawSankey() {
+                const w = this.width;
+                const h = this.height;
+                const ctx = this.ctx;
+                
+                // Clear background matching panel
+                ctx.fillStyle = '#12151e';
+                ctx.fillRect(0, 0, w, h);
+                
+                const pad = 40;
+                
+                // Base scales based on Input Energy
+                const maxEnergy = 200;
+                const baseWidth = Math.max(20, (this.state.energyIn / maxEnergy) * (h * 0.4));
+                
+                const wInput = baseWidth;
+                const wLoss = baseWidth * this.state.animLossPct;
+                const wMotion = baseWidth * this.state.animMotionPct;
+                
+                const themeColor = this.config[this.state.type].color;
+                
+                // Node Positions
+                const xIn = pad;
+                const yIn = h/2;
+                
+                const xSplit = w * 0.4;
+                const ySplit = h/2;
+                
+                const xLoss = w - pad;
+                const yLoss = pad + wLoss/2;
+                
+                const xMotion = w - pad;
+                const yMotion = h - pad - wMotion/2;
+                
+                // Draw Paths using bezier curves
+                ctx.globalCompositeOperation = 'source-over';
+                
+                // Helper to draw flow path
+                const drawFlow = (x1, y1, x2, y2, width, color) => {
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1 - width/2);
+                    ctx.bezierCurveTo(x1 + (x2-x1)/2, y1 - width/2, x1 + (x2-x1)/2, y2 - width/2, x2, y2 - width/2);
+                    ctx.lineTo(x2, y2 + width/2);
+                    ctx.bezierCurveTo(x1 + (x2-x1)/2, y2 + width/2, x1 + (x2-x1)/2, y1 + width/2, x1, y1 + width/2);
+                    ctx.closePath();
+                    
+                    const grad = ctx.createLinearGradient(x1, 0, x2, 0);
+                    grad.addColorStop(0, themeColor + '88');
+                    grad.addColorStop(1, color + '88');
+                    ctx.fillStyle = grad;
+                    ctx.fill();
+                    
+                    // Edge lines
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1 - width/2);
+                    ctx.bezierCurveTo(x1 + (x2-x1)/2, y1 - width/2, x1 + (x2-x1)/2, y2 - width/2, x2, y2 - width/2);
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                };
+                
+                // Main Trunk
+                ctx.beginPath();
+                ctx.moveTo(xIn, yIn - wInput/2);
+                ctx.lineTo(xSplit, ySplit - wInput/2);
+                ctx.lineTo(xSplit, ySplit + wInput/2);
+                ctx.lineTo(xIn, yIn + wInput/2);
+                ctx.fillStyle = themeColor + '88';
+                ctx.fill();
+                
+                // Branches
+                drawFlow(xSplit, ySplit - wInput/2 + wLoss/2, xLoss, yLoss, wLoss, this.config.lossColor);
+                drawFlow(xSplit, ySplit + wInput/2 - wMotion/2, xMotion, yMotion, wMotion, themeColor);
+                
+                // Draw Flowing Particles to simulate movement
+                this.updateAndDrawParticles(xIn, yIn, xSplit, ySplit, xLoss, yLoss, xMotion, yMotion, wInput, wLoss, wMotion, themeColor);
+                
+                // Draw Labels on Canvas (Crisp)
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 16px sans-serif';
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Energy In', xIn, yIn - wInput/2 - 20);
+                
+                ctx.textAlign = 'right';
+                ctx.fillStyle = this.config.lossColor;
+                ctx.fillText('Waste Heat', xLoss, yLoss - wLoss/2 - 20);
+                
+                ctx.fillStyle = themeColor;
+                ctx.fillText('Useful Motion', xMotion, yMotion - wMotion/2 - 20);
+            },
+            
+            updateAndDrawParticles(xIn, yIn, xSplit, ySplit, xLoss, yLoss, xMotion, yMotion, wIn, wLoss, wMotion, themeColor) {
+                const ctx = this.ctx;
+                
+                // Add new particles occasionally based on energy in
+                if(Math.random() < this.state.energyIn / 400) {
+                    const isLoss = Math.random() < this.state.animLossPct;
+                    this.state.particles.push({
+                        progress: 0,
+                        speed: 0.005 + Math.random() * 0.005,
+                        offset: (Math.random() - 0.5), // Relative vertical offset
+                        isLoss: isLoss
+                    });
+                }
+                
+                ctx.globalCompositeOperation = 'screen';
+                
+                for(let i = this.state.particles.length - 1; i >= 0; i--) {
+                    let p = this.state.particles[i];
+                    p.progress += p.speed;
+                    
+                    if(p.progress >= 1) {
+                        this.state.particles.splice(i, 1);
+                        continue;
+                    }
+                    
+                    let x, y, size, color;
+                    
+                    if(p.progress < 0.4) {
+                        // Trunk phase
+                        let t = p.progress / 0.4;
+                        x = this.lerp(xIn, xSplit, t);
+                        y = yIn + p.offset * wIn;
+                        size = 3;
+                        color = themeColor;
+                    } else {
+                        // Branch phase
+                        let t = (p.progress - 0.4) / 0.6;
+                        
+                        // Bezier calculation
+                        let startX = xSplit;
+                        let endX = p.isLoss ? xLoss : xMotion;
+                        
+                        // Calculate specific start Y based on proportion to prevent snapping
+                        let startY;
+                        if(p.isLoss) {
+                            startY = ySplit - wIn/2 + wLoss/2 + p.offset * wLoss;
+                        } else {
+                            startY = ySplit + wIn/2 - wMotion/2 + p.offset * wMotion;
+                        }
+                        
+                        let endY = p.isLoss ? yLoss + p.offset * wLoss : yMotion + p.offset * wMotion;
+                        
+                        // Cubic Bezier interpolation
+                        let cx1 = startX + (endX - startX)/2;
+                        let cy1 = startY;
+                        let cx2 = startX + (endX - startX)/2;
+                        let cy2 = endY;
+                        
+                        // Bezier formula
+                        let mt = 1 - t;
+                        x = mt*mt*mt*startX + 3*mt*mt*t*cx1 + 3*mt*t*t*cx2 + t*t*t*endX;
+                        y = mt*mt*mt*startY + 3*mt*mt*t*cy1 + 3*mt*t*t*cy2 + t*t*t*endY;
+                        
+                        size = 2;
+                        color = p.isLoss ? this.config.lossColor : themeColor;
+                    }
+                    
+                    ctx.beginPath();
+                    ctx.arc(x, y, size, 0, Math.PI * 2);
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                    // Glow
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = color;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                }
+                ctx.globalCompositeOperation = 'source-over';
+            }
+        };
+
+        // Initialize App on load
+        window.addEventListener('DOMContentLoaded', () => {
+            App.init();
+        });
+
+    </script>
+</body>
+</html>

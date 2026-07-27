@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trigonometry: Line of Sight Simulation</title>
+    <style>
+        /* =========================================================
+           DESIGN SYSTEM & THEME
+           ========================================================= */
+        :root {
+            --bg-dark: #070B14;
+            --bg-panel: rgba(15, 23, 42, 0.6);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --text-main: #F8FAFC;
+            --text-muted: #94A3B8;
+            
+            /* Accent Colors */
+            --cyan: #00E5FF;
+            --blue: #4FC3F7;
+            --purple: #8E44FF;
+            --orange: #FFA726;
+            --green: #00E676;
+            --red: #FF5252;
+            
+            --font-main: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            --font-math: 'Times New Roman', Times, serif;
+            
+            --shadow-glow: 0 0 20px rgba(0, 229, 255, 0.15);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.6;
+            position: relative;
+        }
+
+        /* Background Canvas for Particles */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: -1;
+            pointer-events: none;
+            background: radial-gradient(circle at 50% 0%, #111827 0%, var(--bg-dark) 80%);
+        }
+
+        /* =========================================================
+           LAYOUT & CONTAINERS
+           ========================================================= */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 1rem;
+        }
+
+        h1 {
+            font-size: clamp(2rem, 4vw, 3rem);
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--cyan), var(--blue));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+        }
+
+        /* Glassmorphism Cards */
+        .glass-card {
+            background: var(--bg-panel);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: var(--transition);
+        }
+
+        .glass-card:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            box-shadow: var(--shadow-glow);
+        }
+
+        /* Section Layouts */
+        .theory-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .interactive-layout {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 1.5rem;
+            align-items: stretch;
+        }
+
+        /* =========================================================
+           TYPOGRAPHY & COMPONENTS
+           ========================================================= */
+        h2 {
+            font-size: 1.4rem;
+            color: var(--cyan);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        h2::before {
+            content: '';
+            display: block;
+            width: 4px;
+            height: 1.2em;
+            background: var(--cyan);
+            border-radius: 2px;
+            box-shadow: 0 0 10px var(--cyan);
+        }
+
+        p {
+            margin-bottom: 1rem;
+            color: #CBD5E1;
+        }
+
+        .highlight {
+            color: var(--orange);
+            font-weight: 600;
+        }
+
+        .fact-box {
+            border-left: 4px solid var(--purple);
+            background: linear-gradient(90deg, rgba(142, 68, 255, 0.1) 0%, transparent 100%);
+            padding: 1rem;
+            border-radius: 0 8px 8px 0;
+            margin-top: 1rem;
+            font-style: italic;
+        }
+
+        /* =========================================================
+           MATH FORMULAS (Textbook Style)
+           ========================================================= */
+        .formula-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            align-items: center;
+            padding: 1rem 0;
+        }
+
+        .math-eq {
+            font-family: var(--font-math);
+            font-size: 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .math-eq i { font-style: italic; }
+        .math-eq .func { font-style: normal; }
+        
+        .fraction {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0 0.3rem;
+            vertical-align: middle;
+            font-size: 1.2rem;
+        }
+        
+        .fraction .num {
+            border-bottom: 1.5px solid var(--text-main);
+            padding: 0 0.3rem;
+            line-height: 1.2;
+        }
+        
+        .fraction .den {
+            padding: 0 0.3rem;
+            line-height: 1.2;
+        }
+
+        .sqrt {
+            display: flex;
+            align-items: center;
+        }
+
+        .sqrt-symbol {
+            font-size: 1.8rem;
+            line-height: 1;
+            font-style: normal;
+            font-family: var(--font-main);
+            margin-right: -0.1rem;
+        }
+
+        .sqrt-content {
+            border-top: 1.5px solid var(--text-main);
+            padding: 0.1rem 0.2rem 0;
+        }
+
+        /* =========================================================
+           SIMULATION CANVAS
+           ========================================================= */
+        .canvas-container {
+            position: relative;
+            width: 100%;
+            height: 600px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: linear-gradient(180deg, #0F172A 0%, #020617 100%);
+            border: 1px solid var(--border-glass);
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .canvas-overlay-labels {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            pointer-events: none;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            background: rgba(0,0,0,0.5);
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+        .color-box {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+
+        /* =========================================================
+           CONTROLS & PARAMETERS
+           ========================================================= */
+        .controls-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .control-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .control-label {
+            font-size: 0.95rem;
+            font-weight: 500;
+            color: var(--blue);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .tooltip-icon {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            font-size: 0.7rem;
+            cursor: help;
+            position: relative;
+        }
+
+        .tooltip-icon:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1E293B;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            width: max-content;
+            max-width: 200px;
+            z-index: 100;
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        }
+
+        .control-val {
+            font-family: monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            color: var(--cyan);
+            border: 1px solid rgba(0, 229, 255, 0.2);
+            width: 65px;
+            text-align: right;
+        }
+
+        /* Custom Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 6px;
+            cursor: pointer;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 18px;
+            width: 18px;
+            border-radius: 50%;
+            background: var(--cyan);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -6px;
+            box-shadow: 0 0 10px var(--cyan);
+            transition: transform 0.1s;
+        }
+        input[type=range]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        /* Buttons */
+        .btn-group {
+            display: flex;
+            gap: 0.8rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        button {
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border-glass);
+            color: var(--text-main);
+            padding: 0.8rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+        }
+
+        button:hover {
+            background: rgba(255,255,255,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        
+        button.play-btn { background: rgba(0, 230, 118, 0.1); border-color: rgba(0, 230, 118, 0.3); color: var(--green); }
+        button.play-btn:hover { background: rgba(0, 230, 118, 0.2); box-shadow: 0 0 15px rgba(0, 230, 118, 0.3); }
+
+        button.pause-btn { background: rgba(255, 167, 38, 0.1); border-color: rgba(255, 167, 38, 0.3); color: var(--orange); }
+        button.pause-btn:hover { background: rgba(255, 167, 38, 0.2); box-shadow: 0 0 15px rgba(255, 167, 38, 0.3); }
+
+        /* =========================================================
+           LIVE CALCULATIONS
+           ========================================================= */
+        .live-calc-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .calc-box {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--border-glass);
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: background 0.3s;
+        }
+
+        .calc-box.flash {
+            background: rgba(0, 229, 255, 0.2);
+        }
+
+        .calc-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.3rem;
+        }
+
+        .calc-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            font-family: monospace;
+        }
+
+        .val-elevation { color: var(--cyan); }
+        .val-depression { color: var(--orange); }
+        .val-distance { color: var(--purple); }
+
+        .warning-box {
+            display: none;
+            background: rgba(255, 82, 82, 0.1);
+            border: 1px solid rgba(255, 82, 82, 0.3);
+            color: var(--red);
+            padding: 0.8rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            text-align: center;
+            animation: pulseWarning 2s infinite;
+        }
+
+        @keyframes pulseWarning {
+            0% { box-shadow: 0 0 0 0 rgba(255, 82, 82, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 82, 82, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 82, 82, 0); }
+        }
+
+        /* =========================================================
+           RESPONSIVENESS
+           ========================================================= */
+        @media (max-width: 1024px) {
+            .interactive-layout {
+                grid-template-columns: 1fr;
+            }
+            .canvas-container {
+                height: 500px;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 1rem; }
+            .canvas-container { height: 350px; }
+            .theory-grid { grid-template-columns: 1fr; }
+            .btn-group { flex-direction: column; }
+            .live-calc-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Background Particles -->
+    <canvas id="bg-canvas"></canvas>
+
+    <div class="container">
+        <header>
+            <h1>Trigonometry Laboratory</h1>
+            <p class="subtitle">Angles of Elevation & Depression in Real-World Applications</p>
+        </header>
+
+        <!-- Theory Section -->
+        <section class="theory-grid">
+            <div class="glass-card">
+                <h2>Concepts</h2>
+                <p><strong>Line of Sight:</strong> The imaginary straight line drawn from the eye of an observer to the object being viewed.</p>
+                <p><strong>Angle of <span style="color: var(--cyan)">Elevation</span>:</strong> The angle formed by the line of sight and the horizontal plane when the object is <span class="highlight">above</span> the horizontal level.</p>
+                <p><strong>Angle of <span style="color: var(--orange)">Depression</span>:</strong> The angle formed by the line of sight and the horizontal plane when the object is <span class="highlight">below</span> the horizontal level.</p>
+                
+                <div class="fact-box">
+                    <strong>Did you know?</strong> Surveyors used these exact trigonometric principles in 1852 to calculate the height of Mount Everest from over 100 miles away!
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <h2>Mathematical Formulas</h2>
+                <p>Using a right-angled triangle, we relate the vertical height diff (<i style="font-family:var(--font-math)">h</i>) and horizontal distance (<i style="font-family:var(--font-math)">d</i>):</p>
+                
+                <div class="formula-container">
+                    <!-- tan(theta) = h / d -->
+                    <div class="math-eq">
+                        <span class="func">tan</span>(<i>&theta;</i>) = 
+                        <div class="fraction">
+                            <span class="num"><i>h</i></span>
+                            <span class="den"><i>d</i></span>
+                        </div>
+                    </div>
+
+                    <!-- theta = arctan(h/d) -->
+                    <div class="math-eq">
+                        <i>&theta;</i> = <span class="func">arctan</span>
+                        <span style="font-size: 2rem; font-weight: 100;">(</span>
+                        <div class="fraction">
+                            <span class="num"><i>h</i></span>
+                            <span class="den"><i>d</i></span>
+                        </div>
+                        <span style="font-size: 2rem; font-weight: 100;">)</span>
+                    </div>
+
+                    <!-- L = sqrt(h^2 + d^2) -->
+                    <div class="math-eq" style="margin-top: 0.5rem;">
+                        <i>L</i> = 
+                        <div class="sqrt">
+                            <span class="sqrt-symbol">&radic;</span>
+                            <span class="sqrt-content"><i>h</i><sup>2</sup> + <i>d</i><sup>2</sup></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Interactive Simulation Section -->
+        <section class="interactive-layout">
+            <!-- Canvas Graph Area -->
+            <div class="glass-card" style="padding: 0; display: flex; flex-direction: column;">
+                <div style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-glass); display: flex; justify-content: space-between; align-items: center;">
+                    <h2>Interactive Environment</h2>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); display: flex; gap: 1rem;">
+                        <span style="display:flex; align-items:center; gap:4px;"><span style="display:inline-block; width:10px; height:10px; background:var(--blue); border-radius:50%;"></span> Observer</span>
+                        <span style="display:flex; align-items:center; gap:4px;"><span style="display:inline-block; width:10px; height:10px; background:var(--purple); border-radius:50%;"></span> Target Object</span>
+                    </div>
+                </div>
+                <div class="canvas-container" id="canvas-wrapper">
+                    <canvas id="sim-canvas"></canvas>
+                    <div class="canvas-overlay-labels">
+                        <div class="legend-item">
+                            <div class="color-box" style="background: rgba(255,255,255,0.4);"></div> Horizontal Line
+                        </div>
+                        <div class="legend-item">
+                            <div class="color-box" style="background: var(--green);"></div> Line of Sight
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls Area -->
+            <div class="glass-card controls-panel">
+                <h2>Parameters</h2>
+                
+                <!-- Observer Height -->
+                <div class="control-group">
+                    <div class="control-header">
+                        <span class="control-label">
+                            Observer Height
+                            <span class="tooltip-icon" data-tooltip="Height of the observer's eyes from the ground level (0m).">?</span>
+                        </span>
+                        <span class="control-val" id="val-obs-h">10 m</span>
+                    </div>
+                    <input type="range" id="slider-obs-h" min="0" max="100" value="10" step="1">
+                </div>
+
+                <!-- Object Distance -->
+                <div class="control-group">
+                    <div class="control-header">
+                        <span class="control-label">
+                            Horizontal Distance (<i>d</i>)
+                            <span class="tooltip-icon" data-tooltip="Horizontal ground distance between the observer and the object.">?</span>
+                        </span>
+                        <span class="control-val" id="val-obj-d">50 m</span>
+                    </div>
+                    <input type="range" id="slider-obj-d" min="10" max="150" value="50" step="1">
+                </div>
+
+                <!-- Object Height -->
+                <div class="control-group">
+                    <div class="control-header">
+                        <span class="control-label">
+                            Object Altitude
+                            <span class="tooltip-icon" data-tooltip="Vertical height of the target object relative to the ground.">?</span>
+                        </span>
+                        <span class="control-val" id="val-obj-h">40 m</span>
+                    </div>
+                    <input type="range" id="slider-obj-h" min="0" max="120" value="40" step="1">
+                </div>
+
+                <div class="btn-group">
+                    <button id="btn-play" class="play-btn">▶ Play</button>
+                    <button id="btn-pause" class="pause-btn" style="display:none;">⏸ Pause</button>
+                    <button id="btn-reset">⏹ Reset</button>
+                    <button id="btn-random">🎲 Random</button>
+                </div>
+
+                <div class="warning-box" id="warning-msg">
+                    Target is exactly at eye level. Angle is 0°.
+                </div>
+
+                <!-- Live Calcs -->
+                <div style="margin-top: 1rem;">
+                    <h3 style="font-size: 1rem; color: var(--text-muted); margin-bottom: 0.5rem; text-align: center;">Live Calculations</h3>
+                    <div class="live-calc-grid">
+                        <div class="calc-box" id="calc-box-angle">
+                            <div class="calc-label" id="angle-label">Elevation Angle</div>
+                            <div class="calc-value val-elevation" id="calc-angle">30.96°</div>
+                        </div>
+                        <div class="calc-box" id="calc-box-dist">
+                            <div class="calc-label">Line of Sight (L)</div>
+                            <div class="calc-value val-distance" id="calc-dist">58.31m</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+    </div>
+
+    <script>
+        /**
+         * =========================================================
+         * BACKGROUND PARTICLES ENGINE
+         * =========================================================
+         */
+        const bgCanvas = document.getElementById('bg-canvas');
+        const bgCtx = bgCanvas.getContext('2d');
+        let particles = [];
+
+        function resizeBgCanvas() {
+            bgCanvas.width = window.innerWidth;
+            bgCanvas.height = window.innerHeight;
+        }
+
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+            reset() {
+                this.x = Math.random() * bgCanvas.width;
+                this.y = Math.random() * bgCanvas.height;
+                this.size = Math.random() * 2 + 0.5;
+                this.speedX = (Math.random() - 0.5) * 0.5;
+                this.speedY = (Math.random() - 0.5) * 0.5;
+                this.opacity = Math.random() * 0.5 + 0.1;
+            }
+            update() {
+                this.x += this.speedX;
+                this.y += this.speedY;
+                if (this.x < 0 || this.x > bgCanvas.width || this.y < 0 || this.y > bgCanvas.height) {
+                    this.reset();
+                }
+            }
+            draw() {
+                bgCtx.beginPath();
+                bgCtx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                bgCtx.fillStyle = `rgba(0, 229, 255, ${this.opacity})`;
+                bgCtx.fill();
+            }
+        }
+
+        function initParticles() {
+            resizeBgCanvas();
+            particles = [];
+            for (let i = 0; i < 100; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function animateParticles() {
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            particles.forEach(p => {
+                p.update();
+                p.draw();
+            });
+            requestAnimationFrame(animateParticles);
+        }
+
+        window.addEventListener('resize', resizeBgCanvas);
+        initParticles();
+        animateParticles();
+
+
+        /**
+         * =========================================================
+         * SIMULATION ENGINE
+         * =========================================================
+         */
+        const canvas = document.getElementById('sim-canvas');
+        const ctx = canvas.getContext('2d');
+        const wrapper = document.getElementById('canvas-wrapper');
+
+        // DOM Elements - Inputs
+        const slObsH = document.getElementById('slider-obs-h');
+        const slObjD = document.getElementById('slider-obj-d');
+        const slObjH = document.getElementById('slider-obj-h');
+        
+        // DOM Elements - Values
+        const valObsH = document.getElementById('val-obs-h');
+        const valObjD = document.getElementById('val-obj-d');
+        const valObjH = document.getElementById('val-obj-h');
+        
+        // DOM Elements - Calcs & UI
+        const calcAngle = document.getElementById('calc-angle');
+        const angleLabel = document.getElementById('angle-label');
+        const calcDist = document.getElementById('calc-dist');
+        const calcBoxAngle = document.getElementById('calc-box-angle');
+        const calcBoxDist = document.getElementById('calc-box-dist');
+        const warningMsg = document.getElementById('warning-msg');
+
+        // State Variables
+        let state = {
+            obsH: 10,
+            objD: 50,
+            objH: 40,
+            isPlaying: false,
+            time: 0,
+            prevAngle: null,
+            prevDist: null
+        };
+
+        // Graph Bounds (Meters)
+        const graphConfig = {
+            xMax: 160,
+            yMax: 130,
+            paddingL: 60,
+            paddingR: 40,
+            paddingT: 40,
+            paddingB: 50
+        };
+
+        function resizeSimulation() {
+            // High DPI Canvas setup
+            const rect = wrapper.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${rect.width}px`;
+            canvas.style.height = `${rect.height}px`;
+            
+            drawSimulation();
+        }
+
+        window.addEventListener('resize', resizeSimulation);
+
+        // Map real-world coordinates to canvas pixels
+        function mapX(val, width) {
+            const plotWidth = width - graphConfig.paddingL - graphConfig.paddingR;
+            return graphConfig.paddingL + (val / graphConfig.xMax) * plotWidth;
+        }
+
+        function mapY(val, height) {
+            const plotHeight = height - graphConfig.paddingT - graphConfig.paddingB;
+            // Y inverted for canvas (0 at bottom)
+            return height - graphConfig.paddingB - (val / graphConfig.yMax) * plotHeight;
+        }
+
+        function flashBox(element) {
+            element.classList.remove('flash');
+            void element.offsetWidth; // trigger reflow
+            element.classList.add('flash');
+        }
+
+        function updateCalculations() {
+            const hDiff = state.objH - state.obsH;
+            const dist = state.objD;
+            
+            // L = sqrt(h^2 + d^2)
+            const lineOfSight = Math.sqrt(hDiff*hDiff + dist*dist);
+            
+            // Angle = atan(h/d) in degrees
+            let angleRad = Math.atan(Math.abs(hDiff) / dist);
+            let angleDeg = angleRad * (180 / Math.PI);
+
+            // Update UI
+            if (hDiff > 0) {
+                angleLabel.textContent = "Elevation Angle";
+                calcAngle.className = "calc-value val-elevation";
+                warningMsg.style.display = "none";
+            } else if (hDiff < 0) {
+                angleLabel.textContent = "Depression Angle";
+                calcAngle.className = "calc-value val-depression";
+                warningMsg.style.display = "none";
+            } else {
+                angleLabel.textContent = "Zero Angle";
+                calcAngle.className = "calc-value";
+                calcAngle.style.color = "#94A3B8";
+                warningMsg.style.display = "block";
+            }
+
+            const strAngle = angleDeg.toFixed(2) + "°";
+            const strDist = lineOfSight.toFixed(2) + " m";
+
+            if (state.prevAngle !== strAngle) {
+                calcAngle.textContent = strAngle;
+                flashBox(calcBoxAngle);
+                state.prevAngle = strAngle;
+            }
+
+            if (state.prevDist !== strDist) {
+                calcDist.textContent = strDist;
+                flashBox(calcBoxDist);
+                state.prevDist = strDist;
+            }
+        }
+
+        function drawGrid(w, h) {
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+            ctx.lineWidth = 1;
+            ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+            ctx.font = "12px 'Segoe UI', sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            // Vertical Grid lines (Distance)
+            for (let x = 0; x <= graphConfig.xMax; x += 20) {
+                const px = mapX(x, w);
+                ctx.beginPath();
+                ctx.moveTo(px, graphConfig.paddingT);
+                ctx.lineTo(px, h - graphConfig.paddingB);
+                ctx.stroke();
+                
+                // Axis Label X
+                ctx.fillText(x, px, h - graphConfig.paddingB + 20);
+            }
+            ctx.fillText("Distance (m)", w/2, h - 10);
+
+            // Horizontal Grid lines (Altitude)
+            ctx.textAlign = "right";
+            for (let y = 0; y <= graphConfig.yMax; y += 20) {
+                const py = mapY(y, h);
+                ctx.beginPath();
+                ctx.moveTo(graphConfig.paddingL, py);
+                ctx.lineTo(w - graphConfig.paddingR, py);
+                ctx.stroke();
+
+                // Axis Label Y
+                ctx.fillText(y, graphConfig.paddingL - 10, py);
+            }
+            
+            ctx.save();
+            ctx.translate(20, h/2);
+            ctx.rotate(-Math.PI/2);
+            ctx.textAlign = "center";
+            ctx.fillText("Altitude (m)", 0, 0);
+            ctx.restore();
+
+            // Draw Base Axes
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(graphConfig.paddingL, graphConfig.paddingT);
+            ctx.lineTo(graphConfig.paddingL, h - graphConfig.paddingB);
+            ctx.lineTo(w - graphConfig.paddingR, h - graphConfig.paddingB);
+            ctx.stroke();
+        }
+
+        function drawSimulation() {
+            const w = canvas.width / (window.devicePixelRatio || 1);
+            const h = canvas.height / (window.devicePixelRatio || 1);
+
+            ctx.clearRect(0, 0, w, h);
+            
+            drawGrid(w, h);
+
+            // Calculate pixel coords
+            const obsX = mapX(0, w);
+            const obsY = mapY(state.obsH, h);
+            const objX = mapX(state.objD, w);
+            const objY = mapY(state.objH, h);
+            const groundY = mapY(0, h);
+
+            // 1. Draw Observer Tower
+            const twW = 14;
+            ctx.fillStyle = "rgba(79, 195, 247, 0.2)";
+            ctx.strokeStyle = "#4FC3F7";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.rect(obsX - twW/2, obsY, twW, groundY - obsY);
+            ctx.fill();
+            ctx.stroke();
+
+            // Observer Eye (Dot)
+            ctx.beginPath();
+            ctx.arc(obsX, obsY, 5, 0, Math.PI*2);
+            ctx.fillStyle = "#fff";
+            ctx.fill();
+            ctx.shadowColor = "#4FC3F7";
+            ctx.shadowBlur = 10;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // 2. Draw Target Object
+            ctx.beginPath();
+            // Object stick to ground
+            ctx.moveTo(objX, groundY);
+            ctx.lineTo(objX, objY);
+            ctx.strokeStyle = "rgba(142, 68, 255, 0.3)";
+            ctx.setLineDash([5, 5]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Object Orb
+            ctx.beginPath();
+            ctx.arc(objX, objY, 8, 0, Math.PI*2);
+            ctx.fillStyle = "#8E44FF";
+            ctx.shadowColor = "#8E44FF";
+            ctx.shadowBlur = 15;
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.beginPath();
+            ctx.arc(objX, objY, 3, 0, Math.PI*2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // 3. Draw Horizontal Reference Line
+            ctx.beginPath();
+            ctx.moveTo(obsX, obsY);
+            ctx.lineTo(w - graphConfig.paddingR, obsY);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([8, 6]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 4. Draw Line of Sight
+            ctx.beginPath();
+            ctx.moveTo(obsX, obsY);
+            ctx.lineTo(objX, objY);
+            ctx.strokeStyle = "#00E676";
+            ctx.lineWidth = 2.5;
+            ctx.shadowColor = "#00E676";
+            ctx.shadowBlur = 10;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // 5. Draw Angle Arc
+            const hDiff = state.objH - state.obsH;
+            const dist = state.objD;
+            let angleRad = Math.atan2(hDiff, dist); // mathematically relative to origin
+
+            const radius = 40;
+            ctx.beginPath();
+            
+            // In canvas, y goes DOWN, so visually elevation goes UP (-Y direction)
+            // Mathematical angles need to be mapped to Canvas angles
+            if (hDiff > 0) {
+                // Elevation
+                ctx.arc(obsX, obsY, radius, -angleRad, 0, false);
+                ctx.strokeStyle = "#00E5FF"; // Cyan
+                ctx.fillStyle = "rgba(0, 229, 255, 0.2)";
+            } else if (hDiff < 0) {
+                // Depression
+                // Canvas angle for horizontal is 0, down is positive
+                ctx.arc(obsX, obsY, radius, 0, -angleRad, false);
+                ctx.strokeStyle = "#FFA726"; // Orange
+                ctx.fillStyle = "rgba(255, 167, 38, 0.2)";
+            }
+
+            if (hDiff !== 0) {
+                ctx.lineTo(obsX, obsY);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Label Angle
+                ctx.fillStyle = "#fff";
+                ctx.font = "bold 13px 'Segoe UI'";
+                ctx.textAlign = "left";
+                ctx.textBaseline = "middle";
+                const lblAngle = Math.abs(angleRad * 180 / Math.PI).toFixed(1) + "°";
+                
+                // Position label bisecting the angle
+                const bisect = hDiff > 0 ? -angleRad / 2 : -angleRad / 2;
+                const lx = obsX + (radius + 15) * Math.cos(bisect);
+                const ly = obsY + (radius + 15) * Math.sin(bisect);
+                ctx.fillText(lblAngle, lx, ly);
+            }
+        }
+
+        function updateFromState() {
+            slObsH.value = state.obsH;
+            slObjD.value = state.objD;
+            slObjH.value = state.objH;
+            
+            valObsH.textContent = state.obsH + " m";
+            valObjD.textContent = state.objD + " m";
+            valObjH.textContent = state.objH + " m";
+
+            updateCalculations();
+            drawSimulation();
+        }
+
+        // Event Listeners for Inputs
+        slObsH.addEventListener('input', (e) => { state.obsH = parseFloat(e.target.value); updateFromState(); });
+        slObjD.addEventListener('input', (e) => { state.objD = parseFloat(e.target.value); updateFromState(); });
+        slObjH.addEventListener('input', (e) => { state.objH = parseFloat(e.target.value); updateFromState(); });
+
+        // Animation Loop
+        let animFrame;
+        const btnPlay = document.getElementById('btn-play');
+        const btnPause = document.getElementById('btn-pause');
+
+        function animateSimulation(timestamp) {
+            if (!state.isPlaying) return;
+            
+            state.time += 0.02;
+            
+            // Oscillate object height and distance smoothly
+            const baseH = 60;
+            const varH = 50;
+            state.objH = Math.round(baseH + Math.sin(state.time) * varH);
+            
+            const baseD = 80;
+            const varD = 60;
+            state.objD = Math.round(baseD + Math.cos(state.time * 0.7) * varD);
+            
+            // Constrain
+            state.objH = Math.max(0, Math.min(120, state.objH));
+            state.objD = Math.max(10, Math.min(150, state.objD));
+            
+            updateFromState();
+            
+            animFrame = requestAnimationFrame(animateSimulation);
+        }
+
+        btnPlay.addEventListener('click', () => {
+            state.isPlaying = true;
+            btnPlay.style.display = 'none';
+            btnPause.style.display = 'flex';
+            animFrame = requestAnimationFrame(animateSimulation);
+        });
+
+        btnPause.addEventListener('click', () => {
+            state.isPlaying = false;
+            btnPause.style.display = 'none';
+            btnPlay.style.display = 'flex';
+            cancelAnimationFrame(animFrame);
+        });
+
+        document.getElementById('btn-reset').addEventListener('click', () => {
+            state.isPlaying = false;
+            btnPause.style.display = 'none';
+            btnPlay.style.display = 'flex';
+            cancelAnimationFrame(animFrame);
+            
+            state.obsH = 10;
+            state.objD = 50;
+            state.objH = 40;
+            state.time = 0;
+            updateFromState();
+        });
+
+        document.getElementById('btn-random').addEventListener('click', () => {
+            state.obsH = Math.floor(Math.random() * 80);
+            state.objD = Math.floor(Math.random() * 120) + 20;
+            state.objH = Math.floor(Math.random() * 100);
+            updateFromState();
+        });
+
+        // Initial Boot
+        setTimeout(() => {
+            resizeSimulation();
+            updateFromState();
+        }, 100);
+
+    </script>
+</body>
+</html>

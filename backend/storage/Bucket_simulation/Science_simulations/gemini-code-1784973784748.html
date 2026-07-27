@@ -1,0 +1,1477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Plane Mirror | Interactive Physics Simulation</title>
+    <style>
+        /* ==========================================================================
+           1. CSS VARIABLES & RESET
+           ========================================================================== */
+        :root {
+            --bg-color: #030712;
+            --surface: rgba(17, 24, 39, 0.6);
+            --surface-hover: rgba(31, 41, 55, 0.8);
+            --border: rgba(255, 255, 255, 0.1);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            
+            --accent-cyan: #06b6d4;
+            --accent-cyan-glow: rgba(6, 182, 212, 0.5);
+            --accent-magenta: #d946ef;
+            --accent-magenta-glow: rgba(217, 70, 239, 0.5);
+            --accent-yellow: #f59e0b;
+            --accent-green: #10b981;
+            
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            
+            --glass-blur: blur(16px);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-sans);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(6, 182, 212, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(217, 70, 239, 0.08) 0%, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Fluid Typography */
+        h1 { font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+        h2 { font-size: clamp(2rem, 3.5vw, 3rem); font-weight: 700; margin-bottom: 1rem; }
+        h3 { font-size: clamp(1.25rem, 2vw, 1.75rem); font-weight: 600; margin-bottom: 0.75rem; }
+        p { font-size: clamp(0.95rem, 1vw + 0.5rem, 1.125rem); color: var(--text-muted); }
+
+        /* ==========================================================================
+           2. UTILITIES & LAYOUT
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(20px, 4vw, 60px) clamp(16px, 4vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 100px);
+        }
+
+        .glass-panel {
+            background: var(--surface);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--glass-shadow);
+            padding: clamp(20px, 3vw, 40px);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: clamp(20px, 3vw, 40px);
+            align-items: center;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .highlight-text {
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .gradient-text {
+            background: linear-gradient(to right, var(--accent-cyan), var(--accent-magenta));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        /* ==========================================================================
+           3. HERO SECTION
+           ========================================================================== */
+        header {
+            text-align: center;
+            padding: clamp(40px, 8vw, 80px) 0 20px;
+            position: relative;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 6px 16px;
+            background: rgba(6, 182, 212, 0.1);
+            border: 1px solid var(--accent-cyan-glow);
+            color: var(--accent-cyan);
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* ==========================================================================
+           4. COMPONENTS (SVG & LEGEND)
+           ========================================================================== */
+        .components-layout {
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        @media (min-width: 1024px) {
+            .components-layout {
+                flex-direction: row;
+                align-items: flex-start;
+            }
+        }
+
+        .svg-container {
+            flex: 1.5;
+            position: relative;
+            min-height: 300px;
+            width: 100%;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .svg-container svg {
+            width: 100%;
+            height: 100%;
+            max-height: 500px;
+            filter: drop-shadow(0 0 20px rgba(6, 182, 212, 0.2));
+        }
+
+        /* SVG Internal Styles */
+        .mirror-glass { fill: url(#glassGradient); }
+        .mirror-silver { fill: url(#silverGradient); }
+        .mirror-back { fill: #1f2937; }
+        .ray-incident { stroke: var(--accent-cyan); stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 8px var(--accent-cyan)); }
+        .ray-reflected { stroke: var(--accent-magenta); stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 8px var(--accent-magenta)); }
+        .normal-line { stroke: rgba(255,255,255,0.5); stroke-width: 2; stroke-dasharray: 6 6; }
+
+        /* Marker Styles on SVG */
+        .marker {
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .marker circle {
+            fill: rgba(17, 24, 39, 0.9);
+            stroke: var(--text-main);
+            stroke-width: 2;
+            transition: var(--transition-smooth);
+        }
+        .marker text {
+            fill: var(--text-main);
+            font-family: var(--font-sans);
+            font-weight: bold;
+            font-size: 14px;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+        .marker:hover circle, .marker.active circle {
+            fill: var(--text-main);
+            stroke: var(--accent-cyan);
+            box-shadow: 0 0 15px var(--accent-cyan);
+        }
+        .marker:hover text, .marker.active text {
+            fill: var(--bg-color);
+        }
+
+        .legend-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(6, 182, 212, 0.1);
+            border-color: var(--accent-cyan-glow);
+            transform: translateX(5px);
+        }
+
+        .legend-number {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            font-weight: 700;
+            color: var(--text-main);
+            transition: var(--transition-smooth);
+        }
+
+        .legend-item:hover .legend-number, .legend-item.active .legend-number {
+            background: var(--accent-cyan);
+            color: var(--bg-color);
+            box-shadow: 0 0 15px var(--accent-cyan-glow);
+        }
+
+        .legend-text {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .legend-title {
+            font-weight: 600;
+            color: var(--text-main);
+            font-size: 1rem;
+        }
+
+        .legend-desc {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* ==========================================================================
+           5. WORKING MECHANISM (CANVAS & CONTROLS)
+           ========================================================================== */
+        .mechanism-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .canvas-wrapper {
+            width: 100%;
+            height: clamp(300px, 50vh, 500px);
+            background: radial-gradient(circle at center, rgba(31, 41, 55, 0.8) 0%, #030712 100%);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            touch-action: none; /* Prevent scrolling when interacting with canvas */
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            background: rgba(0,0,0,0.3);
+            padding: 16px 24px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border);
+        }
+
+        .stage-info {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .stage-badge {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--accent-yellow);
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stage-title {
+            font-size: 1.125rem;
+            color: var(--text-main);
+            font-weight: 600;
+        }
+
+        .stage-desc {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+        }
+
+        button {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            color: var(--text-main);
+            padding: 10px 20px;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.2);
+            transform: translateY(-2px);
+        }
+
+        button.active-play {
+            background: rgba(16, 185, 129, 0.1);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            width: 100%;
+            margin-top: 8px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition-smooth);
+        }
+        .dot.active {
+            background: var(--accent-yellow);
+            box-shadow: 0 0 10px var(--accent-yellow);
+            transform: scale(1.3);
+        }
+
+        /* ==========================================================================
+           6. INTERACTIVE SIMULATION
+           ========================================================================== */
+        .sim-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        
+        .sim-stats {
+            display: flex;
+            gap: 24px;
+            background: rgba(0,0,0,0.5);
+            padding: 12px 24px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
+
+        .stat-box {
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .val-i { color: var(--accent-cyan); }
+        .val-r { color: var(--accent-magenta); }
+
+        .hint-overlay {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(8px);
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            pointer-events: none;
+            opacity: 0.8;
+            border: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        /* ==========================================================================
+           7. CARDS & EXTRAS
+           ========================================================================== */
+        .feature-card {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            transition: var(--transition-smooth);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .feature-card:hover {
+            background: rgba(255,255,255,0.05);
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.2);
+        }
+
+        .icon-box {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 16px;
+            font-size: 24px;
+        }
+
+        .card-cyan { border-top: 2px solid var(--accent-cyan); }
+        .card-cyan .icon-box { color: var(--accent-cyan); background: rgba(6, 182, 212, 0.1); }
+        
+        .card-magenta { border-top: 2px solid var(--accent-magenta); }
+        .card-magenta .icon-box { color: var(--accent-magenta); background: rgba(217, 70, 239, 0.1); }
+        
+        .card-yellow { border-top: 2px solid var(--accent-yellow); }
+        .card-yellow .icon-box { color: var(--accent-yellow); background: rgba(245, 158, 11, 0.1); }
+
+        .mistake-card {
+            background: rgba(239, 68, 68, 0.05);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-left: 4px solid #ef4444;
+            padding: 20px;
+            border-radius: var(--radius-sm);
+            margin-bottom: 16px;
+        }
+
+        .mistake-card h4 {
+            color: #fca5a5;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* SVG lateral inversion visualization */
+        .lateral-svg {
+            width: 100%;
+            height: 120px;
+            margin-bottom: 16px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-sm);
+        }
+
+        /* ==========================================================================
+           8. RESPONSIVE DESIGN TWEAKS
+           ========================================================================== */
+        @media (max-width: 768px) {
+            .grid-2 { grid-template-columns: 1fr; }
+            .sim-stats { width: 100%; justify-content: space-around; }
+            .btn-group { width: 100%; justify-content: space-between; }
+            .controls { flex-direction: column; align-items: stretch; }
+            
+            /* Reduce blur on mobile for performance */
+            .glass-panel {
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <!-- HEADER -->
+    <header>
+        <div class="badge">Optical Physics</div>
+        <h1>The <span class="gradient-text">Plane Mirror</span></h1>
+        <p style="margin-top: 16px; max-width: 600px; margin-inline: auto;">
+            Explore the science of reflection. Discover how light interacts with flat, polished surfaces to create the images we see every day.
+        </p>
+    </header>
+
+    <!-- COMPONENTS SECTION -->
+    <section class="glass-panel" id="components">
+        <h2>Anatomy of a Reflection</h2>
+        <p style="margin-bottom: 32px;">A plane mirror isn't just a piece of glass. It is a precisely engineered optical component. Hover over the markers to understand its structure.</p>
+        
+        <div class="components-layout">
+            <!-- 3D SVG Illustration -->
+            <div class="svg-container">
+                <svg viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                        <!-- Gradients for realistic material look -->
+                        <linearGradient id="glassGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="rgba(255,255,255,0.4)" />
+                            <stop offset="50%" stop-color="rgba(150,200,255,0.1)" />
+                            <stop offset="100%" stop-color="rgba(255,255,255,0.3)" />
+                        </linearGradient>
+                        <linearGradient id="silverGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#e2e8f0" />
+                            <stop offset="50%" stop-color="#94a3b8" />
+                            <stop offset="100%" stop-color="#475569" />
+                        </linearGradient>
+                        
+                        <!-- Filter for glow -->
+                        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                            <feGaussianBlur stdDeviation="5" result="blur" />
+                            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                        </filter>
+                    </defs>
+
+                    <!-- Isometric Grid/Base (Optional, for depth) -->
+                    <!-- Drawing the Mirror (Isometric projection approximation) -->
+                    
+                    <g transform="translate(100, 150) rotate(-15) skewX(20)">
+                        <!-- 3. Protective Backing -->
+                        <rect x="0" y="0" width="300" height="150" class="mirror-back" rx="4" />
+                        
+                        <!-- 2. Silver Coating -->
+                        <rect x="-2" y="-4" width="300" height="150" class="mirror-silver" rx="4" />
+                        
+                        <!-- 1. Glass Front -->
+                        <rect x="-6" y="-12" width="300" height="150" class="mirror-glass" stroke="rgba(255,255,255,0.5)" stroke-width="2" rx="4" />
+                        
+                        <!-- Incident Ray (hitting point 150, 75 on the glass) -->
+                        <line x1="-150" y1="150" x2="144" y2="63" class="ray-incident" marker-end="url(#arrow-cyan)" />
+                        
+                        <!-- Normal Line -->
+                        <line x1="144" y1="63" x2="144" y2="-100" class="normal-line" />
+                        
+                        <!-- Reflected Ray -->
+                        <line x1="144" y1="63" x2="350" y2="150" class="ray-reflected" marker-end="url(#arrow-magenta)" />
+                    </g>
+
+                    <!-- Arrows for rays -->
+                    <defs>
+                        <marker id="arrow-cyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-cyan)" />
+                        </marker>
+                        <marker id="arrow-magenta" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                            <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--accent-magenta)" />
+                        </marker>
+                    </defs>
+
+                    <!-- Interactive Markers (Positioned over the illustration) -->
+                    <g class="marker" data-target="m1" transform="translate(300, 180)">
+                        <circle cx="0" cy="0" r="14" />
+                        <text x="0" y="1">1</text>
+                    </g>
+                    <g class="marker" data-target="m2" transform="translate(315, 195)">
+                        <circle cx="0" cy="0" r="14" />
+                        <text x="0" y="1">2</text>
+                    </g>
+                    <g class="marker" data-target="m3" transform="translate(325, 210)">
+                        <circle cx="0" cy="0" r="14" />
+                        <text x="0" y="1">3</text>
+                    </g>
+                    <g class="marker" data-target="m4" transform="translate(190, 150)">
+                        <circle cx="0" cy="0" r="14" />
+                        <text x="0" y="1">4</text>
+                    </g>
+                    <g class="marker" data-target="m5" transform="translate(420, 150)">
+                        <circle cx="0" cy="0" r="14" />
+                        <text x="0" y="1">5</text>
+                    </g>
+                </svg>
+            </div>
+
+            <!-- Legend List -->
+            <div class="legend-container" id="components-legend">
+                <div class="legend-item" data-marker="m1">
+                    <div class="legend-number">1</div>
+                    <div class="legend-text">
+                        <span class="legend-title">Glass Sheet</span>
+                        <span class="legend-desc">Transparent front layer protecting the reflecting surface.</span>
+                    </div>
+                </div>
+                <div class="legend-item" data-marker="m2">
+                    <div class="legend-number">2</div>
+                    <div class="legend-text">
+                        <span class="legend-title">Silver Coating</span>
+                        <span class="legend-desc">The actual reflecting surface (usually silver or aluminum) deposited on the back of the glass.</span>
+                    </div>
+                </div>
+                <div class="legend-item" data-marker="m3">
+                    <div class="legend-number">3</div>
+                    <div class="legend-text">
+                        <span class="legend-title">Protective Paint</span>
+                        <span class="legend-desc">Opaque backing that prevents scratches and oxidation of the silver layer.</span>
+                    </div>
+                </div>
+                <div class="legend-item" data-marker="m4">
+                    <div class="legend-number">4</div>
+                    <div class="legend-text">
+                        <span class="legend-title">Incident Ray</span>
+                        <span class="legend-desc">The incoming ray of light striking the mirror surface.</span>
+                    </div>
+                </div>
+                <div class="legend-item" data-marker="m5">
+                    <div class="legend-number">5</div>
+                    <div class="legend-text">
+                        <span class="legend-title">Reflected Ray</span>
+                        <span class="legend-desc">The ray of light bouncing off the mirror into the observer's eye.</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- WORKING MECHANISM SECTION -->
+    <section class="glass-panel">
+        <h2>How Image Formation Works</h2>
+        <p style="margin-bottom: 24px;">Images in a plane mirror are formed by the brain tracing reflected light rays backward. Watch the linear sequence below.</p>
+        
+        <div class="mechanism-container">
+            <div class="canvas-wrapper">
+                <canvas id="workingCanvas"></canvas>
+            </div>
+            
+            <div class="controls">
+                <div class="stage-info">
+                    <div class="stage-badge" id="wk-badge">Stage 1 of 4</div>
+                    <div class="stage-title" id="wk-title">Light Emission</div>
+                    <div class="stage-desc" id="wk-desc">Light rays travel from the object towards the plane mirror surface.</div>
+                </div>
+                
+                <div class="btn-group">
+                    <button id="wk-prev">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+                        Prev
+                    </button>
+                    <button id="wk-auto">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        Auto-Play
+                    </button>
+                    <button id="wk-next">
+                        Next
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+                    </button>
+                </div>
+                
+                <div class="progress-dots" id="wk-dots">
+                    <div class="dot active"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION SECTION -->
+    <section class="glass-panel">
+        <div class="sim-header">
+            <div>
+                <h2>Interactive Reflection Lab</h2>
+                <p>Drag the light source to change the angle of incidence. Observe the Law of Reflection: <strong>∠i = ∠r</strong></p>
+            </div>
+            <div class="sim-stats">
+                <div class="stat-box">
+                    <span class="stat-label">Angle of Incidence (i)</span>
+                    <span class="stat-value val-i" id="sim-angle-i">45.0°</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">Angle of Reflection (r)</span>
+                    <span class="stat-value val-r" id="sim-angle-r">45.0°</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="canvas-wrapper" style="height: clamp(400px, 60vh, 600px); cursor: crosshair;">
+            <div class="hint-overlay">Drag the laser source or tap anywhere</div>
+            <canvas id="simCanvas"></canvas>
+        </div>
+    </section>
+
+    <!-- CHARACTERISTICS & FACTS -->
+    <div class="grid-2">
+        <section class="glass-panel">
+            <h3>Characteristics of the Image</h3>
+            <div class="grid-2" style="grid-template-columns: 1fr; gap: 16px; margin-top: 20px;">
+                
+                <div class="feature-card card-cyan">
+                    <div class="icon-box">↔️</div>
+                    <h4>Lateral Inversion</h4>
+                    <p>The image is flipped left-to-right. This is why AMBULANCE is written in reverse on the front of vehicles.</p>
+                    <svg class="lateral-svg" viewBox="0 0 300 100">
+                        <line x1="150" y1="10" x2="150" y2="90" stroke="rgba(255,255,255,0.5)" stroke-dasharray="4 4"/>
+                        <text x="120" y="65" fill="#06b6d4" font-size="48" font-family="monospace" font-weight="bold" text-anchor="end">R</text>
+                        <text x="180" y="65" fill="#d946ef" font-size="48" font-family="monospace" font-weight="bold" text-anchor="start" transform="scale(-1, 1) translate(-360, 0)">R</text>
+                    </svg>
+                </div>
+
+                <div class="feature-card card-magenta">
+                    <div class="icon-box">📏</div>
+                    <h4>Same Distance & Size</h4>
+                    <p>The object distance ($d_o$) equals the image distance ($d_i$). The image is exactly the same size as the object (magnification = 1).</p>
+                </div>
+                
+                <div class="feature-card card-yellow">
+                    <div class="icon-box">👻</div>
+                    <h4>Virtual & Erect</h4>
+                    <p>The image cannot be projected onto a screen because light rays don't actually meet there. It is upright (erect), not upside down.</p>
+                </div>
+
+            </div>
+        </section>
+
+        <section style="display: flex; flex-direction: column; gap: 24px;">
+            <div class="glass-panel">
+                <h3>Common Misconceptions</h3>
+                
+                <div class="mistake-card">
+                    <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> The image is ON the mirror surface.</h4>
+                    <p style="color: #f87171; font-size: 0.95rem;"><strong>Correction:</strong> The image is formed <em>behind</em> the mirror. If you stand 2 meters in front, your image appears to be 2 meters behind the glass (total distance 4m).</p>
+                </div>
+                
+                <div class="mistake-card">
+                    <h4><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg> Mirrors reverse top and bottom.</h4>
+                    <p style="color: #f87171; font-size: 0.95rem;"><strong>Correction:</strong> Mirrors reverse front-to-back along the z-axis (depth). When you point North at a mirror, your reflection points South. Up remains Up.</p>
+                </div>
+            </div>
+
+            <div class="glass-panel">
+                <h3>Real-World Applications</h3>
+                <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 12px; margin-top: 16px;">
+                    <li style="display: flex; gap: 12px; align-items: flex-start;">
+                        <span style="color: var(--accent-cyan);">➔</span>
+                        <span><strong>Periscopes:</strong> Submarines use two plane mirrors angled at 45° to see above water level.</span>
+                    </li>
+                    <li style="display: flex; gap: 12px; align-items: flex-start;">
+                        <span style="color: var(--accent-magenta);">➔</span>
+                        <span><strong>Kaleidoscopes:</strong> Multiple mirrors angled towards each other create infinite symmetrical patterns.</span>
+                    </li>
+                    <li style="display: flex; gap: 12px; align-items: flex-start;">
+                        <span style="color: var(--accent-yellow);">➔</span>
+                        <span><strong>Blind Corners:</strong> Sometimes used to see around tight hallway corners, though convex mirrors are preferred for a wider field of view.</span>
+                    </li>
+                </ul>
+            </div>
+        </section>
+    </div>
+
+</div>
+
+<script>
+    /**
+     * UTILITIES & GLOBAL SETUP
+     */
+    const getDPR = () => window.devicePixelRatio || 1;
+
+    function resizeCanvas(canvas) {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        const dpr = getDPR();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return { width: rect.width, height: rect.height };
+    }
+
+    // Linear interpolation
+    const lerp = (start, end, amt) => {
+        return (1 - amt) * start + amt * end;
+    };
+
+    /**
+     * 1. COMPONENT MARKER LOGIC
+     */
+    const markers = document.querySelectorAll('.marker');
+    const legendItems = document.querySelectorAll('.legend-item');
+
+    function highlightComponent(targetId) {
+        markers.forEach(m => m.classList.remove('active'));
+        legendItems.forEach(l => l.classList.remove('active'));
+        
+        if (targetId) {
+            document.querySelector(`.marker[data-target="${targetId}"]`).classList.add('active');
+            document.querySelector(`.legend-item[data-marker="${targetId}"]`).classList.add('active');
+        }
+    }
+
+    markers.forEach(marker => {
+        marker.addEventListener('mouseenter', () => highlightComponent(marker.dataset.target));
+        marker.addEventListener('touchstart', (e) => { e.preventDefault(); highlightComponent(marker.dataset.target); });
+    });
+
+    legendItems.forEach(item => {
+        item.addEventListener('mouseenter', () => highlightComponent(item.dataset.marker));
+        item.addEventListener('touchstart', (e) => { e.preventDefault(); highlightComponent(item.dataset.marker); });
+    });
+
+    document.getElementById('components').addEventListener('mouseleave', () => highlightComponent(null));
+
+
+    /**
+     * 2. WORKING MECHANISM (IMAGE FORMATION)
+     */
+    class WorkingSimulation {
+        constructor() {
+            this.canvas = document.getElementById('workingCanvas');
+            this.ctx = this.canvas.getContext('2d');
+            this.bounds = resizeCanvas(this.canvas);
+            
+            this.stage = 0; // 0 to 3 (4 stages)
+            this.progress = 0; // 0.0 to 1.0 within current stage
+            this.isAutoPlaying = false;
+            this.lastTime = 0;
+            
+            this.stagesData = [
+                { title: "Light Emission", desc: "Rays from the glowing object travel towards the mirror." },
+                { title: "Reflection", desc: "Rays hit the surface and bounce off, obeying the law of reflection." },
+                { title: "Observation", desc: "The reflected, diverging rays enter the observer's eye." },
+                { title: "Virtual Image", desc: "The brain traces rays backward in a straight line, forming a virtual image behind the mirror." }
+            ];
+
+            this.setupUI();
+            this.animate = this.animate.bind(this);
+            requestAnimationFrame(this.animate);
+
+            window.addEventListener('resize', () => {
+                this.bounds = resizeCanvas(this.canvas);
+            });
+        }
+
+        setupUI() {
+            this.btnPrev = document.getElementById('wk-prev');
+            this.btnNext = document.getElementById('wk-next');
+            this.btnAuto = document.getElementById('wk-auto');
+            this.dots = document.querySelectorAll('#wk-dots .dot');
+            this.uiBadge = document.getElementById('wk-badge');
+            this.uiTitle = document.getElementById('wk-title');
+            this.uiDesc = document.getElementById('wk-desc');
+
+            this.btnPrev.addEventListener('click', () => this.setStage(Math.max(0, this.stage - 1)));
+            this.btnNext.addEventListener('click', () => this.setStage(Math.min(3, this.stage + 1)));
+            this.btnAuto.addEventListener('click', () => this.toggleAutoPlay());
+            
+            this.updateUI();
+        }
+
+        setStage(newStage) {
+            this.stage = newStage;
+            this.progress = 0;
+            if(this.isAutoPlaying && this.stage === 0) this.progress = 0; // reset anim
+            this.updateUI();
+        }
+
+        toggleAutoPlay() {
+            this.isAutoPlaying = !this.isAutoPlaying;
+            this.btnAuto.classList.toggle('active-play', this.isAutoPlaying);
+            if(this.isAutoPlaying) {
+                if(this.stage === 3 && this.progress >= 1) this.setStage(0);
+                this.btnAuto.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause`;
+            } else {
+                this.btnAuto.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Auto-Play`;
+            }
+        }
+
+        updateUI() {
+            this.uiBadge.innerText = `Stage ${this.stage + 1} of 4`;
+            this.uiTitle.innerText = this.stagesData[this.stage].title;
+            this.uiDesc.innerText = this.stagesData[this.stage].desc;
+            
+            this.dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === this.stage);
+            });
+
+            this.btnPrev.style.opacity = this.stage === 0 ? '0.5' : '1';
+            this.btnPrev.style.pointerEvents = this.stage === 0 ? 'none' : 'auto';
+            this.btnNext.style.opacity = this.stage === 3 ? '0.5' : '1';
+            this.btnNext.style.pointerEvents = this.stage === 3 ? 'none' : 'auto';
+        }
+
+        drawObject(ctx, x, y, isVirtual = false, alpha = 1) {
+            ctx.save();
+            ctx.translate(x, y);
+            
+            // Draw a glowing neon arrow/triangle
+            ctx.beginPath();
+            ctx.moveTo(0, -20);
+            ctx.lineTo(15, 10);
+            ctx.lineTo(-15, 10);
+            ctx.closePath();
+            
+            if (isVirtual) {
+                ctx.strokeStyle = `rgba(243, 244, 246, ${alpha * 0.4})`;
+                ctx.setLineDash([4, 4]);
+                ctx.stroke();
+                ctx.fillStyle = `rgba(243, 244, 246, ${alpha * 0.1})`;
+                ctx.fill();
+            } else {
+                ctx.fillStyle = `rgba(16, 185, 129, ${alpha})`;
+                ctx.shadowColor = '#10b981';
+                ctx.shadowBlur = 15;
+                ctx.fill();
+                ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        drawEye(ctx, x, y, alpha=1) {
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.translate(x, y);
+            ctx.rotate(-Math.PI/6); // tilt towards rays
+            
+            // Eye shape
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 15, 8, 0, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255,255,255,0.8)';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.stroke();
+            
+            // Pupil
+            ctx.beginPath();
+            ctx.arc(0, 0, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#030712';
+            ctx.fill();
+            
+            ctx.restore();
+        }
+
+        animate(timestamp) {
+            const dt = (timestamp - this.lastTime) / 1000 || 0;
+            this.lastTime = timestamp;
+
+            if (this.isAutoPlaying) {
+                this.progress += dt * 0.8; // animation speed
+                if (this.progress > 1.2) { // 1.0 + pause
+                    if (this.stage < 3) {
+                        this.setStage(this.stage + 1);
+                    } else {
+                        // Loop
+                        this.setStage(0);
+                    }
+                }
+            } else {
+                // If not autoplaying, smoothly animate progress to 1
+                this.progress += (1 - this.progress) * 0.1; 
+            }
+
+            this.render();
+            requestAnimationFrame(this.animate);
+        }
+
+        render() {
+            const ctx = this.ctx;
+            const w = this.bounds.width;
+            const h = this.bounds.height;
+            
+            ctx.clearRect(0, 0, w, h);
+
+            const mirrorX = w / 2;
+            const objX = mirrorX - 100;
+            const objY = h / 2 - 20;
+            const imgX = mirrorX + 100;
+            
+            // Points on mirror
+            const p1 = { x: mirrorX, y: h/2 - 40 }; // upper ray hit
+            const p2 = { x: mirrorX, y: h/2 + 20 }; // lower ray hit
+            
+            // Eye position (where reflected rays go)
+            // Ray 1 reflection angle: from obj to p1, then reflect
+            const eyeX = objX - 80;
+            const eyeY = h/2 + 60;
+
+            // 1. Draw Mirror
+            ctx.fillStyle = 'rgba(156, 163, 175, 0.2)';
+            ctx.fillRect(mirrorX - 2, 40, 4, h - 80);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(mirrorX, 40); ctx.lineTo(mirrorX, h - 40); ctx.stroke();
+            // Hatching
+            ctx.strokeStyle = 'rgba(156, 163, 175, 0.3)';
+            ctx.lineWidth = 1;
+            for(let y=40; y<h-40; y+=10) {
+                ctx.beginPath(); ctx.moveTo(mirrorX, y); ctx.lineTo(mirrorX+10, y+10); ctx.stroke();
+            }
+
+            // 2. Draw Real Object (Always visible)
+            this.drawObject(ctx, objX, objY);
+
+            // Calculation function for ray segments
+            const drawRay = (startX, startY, endX, endY, color, p) => {
+                if (p <= 0) return;
+                const curX = lerp(startX, endX, Math.min(1, p));
+                const curY = lerp(startY, endY, Math.min(1, p));
+                
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(curX, curY);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 10;
+                ctx.stroke();
+                ctx.shadowBlur = 0; // reset
+                
+                // Arrow head at end of current progress
+                if (p > 0.1) {
+                    const angle = Math.atan2(endY - startY, endX - startX);
+                    ctx.save();
+                    ctx.translate(curX, curY);
+                    ctx.rotate(angle);
+                    ctx.beginPath();
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(-6, -4);
+                    ctx.lineTo(-6, 4);
+                    ctx.fillStyle = color;
+                    ctx.fill();
+                    ctx.restore();
+                }
+            };
+
+            const drawDashedRay = (startX, startY, endX, endY, color, p) => {
+                if (p <= 0) return;
+                const curX = lerp(startX, endX, Math.min(1, p));
+                const curY = lerp(startY, endY, Math.min(1, p));
+                
+                ctx.beginPath();
+                ctx.setLineDash([5, 5]);
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(curX, curY);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                ctx.setLineDash([]); // reset
+            };
+
+            // Stage Logic mapping
+            let s1p = 0, s2p = 0, s3p = 0, s4p = 0;
+            if (this.stage === 0) s1p = this.progress;
+            else if (this.stage > 0) s1p = 1;
+            
+            if (this.stage === 1) s2p = this.progress;
+            else if (this.stage > 1) s2p = 1;
+            
+            if (this.stage === 2) s3p = this.progress;
+            else if (this.stage > 2) s3p = 1;
+            
+            if (this.stage === 3) s4p = this.progress;
+
+            // Draw Stage 1: Incident Rays
+            drawRay(objX, objY-20, p1.x, p1.y, 'var(--accent-cyan)', s1p);
+            drawRay(objX, objY-20, p2.x, p2.y, 'var(--accent-cyan)', s1p);
+
+            // Draw Stage 2: Normal Lines (fade in) & Reflected Rays
+            if (this.stage >= 1) {
+                ctx.strokeStyle = `rgba(255,255,255,${Math.min(1, s2p * 2) * 0.3})`;
+                ctx.setLineDash([2,4]);
+                ctx.beginPath();
+                ctx.moveTo(p1.x - 40, p1.y); ctx.lineTo(p1.x, p1.y);
+                ctx.moveTo(p2.x - 40, p2.y); ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+                
+                // Reflected ray vectors calculated from virtual image
+                // To trace back properly, reflected ray comes from direction of (imgX, objY-20)
+                // Let's pick arbitrary endpoints for eye
+                const ref1EndX = p1.x - (imgX - p1.x);
+                const ref1EndY = p1.y - (objY-20 - p1.y);
+                const ref2EndX = p2.x - (imgX - p2.x);
+                const ref2EndY = p2.y - (objY-20 - p2.y);
+
+                drawRay(p1.x, p1.y, ref1EndX, ref1EndY, 'var(--accent-magenta)', s2p);
+                drawRay(p2.x, p2.y, ref2EndX, ref2EndY, 'var(--accent-magenta)', s2p);
+            }
+
+            // Draw Stage 3: Eye Observation
+            if (this.stage >= 2) {
+                // Fade in eye
+                this.drawEye(ctx, eyeX, eyeY, Math.min(1, s3p * 2));
+            }
+
+            // Draw Stage 4: Virtual Tracing & Image
+            if (this.stage >= 3) {
+                drawDashedRay(p1.x, p1.y, imgX, objY-20, 'rgba(217, 70, 239, 0.5)', s4p);
+                drawDashedRay(p2.x, p2.y, imgX, objY-20, 'rgba(217, 70, 239, 0.5)', s4p);
+                
+                // Draw Image fading in
+                this.drawObject(ctx, imgX, objY, true, Math.min(1, s4p));
+                
+                // Distance markers fading in
+                const alpha = Math.min(1, s4p);
+                ctx.globalAlpha = alpha;
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                ctx.lineWidth = 1;
+                
+                // Distance lines
+                ctx.beginPath();
+                ctx.moveTo(objX, objY + 40); ctx.lineTo(mirrorX, objY + 40);
+                ctx.moveTo(mirrorX, objY + 40); ctx.lineTo(imgX, objY + 40);
+                ctx.stroke();
+                
+                // Tick marks
+                ctx.beginPath();
+                ctx.moveTo(objX, objY + 35); ctx.lineTo(objX, objY + 45);
+                ctx.moveTo(mirrorX, objY + 35); ctx.lineTo(mirrorX, objY + 45);
+                ctx.moveTo(imgX, objY + 35); ctx.lineTo(imgX, objY + 45);
+                ctx.stroke();
+
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.font = '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('d = x', objX + 50, objY + 35);
+                ctx.fillText('d = x', mirrorX + 50, objY + 35);
+                ctx.globalAlpha = 1;
+            }
+        }
+    }
+
+    /**
+     * 3. INTERACTIVE SIMULATION LAB
+     */
+    class InteractiveLab {
+        constructor() {
+            this.canvas = document.getElementById('simCanvas');
+            this.ctx = this.canvas.getContext('2d');
+            this.bounds = resizeCanvas(this.canvas);
+            
+            this.elAngleI = document.getElementById('sim-angle-i');
+            this.elAngleR = document.getElementById('sim-angle-r');
+            
+            // State
+            this.laserAngle = Math.PI / 4; // 45 degrees init
+            this.isDragging = false;
+            
+            this.setupEvents();
+            this.animate = this.animate.bind(this);
+            requestAnimationFrame(this.animate);
+        }
+
+        setupEvents() {
+            window.addEventListener('resize', () => {
+                this.bounds = resizeCanvas(this.canvas);
+            });
+
+            const handlePointerMove = (e) => {
+                e.preventDefault(); // Prevent scrolling
+                const rect = this.canvas.getBoundingClientRect();
+                
+                let clientX = e.clientX;
+                let clientY = e.clientY;
+                
+                if (e.touches && e.touches.length > 0) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                }
+                
+                const x = clientX - rect.left;
+                const y = clientY - rect.top;
+
+                // Center point (where laser hits mirror)
+                const cx = this.bounds.width / 2;
+                const cy = this.bounds.height - 100; // Mirror near bottom
+
+                // Calculate angle from Normal (straight up)
+                // Math.atan2(y-cy, x-cx) gives angle from positive x axis
+                // Normal is at -PI/2.
+                let dx = x - cx;
+                let dy = y - cy;
+                
+                // Only allow laser from above mirror
+                if (dy > -20) dy = -20; 
+
+                let angleFromX = Math.atan2(dy, dx); // range -PI to 0
+                
+                // Convert to angle from normal (Normal is -PI/2)
+                let angleFromNormal = angleFromX - (-Math.PI/2);
+                
+                // Clamp between -85 and +85 degrees
+                const maxAngle = (85 * Math.PI) / 180;
+                angleFromNormal = Math.max(-maxAngle, Math.min(maxAngle, angleFromNormal));
+                
+                this.laserAngle = angleFromNormal;
+                this.updateDOM();
+            };
+
+            const startDrag = (e) => {
+                this.isDragging = true;
+                handlePointerMove(e);
+            };
+
+            const endDrag = () => {
+                this.isDragging = false;
+            };
+
+            this.canvas.addEventListener('mousedown', startDrag);
+            window.addEventListener('mousemove', (e) => { if (this.isDragging) handlePointerMove(e); });
+            window.addEventListener('mouseup', endDrag);
+
+            this.canvas.addEventListener('touchstart', startDrag, {passive: false});
+            window.addEventListener('touchmove', (e) => { if (this.isDragging) handlePointerMove(e); }, {passive: false});
+            window.addEventListener('touchend', endDrag);
+
+            this.updateDOM();
+        }
+
+        updateDOM() {
+            // angle is from normal. 
+            // - angle means left side, + means right side. We display absolute.
+            const deg = Math.abs(this.laserAngle * 180 / Math.PI).toFixed(1);
+            this.elAngleI.innerText = `${deg}°`;
+            this.elAngleR.innerText = `${deg}°`;
+        }
+
+        drawProtractor(ctx, cx, cy, radius) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, Math.PI, 0);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.02)';
+            ctx.fill();
+            
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+
+            // Ticks
+            for(let i=0; i<=180; i+=10) {
+                const rad = i * Math.PI / 180;
+                const inner = i%30===0 ? radius - 15 : radius - 5;
+                const tx1 = cx + Math.cos(rad) * radius;
+                const ty1 = cy - Math.sin(rad) * radius; // subtract because y is inverted
+                const tx2 = cx + Math.cos(rad) * inner;
+                const ty2 = cy - Math.sin(rad) * inner;
+                
+                ctx.beginPath();
+                ctx.moveTo(tx1, ty1);
+                ctx.lineTo(tx2, ty2);
+                ctx.stroke();
+
+                if(i%30===0) {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.font = '10px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    const txText = cx + Math.cos(rad) * (radius - 25);
+                    const tyText = cy - Math.sin(rad) * (radius - 25);
+                    let label = Math.abs(90 - i); // 0 at normal
+                    ctx.fillText(label, txText, tyText);
+                }
+            }
+            ctx.restore();
+        }
+
+        drawArcAngle(ctx, cx, cy, radius, startAngle, endAngle, color) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, radius, startAngle, endAngle, false); // false = clockwise
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Fill tint
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, startAngle, endAngle, false);
+            ctx.fillStyle = color.replace(')', ', 0.2)').replace('rgb', 'rgba'); // Hacky opacity
+            if(color.includes('var')) { // Fallback for CSS vars
+                ctx.fillStyle = color === 'var(--accent-cyan)' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(217, 70, 239, 0.2)';
+            }
+            ctx.fill();
+        }
+
+        animate() {
+            const ctx = this.ctx;
+            const w = this.bounds.width;
+            const h = this.bounds.height;
+            
+            ctx.clearRect(0, 0, w, h);
+
+            const cx = w / 2;
+            const cy = h - 60; // Mirror position
+
+            // 1. Draw Mirror
+            ctx.fillStyle = 'rgba(156, 163, 175, 0.2)';
+            ctx.fillRect(40, cy, w - 80, 10);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(40, cy);
+            ctx.lineTo(w - 40, cy);
+            ctx.stroke();
+            
+            // Hatching
+            ctx.strokeStyle = 'rgba(156, 163, 175, 0.4)';
+            ctx.lineWidth = 1;
+            for(let x=40; x<w-40; x+=15) {
+                ctx.beginPath();
+                ctx.moveTo(x, cy);
+                ctx.lineTo(x - 10, cy + 10);
+                ctx.stroke();
+            }
+
+            // 2. Draw Protractor
+            this.drawProtractor(ctx, cx, cy, Math.min(200, w/2.5));
+
+            // 3. Draw Normal
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx, 40);
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = 'rgba(255,255,255,0.7)';
+            ctx.font = '14px sans-serif';
+            ctx.fillText('Normal', cx, 30);
+
+            // 4. Calculate Ray vectors
+            const rayLength = 500;
+            // Angle is relative to normal (-PI/2)
+            const incidentGlobalAngle = -Math.PI/2 + this.laserAngle;
+            // Reflected angle: Normal - angle
+            const reflectedGlobalAngle = -Math.PI/2 - this.laserAngle;
+
+            // Start point of laser (far away)
+            const laserX = cx + Math.cos(incidentGlobalAngle) * 300;
+            const laserY = cy + Math.sin(incidentGlobalAngle) * 300;
+
+            // 5. Draw Incident Ray
+            ctx.beginPath();
+            ctx.moveTo(laserX, laserY);
+            ctx.lineTo(cx, cy);
+            ctx.strokeStyle = 'var(--accent-cyan)';
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 15;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+
+            // Laser Pointer Body
+            ctx.save();
+            ctx.translate(laserX, laserY);
+            ctx.rotate(incidentGlobalAngle);
+            ctx.fillStyle = '#1f2937';
+            ctx.fillRect(0, -10, 40, 20); // Handle
+            ctx.fillStyle = 'var(--accent-cyan)';
+            ctx.fillRect(-5, -5, 5, 10); // Tip
+            ctx.restore();
+
+            // 6. Draw Reflected Ray
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            const refX = cx + Math.cos(reflectedGlobalAngle) * rayLength;
+            const refY = cy + Math.sin(reflectedGlobalAngle) * rayLength;
+            ctx.lineTo(refX, refY);
+            ctx.strokeStyle = 'var(--accent-magenta)';
+            ctx.shadowColor = '#d946ef';
+            ctx.shadowBlur = 15;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            // Draw Virtual Extension (dashed)
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(cx, cy);
+            const virtX = cx + Math.cos(reflectedGlobalAngle + Math.PI) * rayLength;
+            const virtY = cy + Math.sin(reflectedGlobalAngle + Math.PI) * rayLength;
+            ctx.lineTo(virtX, virtY);
+            ctx.strokeStyle = 'rgba(217, 70, 239, 0.3)';
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // 7. Draw Angle Arcs
+            const arcRadius = 60;
+            // Normal is at -90 deg. 
+            let startI, endI, startR, endR;
+            
+            if (this.laserAngle < 0) {
+                // Laser is on the left
+                startI = incidentGlobalAngle;
+                endI = -Math.PI/2;
+                startR = -Math.PI/2;
+                endR = reflectedGlobalAngle;
+            } else {
+                // Laser is on the right
+                startI = -Math.PI/2;
+                endI = incidentGlobalAngle;
+                startR = reflectedGlobalAngle;
+                endR = -Math.PI/2;
+            }
+            
+            // Draw Incident Angle Arc
+            if(Math.abs(this.laserAngle) > 0.05) { // don't draw if near 0
+                this.drawArcAngle(ctx, cx, cy, arcRadius, startI, endI, 'var(--accent-cyan)');
+                this.drawArcAngle(ctx, cx, cy, arcRadius, startR, endR, 'var(--accent-magenta)');
+            }
+
+            // Draw intersection point
+            ctx.beginPath();
+            ctx.arc(cx, cy, 4, 0, Math.PI*2);
+            ctx.fillStyle = '#fff';
+            ctx.fill();
+
+            requestAnimationFrame(this.animate);
+        }
+    }
+
+    // Initialize Simulations
+    window.onload = () => {
+        new WorkingSimulation();
+        new InteractiveLab();
+    };
+
+</script>
+</body>
+</html>

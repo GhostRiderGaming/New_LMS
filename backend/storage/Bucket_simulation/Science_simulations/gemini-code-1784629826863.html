@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Petroleum Fractional Distillation | Premium Simulation</title>
+    <style>
+        /* ==========================================================================
+           ROOT & CSS VARIABLES
+           ========================================================================== */
+        :root {
+            --bg-color: #050914;
+            --panel-bg: rgba(16, 24, 43, 0.6);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.4);
+            
+            /* Fraction Colors */
+            --c-gas: #00f3ff;
+            --c-petrol: #ffea00;
+            --c-naphtha: #ffa500;
+            --c-kerosene: #ff4500;
+            --c-diesel: #ff00ff;
+            --c-fuel: #8a2be2;
+            --c-bitumen: #5c3a21;
+            
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --radius-lg: 24px;
+            --radius-md: 16px;
+            --radius-sm: 8px;
+            
+            --transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* ==========================================================================
+           RESET & TYPOGRAPHY
+           ========================================================================== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(56, 189, 248, 0.05) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(255, 165, 0, 0.05) 0%, transparent 50%);
+            background-attachment: fixed;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1, h2, h3 { font-weight: 700; line-height: 1.2; margin-bottom: 0.5em; }
+        h1 { font-size: clamp(2rem, 5vw, 3.5rem); letter-spacing: -1px; background: linear-gradient(135deg, #fff, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); color: #fff; }
+        h3 { font-size: clamp(1.2rem, 2vw, 1.5rem); color: var(--accent); }
+        p { font-size: clamp(0.95rem, 1.2vw, 1.1rem); color: var(--text-muted); margin-bottom: 1rem; }
+
+        /* ==========================================================================
+           LAYOUT & GLASSMORPHISM
+           ========================================================================== */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 3vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(30px, 5vw, 80px);
+        }
+
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius-lg);
+            padding: clamp(20px, 3vw, 40px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .glass-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: clamp(20px, 4vw, 40px);
+            align-items: center;
+        }
+
+        @media (min-width: 1024px) {
+            .grid-2 { grid-template-columns: 1fr 1fr; }
+            .grid-2.reverse { grid-template-columns: 1.2fr 0.8fr; }
+        }
+
+        /* ==========================================================================
+           SVG ILLUSTRATIONS & CANVAS
+           ========================================================================== */
+        .visual-container {
+            position: relative;
+            width: 100%;
+            height: clamp(400px, 60vh, 700px);
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--panel-border);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        .visual-container svg {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            position: relative;
+            z-index: 2;
+        }
+
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* SVG Stylings */
+        .pipe { stroke-width: 4; fill: none; stroke-linecap: round; filter: drop-shadow(0 0 4px rgba(255,255,255,0.2)); }
+        .tower-body { fill: url(#tower-grad); stroke: rgba(255,255,255,0.1); stroke-width: 2; }
+        .tray { stroke: rgba(255,255,255,0.3); stroke-width: 2; }
+        .bubble-cap { fill: rgba(255,255,255,0.4); }
+        .heat-glow { fill: url(#fire-grad); filter: drop-shadow(0 0 15px #ff4500); animation: pulseHeat 2s infinite alternate; }
+
+        @keyframes pulseHeat {
+            0% { opacity: 0.8; filter: drop-shadow(0 0 10px #ff4500); }
+            100% { opacity: 1; filter: drop-shadow(0 0 25px #ffea00); }
+        }
+
+        /* ==========================================================================
+           LABELING SYSTEM (STRICT MARKER + LEGEND)
+           ========================================================================== */
+        .diagram-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        .svg-wrapper {
+            position: relative;
+            height: 100%;
+            aspect-ratio: 1 / 1.8; /* Matches SVG viewBox ratio roughly */
+        }
+
+        .marker {
+            position: absolute;
+            width: clamp(24px, 3vw, 32px);
+            height: clamp(24px, 3vw, 32px);
+            border-radius: 50%;
+            background: rgba(16, 24, 43, 0.8);
+            border: 2px solid var(--accent);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            z-index: 10;
+            box-shadow: 0 0 10px var(--accent-glow);
+            transition: var(--transition);
+        }
+
+        .marker.active, .marker:hover {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: var(--accent);
+            color: #000;
+            box-shadow: 0 0 20px var(--accent);
+        }
+
+        /* Specific Marker Colors based on fraction */
+        .m-gas { border-color: var(--c-gas); box-shadow: 0 0 10px var(--c-gas); }
+        .m-gas.active { background: var(--c-gas); box-shadow: 0 0 20px var(--c-gas); }
+        .m-petrol { border-color: var(--c-petrol); box-shadow: 0 0 10px var(--c-petrol); }
+        .m-petrol.active { background: var(--c-petrol); box-shadow: 0 0 20px var(--c-petrol); }
+        .m-kerosene { border-color: var(--c-kerosene); box-shadow: 0 0 10px var(--c-kerosene); }
+        .m-kerosene.active { background: var(--c-kerosene); box-shadow: 0 0 20px var(--c-kerosene); }
+        .m-furnace { border-color: #ff4500; box-shadow: 0 0 10px #ff4500; }
+        .m-furnace.active { background: #ff4500; box-shadow: 0 0 20px #ff4500; }
+
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            list-style: none;
+            padding: 0;
+            margin-top: 20px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .legend-item:hover, .legend-item.active {
+            background: rgba(255,255,255,0.08);
+            border-color: rgba(255,255,255,0.15);
+            transform: translateX(5px);
+        }
+
+        .legend-badge {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--panel-bg);
+            border: 2px solid var(--accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .legend-item.active .legend-badge {
+            background: var(--accent);
+            color: #000;
+        }
+
+        .legend-text { display: flex; flex-direction: column; }
+        .legend-title { font-weight: 600; color: #fff; font-size: 1rem; }
+        .legend-desc { font-size: 0.85rem; color: var(--text-muted); }
+
+        /* Dynamic badge colors */
+        .l-gas .legend-badge { border-color: var(--c-gas); }
+        .l-gas.active .legend-badge { background: var(--c-gas); }
+        .l-petrol .legend-badge { border-color: var(--c-petrol); }
+        .l-petrol.active .legend-badge { background: var(--c-petrol); }
+        .l-kerosene .legend-badge { border-color: var(--c-kerosene); }
+        .l-kerosene.active .legend-badge { background: var(--c-kerosene); }
+        .l-furnace .legend-badge { border-color: #ff4500; }
+        .l-furnace.active .legend-badge { background: #ff4500; }
+
+        /* ==========================================================================
+           WORKING MECHANISM (DEDICATED SECTION)
+           ========================================================================== */
+        .mechanism-controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 20px;
+            background: rgba(0,0,0,0.3);
+            padding: 10px 20px;
+            border-radius: 50px;
+            width: fit-content;
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: none;
+            color: #fff;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition);
+            background: rgba(255,255,255,0.05);
+        }
+        
+        .btn-icon:hover { background: var(--accent); color: #000; }
+        .btn-icon svg { width: 20px; height: 20px; fill: currentColor; }
+
+        .progress-dots {
+            display: flex;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: var(--transition);
+        }
+        .dot.active { background: var(--accent); transform: scale(1.3); box-shadow: 0 0 10px var(--accent-glow); }
+
+        .stage-info {
+            min-height: 120px;
+            margin-top: 20px;
+            padding-left: 20px;
+            border-left: 2px solid var(--accent);
+        }
+
+        /* Animation Classes for Mechanism Visuals */
+        .mech-fade { opacity: 0.2; transition: opacity 0.5s; }
+        .mech-active { opacity: 1; filter: drop-shadow(0 0 8px rgba(255,255,255,0.5)); transition: opacity 0.5s, filter 0.5s; }
+        
+        .flow-path {
+            stroke-dasharray: 10;
+            animation: dashFlow 1s linear infinite;
+            display: none;
+        }
+        .flow-path.active { display: block; }
+        
+        @keyframes dashFlow {
+            to { stroke-dashoffset: -20; }
+        }
+
+        /* ==========================================================================
+           INTERACTIVE SIMULATION (CONTROLS)
+           ========================================================================== */
+        .sim-controls {
+            padding: 20px;
+            background: rgba(0,0,0,0.2);
+            border-radius: var(--radius-md);
+            margin-top: 20px;
+        }
+
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .temp-display {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #ff4500;
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 0 15px rgba(255, 69, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+            height: 40px;
+        }
+
+        input[type=range]:focus { outline: none; }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: linear-gradient(90deg, #333 0%, #ff4500 100%);
+            border-radius: 4px;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #fff;
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -8px;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5);
+            border: 2px solid #ff4500;
+        }
+
+        /* Temperature Scale inside visual */
+        .temp-scale {
+            position: absolute;
+            right: 10%;
+            top: 15%;
+            bottom: 15%;
+            width: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            color: rgba(255,255,255,0.5);
+            font-size: 0.8rem;
+            pointer-events: none;
+        }
+        
+        .temp-scale::before {
+            content: '';
+            position: absolute;
+            left: 50%; top: 0; bottom: 0; width: 2px;
+            background: linear-gradient(to bottom, #00f3ff, #ffea00, #ff4500, #8b4513);
+            transform: translateX(-50%);
+            opacity: 0.3;
+        }
+
+        /* ==========================================================================
+           FRACTION CARDS (Applications)
+           ========================================================================== */
+        .fractions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .fraction-card {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .fraction-card:hover {
+            background: rgba(255,255,255,0.05);
+            transform: translateY(-5px);
+        }
+
+        .fraction-color-bar {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+        }
+
+        .fc-gas { background: var(--c-gas); box-shadow: 0 0 10px var(--c-gas); }
+        .fc-petrol { background: var(--c-petrol); box-shadow: 0 0 10px var(--c-petrol); }
+        .fc-naphtha { background: var(--c-naphtha); box-shadow: 0 0 10px var(--c-naphtha); }
+        .fc-kerosene { background: var(--c-kerosene); box-shadow: 0 0 10px var(--c-kerosene); }
+        .fc-diesel { background: var(--c-diesel); box-shadow: 0 0 10px var(--c-diesel); }
+        .fc-fuel { background: var(--c-fuel); box-shadow: 0 0 10px var(--c-fuel); }
+        .fc-bitumen { background: var(--c-bitumen); box-shadow: 0 0 10px var(--c-bitumen); }
+
+        .fraction-card h3 { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+        .bp-badge { font-size: 0.8rem; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 12px; color: #fff; }
+
+        /* Facts */
+        .fact-box {
+            display: flex;
+            gap: 15px;
+            background: rgba(56, 189, 248, 0.05);
+            border-left: 4px solid var(--accent);
+            padding: 20px;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            margin-top: 20px;
+        }
+        .fact-icon { font-size: 24px; }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- HEADER -->
+        <header class="glass-panel" style="text-align: center;">
+            <h3 style="color: var(--text-muted); font-size: 1rem; letter-spacing: 2px; text-transform: uppercase;">Interactive Physics & Chemistry</h3>
+            <h1>Petroleum Fractional Distillation</h1>
+            <p style="max-width: 800px; margin: 0 auto;">Explore how crude oil—a complex mixture of hydrocarbons—is separated into useful fuels and materials using thermodynamics and boiling points.</p>
+        </header>
+
+        <!-- COMPONENTS SECTION (Interactive Diagram) -->
+        <section class="glass-panel">
+            <h2>System Components</h2>
+            <p>Hover/Tap the markers or list items to understand the architecture of a fractionating column.</p>
+            
+            <div class="grid-2">
+                <!-- Visual Left -->
+                <div class="visual-container">
+                    <div class="diagram-wrapper">
+                        <div class="svg-wrapper" id="components-svg-wrapper">
+                            <svg viewBox="0 0 300 600" preserveAspectRatio="xMidYMid meet">
+                                <defs>
+                                    <linearGradient id="tower-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#2a3441" />
+                                        <stop offset="20%" stop-color="#3b4859" />
+                                        <stop offset="50%" stop-color="#5a6a7e" />
+                                        <stop offset="80%" stop-color="#3b4859" />
+                                        <stop offset="100%" stop-color="#1e2630" />
+                                    </linearGradient>
+                                    <linearGradient id="fire-grad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                        <stop offset="0%" stop-color="#ff0000" />
+                                        <stop offset="50%" stop-color="#ff7b00" />
+                                        <stop offset="100%" stop-color="#ffea00" />
+                                    </linearGradient>
+                                    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                        <feGaussianBlur stdDeviation="5" result="blur" />
+                                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                                    </filter>
+                                </defs>
+                                
+                                <!-- Furnace / Boiler -->
+                                <path d="M 30,500 L 100,500 L 100,560 L 30,560 Z" fill="#1a1a1a" stroke="#555" stroke-width="2"/>
+                                <path class="heat-glow" d="M 40,550 Q 65,510 90,550 Z" />
+                                <path d="M 100,530 L 140,530" class="pipe" stroke="#777" />
+                                
+                                <!-- Main Tower Base -->
+                                <rect x="120" y="50" width="100" height="500" rx="10" class="tower-body" />
+                                
+                                <!-- Trays (Internal horizontal dividers) -->
+                                <line x1="120" y1="420" x2="220" y2="420" class="tray" />
+                                <line x1="120" y1="340" x2="220" y2="340" class="tray" />
+                                <line x1="120" y1="260" x2="220" y2="260" class="tray" />
+                                <line x1="120" y1="180" x2="220" y2="180" class="tray" />
+                                <line x1="120" y1="100" x2="220" y2="100" class="tray" />
+
+                                <!-- Bubble caps (simplified representation on trays) -->
+                                <path d="M 140,420 Q 150,400 160,420" class="bubble-cap" />
+                                <path d="M 180,420 Q 190,400 200,420" class="bubble-cap" />
+                                
+                                <path d="M 140,340 Q 150,320 160,340" class="bubble-cap" />
+                                <path d="M 180,340 Q 190,320 200,340" class="bubble-cap" />
+                                
+                                <path d="M 140,260 Q 150,240 160,260" class="bubble-cap" />
+                                <path d="M 180,260 Q 190,240 200,260" class="bubble-cap" />
+
+                                <!-- Output Pipes -->
+                                <!-- Bitumen -->
+                                <path d="M 220,530 L 270,530" class="pipe" stroke="var(--c-bitumen)" />
+                                <!-- Fuel Oil -->
+                                <path d="M 220,400 L 270,400" class="pipe" stroke="var(--c-fuel)" />
+                                <!-- Diesel -->
+                                <path d="M 220,320 L 270,320" class="pipe" stroke="var(--c-diesel)" />
+                                <!-- Kerosene -->
+                                <path d="M 220,240 L 270,240" class="pipe" stroke="var(--c-kerosene)" />
+                                <!-- Naphtha -->
+                                <path d="M 220,160 L 270,160" class="pipe" stroke="var(--c-naphtha)" />
+                                <!-- Petrol -->
+                                <path d="M 220,80 L 270,80" class="pipe" stroke="var(--c-petrol)" />
+                                <!-- Gas (Top) -->
+                                <path d="M 170,50 L 170,20 L 270,20" class="pipe" stroke="var(--c-gas)" />
+
+                            </svg>
+                            
+                            <!-- Dynamic Markers placed via percentages -->
+                            <div class="marker m-furnace" data-target="l-furnace" style="top: 88%; left: 22%;">1</div>
+                            <div class="marker" data-target="l-tower" style="top: 50%; left: 56%;">2</div>
+                            <div class="marker" data-target="l-trays" style="top: 56%; left: 47%;">3</div>
+                            <div class="marker m-kerosene" data-target="l-pipes" style="top: 40%; left: 82%;">4</div>
+                            <div class="marker m-gas" data-target="l-top" style="top: 3%; left: 70%;">5</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Legend Right -->
+                <div>
+                    <ul class="legend-list">
+                        <li class="legend-item l-furnace" data-marker="m-furnace">
+                            <div class="legend-badge">1</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Furnace / Boiler</span>
+                                <span class="legend-desc">Heats crude oil to ~400°C, turning most of it into vapor before entering the column.</span>
+                            </div>
+                        </li>
+                        <li class="legend-item l-tower" data-marker="m-tower">
+                            <div class="legend-badge">2</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Fractionating Column</span>
+                                <span class="legend-desc">A tall steel tower with a temperature gradient: very hot at the bottom, cool at the top.</span>
+                            </div>
+                        </li>
+                        <li class="legend-item l-trays" data-marker="m-trays">
+                            <div class="legend-badge">3</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Bubble Cap Trays</span>
+                                <span class="legend-desc">Perforated plates that allow rising vapor to bubble through liquid, forcing condensation.</span>
+                            </div>
+                        </li>
+                        <li class="legend-item l-pipes" data-marker="m-pipes">
+                            <div class="legend-badge">4</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Extraction Pipes</span>
+                                <span class="legend-desc">Draws off the condensed liquid fractions at specific temperature levels.</span>
+                            </div>
+                        </li>
+                        <li class="legend-item l-top" data-marker="m-top">
+                            <div class="legend-badge">5</div>
+                            <div class="legend-text">
+                                <span class="legend-title">Gas Outlet</span>
+                                <span class="legend-desc">Collects the lightest molecules (1-4 carbon atoms) that never condense, exiting as gas.</span>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- WORKING MECHANISM SECTION -->
+        <section class="glass-panel">
+            <h2>Mechanism: Continuous Flow</h2>
+            <p>Observe the physical process of separation through evaporation and condensation.</p>
+            
+            <div class="grid-2 reverse">
+                <!-- Text & Controls Left -->
+                <div>
+                    <div class="mechanism-controls">
+                        <button class="btn-icon" id="btn-prev" aria-label="Previous Stage">
+                            <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+                        </button>
+                        <button class="btn-icon" id="btn-play" aria-label="Play/Pause">
+                            <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            <svg id="icon-pause" viewBox="0 0 24 24" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                        </button>
+                        <button class="btn-icon" id="btn-next" aria-label="Next Stage">
+                            <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+                        </button>
+                        <div class="progress-dots" id="mech-dots">
+                            <!-- Injected by JS -->
+                        </div>
+                    </div>
+
+                    <div class="stage-info">
+                        <h3 id="stage-title">1. Heating Crude Oil</h3>
+                        <p id="stage-desc">Raw crude oil is pumped into a furnace and heated to roughly 400°C. This extreme heat vaporizes most of the liquid into a mixture of gases.</p>
+                    </div>
+                </div>
+
+                <!-- Visual Right (Animated SVG) -->
+                <div class="visual-container">
+                    <svg viewBox="0 0 300 400" preserveAspectRatio="xMidYMid meet">
+                        <!-- Simplified Column for mechanism -->
+                        <!-- Base structure always slightly visible -->
+                        <rect x="120" y="40" width="80" height="320" fill="none" stroke="#444" stroke-width="2" />
+                        <line x1="120" y1="280" x2="200" y2="280" stroke="#444" stroke-width="2" />
+                        <line x1="120" y1="200" x2="200" y2="200" stroke="#444" stroke-width="2" />
+                        <line x1="120" y1="120" x2="200" y2="120" stroke="#444" stroke-width="2" />
+
+                        <!-- Stage 1: Heating (Furnace & Pipe in) -->
+                        <g id="mech-s1" class="mech-fade">
+                            <rect x="20" y="300" width="50" height="50" fill="#222" stroke="#ff4500" stroke-width="2" />
+                            <path class="heat-glow" d="M 25,340 Q 45,300 65,340 Z" />
+                            <path d="M 70,325 L 120,325" stroke="#ffea00" stroke-width="4" fill="none" class="flow-path active" />
+                            <text x="45" y="370" fill="#ff4500" font-size="12" text-anchor="middle">Furnace</text>
+                        </g>
+
+                        <!-- Stage 2: Vaporization (Vapors rising) -->
+                        <g id="mech-s2" class="mech-fade">
+                            <path d="M 140,320 Q 150,280 145,240" stroke="#ff7b00" stroke-width="3" fill="none" stroke-dasharray="4" style="animation: dashFlow 2s linear infinite;" />
+                            <path d="M 160,320 Q 170,260 165,180" stroke="#ffea00" stroke-width="3" fill="none" stroke-dasharray="4" style="animation: dashFlow 1.5s linear infinite;" />
+                            <path d="M 180,320 Q 190,200 180,80" stroke="#00f3ff" stroke-width="3" fill="none" stroke-dasharray="4" style="animation: dashFlow 1s linear infinite;" />
+                            <polygon points="120,360 200,360 200,320 120,320" fill="rgba(139, 69, 19, 0.5)" /> <!-- Heavy unvaporized liquid -->
+                        </g>
+
+                        <!-- Stage 3: Cooling / Temperature Gradient -->
+                        <g id="mech-s3" class="mech-fade">
+                            <!-- Gradient overlay representing temp drop -->
+                            <rect x="122" y="42" width="76" height="316" fill="url(#temp-grad-mech)" opacity="0.6"/>
+                            <defs>
+                                <linearGradient id="temp-grad-mech" x1="0" y1="100%" x2="0" y2="0%">
+                                    <stop offset="0%" stop-color="#ff0000" stop-opacity="0.8"/>
+                                    <stop offset="50%" stop-color="#ffea00" stop-opacity="0.5"/>
+                                    <stop offset="100%" stop-color="#00f3ff" stop-opacity="0.8"/>
+                                </linearGradient>
+                            </defs>
+                            <text x="160" y="60" fill="#00f3ff" font-size="10" text-anchor="middle">~40°C</text>
+                            <text x="160" y="340" fill="#ff4500" font-size="10" text-anchor="middle">~350°C</text>
+                        </g>
+
+                        <!-- Stage 4: Condensation (Liquid forming on trays) -->
+                        <g id="mech-s4" class="mech-fade">
+                            <rect x="122" y="275" width="76" height="5" fill="var(--c-diesel)" />
+                            <rect x="122" y="195" width="76" height="5" fill="var(--c-kerosene)" />
+                            <rect x="122" y="115" width="76" height="5" fill="var(--c-petrol)" />
+                            
+                            <!-- Droplet animation -->
+                            <circle cx="150" cy="260" r="3" fill="var(--c-diesel)">
+                                <animate attributeName="cy" from="260" to="275" dur="1s" repeatCount="indefinite" />
+                                <animate attributeName="opacity" from="0" to="1" dur="0.5s" repeatCount="indefinite" />
+                            </circle>
+                            <circle cx="170" cy="180" r="3" fill="var(--c-kerosene)">
+                                <animate attributeName="cy" from="180" to="195" dur="0.8s" repeatCount="indefinite" />
+                                <animate attributeName="opacity" from="0" to="1" dur="0.4s" repeatCount="indefinite" />
+                            </circle>
+                        </g>
+
+                        <!-- Stage 5: Extraction (Flowing out) -->
+                        <g id="mech-s5" class="mech-fade">
+                            <path d="M 200,277 L 250,277" stroke="var(--c-diesel)" stroke-width="4" fill="none" class="flow-path active" />
+                            <text x="260" y="280" fill="var(--c-diesel)" font-size="12">Diesel</text>
+
+                            <path d="M 200,197 L 250,197" stroke="var(--c-kerosene)" stroke-width="4" fill="none" class="flow-path active" />
+                            <text x="260" y="200" fill="var(--c-kerosene)" font-size="12">Kerosene</text>
+
+                            <path d="M 200,117 L 250,117" stroke="var(--c-petrol)" stroke-width="4" fill="none" class="flow-path active" />
+                            <text x="260" y="120" fill="var(--c-petrol)" font-size="12">Petrol</text>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+        </section>
+
+        <!-- INTERACTIVE SIMULATION (Canvas Particle System) -->
+        <section class="glass-panel">
+            <h2>Interactive Thermodynamics</h2>
+            <p>Control the furnace temperature. Watch how increasing heat provides enough kinetic energy to vaporize heavier hydrocarbon molecules.</p>
+            
+            <div class="grid-2">
+                <div class="visual-container" id="sim-container">
+                    <div class="temp-scale">
+                        <span>400°</span>
+                        <span>300°</span>
+                        <span>200°</span>
+                        <span>100°</span>
+                        <span>0°</span>
+                    </div>
+                    <!-- SVG Background for Simulation -->
+                    <svg viewBox="0 0 400 800" preserveAspectRatio="xMidYMid meet" style="z-index: 0; opacity: 0.5;">
+                        <rect x="150" y="100" width="100" height="600" rx="5" fill="none" stroke="#555" stroke-width="2" />
+                        <!-- Trays -->
+                        <line x1="150" y1="200" x2="250" y2="200" stroke="#444" />
+                        <line x1="150" y1="300" x2="250" y2="300" stroke="#444" />
+                        <line x1="150" y1="400" x2="250" y2="400" stroke="#444" />
+                        <line x1="150" y1="500" x2="250" y2="500" stroke="#444" />
+                        <line x1="150" y1="600" x2="250" y2="600" stroke="#444" />
+                        
+                        <!-- Exit Pipes (Right) -->
+                        <path d="M 250,100 L 300,100" class="pipe" stroke="#333" />
+                        <path d="M 250,200 L 300,200" class="pipe" stroke="#333" />
+                        <path d="M 250,300 L 300,300" class="pipe" stroke="#333" />
+                        <path d="M 250,400 L 300,400" class="pipe" stroke="#333" />
+                        <path d="M 250,500 L 300,500" class="pipe" stroke="#333" />
+                        <path d="M 250,600 L 300,600" class="pipe" stroke="#333" />
+                    </svg>
+                    
+                    <!-- Particle Canvas -->
+                    <canvas id="sim-canvas"></canvas>
+                </div>
+
+                <div class="sim-controls">
+                    <div class="temp-display">
+                        <span style="font-size: 1.2rem; color: #fff; font-weight: normal;">Furnace Output:</span>
+                        <span id="temp-val">20</span>°C
+                    </div>
+                    <div class="slider-container" style="margin-top: 20px;">
+                        <input type="range" id="temp-slider" min="20" max="450" value="20" step="1">
+                        <div style="display: flex; justify-content: space-between; color: var(--text-muted); font-size: 0.9rem; margin-top: 5px;">
+                            <span>Ambient</span>
+                            <span>Max Heat</span>
+                        </div>
+                    </div>
+                    
+                    <div class="fact-box" style="margin-top: 40px;">
+                        <span class="fact-icon">💡</span>
+                        <p style="margin: 0;"><strong>Boiling Point & Molecular Size:</strong><br> Smaller molecules (like Propane, C₃H₈) have weak intermolecular forces and boil at low temperatures. Large molecules (like Bitumen, C₅₀+) have strong forces and require immense heat to vaporize.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- OUTPUT FRACTIONS (Applications) -->
+        <section class="glass-panel">
+            <h2>The Fractions & Applications</h2>
+            <p>The products separated by the column are the foundation of modern industry and transportation.</p>
+            
+            <div class="fractions-grid">
+                <!-- Gas -->
+                <div class="fraction-card">
+                    <div class="fraction-color-bar fc-gas"></div>
+                    <h3>Refinery Gas <span class="bp-badge">< 20°C</span></h3>
+                    <p>Smallest molecules (1-4 Carbons). Exits as a gas. Used as bottled heating gas (LPG) and cooking fuel.</p>
+                </div>
+                <!-- Petrol -->
+                <div class="fraction-card">
+                    <div class="fraction-color-bar fc-petrol"></div>
+                    <h3>Petrol / Gasoline <span class="bp-badge">20-150°C</span></h3>
+                    <p>Highly volatile and flammable liquid (5-9 Carbons). The primary fuel for standard internal combustion car engines.</p>
+                </div>
+                <!-- Naphtha -->
+                <div class="fraction-card">
+                    <div class="fraction-color-bar fc-naphtha"></div>
+                    <h3>Naphtha <span class="bp-badge">150-200°C</span></h3>
+                    <p>Crucial chemical feedstock. Used to manufacture plastics, synthetic rubbers, and industrial solvents.</p>
+                </div>
+                <!-- Kerosene -->
+                <div class="fraction-card">
+                    <div class="fraction-color-bar fc-kerosene"></div>
+                    <h3>Kerosene <span class="bp-badge">200-300°C</span></h3>
+                    <p>Medium-weight liquid. Used primarily as aviation fuel (Jet-A1) and in domestic heaters/lamps.</p>
+                </div>
+                <!-- Diesel -->
+                <div class="fraction-card">
+                    <div class="fraction-color-bar fc-diesel"></div>
+                    <h3>Diesel <span class="bp-badge">300-370°C</span></h3>
+                    <p>Heavier, less volatile fuel. Ignites under pressure rather than a spark. Used in trucks, trains, and ships.</p>
+                </div>
+                <!-- Fuel Oil -->
+                <div class="fraction-card">
+                    <div class="fraction-color-bar fc-fuel"></div>
+                    <h3>Fuel Oil <span class="bp-badge">370-400°C</span></h3>
+                    <p>Thick, viscous liquid. Burned in power stations and used as bunker fuel for massive ocean liners.</p>
+                </div>
+                <!-- Bitumen -->
+                <div class="fraction-card">
+                    <div class="fraction-color-bar fc-bitumen"></div>
+                    <h3>Bitumen <span class="bp-badge">> 400°C</span></h3>
+                    <p>The heaviest fraction (70+ Carbons). A thick, black, sticky semi-solid. Used for surfacing roads and roofing.</p>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ==========================================================================
+         JAVASCRIPT LOGIC
+         ========================================================================== -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            /* -----------------------------------------------------------
+               1. LABELING SYSTEM (Hover/Interaction)
+               ----------------------------------------------------------- */
+            const markers = document.querySelectorAll('.marker');
+            const legendItems = document.querySelectorAll('.legend-item');
+
+            function setActiveLabel(targetClass) {
+                // Reset all
+                markers.forEach(m => m.classList.remove('active'));
+                legendItems.forEach(l => l.classList.remove('active'));
+
+                if(targetClass) {
+                    const cls = targetClass.replace('m-', '').replace('l-', '');
+                    document.querySelector(`.m-${cls}`)?.classList.add('active');
+                    document.querySelector(`.l-${cls}`)?.classList.add('active');
+                }
+            }
+
+            markers.forEach(marker => {
+                marker.addEventListener('mouseenter', () => setActiveLabel(marker.classList[1]));
+                marker.addEventListener('mouseleave', () => setActiveLabel(null));
+                // For mobile touch
+                marker.addEventListener('touchstart', (e) => { e.preventDefault(); setActiveLabel(marker.classList[1]); });
+            });
+
+            legendItems.forEach(item => {
+                item.addEventListener('mouseenter', () => setActiveLabel(item.classList[1]));
+                item.addEventListener('mouseleave', () => setActiveLabel(null));
+                item.addEventListener('touchstart', (e) => { setActiveLabel(item.classList[1]); });
+            });
+
+            /* -----------------------------------------------------------
+               2. WORKING MECHANISM (Step-by-step logic)
+               ----------------------------------------------------------- */
+            const mechData = [
+                { title: "1. Heating Crude Oil", desc: "Raw crude oil is pumped into a furnace and heated to roughly 400°C. This extreme heat vaporizes most of the liquid into a mixture of gases.", svgId: "mech-s1" },
+                { title: "2. Vaporization & Rise", desc: "The hot mixture of vapors and liquid enters the bottom of the column. The vapors rise up the tower, while the heaviest unvaporized liquids stay at the bottom.", svgId: "mech-s2" },
+                { title: "3. Temperature Gradient", desc: "The column is designed to be hot at the base and progressively cooler towards the top. This gradient is the key to separation.", svgId: "mech-s3" },
+                { title: "4. Condensation", desc: "As vapors rise, they cool. When a specific hydrocarbon vapor reaches a tray where the temperature is just below its boiling point, it condenses back into a liquid.", svgId: "mech-s4" },
+                { title: "5. Extraction", desc: "The condensed liquids collect on the trays and flow out through side pipes, continuously separated into their respective fractions.", svgId: "mech-s5" }
+            ];
+
+            let currentMechStage = 0;
+            let mechInterval = null;
+            let isPlaying = false;
+
+            const mechTitle = document.getElementById('stage-title');
+            const mechDesc = document.getElementById('stage-desc');
+            const dotsContainer = document.getElementById('mech-dots');
+            const btnPrev = document.getElementById('btn-prev');
+            const btnNext = document.getElementById('btn-next');
+            const btnPlay = document.getElementById('btn-play');
+            const iconPlay = document.getElementById('icon-play');
+            const iconPause = document.getElementById('icon-pause');
+
+            // Generate dots
+            mechData.forEach((_, i) => {
+                const dot = document.createElement('div');
+                dot.className = 'dot';
+                dot.addEventListener('click', () => updateMechStage(i));
+                dotsContainer.appendChild(dot);
+            });
+
+            function updateMechStage(index) {
+                currentMechStage = index;
+                
+                // Update text
+                mechTitle.textContent = mechData[index].title;
+                mechDesc.textContent = mechData[index].desc;
+
+                // Update dots
+                document.querySelectorAll('.dot').forEach((d, i) => {
+                    d.classList.toggle('active', i === index);
+                });
+
+                // Update SVG visuals (Cumulative visibility)
+                mechData.forEach((data, i) => {
+                    const el = document.getElementById(data.svgId);
+                    if(el) {
+                        if(i <= index) {
+                            el.classList.add('mech-active');
+                            el.classList.remove('mech-fade');
+                        } else {
+                            el.classList.remove('mech-active');
+                            el.classList.add('mech-fade');
+                        }
+                    }
+                });
+            }
+
+            function nextStage() {
+                let next = currentMechStage + 1;
+                if (next >= mechData.length) next = 0; // Loop
+                updateMechStage(next);
+            }
+
+            function prevStage() {
+                let prev = currentMechStage - 1;
+                if (prev < 0) prev = mechData.length - 1;
+                updateMechStage(prev);
+            }
+
+            function togglePlay() {
+                isPlaying = !isPlaying;
+                if(isPlaying) {
+                    iconPlay.style.display = 'none';
+                    iconPause.style.display = 'block';
+                    mechInterval = setInterval(nextStage, 3000);
+                } else {
+                    iconPlay.style.display = 'block';
+                    iconPause.style.display = 'none';
+                    clearInterval(mechInterval);
+                }
+            }
+
+            btnNext.addEventListener('click', () => { clearInterval(mechInterval); isPlaying = false; iconPlay.style.display = 'block'; iconPause.style.display = 'none'; nextStage(); });
+            btnPrev.addEventListener('click', () => { clearInterval(mechInterval); isPlaying = false; iconPlay.style.display = 'block'; iconPause.style.display = 'none'; prevStage(); });
+            btnPlay.addEventListener('click', togglePlay);
+
+            // Initialize first stage
+            updateMechStage(0);
+
+
+            /* -----------------------------------------------------------
+               3. INTERACTIVE SIMULATION (Canvas Particle System)
+               ----------------------------------------------------------- */
+            const canvas = document.getElementById('sim-canvas');
+            const ctx = canvas.getContext('2d');
+            const container = document.getElementById('sim-container');
+            const tempSlider = document.getElementById('temp-slider');
+            const tempValDisplay = document.getElementById('temp-val');
+
+            let width, height;
+            let currentTemp = 20;
+
+            // Fractions Data with visual mappings relative to a 400x800 logical canvas
+            const simFractions = [
+                { name: "Gas", bp: 20, color: "#00f3ff", targetY: 100 },
+                { name: "Petrol", bp: 100, color: "#ffea00", targetY: 200 },
+                { name: "Naphtha", bp: 180, color: "#ffa500", targetY: 300 },
+                { name: "Kerosene", bp: 250, color: "#ff4500", targetY: 400 },
+                { name: "Diesel", bp: 320, color: "#ff00ff", targetY: 500 },
+                { name: "Fuel", bp: 380, color: "#8a2be2", targetY: 600 }
+            ];
+
+            let particles = [];
+
+            function resizeCanvas() {
+                const rect = container.getBoundingClientRect();
+                // Handle high DPI displays
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                width = rect.width;
+                height = rect.height;
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+            // Also listen to orientation change for mobile
+            window.addEventListener('orientationchange', () => setTimeout(resizeCanvas, 100));
+            resizeCanvas();
+
+            class Particle {
+                constructor(fractionType) {
+                    this.fraction = fractionType;
+                    // Start at bottom center of tower (mapped to canvas width/height)
+                    this.x = (width * 0.5) + (Math.random() * 40 - 20);
+                    this.y = height * 0.9; 
+                    
+                    // Upward velocity
+                    this.vy = -(Math.random() * 2 + 1);
+                    this.vx = (Math.random() - 0.5) * 0.5;
+                    
+                    this.radius = Math.random() * 3 + 2;
+                    this.life = 1;
+                    this.state = 'rising'; // rising, condensing, exiting
+                    
+                    // Map logical targetY (0-800 scale from SVG viewbox) to actual canvas height
+                    this.actualTargetY = (this.fraction.targetY / 800) * height;
+                }
+
+                update() {
+                    if (this.state === 'rising') {
+                        this.y += this.vy;
+                        this.x += this.vx;
+                        
+                        // Check if reached condensation point
+                        if (this.y <= this.actualTargetY) {
+                            this.state = 'condensing';
+                            this.vy = 0;
+                            this.y = this.actualTargetY;
+                        }
+                    } else if (this.state === 'condensing') {
+                        // Move right towards exit pipe
+                        this.vx = 2;
+                        this.x += this.vx;
+                        
+                        // Liquid physics (slight droop)
+                        if(Math.random() > 0.8) this.y += 0.5;
+
+                        // Fade out as it exits right side of tower
+                        if (this.x > width * 0.7) {
+                            this.life -= 0.05;
+                        }
+                    }
+                }
+
+                draw(ctx) {
+                    ctx.save();
+                    ctx.globalAlpha = this.life;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = this.fraction.color;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = this.fraction.color;
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            function updateSimulation() {
+                // Clear with slight trailing effect
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(0, 0, width, height);
+
+                // Spawn new particles based on temperature
+                if (Math.random() < 0.3) {
+                    // Find valid fractions that boil at or below current temp
+                    const validFractions = simFractions.filter(f => currentTemp >= f.bp);
+                    
+                    if (validFractions.length > 0) {
+                        // Pick a random valid fraction
+                        const type = validFractions[Math.floor(Math.random() * validFractions.length)];
+                        particles.push(new Particle(type));
+                    }
+                }
+
+                // Update & Draw
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    p.update();
+                    p.draw(ctx);
+                    
+                    // Remove dead particles
+                    if (p.life <= 0 || p.x > width) {
+                        particles.splice(i, 1);
+                    }
+                }
+
+                // Draw heat glow at bottom based on temp
+                if(currentTemp > 20) {
+                    const heatIntensity = currentTemp / 450;
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'lighter';
+                    const gradient = ctx.createRadialGradient(width/2, height*0.9, 10, width/2, height*0.9, 100);
+                    gradient.addColorStop(0, `rgba(255, 69, 0, ${heatIntensity * 0.8})`);
+                    gradient.addColorStop(1, 'rgba(255, 69, 0, 0)');
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(width/2, height*0.9, 100, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+
+                requestAnimationFrame(updateSimulation);
+            }
+
+            // Slider Event Listener
+            tempSlider.addEventListener('input', (e) => {
+                currentTemp = parseInt(e.target.value);
+                tempValDisplay.textContent = currentTemp;
+                
+                // Visual feedback on slider track
+                const percentage = ((currentTemp - 20) / (450 - 20)) * 100;
+                e.target.style.background = `linear-gradient(90deg, #ff4500 ${percentage}%, #333 ${percentage}%)`;
+            });
+
+            // Start loop
+            updateSimulation();
+
+        });
+    </script>
+</body>
+</html>

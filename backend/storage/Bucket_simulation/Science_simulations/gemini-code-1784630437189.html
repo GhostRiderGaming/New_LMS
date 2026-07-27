@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Candle Flame Zones Simulation</title>
+    <style>
+        /* ==========================================================================
+           CSS VARIABLES & THEME SETUP
+           ========================================================================== */
+        :root {
+            --bg-color: #07090f;
+            --panel-bg: rgba(20, 25, 40, 0.4);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --text-main: #f0f4f8;
+            --text-muted: #9ba4b5;
+            --accent-blue: #4fa6ff;
+            --accent-yellow: #ffd700;
+            --accent-orange: #ff7300;
+            
+            /* Flame Zone Colors */
+            --zone-outer: #2bc4ff;
+            --zone-mid: #ffcc00;
+            --zone-inner: #cc4400;
+
+            /* Typography - Fluid */
+            --font-main: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --text-xs: clamp(0.75rem, 1vw, 0.875rem);
+            --text-sm: clamp(0.875rem, 1.2vw, 1rem);
+            --text-base: clamp(1rem, 1.5vw, 1.125rem);
+            --text-lg: clamp(1.25rem, 2vw, 1.5rem);
+            --text-xl: clamp(1.5rem, 3vw, 2.5rem);
+            --text-xxl: clamp(2rem, 5vw, 3.5rem);
+
+            --radius-md: 16px;
+            --radius-lg: 24px;
+            --transition-smooth: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            line-height: 1.6;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 15% 50%, rgba(43, 196, 255, 0.03) 0%, transparent 50%),
+                radial-gradient(circle at 85% 30%, rgba(255, 204, 0, 0.03) 0%, transparent 50%);
+        }
+
+        /* Glassmorphism Utilities */
+        .glass-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Layout Architecture */
+        .container {
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: clamp(16px, 4vw, 40px);
+            display: flex;
+            flex-direction: column;
+            gap: clamp(40px, 8vw, 80px);
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2vh;
+            position: relative;
+            z-index: 10;
+        }
+
+        .tagline {
+            color: var(--accent-blue);
+            font-size: var(--text-sm);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        h1 {
+            font-size: var(--text-xxl);
+            font-weight: 700;
+            background: linear-gradient(to right, #fff, #ffd700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: var(--text-base);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        section {
+            position: relative;
+        }
+
+        .section-header {
+            margin-bottom: clamp(20px, 4vw, 32px);
+        }
+
+        h2 {
+            font-size: var(--text-xl);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        h2::before {
+            content: '';
+            display: block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            box-shadow: 0 0 10px var(--accent-blue);
+        }
+
+        /* ==========================================================================
+           SECTION: HERO (Animated Candle)
+           ========================================================================== */
+        .hero-visual {
+            height: 40vh;
+            min-height: 300px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            padding-bottom: 40px;
+            position: relative;
+        }
+
+        /* Pure CSS Animated Flame */
+        .css-candle {
+            position: relative;
+            width: 40px;
+            height: 120px;
+            background: linear-gradient(to bottom, #d4e2f0, #ffffff);
+            border-radius: 4px 4px 0 0;
+            box-shadow: inset -5px 0 10px rgba(0,0,0,0.1);
+        }
+
+        .css-wick {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 18px;
+            background: #2a2a2a;
+            border-radius: 2px;
+            z-index: 2;
+        }
+
+        .css-flame {
+            position: absolute;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 90px;
+            border-radius: 50% 50% 20% 20% / 60% 60% 30% 30%;
+            background: radial-gradient(ellipse at bottom, var(--zone-inner) 10%, var(--zone-mid) 40%, transparent 80%);
+            box-shadow: 
+                0 -10px 40px var(--zone-mid),
+                0 0 20px var(--zone-inner),
+                0 0 80px rgba(43, 196, 255, 0.4);
+            transform-origin: bottom center;
+            animation: flicker 0.12s infinite alternate, drift 2s infinite ease-in-out alternate;
+            z-index: 3;
+            filter: blur(1px);
+        }
+
+        .css-flame-inner {
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 20px;
+            height: 40px;
+            border-radius: 50% 50% 20% 20% / 60% 60% 30% 30%;
+            background: radial-gradient(ellipse at bottom, rgba(0,0,0,0.8) 10%, rgba(204,68,0,0.6) 60%, transparent 100%);
+            z-index: 4;
+        }
+
+        .css-flame-base {
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 20px;
+            border-radius: 50%;
+            background: radial-gradient(circle, var(--zone-outer) 20%, transparent 80%);
+            z-index: 5;
+            mix-blend-mode: screen;
+        }
+
+        @keyframes flicker {
+            0% { transform: translateX(-50%) scale(1) scaleY(1); opacity: 0.9; }
+            100% { transform: translateX(-50%) scale(1.02) scaleY(1.05); opacity: 1; }
+        }
+        @keyframes drift {
+            0% { transform: translateX(-50%) rotate(-2deg); }
+            100% { transform: translateX(-50%) rotate(2deg); }
+        }
+
+        /* ==========================================================================
+           SECTION: STRUCTURE (Markers + Legend)
+           ========================================================================== */
+        .diagram-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: center;
+        }
+
+        @media (max-width: 1024px) {
+            .diagram-grid { grid-template-columns: 1fr; }
+        }
+
+        .illustration-container {
+            position: relative;
+            width: 100%;
+            min-height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.02) 0%, transparent 70%);
+            border-radius: var(--radius-lg);
+        }
+
+        .flame-svg-wrapper {
+            position: relative;
+            width: 200px;
+            height: 350px;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        /* SVG Paths highlighting */
+        .svg-zone {
+            transition: var(--transition-smooth);
+            cursor: pointer;
+        }
+        .svg-zone.dimmed { opacity: 0.2; }
+        .svg-zone.active { filter: brightness(1.3) drop-shadow(0 0 10px currentColor); }
+
+        /* strict rule: Markers only on illustration */
+        .marker {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--panel-bg);
+            border: 2px solid;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 15px rgba(0,0,0,0.5);
+            transition: var(--transition-smooth);
+            z-index: 10;
+        }
+
+        .marker::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 2px solid inherit;
+            animation: pulse 2s infinite;
+            box-sizing: border-box;
+            border-color: inherit;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.5); opacity: 0; }
+        }
+
+        .marker[data-zone="1"] { border-color: var(--zone-outer); top: 15%; left: 95%; color: var(--zone-outer); }
+        .marker[data-zone="2"] { border-color: var(--zone-mid); top: 40%; left: 80%; color: var(--zone-mid); }
+        .marker[data-zone="3"] { border-color: var(--zone-inner); top: 65%; left: 55%; color: var(--zone-inner); }
+
+        .marker.active {
+            transform: translate(-50%, -50%) scale(1.2);
+            background: currentColor;
+            color: #000;
+        }
+
+        /* strict rule: Legend list outside */
+        .legend-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 20px;
+            border-radius: var(--radius-md);
+            border: 1px solid transparent;
+            transition: var(--transition-smooth);
+            cursor: pointer;
+            background: rgba(255,255,255,0.01);
+        }
+
+        .legend-item.active {
+            background: var(--panel-bg);
+            border-color: var(--panel-border);
+            transform: translateX(10px);
+        }
+
+        .legend-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            flex-shrink: 0;
+            border: 2px solid;
+        }
+
+        .legend-item[data-zone="1"] .legend-badge { border-color: var(--zone-outer); color: var(--zone-outer); }
+        .legend-item[data-zone="2"] .legend-badge { border-color: var(--zone-mid); color: var(--zone-mid); }
+        .legend-item[data-zone="3"] .legend-badge { border-color: var(--zone-inner); color: var(--zone-inner); }
+
+        .legend-item.active[data-zone="1"] { box-shadow: 0 0 20px rgba(43, 196, 255, 0.1); border-color: var(--zone-outer); }
+        .legend-item.active[data-zone="2"] { box-shadow: 0 0 20px rgba(255, 204, 0, 0.1); border-color: var(--zone-mid); }
+        .legend-item.active[data-zone="3"] { box-shadow: 0 0 20px rgba(204, 68, 0, 0.1); border-color: var(--zone-inner); }
+
+
+        .legend-content h3 {
+            font-size: var(--text-lg);
+            margin-bottom: 4px;
+            color: #fff;
+        }
+
+        .legend-content p {
+            font-size: var(--text-sm);
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        
+        .legend-stats {
+            display: flex;
+            gap: 12px;
+            font-size: var(--text-xs);
+        }
+        .stat-badge {
+            background: rgba(255,255,255,0.05);
+            padding: 4px 8px;
+            border-radius: 4px;
+            color: #fff;
+        }
+
+        /* ==========================================================================
+           SECTION: WORKING PROCESS (Mechanism)
+           ========================================================================== */
+        .mechanism-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            background: var(--panel-bg);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--panel-border);
+            overflow: hidden;
+        }
+
+        @media (max-width: 1024px) {
+            .mechanism-container { grid-template-columns: 1fr; }
+        }
+
+        .mechanism-visual {
+            background: #000;
+            position: relative;
+            min-height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* Mechanism Animation Elements */
+        .mech-svg {
+            width: 150px;
+            height: 300px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .particle-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .particle-layer.active { opacity: 1; }
+
+        /* Liquid wax animation */
+        .mech-wax-pool { fill: #d4e2f0; opacity: 0.9; transition: transform 0.5s; transform-origin: center; transform: scaleY(0); }
+        .step-1 .mech-wax-pool { transform: scaleY(1); }
+
+        /* Capillary action arrows */
+        .arrow-up {
+            fill: none; stroke: var(--accent-blue); stroke-width: 2;
+            stroke-dasharray: 10;
+            animation: marchUp 1s linear infinite;
+            opacity: 0;
+        }
+        .step-2 .arrow-up { opacity: 1; }
+        @keyframes marchUp { to { stroke-dashoffset: -20; } }
+
+        /* Vapor clouds */
+        .vapor-cloud { fill: rgba(255,255,255,0.3); opacity: 0; filter: blur(4px); transform-origin: bottom center; }
+        .step-3 .vapor-cloud { animation: vaporRise 2s ease-in infinite alternate; }
+        @keyframes vaporRise { 
+            0% { opacity: 0; transform: scale(0.5) translateY(0); }
+            50% { opacity: 1; }
+            100% { opacity: 0; transform: scale(1.5) translateY(-30px); }
+        }
+
+        /* Combustion */
+        .mech-flame-path { opacity: 0; transition: opacity 1s, fill 1s; }
+        .step-4 .mech-flame-path { opacity: 1; }
+
+        /* Mechanism UI */
+        .mechanism-ui {
+            padding: clamp(20px, 4vw, 40px);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .stage-indicator {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .stage-dot {
+            flex: 1;
+            height: 4px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+            transition: var(--transition-smooth);
+        }
+        .stage-dot.active { background: var(--accent-blue); box-shadow: 0 0 10px var(--accent-blue); }
+
+        .stage-content {
+            flex-grow: 1;
+        }
+
+        .stage-title {
+            color: var(--accent-blue);
+            font-size: var(--text-sm);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .stage-name {
+            font-size: var(--text-xl);
+            margin-bottom: 16px;
+        }
+
+        .stage-desc {
+            color: var(--text-muted);
+            font-size: var(--text-base);
+            margin-bottom: 24px;
+        }
+
+        .io-badges {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .io-badge {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: var(--text-xs);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .io-badge span { color: var(--text-muted); }
+        .io-badge strong { color: #fff; }
+        .icon-in::before { content: '→'; color: #4fa6ff; }
+        .icon-out::before { content: '→'; color: #ff7300; }
+
+        .mech-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-top: auto;
+        }
+
+        button {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--panel-border);
+            color: #fff;
+            padding: 12px 24px;
+            border-radius: 50px;
+            font-size: var(--text-sm);
+            font-family: inherit;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        button:hover:not(:disabled) {
+            background: rgba(255,255,255,0.1);
+            border-color: rgba(255,255,255,0.3);
+        }
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        
+        button.btn-primary {
+            background: var(--accent-blue);
+            color: #000;
+            border: none;
+            font-weight: 600;
+        }
+        button.btn-primary:hover {
+            background: #6bb3ff;
+            box-shadow: 0 0 15px rgba(79, 166, 255, 0.4);
+        }
+
+        /* ==========================================================================
+           SECTION: SIMULATION (Canvas Thermometer)
+           ========================================================================== */
+        .sim-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+            height: 500px;
+        }
+        @media (max-width: 1024px) {
+            .sim-layout { grid-template-columns: 1fr; height: auto; display: flex; flex-direction: column;}
+        }
+
+        .canvas-container {
+            background: #030407;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--panel-border);
+            position: relative;
+            overflow: hidden;
+            touch-action: none; /* Prevent scroll on touch device while dragging */
+            min-height: 400px;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+
+        .sim-instructions {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: var(--text-sm);
+            pointer-events: none;
+            color: #fff;
+            border: 1px solid rgba(255,255,255,0.1);
+            white-space: nowrap;
+        }
+
+        .sim-dashboard {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .dash-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .temp-display {
+            font-size: var(--text-xxl);
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+        .temp-unit {
+            font-size: var(--text-lg);
+            color: var(--text-muted);
+        }
+
+        .zone-name-display {
+            font-size: var(--text-lg);
+            color: var(--accent-yellow);
+            margin-top: 8px;
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+
+        .thermometer-bar-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            margin-top: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+        .thermometer-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--zone-inner), var(--zone-mid), var(--zone-outer));
+            border-radius: 4px;
+            transition: width 0.2s ease-out;
+        }
+
+        /* ==========================================================================
+           GRID CARDS (Facts, Revision)
+           ========================================================================== */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .info-card {
+            padding: 24px;
+            border-radius: var(--radius-md);
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            transition: var(--transition-smooth);
+        }
+
+        .info-card:hover {
+            background: rgba(255,255,255,0.05);
+            transform: translateY(-5px);
+            border-color: rgba(255,255,255,0.1);
+        }
+
+        .card-icon {
+            font-size: 24px;
+            margin-bottom: 16px;
+            display: inline-block;
+            background: rgba(255,255,255,0.1);
+            width: 48px; height: 48px;
+            line-height: 48px;
+            text-align: center;
+            border-radius: 50%;
+        }
+
+        .info-card h3 {
+            font-size: var(--text-lg);
+            margin-bottom: 12px;
+            color: #fff;
+        }
+
+        .info-card p {
+            color: var(--text-muted);
+            font-size: var(--text-sm);
+        }
+        
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--text-muted);
+            font-size: var(--text-xs);
+            border-top: 1px solid var(--panel-border);
+            margin-top: 40px;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- HERO SECTION -->
+    <header>
+        <span class="tagline">Interactive Science Visualization</span>
+        <h1>Candle Flame Zones</h1>
+        <p class="subtitle">Anatomy of combustion. Explore the invisible chemical processes that create light and heat.</p>
+    </header>
+
+    <div class="hero-visual">
+        <div class="css-candle">
+            <div class="css-wick"></div>
+            <div class="css-flame-base"></div>
+            <div class="css-flame-inner"></div>
+            <div class="css-flame"></div>
+        </div>
+    </div>
+
+    <!-- MAIN COMPONENTS (Strict Marker + Legend pattern) -->
+    <section class="glass-panel" style="padding: clamp(20px, 4vw, 40px);">
+        <div class="section-header">
+            <h2>Structure of a Flame</h2>
+            <p class="subtitle" style="margin: 0; font-size: var(--text-sm);">A flame is not a single entity. It consists of distinct zones based on oxygen availability and temperature.</p>
+        </div>
+
+        <div class="diagram-grid">
+            <!-- Left: Illustration with Markers -->
+            <div class="illustration-container">
+                <div class="flame-svg-wrapper">
+                    <!-- Complex SVG Flame -->
+                    <svg viewBox="0 0 100 180" id="zonesSvg">
+                        <defs>
+                            <!-- Gradients -->
+                            <linearGradient id="outerGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="#2bc4ff" stop-opacity="0.8" />
+                                <stop offset="10%" stop-color="#2bc4ff" stop-opacity="0.2" />
+                                <stop offset="100%" stop-color="transparent" stop-opacity="0" />
+                            </linearGradient>
+                            <linearGradient id="midGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+                                <stop offset="0%" stop-color="#ff9900" />
+                                <stop offset="50%" stop-color="#ffd700" />
+                                <stop offset="100%" stop-color="#ffffcc" />
+                            </linearGradient>
+                            <radialGradient id="innerGrad" cx="50%" cy="80%" r="50%">
+                                <stop offset="0%" stop-color="#111" />
+                                <stop offset="70%" stop-color="#8c2300" />
+                                <stop offset="100%" stop-color="#cc4400" />
+                            </radialGradient>
+                            <filter id="glow">
+                                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                                <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+
+                        <!-- Base/Candle Body -->
+                        <path d="M 40 160 L 60 160 L 60 180 L 40 180 Z" fill="#d4e2f0" />
+                        <path d="M 40 160 Q 50 155 60 160" fill="none" stroke="#b0c4de" stroke-width="2"/>
+                        
+                        <!-- Wick -->
+                        <path d="M 50 160 Q 48 145 52 135" fill="none" stroke="#222" stroke-width="2"/>
+                        <circle cx="52" cy="135" r="1.5" fill="#ff4400" filter="url(#glow)"/>
+
+                        <!-- Zones Paths -->
+                        <!-- 1. Outer Zone (Non-luminous) -->
+                        <path class="svg-zone" data-zone="1" d="M 50 10 C 20 50 15 130 50 160 C 85 130 80 50 50 10 Z" fill="url(#outerGrad)" stroke="rgba(43, 196, 255, 0.4)" stroke-width="0.5" filter="url(#glow)"/>
+                        
+                        <!-- 2. Middle Zone (Luminous) -->
+                        <path class="svg-zone" data-zone="2" d="M 50 30 C 30 60 25 120 50 145 C 75 120 70 60 50 30 Z" fill="url(#midGrad)" filter="url(#glow)"/>
+                        
+                        <!-- 3. Inner Zone (Dark) -->
+                        <path class="svg-zone" data-zone="3" d="M 50 80 C 40 100 42 135 50 140 C 58 135 60 100 50 80 Z" fill="url(#innerGrad)"/>
+                        
+                        <!-- Blue Base -->
+                        <path class="svg-zone" data-zone="1" d="M 40 150 Q 50 135 60 150 Q 50 165 40 150 Z" fill="#2bc4ff" opacity="0.6" filter="url(#glow)"/>
+                    </svg>
+
+                    <!-- Markers -->
+                    <div class="marker" data-zone="1">1</div>
+                    <div class="marker" data-zone="2">2</div>
+                    <div class="marker" data-zone="3">3</div>
+                </div>
+            </div>
+
+            <!-- Right: Legend List (No absolute positioning) -->
+            <div class="legend-list">
+                <!-- Item 1 -->
+                <div class="legend-item" data-zone="1">
+                    <div class="legend-badge">1</div>
+                    <div class="legend-content">
+                        <h3 style="color: var(--zone-outer)">Non-Luminous Zone</h3>
+                        <p>The outermost layer. Oxygen supply is abundant here, leading to complete combustion. It produces very little light but the most heat.</p>
+                        <div class="legend-stats">
+                            <span class="stat-badge">Complete Combustion</span>
+                            <span class="stat-badge">Hottest Part (~1400°C)</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Item 2 -->
+                <div class="legend-item" data-zone="2">
+                    <div class="legend-badge">2</div>
+                    <div class="legend-content">
+                        <h3 style="color: var(--zone-mid)">Luminous Zone</h3>
+                        <p>The middle yellow area. Limited oxygen causes incomplete combustion. Unburnt carbon particles get heated up and glow brightly (incandescence), producing the yellow light.</p>
+                        <div class="legend-stats">
+                            <span class="stat-badge">Incomplete Combustion</span>
+                            <span class="stat-badge">Moderate Heat (~1000°C)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Item 3 -->
+                <div class="legend-item" data-zone="3">
+                    <div class="legend-badge">3</div>
+                    <div class="legend-content">
+                        <h3 style="color: var(--zone-inner)">Dark Zone</h3>
+                        <p>The innermost area surrounding the wick. It contains unburnt wax vapors because oxygen cannot reach this deep inside the flame.</p>
+                        <div class="legend-stats">
+                            <span class="stat-badge">No Combustion</span>
+                            <span class="stat-badge">Least Hot (~800°C)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <!-- WORKING PROCESS (Mechanism Stage-by-Stage) -->
+    <section>
+        <div class="section-header">
+            <h2>How a Candle Burns</h2>
+            <p class="subtitle" style="margin: 0; font-size: var(--text-sm);">The continuous physical and chemical cycle of combustion.</p>
+        </div>
+
+        <div class="mechanism-container">
+            
+            <!-- Visual Left Side -->
+            <div class="mechanism-visual">
+                
+                <!-- Base SVG setup for mechanism -->
+                <svg viewBox="0 0 100 200" class="mech-svg">
+                    <!-- The solid candle -->
+                    <rect x="35" y="150" width="30" height="50" fill="#a0aab5" />
+                    <!-- The wick -->
+                    <line x1="50" y1="110" x2="50" y2="160" stroke="#444" stroke-width="3" stroke-linecap="round"/>
+                    
+                    <!-- Dynamic layers controlled via CSS classes on parent -->
+                    <g id="mechLayers">
+                        <!-- Step 1: Melt -->
+                        <path class="mech-wax-pool" d="M 35 150 Q 50 160 65 150 Q 50 145 35 150 Z" />
+                        
+                        <!-- Step 2: Capillary -->
+                        <path class="arrow-up" d="M 45 150 L 45 120" />
+                        <path class="arrow-up" d="M 55 150 L 55 120" />
+                        
+                        <!-- Step 3: Vaporization -->
+                        <circle cx="50" cy="115" r="8" class="vapor-cloud" />
+                        <circle cx="45" cy="110" r="6" class="vapor-cloud" />
+                        <circle cx="55" cy="110" r="6" class="vapor-cloud" />
+
+                        <!-- Step 4: Combustion Flame -->
+                        <path class="mech-flame-path" d="M 50 40 C 25 70 30 115 50 120 C 70 115 75 70 50 40 Z" fill="url(#midGrad)" />
+                    </g>
+                </svg>
+
+                <!-- Particle overlays outside SVG for better performance/effects if needed -->
+                <div class="particle-layer" id="oxygenParticles"></div>
+            </div>
+
+            <!-- UI Right Side -->
+            <div class="mechanism-ui">
+                <div>
+                    <div class="stage-indicator" id="stageDots">
+                        <div class="stage-dot active"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                        <div class="stage-dot"></div>
+                    </div>
+                    
+                    <div id="mechContent">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+
+                <div class="mech-controls">
+                    <button id="btnPrev" disabled>← Prev</button>
+                    <button id="btnNext">Next →</button>
+                    <button id="btnAuto" class="btn-primary">Auto-Play ⏵</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- INTERACTIVE SIMULATION -->
+    <section>
+        <div class="section-header">
+            <h2>Temperature Probe Simulation</h2>
+            <p class="subtitle" style="margin: 0; font-size: var(--text-sm);">Drag the probe across the flame to measure temperature and identify zones in real-time.</p>
+        </div>
+
+        <div class="sim-layout">
+            <!-- Canvas container -->
+            <div class="canvas-container" id="simWrapper">
+                <div class="sim-instructions">Drag probe to measure →</div>
+                <canvas id="simCanvas"></canvas>
+            </div>
+
+            <!-- Dashboard -->
+            <div class="sim-dashboard glass-panel">
+                <div class="dash-card">
+                    <span style="color: var(--text-muted); font-size: var(--text-xs); text-transform: uppercase;">Current Reading</span>
+                    <div class="temp-display">
+                        <span id="dashTemp">20</span><span class="temp-unit">°C</span>
+                    </div>
+                    <div class="zone-name-display" id="dashZoneName">Ambient Air</div>
+                    <p id="dashZoneDesc" style="font-size: var(--text-sm); color: var(--text-muted); margin:0;">
+                        Move the sensor into the flame to analyze the combustion zones.
+                    </p>
+                    
+                    <!-- Visual Temp Bar -->
+                    <div class="thermometer-bar-container">
+                        <div class="thermometer-fill" id="dashTempBar"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 10px; color: #666; margin-top: 4px;">
+                        <span>0°C</span>
+                        <span>1400°C</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- KNOWLEDGE GRID -->
+    <section>
+        <div class="card-grid">
+            <div class="info-card">
+                <div class="card-icon" style="color: #4fa6ff;">💡</div>
+                <h3>Why is it yellow?</h3>
+                <p>The yellow light doesn't come from a gas burning. It comes from solid soot (carbon particles) heating up until they glow red, then yellow, exactly like the filament in an old lightbulb.</p>
+            </div>
+            <div class="info-card">
+                <div class="card-icon" style="color: #ff7300;">🧲</div>
+                <h3>Zero Gravity Flame</h3>
+                <p>In space, a candle flame is completely round and blue! Without gravity, hot air doesn't rise (no convection), so the teardrop shape never forms and oxygen only reaches the surface slowly via diffusion.</p>
+            </div>
+            <div class="info-card">
+                <div class="card-icon" style="color: #ff4444;">⚠️</div>
+                <h3>Common Mistake</h3>
+                <p>People often think the brightest part of the flame is the hottest. It's actually the opposite. The faint, barely visible blue outer edge is where combustion is complete and temperature is highest.</p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>Interactive Educational Simulation • Developed for visual learning</p>
+    </footer>
+
+</div>
+
+<!-- ==========================================================================
+     JAVASCRIPT LOGIC
+     ========================================================================== -->
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        
+        /* ----------------------------------------------------------------------
+           1. ZONES DIAGRAM INTERACTION (Markers + Legend)
+           ---------------------------------------------------------------------- */
+        const zonesSvg = document.getElementById('zonesSvg');
+        const svgZones = document.querySelectorAll('.svg-zone');
+        const markers = document.querySelectorAll('.marker');
+        const legendItems = document.querySelectorAll('.legend-item');
+
+        function activateZone(zoneId) {
+            // Reset all
+            svgZones.forEach(z => z.classList.remove('active'));
+            svgZones.forEach(z => z.classList.add('dimmed')); // dim others
+            markers.forEach(m => m.classList.remove('active'));
+            legendItems.forEach(l => l.classList.remove('active'));
+
+            if(zoneId) {
+                // Highlight target
+                document.querySelectorAll(`.svg-zone[data-zone="${zoneId}"]`).forEach(z => {
+                    z.classList.remove('dimmed');
+                    z.classList.add('active');
+                });
+                document.querySelector(`.marker[data-zone="${zoneId}"]`).classList.add('active');
+                document.querySelector(`.legend-item[data-zone="${zoneId}"]`).classList.add('active');
+                
+                // Bring active SVG path to front (simple way in DOM)
+                document.querySelectorAll(`.svg-zone[data-zone="${zoneId}"]`).forEach(z => {
+                    z.parentNode.appendChild(z); 
+                });
+            } else {
+                // Remove dimmed state if nothing is active
+                svgZones.forEach(z => z.classList.remove('dimmed'));
+            }
+        }
+
+        // Add Event Listeners
+        const interactables = [...markers, ...legendItems, ...svgZones];
+        interactables.forEach(el => {
+            el.addEventListener('mouseenter', () => {
+                if(el.dataset.zone) activateZone(el.dataset.zone);
+            });
+            el.addEventListener('mouseleave', () => {
+                activateZone(null);
+            });
+            // Touch support
+            el.addEventListener('touchstart', (e) => {
+                // Prevent scroll on tap if needed, but let's just trigger
+                if(el.dataset.zone) activateZone(el.dataset.zone);
+            }, {passive: true});
+        });
+
+
+        /* ----------------------------------------------------------------------
+           2. WORKING MECHANISM (Step-by-Step)
+           ---------------------------------------------------------------------- */
+        const mechData = [
+            {
+                title: "Stage 1", name: "Melting Wax",
+                desc: "Heat from the flame melts the solid wax at the top of the candle, creating a small pool of liquid fuel.",
+                inIcon: "Heat", outIcon: "Liquid Wax"
+            },
+            {
+                title: "Stage 2", name: "Capillary Action",
+                desc: "The liquid wax is drawn up into the wick, fighting gravity. It moves through the tiny threads just like water climbing up a paper towel.",
+                inIcon: "Liquid Wax", outIcon: "Upward Flow"
+            },
+            {
+                title: "Stage 3", name: "Vaporization",
+                desc: "As the liquid wax nears the intense heat of the flame, it boils and turns into a hot gas (hydrocarbon vapor).",
+                inIcon: "Liquid Fuel", outIcon: "Wax Gas"
+            },
+            {
+                title: "Stage 4", name: "Combustion",
+                desc: "The wax vapor mixes with oxygen from the air. A chemical reaction occurs, generating heat, light, water vapor, and carbon dioxide.",
+                inIcon: "Vapor + O₂", outIcon: "Light + Heat + CO₂"
+            }
+        ];
+
+        let currentMechStep = 0;
+        let isAutoPlaying = false;
+        let autoPlayTimer = null;
+
+        const mechContent = document.getElementById('mechContent');
+        const mechLayers = document.getElementById('mechLayers');
+        const dots = document.querySelectorAll('.stage-dot');
+        const btnPrev = document.getElementById('btnPrev');
+        const btnNext = document.getElementById('btnNext');
+        const btnAuto = document.getElementById('btnAuto');
+
+        function renderMechStep(index) {
+            const data = mechData[index];
+            
+            // Update UI Text
+            mechContent.innerHTML = `
+                <div class="stage-title">${data.title}</div>
+                <div class="stage-name">${data.name}</div>
+                <div class="io-badges">
+                    <div class="io-badge icon-in"><span>In:</span> <strong>${data.inIcon}</strong></div>
+                    <div class="io-badge icon-out"><span>Out:</span> <strong>${data.outIcon}</strong></div>
+                </div>
+                <div class="stage-desc">${data.desc}</div>
+            `;
+
+            // Update SVG CSS class to trigger animations
+            mechLayers.className = `step-${index + 1}`;
+
+            // Update dots
+            dots.forEach((dot, i) => {
+                dot.classList.toggle('active', i === index);
+            });
+
+            // Update buttons
+            btnPrev.disabled = index === 0;
+            btnNext.disabled = index === mechData.length - 1;
+        }
+
+        function nextMechStep() {
+            if (currentMechStep < mechData.length - 1) {
+                currentMechStep++;
+                renderMechStep(currentMechStep);
+            } else if (isAutoPlaying) {
+                currentMechStep = 0; // Loop in autoplay
+                renderMechStep(currentMechStep);
+            }
+        }
+
+        function prevMechStep() {
+            if (currentMechStep > 0) {
+                currentMechStep--;
+                renderMechStep(currentMechStep);
+            }
+        }
+
+        function toggleAutoPlay() {
+            isAutoPlaying = !isAutoPlaying;
+            if (isAutoPlaying) {
+                btnAuto.innerHTML = 'Stop ⏸';
+                btnAuto.style.background = '#ff7300';
+                nextMechStep(); // trigger immediately
+                autoPlayTimer = setInterval(nextMechStep, 3500); // 3.5s per stage
+            } else {
+                btnAuto.innerHTML = 'Auto-Play ⏵';
+                btnAuto.style.background = 'var(--accent-blue)';
+                clearInterval(autoPlayTimer);
+            }
+        }
+
+        btnNext.addEventListener('click', () => { if(isAutoPlaying) toggleAutoPlay(); nextMechStep(); });
+        btnPrev.addEventListener('click', () => { if(isAutoPlaying) toggleAutoPlay(); prevMechStep(); });
+        btnAuto.addEventListener('click', toggleAutoPlay);
+
+        // Init Mechanism
+        renderMechStep(0);
+
+
+        /* ----------------------------------------------------------------------
+           3. INTERACTIVE SIMULATION (Canvas)
+           ---------------------------------------------------------------------- */
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const wrapper = document.getElementById('simWrapper');
+        
+        // Dashboard DOM
+        const dashTemp = document.getElementById('dashTemp');
+        const dashZoneName = document.getElementById('dashZoneName');
+        const dashZoneDesc = document.getElementById('dashZoneDesc');
+        const dashTempBar = document.getElementById('dashTempBar');
+
+        let width, height;
+        let flameCenter = { x: 0, y: 0 };
+        let probe = { x: 0, y: 0, radius: 8, isDragging: false };
+        let dpr = window.devicePixelRatio || 1;
+
+        // Particle system for ambient effect
+        let particles = [];
+
+        function initCanvas() {
+            const rect = wrapper.getBoundingClientRect();
+            width = rect.width;
+            height = rect.height;
+            
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            ctx.scale(dpr, dpr);
+
+            // Establish coordinate system
+            flameCenter.x = width / 2;
+            flameCenter.y = height * 0.7; // Base of flame
+
+            // Initial probe position (outside flame)
+            if(!probe.isDragging) {
+                probe.x = width * 0.8;
+                probe.y = height * 0.5;
+            }
+
+            // Init particles
+            if(particles.length === 0) {
+                for(let i=0; i<30; i++) {
+                    particles.push({
+                        x: flameCenter.x + (Math.random() - 0.5) * 60,
+                        y: flameCenter.y - Math.random() * 200,
+                        speedY: Math.random() * 1.5 + 0.5,
+                        radius: Math.random() * 2 + 1,
+                        alpha: Math.random()
+                    });
+                }
+            }
+        }
+
+        // Zone definitions based on distance from center/wick
+        // Using ellipses roughly mapped to visuals
+        const ZONES = {
+            INNER: { name: 'Dark Zone', temp: 800, maxRx: 15, maxRy: 40, color: '#cc4400', desc: 'Unburnt wax vapors. Coolest part of the flame as no oxygen reaches here.' },
+            MID:   { name: 'Luminous Zone', temp: 1000, maxRx: 30, maxRy: 100, color: '#ffd700', desc: 'Incomplete combustion. Glowing carbon soot produces the yellow light.' },
+            OUTER: { name: 'Non-Luminous Zone', temp: 1400, maxRx: 45, maxRy: 140, color: '#2bc4ff', desc: 'Complete combustion area. Plenty of oxygen, generating maximum heat.' },
+            AMBIENT: { name: 'Ambient Air', temp: 25, color: '#9ba4b5', desc: 'Normal room temperature air outside the reaction zone.' }
+        };
+
+        function calculateCurrentZone(px, py) {
+            // Math: check if point is inside ellipse (x-cx)^2/rx^2 + (y-cy)^2/ry^2 <= 1
+            // Offset Y so flame grows upwards from center
+            let dx = px - flameCenter.x;
+            // Flame center is base, flame goes UP (negative Y)
+            let dy = py - (flameCenter.y - 50); // Shift center of ellipses up
+
+            function isInside(rx, ry) {
+                // Adjust for flame teardrop shape roughly
+                let adjustedRy = dy > 0 ? ry * 0.3 : ry; // Shorter at bottom
+                return (dx*dx)/(rx*rx) + (dy*dy)/(adjustedRy*adjustedRy) <= 1;
+            }
+
+            if (isInside(ZONES.INNER.maxRx, ZONES.INNER.maxRy)) return ZONES.INNER;
+            if (isInside(ZONES.MID.maxRx, ZONES.MID.maxRy)) return ZONES.MID;
+            if (isInside(ZONES.OUTER.maxRx, ZONES.OUTER.maxRy)) return ZONES.OUTER;
+            return ZONES.AMBIENT;
+        }
+
+        let currentDisplayedTemp = 20;
+
+        function updateDashboard(targetZone) {
+            // Animate number
+            let diff = targetZone.temp - currentDisplayedTemp;
+            currentDisplayedTemp += diff * 0.1; // Ease
+            if(Math.abs(diff) < 1) currentDisplayedTemp = targetZone.temp;
+
+            dashTemp.innerText = Math.round(currentDisplayedTemp);
+            
+            // Only update text if zone changed to avoid DOM thrashing
+            if(dashZoneName.innerText !== targetZone.name) {
+                dashZoneName.innerText = targetZone.name;
+                dashZoneName.style.color = targetZone.color;
+                dashZoneDesc.innerText = targetZone.desc;
+            }
+
+            // Update progress bar (0 to 1400 mapped to 0 to 100%)
+            let percentage = (currentDisplayedTemp / 1400) * 100;
+            dashTempBar.style.width = `${Math.min(100, Math.max(0, percentage))}%`;
+        }
+
+
+        let time = 0;
+        function drawCanvas() {
+            time += 0.05;
+            ctx.clearRect(0, 0, width, height);
+
+            // 1. Draw Candle Body
+            ctx.fillStyle = '#a0aab5';
+            ctx.beginPath();
+            ctx.roundRect(flameCenter.x - 20, flameCenter.y, 40, height - flameCenter.y + 10, [4, 4, 0, 0]);
+            ctx.fill();
+
+            // Wick
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(flameCenter.x, flameCenter.y);
+            ctx.quadraticCurveTo(flameCenter.x - 2, flameCenter.y - 10, flameCenter.x + 2, flameCenter.y - 20);
+            ctx.stroke();
+            
+            // Wick ember
+            ctx.fillStyle = '#ff4400';
+            ctx.beginPath();
+            ctx.arc(flameCenter.x + 2, flameCenter.y - 20, 2.5, 0, Math.PI*2);
+            ctx.fill();
+
+            // 2. Draw Flame Zones (Static representation, relying on probe for interactivity)
+            // Outer
+            let flickerY = Math.sin(time) * 5;
+            let flickerX = Math.cos(time * 0.5) * 2;
+            
+            const gOuter = ctx.createRadialGradient(flameCenter.x, flameCenter.y - 60, 10, flameCenter.x, flameCenter.y - 60, ZONES.OUTER.maxRy);
+            gOuter.addColorStop(0, 'rgba(43, 196, 255, 0)');
+            gOuter.addColorStop(0.8, 'rgba(43, 196, 255, 0.15)');
+            gOuter.addColorStop(1, 'transparent');
+            
+            ctx.fillStyle = gOuter;
+            ctx.beginPath();
+            ctx.ellipse(flameCenter.x + flickerX, flameCenter.y - 50 + flickerY, ZONES.OUTER.maxRx, ZONES.OUTER.maxRy, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // Mid
+            const gMid = ctx.createRadialGradient(flameCenter.x, flameCenter.y - 40, 5, flameCenter.x, flameCenter.y - 40, ZONES.MID.maxRy);
+            gMid.addColorStop(0, 'rgba(255, 215, 0, 1)');
+            gMid.addColorStop(0.5, 'rgba(255, 150, 0, 0.8)');
+            gMid.addColorStop(1, 'transparent');
+
+            ctx.fillStyle = gMid;
+            ctx.beginPath();
+            ctx.ellipse(flameCenter.x + flickerX*0.8, flameCenter.y - 40 + flickerY*0.8, ZONES.MID.maxRx, ZONES.MID.maxRy, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // Inner
+            ctx.fillStyle = 'rgba(20, 5, 0, 0.9)';
+            ctx.beginPath();
+            ctx.ellipse(flameCenter.x, flameCenter.y - 20, ZONES.INNER.maxRx, ZONES.INNER.maxRy, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // Blue base
+            ctx.fillStyle = 'rgba(43, 196, 255, 0.6)';
+            ctx.beginPath();
+            ctx.ellipse(flameCenter.x, flameCenter.y - 5, 20, 10, 0, 0, Math.PI*2);
+            ctx.fill();
+
+            // Particles
+            ctx.fillStyle = 'rgba(255, 200, 100, 0.5)';
+            particles.forEach(p => {
+                p.y -= p.speedY;
+                p.x += Math.sin(p.y * 0.05) * 0.5;
+                if(p.y < flameCenter.y - 200) {
+                    p.y = flameCenter.y;
+                    p.x = flameCenter.x + (Math.random() - 0.5) * 30;
+                }
+                ctx.globalAlpha = p.alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI*2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+
+
+            // 3. Draw Probe System
+            
+            // Wire connecting to edge
+            ctx.strokeStyle = '#555';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(width, probe.y);
+            ctx.lineTo(probe.x, probe.y);
+            ctx.stroke();
+
+            // Probe Handle
+            ctx.fillStyle = '#333';
+            ctx.fillRect(probe.x + 10, probe.y - 4, 40, 8);
+            
+            // Probe Tip
+            const currentZone = calculateCurrentZone(probe.x, probe.y);
+            
+            // Tip Glow based on temp
+            ctx.shadowColor = currentZone.color;
+            ctx.shadowBlur = (currentDisplayedTemp / 1400) * 20;
+            
+            ctx.fillStyle = currentZone.temp > 100 ? '#fff' : '#888'; // Heat up visual
+            ctx.beginPath();
+            ctx.arc(probe.x, probe.y, probe.radius, 0, Math.PI*2);
+            ctx.fill();
+            
+            ctx.shadowBlur = 0; // reset
+
+            // Update DOM UI
+            updateDashboard(currentZone);
+
+            requestAnimationFrame(drawCanvas);
+        }
+
+        // Event Handling for Canvas
+        function getMousePos(evt) {
+            const rect = canvas.getBoundingClientRect();
+            // Handle touch or mouse
+            let clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+            let clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
+            
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        }
+
+        function handlePointerDown(e) {
+            const pos = getMousePos(e);
+            // Check if clicked near probe tip or handle
+            if(pos.x > probe.x - 20 && pos.x < probe.x + 50 && pos.y > probe.y - 20 && pos.y < probe.y + 20) {
+                probe.isDragging = true;
+                // Hide instructions when interaction starts
+                document.querySelector('.sim-instructions').style.opacity = 0;
+            }
+        }
+
+        function handlePointerMove(e) {
+            if(probe.isDragging) {
+                e.preventDefault(); // prevent scroll
+                const pos = getMousePos(e);
+                // Constrain probe within canvas
+                probe.x = Math.max(10, Math.min(width - 10, pos.x));
+                probe.y = Math.max(10, Math.min(height - 10, pos.y));
+            }
+        }
+
+        function handlePointerUp() {
+            probe.isDragging = false;
+        }
+
+        // Attach events
+        canvas.addEventListener('mousedown', handlePointerDown);
+        window.addEventListener('mousemove', handlePointerMove);
+        window.addEventListener('mouseup', handlePointerUp);
+
+        canvas.addEventListener('touchstart', handlePointerDown, {passive: false});
+        window.addEventListener('touchmove', handlePointerMove, {passive: false});
+        window.addEventListener('touchend', handlePointerUp);
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            initCanvas();
+        });
+        window.addEventListener('orientationchange', () => {
+            setTimeout(initCanvas, 100);
+        });
+
+        // Start
+        initCanvas();
+        drawCanvas();
+
+    });
+</script>
+</body>
+</html>
