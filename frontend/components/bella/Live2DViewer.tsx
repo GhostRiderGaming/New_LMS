@@ -3,7 +3,7 @@ import { useEffect, useRef, useCallback } from 'react'
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 
-export type EmotionState = 'neutral' | 'thinking' | 'happy' | 'angry' | 'scared' | 'blush'
+export type EmotionState = 'neutral' | 'thinking' | 'happy' | 'angry' | 'scared' | 'blush' | 'celebrate'
 
 export interface Live2DViewerProps {
   emotion: EmotionState
@@ -336,12 +336,14 @@ export function Live2DViewer({ emotion, isTalking, audioVolume = 0, onLoaded, mo
           model.internalModel.motionManager.groups.idle = ''
         }
 
-        // Scale & position
-        const scale = Math.min(CANVAS_W / model.width, CANVAS_H / model.height) * 0.95
+        // Scale & position (zoomed in to focus on upper body)
+        const baseScale = Math.min(CANVAS_W / model.width, CANVAS_H / model.height)
+        const scale = baseScale * 1.93
         model.scale.set(scale)
         model.anchor.set(0.5, 0.5)
         model.x = CANVAS_W / 2
-        model.y = CANVAS_H / 2
+        // Shift down so the head/chest is centered
+        model.y = CANVAS_H * 0.9
         model.eventMode = 'none'
         pixiApp.stage.eventMode = 'none'
         pixiApp.stage.addChild(model)

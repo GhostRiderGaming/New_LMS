@@ -89,6 +89,7 @@ function generateSvgPlaceholder(seed: string, icon: string) {
 
 function SimulationCard({ sim, category, onOpen }: { sim: SimulationItem, category: SimulationCategory, onOpen: (sim: SimulationItem) => void }) {
   const [isHovered, setIsHovered] = useState(false)
+  const [iframeLoaded, setIframeLoaded] = useState(false)
   const hoverTimeout = useRef<NodeJS.Timeout | null>(null)
 
   const handleMouseEnter = (e: React.MouseEvent<HTMLElement>) => {
@@ -102,6 +103,7 @@ function SimulationCard({ sim, category, onOpen }: { sim: SimulationItem, catego
     (e.currentTarget as HTMLElement).style.boxShadow = 'inset 0 1px 0 rgba(255,255,255,0.02)';
     if (hoverTimeout.current) clearTimeout(hoverTimeout.current)
     setIsHovered(false)
+    setIframeLoaded(false)
   }
 
   useEffect(() => {
@@ -138,11 +140,15 @@ function SimulationCard({ sim, category, onOpen }: { sim: SimulationItem, catego
         {/* Live Preview Iframe (loads on hover) */}
         {isHovered && (
           <div className="absolute inset-0 origin-top-left pointer-events-none" style={{ width: '200%', height: '200%', transform: 'scale(0.5)' }}>
+            {!iframeLoaded && (
+              <div className="absolute inset-0 bg-slate-800/80 animate-pulse z-10" />
+            )}
             <iframe 
               src={api.getSimulationFileUrl(category.name, sim.filename)}
               className="w-full h-full border-none opacity-0 animate-[fadeIn_0.5s_ease-out_forwards]" 
               sandbox="allow-scripts allow-same-origin"
               tabIndex={-1}
+              onLoad={() => setIframeLoaded(true)}
             />
           </div>
         )}
@@ -288,7 +294,7 @@ function SimulationLibrary() {
   // Loading state
   if (loading) {
     return (
-      <div className="p-6 max-w-7xl mx-auto text-center py-20">
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto text-center py-20">
         <div className="text-5xl mb-4 animate-pulse">🔬</div>
         <p className="text-sm text-slate-400">Loading simulation library...</p>
         <div className="mt-4 w-48 h-1 mx-auto rounded-full overflow-hidden" style={{ background: 'rgba(139,92,246,0.1)' }}>
@@ -301,7 +307,7 @@ function SimulationLibrary() {
   // Error state
   if (error) {
     return (
-      <div className="p-6 max-w-7xl mx-auto text-center py-20">
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto text-center py-20">
         <div className="text-5xl mb-4">⚠️</div>
         <p className="text-sm text-red-400 mb-4">{error}</p>
         <button
@@ -315,7 +321,7 @@ function SimulationLibrary() {
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       {/* ── Header ────────────────────────────────────────────────────── */}
       <div className="mb-8 animate-fadeInUp">
         <div className="flex items-center gap-3 mb-2">
@@ -482,7 +488,7 @@ function SimulationLibrary() {
 
             {/* Toolbar */}
             <div
-              className="flex items-center justify-between px-4 py-2.5 gap-2 shrink-0"
+              className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 py-2.5 gap-3 sm:gap-2 shrink-0 w-full"
               style={{
                 background: 'linear-gradient(180deg, rgba(10,10,32,0.98), rgba(12,12,36,0.98))',
                 borderBottom: '1px solid rgba(139, 92, 246, 0.1)',
@@ -505,7 +511,7 @@ function SimulationLibrary() {
                 </span>
               </div>
 
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto w-full sm:w-auto justify-end">
                 {isExplaining && (
                   <button
                     onClick={requestStopSpeaking}

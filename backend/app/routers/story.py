@@ -92,14 +92,18 @@ async def get_character_portrait(
         topic_summary=topic_summary,
     )
 
+    # resolve_character_portrait now always populates url for non-restricted results
+    # (both reference_styled and ai_interpretation paths return a direct URL)
     url = result.url
 
-    # For AI interpretation fallback, build a Pollinations URL
-    if result.source == "ai_interpretation" and result.ai_prompt and not url:
+    # Legacy fallback: if somehow url is still None and we have an ai_prompt, build URL
+    if not url and result.source == "ai_interpretation" and result.ai_prompt:
+        import urllib.parse
         encoded = urllib.parse.quote(result.ai_prompt)
+        seed = sum(ord(c) for c in name) % 100000
         url = (
             f"https://image.pollinations.ai/prompt/{encoded}"
-            f"?width=512&height=512&nologo=true"
+            f"?width=512&height=768&nologo=true&seed={seed}"
         )
 
     return PortraitResponse(

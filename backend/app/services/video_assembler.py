@@ -2,12 +2,12 @@
 Video Assembler — Converts a story plan + scene images into a narrated MP4 video.
 
 Pipeline:
-  1. For each scene: generate narration audio via edge-tts
+  1. For each scene: generate narration audio via Kokoro
   2. Load scene images, apply Ken Burns (pan/zoom) effects
   3. Add caption overlays and episode title cards
   4. Stitch everything into a single MP4 with audio
 
-Dependencies: moviepy, edge-tts, Pillow, imageio-ffmpeg
+Dependencies: moviepy, Pillow, imageio-ffmpeg
 """
 from __future__ import annotations
 
@@ -19,7 +19,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-import edge_tts
 from PIL import Image, ImageDraw, ImageFont
 from moviepy import (
     ImageClip,
@@ -37,7 +36,6 @@ from app.services.asset_manager import asset_manager
 # Constants
 # ---------------------------------------------------------------------------
 
-_TTS_VOICE = "en-US-AriaNeural"
 _VIDEO_SIZE = (1280, 720)
 _FPS = 24
 _TITLE_CARD_DURATION = 4  # seconds
@@ -49,10 +47,12 @@ _MIN_SCENE_DURATION = 5   # minimum seconds per scene
 # ---------------------------------------------------------------------------
 
 async def _synthesize_narration(text: str, output_path: str) -> float:
-    """Generate narration audio via edge-tts. Returns duration in seconds."""
+    """Generate narration audio via Kokoro TTS (with fallback). Returns duration in seconds."""
     try:
-        communicate = edge_tts.Communicate(text, _TTS_VOICE)
-        await communicate.save(output_path)
+        from app.services.bella_service import bella_service
+        audio_bytes = await bella_service.synthesize_speech(text)
+        with open(output_path, "wb") as f:
+            f.write(audio_bytes)
         
         # Get duration
         try:

@@ -4,6 +4,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import GameHUD from "@/components/layout/GameHUD";
 import { BellaPresence } from "@/components/bella/BellaPresence";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -36,13 +37,15 @@ export default function RootLayout({
         {/* Top Navigation HUD */}
         <GameHUD />
         
-        {/* Main Content Area */}
-        <main className="relative min-h-[calc(100vh-56px)] mt-14 z-10 px-3 sm:px-6 py-4 sm:py-6">
-          {children}
-        </main>
-        
-        {/* Floating Desktop Mate */}
-        <BellaPresence />
+        <ErrorBoundary>
+          {/* Main Content Area */}
+          <main className="relative min-h-[calc(100vh-56px)] mt-14 z-10 px-3 sm:px-6 py-4 sm:py-6">
+            {children}
+          </main>
+          
+          {/* Floating Desktop Mate */}
+          <BellaPresence />
+        </ErrorBoundary>
       </body>
     </html>
   );

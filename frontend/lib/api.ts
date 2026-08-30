@@ -6,7 +6,7 @@ const TIMEOUTS = {
   default: 30_000,
   model3d: 120_000,
   story: 30_000,   // job submission only — actual work is async
-  bella: 15_000,
+  bella: 60_000,
 }
 
 /** Map HTTP status codes to human-readable messages when no server message is available. */
@@ -204,17 +204,33 @@ export const api = {
 
   // --- Bella ---
   bellaChat: (message: string, session_id: string, language?: string) =>
-    request<{ reply: string; audio_b64?: string; phonemes?: { phoneme: string; time: number }[]; tts_available: boolean }>(
-      '/api/v1/bella/chat', { method: 'POST', body: JSON.stringify({ message, session_id, language }) }
+    request<{ reply: string; audio_b64?: string; phonemes?: { phoneme: string; time: number }[]; tts_available: boolean; emotion?: string; category?: string }>(
+      '/api/v1/bella/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message, session_id, language }),
+        timeoutMs: TIMEOUTS.bella,
+      }
     ),
   bellaExplain: (topic: string, options?: { image_context?: { source?: string; category?: string; caption?: string; prompt?: string }, section?: string, language?: string }) =>
-    request<{ explanation: string; audio_b64?: string; tts_available: boolean }>(
-      '/api/v1/bella/explain', { method: 'POST', body: JSON.stringify({ topic, image_context: options?.image_context, section: options?.section, language: options?.language }) }
+    request<{ explanation: string; audio_b64?: string; tts_available: boolean; emotion?: string; category?: string }>(
+      '/api/v1/bella/explain', {
+        method: 'POST',
+        body: JSON.stringify({ topic, image_context: options?.image_context, section: options?.section, language: options?.language }),
+        timeoutMs: TIMEOUTS.bella,
+      }
     ),
-  bellaTTS: async (text: string): Promise<ArrayBuffer> => {
-    const res = await requestRaw('/api/v1/bella/tts', { method: 'POST', body: JSON.stringify({ text }), headers: { 'Content-Type': 'application/json' } })
+  bellaTTS: async (text: string, options?: { language?: string; category?: string; emotion?: string; speed?: number }): Promise<ArrayBuffer> => {
+    const res = await requestRaw('/api/v1/bella/tts', {
+      method: 'POST',
+      body: JSON.stringify({ text, ...options }),
+      headers: { 'Content-Type': 'application/json' },
+    })
     return res.arrayBuffer()
   },
+  bellaDataset: () =>
+    request<{ count: number; dataset: Array<Record<string, any>> }>('/api/v1/bella/dataset'),
+  bellaPreviewUrl: (dialogueId: string) =>
+    `${BASE}/api/v1/bella/preview/${dialogueId}`,
   bellaTranscribe: (audioBlob: Blob) => {
     const form = new FormData(); form.append('audio', audioBlob)
     return request<{ transcript: string }>('/api/v1/bella/transcribe', { method: 'POST', body: form, headers: {} })

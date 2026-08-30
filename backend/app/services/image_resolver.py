@@ -412,24 +412,32 @@ class ImageResolver:
 
         # ── If reference found: build a reference-anchored restyled URL ───
         if reference_url:
-            # Build a Pollinations image-to-image URL that preserves identity
+            # Build a highly specific Pollinations image-to-image prompt.
+            # Key insight: the more specific the visual description in the prompt,
+            # the more the model anchors to the reference rather than hallucinating.
             restyle_prompt = (
-                f"Redraw this character exactly as shown in the reference image, "
-                f"in high-quality anime illustration style. "
-                f"Character: {name}"
+                f"masterpiece, best quality, ultra-detailed anime portrait of {name}"
                 + (f" from {source_work}" if source_work else "")
-                + ". Preserve exact face shape, hair color, hair style, eye color, "
-                f"eye pattern, outfit design, and color scheme. "
-                f"Do not change or reinterpret the character design. "
-                f"Clean background, professional anime portrait."
+                + f", based exactly on the reference image provided, "
+                f"preserve every detail from the reference: exact face shape, "
+                f"exact hair color and hairstyle, exact eye color and shape, "
+                f"exact skin tone, exact clothing design and colors, "
+                f"exact accessories and weapons if any. "
+                f"High-quality official anime art style, clean composition, "
+                f"detailed face, accurate character depiction, "
+                f"cinematic lighting, vibrant colors, sharp focus. "
+                f"negative: deformed face, wrong hair color, wrong eye color, "
+                f"generic character, inaccurate design, blurry, low quality"
             )
             import urllib.parse
             encoded_prompt = urllib.parse.quote(restyle_prompt)
             encoded_ref = urllib.parse.quote(reference_url)
+            # Use a fixed seed derived from name for reproducibility
+            seed = sum(ord(c) for c in name) % 100000
             restyled_url = (
                 f"https://image.pollinations.ai/prompt/{encoded_prompt}"
                 f"?image={encoded_ref}"
-                f"&width=512&height=512&nologo=true"
+                f"&width=512&height=768&nologo=true&seed={seed}"
             )
             return PortraitResult(
                 source="reference_styled",
@@ -439,37 +447,60 @@ class ImageResolver:
             )
 
         # ── Priority 3: AI generation (last resort) ──────────────────────
-        # Build the most detailed prompt possible from available information
+        # Use Groq to generate a highly detailed appearance description first,
+        # then build the richest possible prompt from it.
         appearance_hint = ""
         if topic_summary:
-            # Ask Groq to extract appearance details
             try:
                 desc_prompt = (
-                    f"From the following text, extract ONLY the physical appearance "
-                    f"details of '{name}' (hair color, clothing, weapons, distinctive "
-                    f"features). If no appearance details are found, describe what "
-                    f"'{name}' would typically look like based on their role. "
-                    f"Output ONLY comma-separated visual descriptors.\n\n{topic_summary[:500]}"
+                    f"Describe the EXACT physical appearance of '{name}' in precise visual detail: "
+                    f"hair color and style, eye color, skin tone, height/build, clothing and outfit, "
+                    f"distinctive features, weapons or tools they carry. "
+                    f"Context for reference: {topic_summary[:400]}\n\n"
+                    f"Output ONLY comma-separated visual descriptors — no explanation, no sentences."
                 )
                 appearance_hint = await self._groq_call(
-                    "You extract visual appearance descriptors from text. "
-                    "Output ONLY comma-separated visual tags — no explanation.",
+                    "You are a visual character designer. Extract or infer precise physical appearance "
+                    "details for image generation. Output ONLY comma-separated visual tags.",
                     desc_prompt,
-                    max_tokens=100,
+                    max_tokens=150,
                 )
             except Exception:
                 pass
 
+        seed = sum(ord(c) for c in name) % 100000
+        base_desc = (
+            f"masterpiece, best quality, ultra-detailed accurate portrait of {name}"
+            + (f" from {source_work}" if source_work else "")
+        )
+        if appearance_hint:
+            # Truncate to avoid extremely long URIs that exceed GET limits
+            if len(appearance_hint) > 300:
+                appearance_hint = appearance_hint[:300].rsplit(',', 1)[0]
+            base_desc += f", {appearance_hint}"
+        else:
+            base_desc += (
+                f", accurate likeness, historically and culturally accurate appearance, "
+                f"period-accurate clothing and features"
+            )
+
         ai_prompt = (
-            f"portrait of {name}"
-            + (f", {appearance_hint}" if appearance_hint else "")
-            + (f", from {source_work}" if source_work else "")
-            + ", detailed character portrait, high quality, masterpiece"
+            base_desc
+            + ", professional character portrait, cinematic lighting, "
+            + "sharp focus, highly detailed face, anime illustration style, "
+            + "vibrant colors, clean background"
+        )
+
+        import urllib.parse
+        encoded = urllib.parse.quote(ai_prompt)
+        ai_url = (
+            f"https://image.pollinations.ai/prompt/{encoded}"
+            f"?width=512&height=768&nologo=true&seed={seed}"
         )
 
         return PortraitResult(
             source="ai_interpretation",
-            url=None,
+            url=ai_url,
             ai_prompt=ai_prompt,
             label="AI Interpretation",
         )

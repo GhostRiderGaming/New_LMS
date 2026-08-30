@@ -15,7 +15,16 @@ interface Props {
 async function resolveSceneUrl(asset_id: string): Promise<string | null> {
   try {
     const asset = await api.getAsset(asset_id)
-    return asset.presigned_url ?? null
+    // For external (Wikimedia) assets, presigned_url is the external URL itself
+    // For local assets, it's the presigned S3/local URL
+    const url = asset.presigned_url ?? null
+    if (!url) return null
+    // Prefer external_url from metadata if present (more stable for Wikimedia)
+    const meta = asset.metadata as Record<string, unknown>
+    if (meta?.source === 'external' && meta?.external_url) {
+      return meta.external_url as string
+    }
+    return url
   } catch {
     return null
   }
@@ -44,14 +53,40 @@ function SafeImage({
 }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
+  // For Wikimedia images that fail with no-referrer, try proxying through the backend
+  const [proxied, setProxied] = useState(false)
 
   // Reset states when src changes
   useEffect(() => {
     setLoaded(false)
     setError(false)
+    setProxied(false)
   }, [src])
 
-  if (!src || error) {
+  // Determine effective src — if first load failed and it's a Wikimedia URL, proxy it
+  const isWikimedia = src?.includes('wikimedia.org') || src?.includes('wikipedia.org')
+  const effectiveSrc = error && isWikimedia && !proxied
+    ? undefined // will trigger proxy retry below
+    : src
+
+  const handleError = () => {
+    if (isWikimedia && !proxied) {
+      // Retry via backend proxy to sidestep Wikimedia hotlink protection
+      setProxied(true)
+      setError(false)
+      setLoaded(false)
+    } else {
+      setError(true)
+    }
+  }
+
+  // Proxied Wikimedia src: route through backend download endpoint isn't available for external URLs,
+  // so use a public CORS proxy as fallback
+  const finalSrc = proxied && src
+    ? `https://images.weserv.nl/?url=${encodeURIComponent(src)}&output=jpg&w=800`
+    : src
+
+  if (!finalSrc || error) {
     return (
       <div className={`flex items-center justify-center bg-bg-elevated ${className}`}>
         <div className="text-center px-4">
@@ -71,12 +106,13 @@ function SafeImage({
         </div>
       )}
       <img
-        src={src}
+        src={finalSrc}
         alt={alt}
         className={`w-full h-full ${objectFit} transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-        referrerPolicy="no-referrer"
+        referrerPolicy="strict-origin-when-cross-origin"
+        crossOrigin="anonymous"
         onLoad={() => setLoaded(true)}
-        onError={() => setError(true)}
+        onError={handleError}
       />
       {/* Source badge */}
       {badge && loaded && (
@@ -113,7 +149,9 @@ function CharacterPortrait({
     const load = async () => {
       setLoading(true)
       try {
-        const result = await api.getCharacterPortrait(character.name, topic, character.description)
+        // Fix: pass story topic as topicSummary (3rd arg), not character description.
+        // character.description is long prose — it pollutes the Wikimedia search context.
+        const result = await api.getCharacterPortrait(character.name, topic, topic)
         if (!cancelled) setPortrait(result)
       } catch {
         if (!cancelled) setPortrait(null)
@@ -320,7 +358,7 @@ export default function StoryPlayer({ story }: Props) {
           <div className="absolute -top-20 -right-20 w-64 h-64 bg-accent-purple/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-accent-cyan/10 rounded-full blur-3xl pointer-events-none" />
           
-          <div className="relative p-6 sm:p-8">
+          <div className="relative p-4 sm:p-8">
             <div className="flex items-start justify-between gap-4 mb-6">
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -514,7 +552,7 @@ export default function StoryPlayer({ story }: Props) {
       {/* Episode Title Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-bg-card to-bg-elevated border border-accent-purple/20 p-5">
         <div className="absolute -top-10 -right-10 w-40 h-40 bg-accent-purple/5 rounded-full blur-2xl pointer-events-none" />
-        <div className="relative flex items-center justify-between">
+        <div className="relative flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-4">
           <div>
             <span className="text-xs text-accent-cyan font-bold uppercase tracking-wider">Episode {episode?.episode_number}</span>
             <h3 className="text-xl font-bold text-white mt-1">{episode?.title}</h3>
@@ -554,7 +592,7 @@ export default function StoryPlayer({ story }: Props) {
         </div>
 
         {/* Navigation — Bug 7: relative + z-10 ensures it stays above any overlays */}
-        <div className="px-5 py-4 border-t border-border flex items-center justify-between relative z-10">
+        <div className="px-4 sm:px-5 py-4 border-t border-border flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-between gap-4 sm:gap-0 relative z-10">
           <button
             onClick={handlePrev}
             disabled={isFirst}

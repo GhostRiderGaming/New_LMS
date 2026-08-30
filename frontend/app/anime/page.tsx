@@ -141,7 +141,7 @@ function AnimePageInner() {
   }
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-8 animate-fadeInUp">
         <div className="flex items-center gap-3 mb-2">
@@ -207,7 +207,7 @@ function AnimePageInner() {
       {/* Results */}
       {scenes.length > 0 && (
         <div className="animate-fadeInUp">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
             <h2 className="text-lg font-bold text-white">Generated Scenes</h2>
             <div className="flex items-center gap-3">
               {/* Stop Bella button — shown when she's explaining */}

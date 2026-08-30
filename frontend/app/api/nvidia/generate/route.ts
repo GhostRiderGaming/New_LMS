@@ -66,7 +66,8 @@ ABSOLUTE RULES — FOLLOW EVERY SINGLE ONE WITHOUT EXCEPTION
    - At extreme parameter values, behavior must degrade gracefully (clamp, cap, bound) rather than glitch.
    - Do not depict any religious figures in a literal/figurative visual form.
 
-6. DO NOT generate left-panel navigation or UI cards. The parent app handles ALL layout. You ONLY render the full-screen canvas and the hidden <input> elements.`
+6. DO NOT generate left-panel navigation or UI cards. The parent app handles ALL layout. You ONLY render the full-screen canvas and the hidden <input> elements.
+7. PERFORMANCE STRICT CAP: If you use particles or many moving objects, strictly limit them to < 100 total entities. Use efficient drawing logic to prevent browser lag.`
 
     const userPrompt = `Create a gamified, PhET-style interactive simulation for: "${concept.trim()}"
 

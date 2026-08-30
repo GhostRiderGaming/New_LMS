@@ -6,7 +6,7 @@ import JobProgressBar from '@/components/shared/JobProgressBar'
 import ErrorCard from '@/components/shared/ErrorCard'
 import StoryPlayer from '@/components/story/StoryPlayer'
 import { api } from '@/lib/api'
-import type { Job, StoryPlan, EpisodePlan } from '@/lib/api'
+import type { Job } from '@/lib/api'
 import { useGameProgress } from '@/lib/useGameProgress'
 import { useBellaStore } from '@/lib/bellaStore'
 
@@ -48,7 +48,7 @@ export interface StoryPlan {
 
 export default function StoryPage() {
   return (
-    <Suspense fallback={<div className="p-6 max-w-5xl mx-auto text-center py-20 text-slate-600"><div className="text-5xl mb-4 animate-pulse">📖</div><p className="text-sm">Loading Chronicle...</p></div>}>
+    <Suspense fallback={<div className="p-4 sm:p-6 max-w-5xl mx-auto text-center py-20 text-slate-600"><div className="text-5xl mb-4 animate-pulse">📖</div><p className="text-sm">Loading Chronicle...</p></div>}>
       <StoryPageInner />
     </Suspense>
   )
@@ -167,7 +167,7 @@ function StoryPageInner() {
   }, [])
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-5xl mx-auto">
       <div className="mb-8 animate-fadeInUp">
         <div className="flex items-center gap-3 mb-2">
           <div className="w-12 h-12 rounded-xl bg-accent-purple/20 flex items-center justify-center text-2xl border border-accent-purple/20">📖</div>
@@ -186,7 +186,7 @@ function StoryPageInner() {
           placeholder="Enter a topic — e.g. Quantum Physics, The French Revolution..."
           buttonLabel="Generate Story"
         >
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
             <span className="text-xs text-slate-400">Episodes:</span>
             <div className="flex gap-1.5">
               {[3, 5, 7, 10].map((n) => (

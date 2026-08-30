@@ -105,9 +105,9 @@ export default function HomePage() {
   return (
     <div className="min-h-[80vh] flex flex-col">
       {/* ─── Hero Section ────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-16 text-center relative">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-10 sm:py-16 text-center relative">
         {/* Decorative circle */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[600px] rounded-full opacity-20 pointer-events-none"
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[300px] h-[300px] sm:w-[600px] sm:h-[600px] rounded-full opacity-20 pointer-events-none"
           style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.2) 0%, transparent 70%)' }} />
 
         {/* Tagline typing */}
@@ -137,7 +137,7 @@ export default function HomePage() {
         {/* ─── Command Input ─────────────────────────────────────────── */}
         {showContent && (
           <div className="w-full max-w-2xl animate-fadeInUp" style={{ animationDelay: '0.1s' }}>
-            <div className="card-game p-6">
+            <div className="card-game p-4 sm:p-6">
               {/* Topic input */}
               <div className="relative mb-5">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-accent-purple/50 text-sm">⚡</div>

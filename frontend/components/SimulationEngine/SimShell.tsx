@@ -145,7 +145,7 @@ export default function SimShell({ concept, simulationCode, onRegenerate, fullsc
         <iframe
           ref={iframeRef}
           className="sim-shell__iframe"
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts"
           title="Interactive Simulation"
           onLoad={onIframeLoad}
           onError={onIframeError}

@@ -323,10 +323,15 @@ async def run_story_job(
                         break
 
                 try:
-                    # Bug 6 Round 2: pass story_metadata so scene images are queryable
+                    # Build a clean, specific topic for image generation.
+                    # Using the full compound string confuses the topic classifier.
+                    # Instead pass just the scene description, plus the story topic
+                    # as context via the caption.
+                    scene_topic = f"{scene.description} ({topic})"
+
                     asset = await generate_anime_image(
-                        topic=f"{topic} — Episode {episode.episode_number}: {episode.title} — {scene.description}",
-                        style=plan.setting_style,
+                        topic=scene_topic,
+                        style=plan.setting_style or "outdoor",
                         caption=scene.caption,
                         job_id=job_id,
                         session_id=session_id,
@@ -337,15 +342,16 @@ async def run_story_job(
                         },
                         reference_image_url=scene_ref_url,
                     )
-                    # Bug 6 Round 2: write asset_id back onto the scene
                     scene.asset_id = asset.asset_id
-                    # Read the generated image bytes from storage
                     from app.services.asset_manager import asset_manager
                     img_bytes = asset_manager.download_file(asset.file_path)
                     if img_bytes:
                         scene_images[scene_key] = img_bytes
                 except Exception as e:
                     logger.warning("Scene %s generation failed: %s", scene_key, e)
+                    # Longer pause after a failure to let Pollinations recover
+                    await asyncio.sleep(4.0)
+                    continue
                 
                 # Throttle to avoid 429
                 await asyncio.sleep(1.5)

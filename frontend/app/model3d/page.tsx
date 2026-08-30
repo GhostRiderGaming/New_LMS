@@ -35,7 +35,7 @@ interface Model3DResult {
 
 export default function Model3DPage() {
   return (
-    <Suspense fallback={<div className="p-6 max-w-4xl mx-auto text-center py-20 text-slate-600"><div className="text-5xl mb-4 animate-pulse">🧊</div><p className="text-sm">Loading Holodeck...</p></div>}>
+    <Suspense fallback={<div className="p-4 sm:p-6 max-w-4xl mx-auto text-center py-20 text-slate-600"><div className="text-5xl mb-4 animate-pulse">🧊</div><p className="text-sm">Loading Holodeck...</p></div>}>
       <Model3DPageInner />
     </Suspense>
   )
@@ -178,9 +178,9 @@ function Model3DPageInner() {
   }, [])
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-8 animate-fadeInUp flex items-center justify-between">
+      <div className="mb-8 animate-fadeInUp flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl bg-accent-pink/20 flex items-center justify-center text-2xl border border-accent-pink/20">🧊</div>
           <div>
@@ -242,7 +242,7 @@ function Model3DPageInner() {
       {/* Result */}
       {result && (
         <div className="animate-fadeInUp">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
             {fromCache ? (
               <div className="sim-engine__cache-badge">
                 <span className="sim-engine__cache-badge-icon">⚡</span>

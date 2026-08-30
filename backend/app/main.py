@@ -44,7 +44,18 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS — dynamically read allowed origins from env (I4)
 # ---------------------------------------------------------------------------
 
-_DEFAULT_ORIGINS = ["http://localhost:3000", "http://localhost:3001"]
+_DEFAULT_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://localhost:3003",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
+    "http://127.0.0.1:3003",
+    "http://127.0.0.1:5173",
+]
 _extra_origins = os.getenv("CORS_ORIGINS", "").strip()
 _allowed_origins = _DEFAULT_ORIGINS + ([o.strip() for o in _extra_origins.split(",") if o.strip()] if _extra_origins else [])
 
@@ -52,6 +63,7 @@ _allowed_origins = _DEFAULT_ORIGINS + ([o.strip() for o in _extra_origins.split(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

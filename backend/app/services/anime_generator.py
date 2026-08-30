@@ -214,10 +214,59 @@ async def generate_anime_image(
     If reference_image_url is provided, it's passed to Pollinations as a visual
     reference for identity-preserving generation (character accuracy pipeline).
     """
-    # 1. Resolve image source (Wikimedia for scientific diagrams, AI for everything else)
+    # 1. Resolve image source
+    # Skip the expensive resolver for story scenes (has_scene_context pattern)
+    # because we build the prompt directly from scene description + topic.
+    has_scene_context = (
+        style not in ("character",)
+        and "(" in topic
+        and topic.endswith(")")
+    )
+
+    if has_scene_context:
+        # Build prompt directly without calling resolve_image
+        paren_start = topic.rfind("(")
+        scene_desc = topic[:paren_start].strip()
+        story_context = topic[paren_start + 1:-1].strip()
+
+        anime_prompt = (
+            f"masterpiece, best quality, ultra-detailed cinematic anime scene, "
+            f"{scene_desc}, "
+            f"related to {story_context}, "
+            f"vivid accurate period environment, dramatic cinematic lighting, "
+            f"rich colors, sharp focus, expressive characters, "
+            f"anime art style, 8k resolution"
+        )
+        neg = (
+            "blurry, low quality, bad anatomy, watermark, text overlay, "
+            "generic, boring, modern classroom, school desks, whiteboard"
+        )
+        raw_bytes = await _call_pollinations_image(
+            anime_prompt,
+            negative=neg,
+            reference_image_url=reference_image_url,
+        )
+        final_bytes = _add_caption_overlay(raw_bytes, caption)
+        key = f"anime/{job_id}/{uuid.uuid4()}.png"
+        metadata = {
+            "caption": caption, "style": style,
+            "prompt": anime_prompt, "source": "ai_generated", "category": "HISTORICAL_EVENT",
+        }
+        if story_metadata:
+            metadata.update(story_metadata)
+        asset_manager.store_asset(
+            data=final_bytes, key=key, content_type="image/png",
+            topic=topic, asset_type="image", metadata=metadata,
+        )
+        return _store_asset_record(
+            job_id=job_id, asset_type="image", topic=topic,
+            file_path=key, file_size=len(final_bytes),
+            mime_type="image/png", metadata=metadata, session_id=session_id,
+        )
+
     result = await image_resolver.resolve_image(topic=topic, style=style)
 
-    # Determine negative prompt for scientific diagrams
+    # Negative prompt for scientific diagrams
     neg = _SCIENTIFIC_NEGATIVE if result.category == "SCIENTIFIC_DIAGRAM" else ""
 
     if result.source == "wikimedia" and result.url:
@@ -254,14 +303,25 @@ async def generate_anime_image(
             import json
             import asyncio
             from app.services.prompt_builder import prompt_builder
-            
+
+            # System prompt tuned for maximum character accuracy.
+            # Key insight: shorter positive prompts (< 80 words) outperform longer ones
+            # on Pollinations/Flux. Visual appearance must come FIRST in the prompt.
             system_prompt = (
-                "You are an elite expert art director. A user wants an image of a specific character or person.\n"
-                "You MUST output a valid JSON object with EXACTLY these four keys:\n"
-                "- 'wiki_query': The exact, canonical Wikipedia article title (e.g., 'Monkey D. Luffy', 'Isaac Newton').\n"
-                "- 'visual_appearance': Highly detailed physical description (hair, eyes, clothing, facial features).\n"
-                "- 'positive_prompt': An incredibly descriptive image generation prompt (max 75 words). Must include: 1) Full body portrait, flawless face. 2) Breathtaking, perfectly structured environment. 3) Exact art style. 4) Professional cinematography (e.g., f/1.8 aperture, volumetric rim lighting, masterpiece, 8k resolution).\n"
-                "- 'negative_prompt': Custom negative constraints to prevent style drift. For anime characters, penalize realistic/3D. For real people, penalize anime/cartoon/illustration."
+                "You are an expert character art director for image generation.\n"
+                "Given a character name, output a JSON object with EXACTLY these keys:\n"
+                "'wiki_query': Exact Wikipedia article title for this character/person "
+                "(e.g. 'Napoleon Bonaparte', 'Naruto Uzumaki'). Use the most famous/canonical name.\n"
+                "'visual_appearance': Precise comma-separated physical descriptors ONLY: "
+                "hair color+style, eye color, skin tone, height/build, clothing colors+style, "
+                "any distinctive marks or accessories. Maximum 40 words.\n"
+                "'positive_prompt': Dense image generation prompt starting with visual_appearance, "
+                "then character name, then quality tags. Format: "
+                "'[appearance], [name], [setting], masterpiece, best quality, highly detailed, "
+                "cinematic lighting, sharp focus, 8k'. Maximum 60 words total.\n"
+                "'negative_prompt': 10-15 comma-separated negative tags specific to this character type. "
+                "Real people: 'cartoon, anime style, illustration, painting, drawing'. "
+                "Anime/game characters: 'photorealistic, 3d render, photograph, live action'."
             )
             
             # OPTIMISTIC CONCURRENCY: Fetch Wikipedia for raw topic while LLaMA generates the prompt
@@ -306,9 +366,10 @@ async def generate_anime_image(
             
             if not anime_prompt:
                 anime_prompt = (
-                    f"Full body portrait of exactly {topic}, 100% accurate flawless face, true appearance. "
-                    f"Place {topic} in an incredibly detailed, breathtaking environment themed to them. "
-                    f"Masterpiece, 8k resolution, extreme detail, cinematic volumetric lighting, f/1.8 aperture."
+                    f"portrait of {topic}, accurate likeness, "
+                    f"detailed face, period-accurate clothing, "
+                    f"masterpiece, best quality, highly detailed, "
+                    f"cinematic lighting, sharp focus, 8k resolution"
                 )
 
             # Determine reference image (Optimistic hit or Secondary fetch)
