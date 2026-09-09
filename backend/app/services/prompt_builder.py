@@ -18,7 +18,7 @@ import os
 
 from groq import AsyncGroq
 
-_MODEL = "llama-3.3-70b-versatile"
+_MODEL = "openai/gpt-oss-120b"
 
 # ---------------------------------------------------------------------------
 # Topic classifier system prompt

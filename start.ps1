@@ -46,6 +46,8 @@ try {
 }
 
 Write-Host "  [4/5] Starting Celery Worker..." -ForegroundColor Yellow
+# Kill any lingering Celery processes to prevent zombie workers consuming tasks
+Get-WmiObject Win32_Process | Where-Object { $_.CommandLine -match "celery" } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 $celeryCmd = "cd `"$BACKEND`"; py -3.11 -m celery -A app.worker worker --loglevel=info --pool=solo"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $celeryCmd -WindowStyle Normal
 Start-Sleep -Seconds 3

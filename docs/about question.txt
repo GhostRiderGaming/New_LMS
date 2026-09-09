@@ -1,0 +1,71 @@
+AnimeEdu - Interview Preparation Questions & Answers
+
+--- Easy Questions (General & Conceptual) ---
+
+1. What is AnimeEdu and what is its main goal?
+Answer: AnimeEdu is an AI-powered educational platform. Its goal is to make learning engaging by transforming educational topics into anime scenes, 3D models, simulations, and animated stories.
+
+2. What are the key modules of the AnimeEdu platform? 
+Answer: Scene Forge (Anime images), Lab Engine (HTML5 simulations), Holodeck (3D models), Chronicle (Animated multi-episode stories), and Bella (AI voice tutor).
+
+3. Which programming language is primarily used for the backend?
+Answer: Python (specifically Python 3.11+).
+
+4. What frontend framework is used to build the user interface?
+Answer: Next.js 14 combined with React and TailwindCSS.
+
+5. Name two AI services that the AnimeEdu platform relies on.
+Answer: Groq (for fast LLM text generation) and Tripo AI (for 3D model generation). (Others include Pollinations, Hugging Face, edge-tts).
+
+6. What is the role of "Bella" in the application?
+Answer: Bella is a floating AI tutor companion that users can interact with using voice chat. She explains topics and answers questions in real-time.
+
+7. How does the application ensure that generated content is safe for education?
+Answer: It uses a two-stage safety filter before calling any AI generation API: first, a fast keyword blocklist, followed by a semantic LLM safety classifier powered by Groq.
+
+--- Medium Questions (Implementation & Architecture) ---
+
+8. Why did we choose FastAPI for the backend instead of something like Django or Flask?
+Answer: FastAPI is highly performant, natively supports asynchronous programming (which is crucial for AI API calls), and automatically generates Swagger documentation for our endpoints. It bridges the gap between Python's AI libraries and modern fast web servers.
+
+9. Explain how Celery and Redis work together in this project. Why are they necessary?
+Answer: Generating AI content (like 3D models) is slow. If the main server waits for it, the website freezes. Celery is a task queue that runs these heavy jobs in the background. Redis acts as the message broker, storing the tasks and passing them from FastAPI to the Celery workers. 
+
+10. Describe the flow of data when a user requests a new Anime Image (Scene Forge).
+Answer: Frontend click -> FastAPI endpoint -> Safety Check (Groq) -> Task sent to Celery -> Frontend receives a Job ID -> Celery calls Pollinations API -> Image downloaded & saved to DB -> Celery updates Job Status -> Frontend receives update via WebSocket and displays the image.
+
+11. How does the application handle real-time updates for long-running AI generation jobs?
+Answer: It uses WebSockets. When a job is submitted, the frontend opens a persistent WebSocket connection to the backend, listening for status updates (e.g., "processing", "completed") linked to the specific Job ID.
+
+12. Why are we using WebSockets in this application, and on which endpoints?
+Answer: WebSockets provide a two-way, real-time communication channel. Instead of the frontend constantly asking the server "Are you done yet?" (polling), the server instantly pushes a notification to the frontend when a background task (like Chronicle video rendering or Holodeck 3D generation) finishes.
+
+13. How do we manage environment variables and sensitive API keys in the project?
+Answer: They are stored in `.env` files (e.g., `backend/.env`). These files are added to `.gitignore` so they are never accidentally uploaded to public repositories like GitHub.
+
+14. Explain the difference between running the Celery worker with `--pool=solo` on Windows versus a standard Linux deployment.
+Answer: On Linux, Celery defaults to a "prefork" pool (creating multiple child processes). Windows does not support `fork()`, which causes crashes when running Celery. `--pool=solo` forces Celery to run in a single thread/process, bypassing the fork issue on Windows.
+
+--- Hard Questions (Advanced & Scalability) ---
+
+15. The application currently uses local storage by default but supports Google Cloud Storage (GCS). Explain how you would implement a clean abstraction layer (like Asset Manager) to seamlessly switch between local storage and GCS.
+Answer: You would create a base `StorageProvider` interface (abstract class) with methods like `save()`, `get()`, and `delete()`. Then, create two child classes: `LocalStorageProvider` and `GCSStorageProvider`. Based on the `STORAGE_BACKEND` environment variable, a factory pattern would instantiate the correct class. The rest of the application only interacts with the base interface, oblivious to the underlying storage mechanism.
+
+16. How would you handle rate limiting or quota management for expensive AI API calls (e.g., Groq or Tripo AI) on a per-user session basis?
+Answer: I would implement a Middleware or a Dependency Injection in FastAPI. Using Redis, I would track the API usage count or data size (Quota Service) tied to a user's API key or session token. If the limit (e.g., `STORAGE_QUOTA_BYTES`) is exceeded, the middleware intercepts the request and returns an HTTP 429 Too Many Requests error before hitting the expensive AI endpoints.
+
+17. The two-stage safety filter involves a keyword blocklist and an LLM safety classifier. How would you design this to have minimal latency impact on legitimate requests?
+Answer: The keyword blocklist must run locally in-memory (O(1) lookup time) to instantly reject obvious violations at zero latency cost. The LLM classifier is slower. To mitigate this, we use Groq (which is exceptionally fast) and cache the classification results using Redis. If a user asks for "Photosynthesis" and it's classified as safe, the next user asking for the same topic hits the Redis cache instead of triggering another LLM call.
+
+18. If the application scales to 10,000 concurrent users talking to the Bella AI tutor, what bottlenecks would you expect in the current architecture (FastAPI + Groq + Whisper STT), and how would you resolve them?
+Answer: The main bottlenecks would be WebSocket connection limits on the single FastAPI server and API rate limits from Groq/Whisper. 
+Resolution: 
+1) Horizontally scale the FastAPI backend across multiple servers using a load balancer (like Nginx). 
+2) Use Redis Pub/Sub as a backing store so WebSockets on different servers can share state. 
+3) Implement a robust queueing system for the API calls to avoid hitting external rate limits, or negotiate enterprise rate limits with Groq.
+
+19. Describe a strategy for managing state and caching in the Next.js frontend to prevent unnecessary API calls when navigating between different educational modules.
+Answer: Use a global state management tool (like React Context, Zustand, or Redux) to store user session data and generated asset URLs. Additionally, use React Query (or SWR). React Query automatically caches API responses, deduplicates requests, and serves stale data instantly while revalidating in the background.
+
+20. In the Chronicle module (multi-episode anime stories), how would you synchronize edge-tts generated audio with the visual video assembly process using moviepy to ensure perfect lip-sync or scene transitions?
+Answer: edge-tts provides audio duration metadata. During video assembly, the backend script must parse this metadata to determine the exact length (in milliseconds) of each spoken sentence. `moviepy` can then be used to set the duration of the corresponding anime image clip to perfectly match the duration of its associated audio clip before concatenating them into the final video file.

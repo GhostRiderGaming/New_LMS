@@ -22,7 +22,7 @@ from app.services.bella_voice_engine import (
 # Constants & Engine Configuration
 # ---------------------------------------------------------------------------
 
-_GROQ_CHAT_MODEL = "llama-3.3-70b-versatile"
+_GROQ_CHAT_MODEL = "openai/gpt-oss-120b"
 _GROQ_WHISPER_MODEL = "whisper-large-v3"
 
 

@@ -11,7 +11,7 @@ async def test_groq():
     client = AsyncGroq(api_key=api_key)
     try:
         completion = await client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="openai/gpt-oss-120b",
             messages=[{"role": "user", "content": "Say hello"}],
             max_tokens=10
         )

@@ -31,7 +31,7 @@ from app.models.anime_assets import Asset, Job, SessionLocal
 from app.services.asset_manager import asset_manager
 from app.services.prompt_builder import prompt_builder
 
-_GROQ_MODEL = "llama-3.3-70b-versatile"
+_GROQ_MODEL = "openai/gpt-oss-120b"
 
 # ---------------------------------------------------------------------------
 # Pydantic models for StoryPlan (used for validation + serialisation)

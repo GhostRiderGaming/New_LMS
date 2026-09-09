@@ -18,7 +18,7 @@ from app.models.anime_assets import Asset
 from app.services.asset_manager import asset_manager
 from app.services.prompt_builder import prompt_builder
 
-_GROQ_MODEL = "llama-3.3-70b-versatile"
+_GROQ_MODEL = "openai/gpt-oss-120b"
 
 
 class SimulationCategory(str, Enum):

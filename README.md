@@ -1,27 +1,48 @@
 # 🎌 AnimeEdu — AI-Powered Educational Learning Platform
 
-Transform any topic into immersive anime scenes, interactive simulations, 3D models, and multi-episode story series — all powered by open-source AI.
+**AnimeEdu** is an advanced, AI-powered platform designed to make learning incredibly fun, engaging, and interactive. Instead of reading boring textbooks, students can learn through anime-style scenes, interactive 3D models, hands-on HTML5 simulations, and multi-episode animated stories. It also features a real-time voice-chat AI tutor named "Bella".
 
 ---
 
-## ✨ Features
+## ✨ The Core Modules (What can it do?)
 
-| Module | Description | Tech Stack |
+| Module | What it does | Tech Stack |
 |--------|-------------|------------|
-| **🎨 Scene Forge** | Generate anime-style educational images with topic-aware prompts | Groq LLaMA 3.3 → Animagine XL / Google CSE |
-| **🔬 Lab Engine** | Create interactive HTML5 simulations with sliders & scenario switching | Groq LLaMA 3.3 → Canvas/JS |
-| **🧊 Holodeck** | Generate 3D models of real-world objects (anatomy, chemistry, etc.) | Tripo AI / HF stable-fast-3d |
-| **📖 Chronicle** | Build multi-episode educational anime stories with narrated video | Groq + Pollinations + edge-tts + moviepy |
-| **🤖 Bella** | AI tutor companion with voice chat, TTS, and topic explanations | Groq LLaMA + edge-tts + Whisper STT |
+| **🎨 Scene Forge (The Artist)** | You type a topic, and it generates an educational anime-style image explaining it. | Groq LLaMA 3.3 → Pollinations / HF |
+| **🔬 Lab Engine (The Scientist)** | Builds interactive, playable HTML5 simulations (like mixing chemicals or seeing physics in action). | Groq LLaMA 3.3 → Canvas/JS |
+| **🧊 Holodeck (The 3D Printer)** | Generates 3D models of real-world objects (like a heart or engine) to rotate and zoom in on. | Tripo AI / HF stable-fast-3d |
+| **📖 Chronicle (The Storyteller)** | Creates multi-episode anime stories with voice narration and video to explain complex topics. | Groq + Pollinations + edge-tts + moviepy |
+| **🤖 Bella (The Tutor)** | A floating AI companion. Talk to her using your mic, and she speaks back, answering questions. | Groq LLaMA + edge-tts + Whisper STT |
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Our Technology Stack
 
-**Backend:** FastAPI · Python 3.11+ · SQLAlchemy · Celery · Redis  
-**Frontend:** Next.js 14 · React · TailwindCSS · TypeScript  
-**AI Services:** Groq (LLaMA 3.3 70B) · Pollinations · Tripo AI · Hugging Face · edge-tts  
-**Storage:** Local filesystem (dev) · Google Cloud Storage (prod)
+**Frontend (What you see):**
+- **Next.js 14 & React:** The core framework for routing and UI.
+- **TailwindCSS:** For beautiful, modern styling.
+- **TypeScript:** For strict, reliable code.
+
+**Backend (The Engine):**
+- **FastAPI (Python 3.11+):** Extremely fast Python server connecting the UI to AI.
+- **SQLAlchemy & app.db:** Database for user sessions and assets.
+- **Celery & Redis:** Background task workers. Heavy tasks (like 3D rendering) run in the background without freezing the website.
+
+**AI Services (The Brains):**
+- **Groq (LLaMA 3.3 70B):** Lightning-fast text processing, safety filtering, and Bella's brain.
+- **Tripo AI, Hugging Face, Pollinations, edge-tts:** Various tools for images, 3D, and voice generation.
+
+---
+
+## ⚙️ How it Works (The Flow)
+
+When you ask for a heavy AI generation (like a 3D Heart):
+1. **Request:** Frontend (Next.js) securely asks the Backend (FastAPI).
+2. **Safety Check:** Groq verifies the request is safe and educational.
+3. **Background Job:** FastAPI gives the Frontend a `Job ID` and hands the actual heavy lifting to **Celery**.
+4. **WebSocket:** The Frontend listens for real-time updates via a live WebSocket using that `Job ID`.
+5. **Generation & Save:** Celery finishes creating the 3D model, saves it to the database, and pings the WebSocket.
+6. **Result:** The UI updates instantly to show your generated asset!
 
 ---
 
@@ -158,16 +179,6 @@ New_LMS/
 │   │   │   ├── jobs.py          # Job status + WebSocket
 │   │   │   └── assets.py        # Asset CRUD + ZIP export
 │   │   ├── services/            # Business logic
-│   │   │   ├── anime_generator.py
-│   │   │   ├── simulation_engine.py
-│   │   │   ├── model3d_engine.py
-│   │   │   ├── story_engine.py
-│   │   │   ├── video_assembler.py
-│   │   │   ├── bella_service.py
-│   │   │   ├── safety.py
-│   │   │   ├── prompt_builder.py
-│   │   │   ├── image_resolver.py
-│   │   │   └── asset_manager.py
 │   │   └── worker.py            # Celery task definitions
 │   ├── storage/                 # Local asset storage
 │   ├── requirements.txt
@@ -178,6 +189,8 @@ New_LMS/
 │   ├── lib/                     # API client, utilities
 │   └── package.json
 ├── docs/                        # Documentation & specs
+│   ├── about.txt                # Simplified project overview
+│   └── about question.txt       # Interview prep Q&A
 ├── docker-compose.yml
 └── README.md
 ```
@@ -208,7 +221,6 @@ Full interactive documentation available at `http://localhost:8000/api/v1/docs` 
 ## 🔐 Safety
 
 All generation endpoints run a two-stage safety filter before creating any content:
-
 1. **Keyword blocklist** — instant rejection with no API call
 2. **LLM safety classifier** — semantic classification via Groq
 
